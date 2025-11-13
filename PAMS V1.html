@@ -1,0 +1,2581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Management System</title>
+    <style>
+        /* CSS Variables for Gupshup Color Scheme */
+        :root {
+            --primary-color: #6B46C1;
+            --primary-dark: #553C9A;
+            --primary-light: #9F7AEA;
+            --secondary-color: #805AD5;
+            --accent-color: #B794F4;
+            --bg-color: #F7FAFC;
+            --white: #FFFFFF;
+            --gray-100: #F7FAFC;
+            --gray-200: #EDF2F7;
+            --gray-300: #E2E8F0;
+            --gray-400: #CBD5E0;
+            --gray-500: #A0AEC0;
+            --gray-600: #718096;
+            --gray-700: #4A5568;
+            --gray-800: #2D3748;
+            --gray-900: #1A202C;
+            --success: #48BB78;
+            --danger: #F56565;
+            --warning: #ED8936;
+            --info: #4299E1;
+            --customer-color: #3182CE;
+            --internal-color: #805AD5;
+        }
+
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--gray-800);
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        .navbar {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(107, 70, 193, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--white);
+            text-decoration: none;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-item {
+            color: var(--white);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.3);
+            font-weight: 600;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        /* Page Header */
+        .page-header {
+            background: var(--white);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            color: var(--gray-600);
+        }
+
+        /* Views */
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        /* View Switcher */
+        .view-switcher {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.25rem;
+            background: var(--gray-100);
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            width: fit-content;
+        }
+
+        .view-btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            background: transparent;
+            color: var(--gray-600);
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn:hover {
+            background: var(--gray-200);
+        }
+
+        .view-btn.active {
+            background: var(--white);
+            color: var(--primary-color);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Action Bar */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            background: var(--white);
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 0.5rem;
+            flex: 1;
+            max-width: 400px;
+        }
+
+        /* Stats Display */
+        .stats-display {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-700);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-300);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: var(--white);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: var(--white);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: var(--white);
+        }
+
+        .btn-info {
+            background: var(--info);
+            color: var(--white);
+        }
+
+        .btn-customer {
+            background: var(--customer-color);
+            color: var(--white);
+        }
+
+        .btn-internal {
+            background: var(--internal-color);
+            color: var(--white);
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.813rem;
+        }
+
+        .btn-icon {
+            padding: 0.375rem;
+            font-size: 1rem;
+            background: transparent;
+            color: var(--gray-600);
+        }
+
+        .btn-icon:hover {
+            color: var(--primary-color);
+            background: var(--gray-100);
+        }
+
+        .btn-icon.danger:hover {
+            color: var(--danger);
+            background: var(--gray-100);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--white);
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            padding: 1rem 1.5rem;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header.clickable {
+            cursor: pointer;
+        }
+
+        .card-header:hover {
+            background: var(--gray-100);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .card-meta {
+            display: flex;
+            gap: 1rem;
+            color: var(--gray-600);
+            font-size: 0.875rem;
+        }
+
+        /* Collapsible */
+        .collapsible-content {
+            display: none;
+            padding: 1rem 1.5rem;
+            background: var(--gray-50);
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .collapsible-content.active {
+            display: block;
+        }
+
+        .chevron {
+            transition: transform 0.3s ease;
+            color: var(--gray-500);
+        }
+
+        .chevron.rotate {
+            transform: rotate(90deg);
+        }
+
+        /* Project Card for Win/Loss */
+        .project-card {
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 1rem;
+        }
+
+        .project-card.won {
+            border-left: 4px solid var(--success);
+            background: rgba(72, 187, 120, 0.05);
+        }
+
+        .project-card.lost {
+            border-left: 4px solid var(--danger);
+            background: rgba(245, 101, 101, 0.05);
+        }
+
+        .project-card.pending {
+            border-left: 4px solid var(--warning);
+        }
+
+        .project-info {
+            flex: 1;
+        }
+
+        .win-loss-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Activity Type Badge */
+        .activity-badge {
+            display: inline-block;
+            padding: 0.25rem 0.625rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 0.25rem;
+            margin-left: 0.5rem;
+        }
+
+        .activity-badge.customer {
+            background: var(--customer-color);
+            color: var(--white);
+        }
+
+        .activity-badge.internal {
+            background: var(--internal-color);
+            color: var(--white);
+        }
+
+        /* Forms */
+        .form-section {
+            background: var(--white);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 2px solid var(--gray-200);
+            transition: all 0.3s ease;
+        }
+
+        .form-section.active {
+            border-color: var(--primary-color);
+            box-shadow: 0 4px 12px rgba(107, 70, 193, 0.1);
+        }
+
+        .form-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.875rem;
+        }
+
+        .form-label.required::after {
+            content: " *";
+            color: var(--danger);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Multi-select */
+        .multi-select-container {
+            position: relative;
+        }
+
+        .multi-select-trigger {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            background: var(--white);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .multi-select-trigger:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            margin-top: 0.25rem;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .multi-select-dropdown.active {
+            display: block;
+        }
+
+        .multi-select-option {
+            padding: 0.5rem 0.875rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .multi-select-option:hover {
+            background: var(--gray-100);
+        }
+
+        .multi-select-option input[type="checkbox"] {
+            pointer-events: none;
+        }
+
+        .multi-select-selected {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+
+        .multi-select-tag {
+            background: var(--primary-light);
+            color: var(--white);
+            padding: 0.125rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        /* Search Input with Dropdown */
+        .search-select-container {
+            position: relative;
+        }
+
+        .search-select-input {
+            width: 100%;
+            padding: 0.625rem 0.875rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        .search-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--white);
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            margin-top: 0.25rem;
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .search-select-dropdown.active {
+            display: block;
+        }
+
+        .search-select-item {
+            padding: 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        .search-select-item:hover {
+            background: var(--gray-100);
+        }
+
+        .search-select-item.selected {
+            background: var(--primary-light);
+            color: var(--white);
+        }
+
+        .search-select-create {
+            padding: 0.75rem;
+            background: var(--gray-50);
+            color: var(--primary-color);
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .search-select-create:hover {
+            background: var(--gray-100);
+        }
+
+        /* Activity Category Tabs */
+        .activity-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.25rem;
+            background: var(--gray-100);
+            border-radius: 0.5rem;
+        }
+
+        .activity-tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            color: var(--gray-600);
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .activity-tab:hover {
+            background: var(--gray-200);
+        }
+
+        .activity-tab.active {
+            background: var(--white);
+            color: var(--primary-color);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .activity-tab.customer.active {
+            color: var(--customer-color);
+        }
+
+        .activity-tab.internal.active {
+            color: var(--internal-color);
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.625rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 0.25rem;
+            background: var(--primary-light);
+            color: var(--white);
+        }
+
+        .badge-secondary {
+            background: var(--gray-400);
+        }
+
+        .badge-success {
+            background: var(--success);
+        }
+
+        .badge-danger {
+            background: var(--danger);
+        }
+
+        .badge-warning {
+            background: var(--warning);
+        }
+
+        .badge-customer {
+            background: var(--customer-color);
+        }
+
+        .badge-internal {
+            background: var(--internal-color);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray-500);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: var(--white);
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideIn 0.3s ease;
+        }
+
+        .modal-content.small {
+            max-width: 400px;
+        }
+
+        .modal-content.large {
+            max-width: 1000px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-500);
+            transition: color 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--gray-700);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        /* Alert/Confirm Dialog */
+        .alert-box {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .alert-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--gray-900);
+        }
+
+        .alert-message {
+            margin-bottom: 1.5rem;
+            color: var(--gray-600);
+        }
+
+        /* Statistics Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--white);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--gray-200);
+        }
+
+        .stat-card h4 {
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .stat-card .stat-detail {
+            color: var(--gray-500);
+            font-size: 0.813rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Utilities */
+        .text-muted {
+            color: var(--gray-500);
+        }
+
+        .mt-2 {
+            margin-top: 0.5rem;
+        }
+
+        .d-none {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-menu {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="#" class="nav-brand">Activity Management System</a>
+            <ul class="nav-menu">
+                <li><a class="nav-item active" data-view="dashboard">Dashboard</a></li>
+                <li><a class="nav-item" data-view="activities">Activities</a></li>
+                <li><a class="nav-item" data-view="winloss">Win/Loss</a></li>
+                <li><a class="nav-item" data-view="reports">Reports</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Dashboard View -->
+        <div id="dashboard" class="view active">
+            <div class="page-header">
+                <h1 class="page-title">Dashboard</h1>
+                <p class="page-subtitle">Track customer activities and internal activities</p>
+            </div>
+
+            <!-- Statistics Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Total Accounts</h4>
+                    <div class="stat-value" id="totalAccountsStat">0</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Total Projects</h4>
+                    <div class="stat-value" id="totalProjectsStat">0</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Total Activities</h4>
+                    <div class="stat-value" id="totalActivitiesStat">0</div>
+                    <div class="stat-detail">
+                        <span id="customerActivitiesStat">0</span> Customer | 
+                        <span id="internalActivitiesStat">0</span> Internal
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <h4>Projects Status</h4>
+                    <div class="stat-value" id="projectStatusStat">0</div>
+                    <div class="stat-detail">
+                        <span id="wonProjectsStat">0</span> Won | 
+                        <span id="lostProjectsStat">0</span> Lost | 
+                        <span id="activeProjectsStat">0</span> Active
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Options -->
+            <div class="view-switcher">
+                <button class="view-btn active" onclick="switchDashboardView('hierarchy')">📊 Hierarchy View</button>
+                <button class="view-btn" onclick="switchDashboardView('recent')">🕐 Recent Activities</button>
+                <button class="view-btn" onclick="switchDashboardView('internal')">🏢 Internal Activities</button>
+            </div>
+
+            <div class="action-bar">
+                <div class="action-buttons">
+                    <button class="btn btn-customer" onclick="openCustomerActivityModal()">
+                        + Log Customer Activity
+                    </button>
+                    <button class="btn btn-internal" onclick="openInternalActivityModal()">
+                        + Log Internal Activity
+                    </button>
+                </div>
+            </div>
+
+            <div id="dashboardContent">
+                <!-- Content will be loaded based on view -->
+            </div>
+        </div>
+
+        <!-- Activities View -->
+        <div id="activities" class="view">
+            <div class="page-header">
+                <h1 class="page-title">All Activities</h1>
+                <p class="page-subtitle">View and manage customer and internal activities</p>
+            </div>
+
+            <div class="action-bar">
+                <div class="search-bar">
+                    <input type="text" class="form-control" placeholder="Search activities..." id="searchInput" onkeyup="performSearch()">
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-customer" onclick="openCustomerActivityModal()">
+                        + Customer Activity
+                    </button>
+                    <button class="btn btn-internal" onclick="openInternalActivityModal()">
+                        + Internal Activity
+                    </button>
+                </div>
+            </div>
+
+            <div id="activitiesContent"></div>
+        </div>
+
+        <!-- Win/Loss View -->
+        <div id="winloss" class="view">
+            <div class="page-header">
+                <h1 class="page-title">Win/Loss Tracking</h1>
+                <p class="page-subtitle">Track project wins and losses</p>
+            </div>
+
+            <div class="action-bar">
+                <div class="search-bar">
+                    <input type="text" class="form-control" placeholder="Search projects..." id="winlossSearch" onkeyup="filterWinLoss()">
+                </div>
+                <div class="stats-display">
+                    <span class="badge badge-success" id="totalWins">0 Wins</span>
+                    <span class="badge badge-danger" id="totalLosses">0 Losses</span>
+                    <span class="badge badge-warning" id="totalActive">0 Active</span>
+                </div>
+            </div>
+
+            <div id="winlossContent"></div>
+        </div>
+
+        <!-- Reports View -->
+        <div id="reports" class="view">
+            <div class="page-header">
+                <h1 class="page-title">Reports</h1>
+                <p class="page-subtitle">Activity and performance analytics</p>
+            </div>
+
+            <div id="reportsContent"></div>
+        </div>
+    </div>
+
+    <!-- Customer Activity Modal -->
+    <div id="customerActivityModal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2 class="modal-title">Log Customer Activity</h2>
+                <button class="modal-close" onclick="closeModal('customerActivityModal')">&times;</button>
+            </div>
+            <form id="customerActivityForm" onsubmit="saveCustomerActivity(event)">
+                <!-- Common Fields -->
+                <div class="form-section">
+                    <h3>Basic Information</h3>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Account Name</label>
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input form-control" id="accountSearch" 
+                                       placeholder="Search or create new account..." onkeyup="searchAccounts(this.value)">
+                                <div class="search-select-dropdown" id="accountDropdown"></div>
+                            </div>
+                            <input type="hidden" id="selectedAccountId">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Project Name</label>
+                            <div class="search-select-container">
+                                <input type="text" class="search-select-input form-control" id="projectSearch" 
+                                       placeholder="Select account first..." disabled onkeyup="searchProjects(this.value)">
+                                <div class="search-select-dropdown" id="projectDropdown"></div>
+                            </div>
+                            <input type="hidden" id="selectedProjectId">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Sales Rep Name</label>
+                            <input type="text" class="form-control" id="salesRep" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Industry</label>
+                            <select class="form-control" id="industry" required>
+                                <option value="">Select Industry</option>
+                                <option value="BFSI">BFSI</option>
+                                <option value="IT & Software">IT & Software</option>
+                                <option value="Retail & eCommerce">Retail & eCommerce</option>
+                                <option value="Telecom">Telecom</option>
+                                <option value="Healthcare">Healthcare</option>
+                                <option value="Media & Entertainment">Media & Entertainment</option>
+                                <option value="Travel & Hospitality">Travel & Hospitality</option>
+                                <option value="Automotive">Automotive</option>
+                                <option value="Government">Government</option>
+                                <option value="Education">Education</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">SFDC Link (Project Level)</label>
+                            <input type="url" class="form-control" id="sfdcLink" placeholder="https://...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Primary Use Case</label>
+                            <div class="multi-select-container">
+                                <div class="multi-select-trigger" onclick="toggleMultiSelect('useCaseDropdown')" tabindex="0">
+                                    <span class="multi-select-selected" id="useCaseSelected">Select use cases...</span>
+                                    <span>▼</span>
+                                </div>
+                                <div class="multi-select-dropdown" id="useCaseDropdown">
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Marketing')">
+                                        <input type="checkbox" value="Marketing"> Marketing
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Commerce')">
+                                        <input type="checkbox" value="Commerce"> Commerce
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Support')">
+                                        <input type="checkbox" value="Support"> Support
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Sales')">
+                                        <input type="checkbox" value="Sales"> Sales
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Service')">
+                                        <input type="checkbox" value="Service"> Service
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('useCase', 'Other')">
+                                        <input type="checkbox" value="Other"> Other
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Customer Type</label>
+                            <select class="form-control" id="customerType">
+                                <option value="">Select Type</option>
+                                <option value="New">New</option>
+                                <option value="Existing">Existing</option>
+                                <option value="Prospect">Prospect</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Location</label>
+                            <input type="text" class="form-control" id="location">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Number of Participants</label>
+                            <input type="number" class="form-control" id="participantCount" min="1">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Participants' Roles</label>
+                            <input type="text" class="form-control" id="participantRoles" placeholder="e.g., CEO, CTO, PM">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Type Selection -->
+                <div class="form-section">
+                    <h3>Activity Details</h3>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Date</label>
+                            <input type="date" class="form-control" id="activityDate" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Activity Type</label>
+                            <select class="form-control" id="customerActivityType" onchange="showActivityFields(this.value)" required>
+                                <option value="">Select Activity Type</option>
+                                <option value="customerCall">Customer Call</option>
+                                <option value="poc">POC (Proof of Concept)</option>
+                                <option value="rfx">RFx</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Activity Fields -->
+                    <div id="customerActivityFields"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('customerActivityModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Activity</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Internal Activity Modal -->
+    <div id="internalActivityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Log Internal Activity</h2>
+                <button class="modal-close" onclick="closeModal('internalActivityModal')">&times;</button>
+            </div>
+            <form id="internalActivityForm" onsubmit="saveInternalActivity(event)">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Date</label>
+                            <input type="date" class="form-control" id="internalDate" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Activity Type</label>
+                            <select class="form-control" id="internalActivityType" required>
+                                <option value="">Select Type</option>
+                                <option value="Enablement">Enablement</option>
+                                <option value="Video Creation">Video Creation</option>
+                                <option value="Webinar">Webinar</option>
+                                <option value="Event/Booth Hosting">Event/Booth Hosting</option>
+                                <option value="Product Feedback">Product Feedback</option>
+                                <option value="Content Creation">Content Creation</option>
+                                <option value="Training">Training</option>
+                                <option value="Documentation">Documentation</option>
+                                <option value="Internal Meeting">Internal Meeting</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Time Spent (hours)</label>
+                        <input type="number" class="form-control" id="internalTimeSpent" min="0.5" step="0.5" placeholder="e.g., 2.5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label required">Session Name / Topic</label>
+                        <textarea class="form-control" id="internalTopic" rows="3" required 
+                                  placeholder="Describe the session or topic..."></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('internalActivityModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Activity</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Win/Loss Modal -->
+    <div id="winLossModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Update Project Status</h2>
+                <button class="modal-close" onclick="closeModal('winLossModal')">&times;</button>
+            </div>
+            <form id="winLossForm" onsubmit="saveWinLoss(event)">
+                <input type="hidden" id="winLossProjectId">
+                <input type="hidden" id="winLossAccountId">
+                
+                <div class="form-group">
+                    <label class="form-label required">Project Status</label>
+                    <select class="form-control" id="winLossStatus" required onchange="toggleWinLossFields()">
+                        <option value="">Select Status</option>
+                        <option value="active">Active</option>
+                        <option value="won">Won</option>
+                        <option value="lost">Lost</option>
+                    </select>
+                </div>
+                
+                <div id="winLossFields" class="d-none">
+                    <div class="form-group">
+                        <label class="form-label required">Reason for Win/Loss</label>
+                        <textarea class="form-control" id="winLossReason" rows="3" placeholder="Explain the reason..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Competitor Analysis</label>
+                        <input type="text" class="form-control" id="competitorAnalysis" placeholder="Which competitors were involved?">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label required">MRR (Monthly Recurring Revenue)</label>
+                        <input type="number" class="form-control" id="winLossMRR" min="0" step="100" placeholder="Enter amount">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Account Type</label>
+                        <select class="form-control" id="accountType">
+                            <option value="existing">Existing Account</option>
+                            <option value="new">New Account</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('winLossModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data Management
+        let currentDashboardView = 'hierarchy';
+        let selectedUseCases = [];
+        let selectedProducts = [];
+        let selectedChannels = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('App initialized');
+            loadDashboard();
+            setupNavigation();
+            
+            // Set default dates
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('activityDate').value = today;
+            document.getElementById('internalDate').value = today;
+        });
+
+        // Navigation
+        function setupNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const viewName = this.dataset.view;
+                    showView(viewName);
+                    
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        }
+
+        function showView(viewName) {
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+            document.getElementById(viewName).classList.add('active');
+            
+            if (viewName === 'dashboard') {
+                loadDashboard();
+            } else if (viewName === 'activities') {
+                loadActivitiesView();
+            } else if (viewName === 'winloss') {
+                loadWinLossView();
+            } else if (viewName === 'reports') {
+                loadReportsView();
+            }
+        }
+
+        // Dashboard Views
+        function switchDashboardView(viewType) {
+            currentDashboardView = viewType;
+            const buttons = document.querySelectorAll('#dashboard .view-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            loadDashboard();
+        }
+
+        function loadDashboard() {
+            updateStats();
+            
+            const container = document.getElementById('dashboardContent');
+            
+            if (currentDashboardView === 'hierarchy') {
+                loadHierarchyView(container);
+            } else if (currentDashboardView === 'recent') {
+                loadRecentActivities(container);
+            } else if (currentDashboardView === 'internal') {
+                loadInternalActivities(container);
+            }
+        }
+
+        function updateStats() {
+            const accounts = getAccounts();
+            const internalActivities = getInternalActivities();
+            
+            let totalProjects = 0;
+            let customerActivities = 0;
+            let wonProjects = 0;
+            let lostProjects = 0;
+            let activeProjects = 0;
+            
+            accounts.forEach(account => {
+                totalProjects += account.projects?.length || 0;
+                account.projects?.forEach(project => {
+                    customerActivities += project.activities?.length || 0;
+                    
+                    if (project.status === 'won') wonProjects++;
+                    else if (project.status === 'lost') lostProjects++;
+                    else activeProjects++;
+                });
+            });
+            
+            const totalActivities = customerActivities + internalActivities.length;
+            
+            // Update dashboard stats
+            document.getElementById('totalAccountsStat').textContent = accounts.length;
+            document.getElementById('totalProjectsStat').textContent = totalProjects;
+            document.getElementById('totalActivitiesStat').textContent = totalActivities;
+            document.getElementById('customerActivitiesStat').textContent = customerActivities;
+            document.getElementById('internalActivitiesStat').textContent = internalActivities.length;
+            document.getElementById('projectStatusStat').textContent = totalProjects;
+            document.getElementById('wonProjectsStat').textContent = wonProjects;
+            document.getElementById('lostProjectsStat').textContent = lostProjects;
+            document.getElementById('activeProjectsStat').textContent = activeProjects;
+        }
+
+        function loadHierarchyView(container) {
+            const accounts = getAccounts();
+            
+            if (accounts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📊</div>
+                        <h3>No customer activities yet</h3>
+                        <p>Start by logging your first customer activity</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            accounts.forEach(account => {
+                const projects = account.projects || [];
+                html += `
+                    <div class="card">
+                        <div class="card-header clickable" onclick="toggleCollapsible('account-${account.id}')">
+                            <div class="card-title">
+                                <span class="chevron" id="chevron-account-${account.id}">▶</span>
+                                <span>${account.name}</span>
+                                <span class="badge badge-secondary">${projects.length} projects</span>
+                            </div>
+                        </div>
+                        <div id="account-${account.id}" class="collapsible-content">
+                            ${renderProjects(account.id, projects)}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function renderProjects(accountId, projects) {
+            if (!projects || projects.length === 0) {
+                return '<p class="text-muted" style="padding: 1rem;">No projects yet</p>';
+            }
+            
+            let html = '';
+            projects.forEach(project => {
+                const activities = project.activities || [];
+                const statusBadge = project.status ? 
+                    `<span class="badge badge-${project.status === 'won' ? 'success' : project.status === 'lost' ? 'danger' : 'warning'}">${project.status}</span>` : '';
+                
+                html += `
+                    <div class="card" style="margin: 0.5rem;">
+                        <div class="card-header clickable" onclick="toggleCollapsible('project-${project.id}')">
+                            <div class="card-title">
+                                <span class="chevron" id="chevron-project-${project.id}">▶</span>
+                                <span>${project.name}</span>
+                                ${statusBadge}
+                                <span class="badge badge-customer">${activities.length} activities</span>
+                            </div>
+                        </div>
+                        <div id="project-${project.id}" class="collapsible-content">
+                            ${renderActivities(accountId, project.id, activities)}
+                        </div>
+                    </div>
+                `;
+            });
+            return html;
+        }
+
+        function renderActivities(accountId, projectId, activities) {
+            if (!activities || activities.length === 0) {
+                return '<p class="text-muted" style="padding: 1rem;">No activities yet</p>';
+            }
+            
+            let html = '';
+            activities.forEach(activity => {
+                html += `
+                    <div style="padding: 0.75rem; border-left: 3px solid var(--customer-color); margin: 0.5rem; background: white;">
+                        <div>
+                            <strong>${getActivityTypeLabel(activity.type)}</strong> - ${formatDate(activity.date)}
+                            <span class="activity-badge customer">Customer</span>
+                            ${activity.details ? `<p class="text-muted mt-2">${getActivitySummary(activity)}</p>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            return html;
+        }
+
+        function loadRecentActivities(container) {
+            const allActivities = getAllActivitiesWithDates();
+            allActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            if (allActivities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No activities yet</h3></div>';
+                return;
+            }
+            
+            let html = '<div class="card"><div class="card-body">';
+            allActivities.slice(0, 10).forEach(activity => {
+                const badge = activity.isInternal ? 
+                    '<span class="activity-badge internal">Internal</span>' : 
+                    '<span class="activity-badge customer">Customer</span>';
+                
+                html += `
+                    <div style="padding: 0.75rem; border-left: 3px solid ${activity.isInternal ? 'var(--internal-color)' : 'var(--customer-color)'}; margin-bottom: 0.75rem; background: var(--gray-50);">
+                        <strong>${getActivityTypeLabel(activity.type)}</strong> - ${formatDate(activity.date)}
+                        ${badge}
+                        ${activity.accountName ? `<span class="text-muted"> • ${activity.accountName}</span>` : ''}
+                        ${activity.topic ? `<p class="text-muted mt-2">${activity.topic}</p>` : ''}
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+            
+            container.innerHTML = html;
+        }
+
+        function loadInternalActivities(container) {
+            const activities = getInternalActivities();
+            
+            if (activities.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🏢</div>
+                        <h3>No internal activities yet</h3>
+                        <p>Start by logging your first internal activity</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="card"><div class="card-body">';
+            activities.forEach(activity => {
+                html += `
+                    <div style="padding: 0.75rem; border-left: 3px solid var(--internal-color); margin-bottom: 0.75rem; background: var(--gray-50);">
+                        <strong>${activity.type}</strong> - ${formatDate(activity.date)}
+                        <span class="activity-badge internal">Internal</span>
+                        ${activity.timeSpent ? `<span class="badge badge-secondary">${activity.timeSpent}h</span>` : ''}
+                        <p class="text-muted mt-2">${activity.topic}</p>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+            
+            container.innerHTML = html;
+        }
+
+        // Activities View
+        function loadActivitiesView() {
+            const container = document.getElementById('activitiesContent');
+            const allActivities = getAllActivitiesWithDates();
+            
+            if (allActivities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No activities yet</h3></div>';
+                return;
+            }
+            
+            // Group by month
+            const activitiesByMonth = {};
+            allActivities.forEach(activity => {
+                const month = activity.date ? activity.date.substring(0, 7) : 'Unknown';
+                if (!activitiesByMonth[month]) {
+                    activitiesByMonth[month] = [];
+                }
+                activitiesByMonth[month].push(activity);
+            });
+            
+            let html = '';
+            Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+                const monthActivities = activitiesByMonth[month];
+                html += `
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>${formatMonth(month)}</h3>
+                            <span class="badge">${monthActivities.length} activities</span>
+                        </div>
+                        <div class="card-body">
+                `;
+                
+                monthActivities.forEach(activity => {
+                    const badge = activity.isInternal ? 
+                        '<span class="activity-badge internal">Internal</span>' : 
+                        '<span class="activity-badge customer">Customer</span>';
+                    
+                    html += `
+                        <div style="padding: 0.75rem; border-left: 3px solid ${activity.isInternal ? 'var(--internal-color)' : 'var(--customer-color)'}; margin-bottom: 0.75rem;">
+                            <strong>${getActivityTypeLabel(activity.type)}</strong> - ${formatDate(activity.date)}
+                            ${badge}
+                            ${activity.accountName ? `<span class="text-muted"> • ${activity.accountName}</span>` : ''}
+                            ${activity.projectName ? `<span class="text-muted"> → ${activity.projectName}</span>` : ''}
+                            ${activity.topic || activity.details ? `<p class="text-muted mt-2">${activity.topic || getActivitySummary(activity)}</p>` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Win/Loss View
+        function loadWinLossView() {
+            const accounts = getAccounts();
+            const container = document.getElementById('winlossContent');
+            
+            let allProjects = [];
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    allProjects.push({
+                        ...project,
+                        accountId: account.id,
+                        accountName: account.name,
+                        status: project.status || 'active'
+                    });
+                });
+            });
+            
+            // Update stats
+            const wins = allProjects.filter(p => p.status === 'won').length;
+            const losses = allProjects.filter(p => p.status === 'lost').length;
+            const active = allProjects.filter(p => p.status === 'active').length;
+            
+            document.getElementById('totalWins').textContent = `${wins} Wins`;
+            document.getElementById('totalLosses').textContent = `${losses} Losses`;
+            document.getElementById('totalActive').textContent = `${active} Active`;
+            
+            if (allProjects.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No projects to track</h3></div>';
+                return;
+            }
+            
+            let html = '';
+            allProjects.forEach(project => {
+                const statusClass = project.status === 'won' ? 'won' : 
+                                   project.status === 'lost' ? 'lost' : '';
+                
+                html += `
+                    <div class="project-card ${statusClass}">
+                        <div class="project-info">
+                            <h4>${project.name}</h4>
+                            <p class="text-muted">${project.accountName}</p>
+                            ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank">SFDC Link</a>` : ''}
+                            ${project.winLossData ? `
+                                <div class="mt-2">
+                                    <span class="badge badge-${project.status === 'won' ? 'success' : 'danger'}">
+                                        ${project.status.toUpperCase()}
+                                    </span>
+                                    ${project.winLossData.mrr ? `<span class="badge badge-secondary">MRR: $${project.winLossData.mrr}</span>` : ''}
+                                    ${project.winLossData.reason ? `<p class="text-muted mt-2">Reason: ${project.winLossData.reason}</p>` : ''}
+                                    ${project.winLossData.competitors ? `<p class="text-muted">Competitors: ${project.winLossData.competitors}</p>` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="win-loss-actions">
+                            <button class="btn btn-sm btn-secondary" 
+                                    onclick="openWinLossModal('${project.accountId}', '${project.id}')">
+                                Update Status
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Reports View
+        function loadReportsView() {
+            const container = document.getElementById('reportsContent');
+            const accounts = getAccounts();
+            const internalActivities = getInternalActivities();
+            
+            // Calculate metrics
+            let customerCount = 0;
+            let activitiesByType = {};
+            
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    project.activities?.forEach(activity => {
+                        customerCount++;
+                        const type = getActivityTypeLabel(activity.type);
+                        activitiesByType[type] = (activitiesByType[type] || 0) + 1;
+                    });
+                });
+            });
+            
+            internalActivities.forEach(activity => {
+                activitiesByType[activity.type] = (activitiesByType[activity.type] || 0) + 1;
+            });
+            
+            let html = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4>Total Activities</h4>
+                        <div class="stat-value">${customerCount + internalActivities.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Customer Activities</h4>
+                        <div class="stat-value">${customerCount}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Internal Activities</h4>
+                        <div class="stat-value">${internalActivities.length}</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Activities by Type</h3>
+                    </div>
+                    <div class="card-body">
+            `;
+            
+            Object.entries(activitiesByType).sort((a, b) => b[1] - a[1]).forEach(([type, count]) => {
+                html += `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--gray-200);">
+                        <span>${type}</span>
+                        <span class="badge">${count}</span>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+
+        // Modal Functions
+        function openCustomerActivityModal() {
+            resetCustomerActivityForm();
+            document.getElementById('customerActivityModal').classList.add('active');
+        }
+
+        function openInternalActivityModal() {
+            document.getElementById('internalActivityModal').classList.add('active');
+        }
+
+        function openWinLossModal(accountId, projectId) {
+            const accounts = getAccounts();
+            const account = accounts.find(a => a.id === accountId);
+            const project = account?.projects?.find(p => p.id === projectId);
+            
+            if (!project) return;
+            
+            document.getElementById('winLossAccountId').value = accountId;
+            document.getElementById('winLossProjectId').value = projectId;
+            document.getElementById('winLossStatus').value = project.status || '';
+            
+            if (project.winLossData) {
+                document.getElementById('winLossReason').value = project.winLossData.reason || '';
+                document.getElementById('competitorAnalysis').value = project.winLossData.competitors || '';
+                document.getElementById('winLossMRR').value = project.winLossData.mrr || '';
+                document.getElementById('accountType').value = project.winLossData.accountType || 'existing';
+                toggleWinLossFields();
+            }
+            
+            document.getElementById('winLossModal').classList.add('active');
+        }
+
+        function toggleWinLossFields() {
+            const status = document.getElementById('winLossStatus').value;
+            const fields = document.getElementById('winLossFields');
+            
+            if (status === 'won' || status === 'lost') {
+                fields.classList.remove('d-none');
+                document.getElementById('winLossReason').required = true;
+                document.getElementById('winLossMRR').required = true;
+            } else {
+                fields.classList.add('d-none');
+                document.getElementById('winLossReason').required = false;
+                document.getElementById('winLossMRR').required = false;
+            }
+        }
+
+        // Account/Project Search
+        function searchAccounts(query) {
+            const dropdown = document.getElementById('accountDropdown');
+            const accounts = getAccounts();
+            
+            if (query.length < 1) {
+                dropdown.classList.remove('active');
+                return;
+            }
+            
+            const filtered = accounts.filter(a => 
+                a.name.toLowerCase().includes(query.toLowerCase())
+            );
+            
+            let html = '';
+            filtered.forEach(account => {
+                html += `
+                    <div class="search-select-item" onclick="selectAccount('${account.id}', '${account.name}', '${account.industry}', '${account.salesRep}')">
+                        <strong>${account.name}</strong>
+                        <div style="font-size: 0.75rem; color: var(--gray-500);">${account.industry}</div>
+                    </div>
+                `;
+            });
+            
+            if (query.length > 2) {
+                html += `
+                    <div class="search-select-create" onclick="createNewAccount('${query}')">
+                        + Create new account "${query}"
+                    </div>
+                `;
+            }
+            
+            dropdown.innerHTML = html;
+            dropdown.classList.add('active');
+        }
+
+        function selectAccount(id, name, industry, salesRep) {
+            document.getElementById('selectedAccountId').value = id;
+            document.getElementById('accountSearch').value = name;
+            document.getElementById('industry').value = industry;
+            document.getElementById('salesRep').value = salesRep;
+            document.getElementById('accountDropdown').classList.remove('active');
+            
+            // Enable project search
+            document.getElementById('projectSearch').disabled = false;
+            document.getElementById('projectSearch').placeholder = "Search or create new project...";
+            
+            // Load projects for this account
+            loadProjectsForAccount(id);
+        }
+
+        function createNewAccount(name) {
+            document.getElementById('selectedAccountId').value = 'new';
+            document.getElementById('accountSearch').value = name;
+            document.getElementById('accountDropdown').classList.remove('active');
+            
+            // Enable project search for new project
+            document.getElementById('projectSearch').disabled = false;
+            document.getElementById('projectSearch').placeholder = "Enter new project name...";
+        }
+
+        function searchProjects(query) {
+            const accountId = document.getElementById('selectedAccountId').value;
+            const dropdown = document.getElementById('projectDropdown');
+            
+            if (!accountId || query.length < 1) {
+                dropdown.classList.remove('active');
+                return;
+            }
+            
+            if (accountId === 'new') {
+                dropdown.innerHTML = `
+                    <div class="search-select-create" onclick="createNewProject('${query}')">
+                        + Create new project "${query}"
+                    </div>
+                `;
+            } else {
+                const accounts = getAccounts();
+                const account = accounts.find(a => a.id === accountId);
+                const projects = account?.projects || [];
+                
+                const filtered = projects.filter(p => 
+                    p.name.toLowerCase().includes(query.toLowerCase())
+                );
+                
+                let html = '';
+                filtered.forEach(project => {
+                    html += `
+                        <div class="search-select-item" onclick="selectProject('${project.id}', '${project.name}', '${project.sfdcLink || ''}')">
+                            <strong>${project.name}</strong>
+                            ${project.status ? `<span class="badge badge-sm">${project.status}</span>` : ''}
+                        </div>
+                    `;
+                });
+                
+                if (query.length > 2) {
+                    html += `
+                        <div class="search-select-create" onclick="createNewProject('${query}')">
+                            + Create new project "${query}"
+                        </div>
+                    `;
+                }
+                
+                dropdown.innerHTML = html;
+            }
+            
+            dropdown.classList.add('active');
+        }
+
+        function selectProject(id, name, sfdcLink) {
+            document.getElementById('selectedProjectId').value = id;
+            document.getElementById('projectSearch').value = name;
+            document.getElementById('sfdcLink').value = sfdcLink;
+            document.getElementById('projectDropdown').classList.remove('active');
+        }
+
+        function createNewProject(name) {
+            document.getElementById('selectedProjectId').value = 'new';
+            document.getElementById('projectSearch').value = name;
+            document.getElementById('projectDropdown').classList.remove('active');
+        }
+
+        function loadProjectsForAccount(accountId) {
+            const accounts = getAccounts();
+            const account = accounts.find(a => a.id === accountId);
+            
+            if (account && account.projects && account.projects.length > 0) {
+                document.getElementById('projectSearch').placeholder = `${account.projects.length} projects available`;
+            }
+        }
+
+        // Activity Type Fields
+        function showActivityFields(type) {
+            const container = document.getElementById('customerActivityFields');
+            
+            if (!type) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            if (type === 'customerCall') {
+                html = `
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Call Type</label>
+                            <select class="form-control" id="callType" required>
+                                <option value="">Select Type</option>
+                                <option value="Initial Call">Initial Call</option>
+                                <option value="Discovery Call">Discovery Call</option>
+                                <option value="Deep Dive">Deep Dive</option>
+                                <option value="Follow-up">Follow-up</option>
+                                <option value="Deal Review">Deal Review</option>
+                                <option value="Q&A">Q&A</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Duration (minutes)</label>
+                            <input type="number" class="form-control" id="callDuration" min="15" step="15">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Products Discussed</label>
+                            <div class="multi-select-container">
+                                <div class="multi-select-trigger" onclick="toggleMultiSelect('productsDropdown')" tabindex="0">
+                                    <span class="multi-select-selected" id="productsSelected">Select products...</span>
+                                    <span>▼</span>
+                                </div>
+                                <div class="multi-select-dropdown" id="productsDropdown">
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'AI Agents')">
+                                        <input type="checkbox" value="AI Agents"> AI Agents
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Campaign Manager')">
+                                        <input type="checkbox" value="Campaign Manager"> Campaign Manager
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Agent Assist')">
+                                        <input type="checkbox" value="Agent Assist"> Agent Assist
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Journey Builder')">
+                                        <input type="checkbox" value="Journey Builder"> Journey Builder
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Personalize')">
+                                        <input type="checkbox" value="Personalize"> Personalize
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Voice AI')">
+                                        <input type="checkbox" value="Voice AI"> Voice AI
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('products', 'Other')">
+                                        <input type="checkbox" value="Other"> Other
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Channels</label>
+                            <div class="multi-select-container">
+                                <div class="multi-select-trigger" onclick="toggleMultiSelect('channelsDropdown')" tabindex="0">
+                                    <span class="multi-select-selected" id="channelsSelected">Select channels...</span>
+                                    <span>▼</span>
+                                </div>
+                                <div class="multi-select-dropdown" id="channelsDropdown">
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'WhatsApp')">
+                                        <input type="checkbox" value="WhatsApp"> WhatsApp
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'Web')">
+                                        <input type="checkbox" value="Web"> Web
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'Voice')">
+                                        <input type="checkbox" value="Voice"> Voice
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'RCS')">
+                                        <input type="checkbox" value="RCS"> RCS
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'Instagram')">
+                                        <input type="checkbox" value="Instagram"> Instagram
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'Mobile SDK')">
+                                        <input type="checkbox" value="Mobile SDK"> Mobile SDK
+                                    </div>
+                                    <div class="multi-select-option" onclick="toggleOption('channels', 'Other')">
+                                        <input type="checkbox" value="Other"> Other
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Opportunity Status</label>
+                            <select class="form-control" id="opportunityStatus" onchange="toggleDealSize()">
+                                <option value="no">No</option>
+                                <option value="yes">Yes</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group d-none" id="dealSizeGroup">
+                            <label class="form-label">Potential Deal Size</label>
+                            <input type="number" class="form-control" id="dealSize" min="0" step="1000">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Competitors Discussed</label>
+                        <input type="text" class="form-control" id="competitors" placeholder="e.g., Competitor A, Competitor B">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Objective / Next Steps</label>
+                        <textarea class="form-control" id="objectiveNextSteps" rows="3"></textarea>
+                    </div>
+                `;
+            } else if (type === 'poc') {
+                html = `
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Account Type</label>
+                            <select class="form-control" id="pocAccountType" required>
+                                <option value="">Select Type</option>
+                                <option value="new">New Account</option>
+                                <option value="existing">Existing Account</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Access Type</label>
+                            <select class="form-control" id="accessType" required>
+                                <option value="">Select Access Type</option>
+                                <option value="Sandbox Access">Sandbox Access</option>
+                                <option value="Custom POC - Structured Journey">Custom POC - Structured Journey</option>
+                                <option value="Custom POC - Agentic">Custom POC - Agentic</option>
+                                <option value="Custom POC - Commerce">Custom POC - Commerce</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Products Interested</label>
+                        <div class="multi-select-container">
+                            <div class="multi-select-trigger" onclick="toggleMultiSelect('pocProductsDropdown')" tabindex="0">
+                                <span class="multi-select-selected" id="pocProductsSelected">Select products...</span>
+                                <span>▼</span>
+                            </div>
+                            <div class="multi-select-dropdown" id="pocProductsDropdown">
+                                <div class="multi-select-option" onclick="toggleOption('pocProducts', 'AI Agents')">
+                                    <input type="checkbox" value="AI Agents"> AI Agents
+                                </div>
+                                <div class="multi-select-option" onclick="toggleOption('pocProducts', 'Campaign Manager')">
+                                    <input type="checkbox" value="Campaign Manager"> Campaign Manager
+                                </div>
+                                <div class="multi-select-option" onclick="toggleOption('pocProducts', 'Agent Assist')">
+                                    <input type="checkbox" value="Agent Assist"> Agent Assist
+                                </div>
+                                <div class="multi-select-option" onclick="toggleOption('pocProducts', 'Journey Builder')">
+                                    <input type="checkbox" value="Journey Builder"> Journey Builder
+                                </div>
+                                <div class="multi-select-option" onclick="toggleOption('pocProducts', 'Other')">
+                                    <input type="checkbox" value="Other"> Other
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">Start Date</label>
+                            <input type="date" class="form-control" id="pocStartDate" required onchange="setPOCEndDate()">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">End Date</label>
+                            <input type="date" class="form-control" id="pocEndDate" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label required">Use Case Description</label>
+                        <textarea class="form-control" id="useCaseDescription" rows="3" required></textarea>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Demo Environment</label>
+                            <input type="text" class="form-control" id="demoEnvironment">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Bot Trigger URL</label>
+                            <input type="url" class="form-control" id="botTriggerUrl" placeholder="https://...">
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'rfx') {
+                html = `
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label required">RFx Type</label>
+                            <select class="form-control" id="rfxType" required>
+                                <option value="">Select Type</option>
+                                <option value="RFP">RFP (Request for Proposal)</option>
+                                <option value="RFI">RFI (Request for Information)</option>
+                                <option value="RFQ">RFQ (Request for Quote)</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Submission Deadline</label>
+                            <input type="date" class="form-control" id="submissionDeadline" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Google Folder Link</label>
+                        <input type="url" class="form-control" id="googleFolderLink" placeholder="https://drive.google.com/...">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Additional Notes</label>
+                        <textarea class="form-control" id="rfxNotes" rows="3"></textarea>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            // Set default POC end date if POC type is selected
+            if (type === 'poc') {
+                const today = new Date();
+                document.getElementById('pocStartDate').value = today.toISOString().split('T')[0];
+                setPOCEndDate();
+            }
+        }
+
+        function setPOCEndDate() {
+            const startDate = document.getElementById('pocStartDate').value;
+            if (startDate) {
+                const endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + 7);
+                document.getElementById('pocEndDate').value = endDate.toISOString().split('T')[0];
+            }
+        }
+
+        function toggleDealSize() {
+            const status = document.getElementById('opportunityStatus').value;
+            const group = document.getElementById('dealSizeGroup');
+            
+            if (status === 'yes') {
+                group.classList.remove('d-none');
+            } else {
+                group.classList.add('d-none');
+            }
+        }
+
+        // Multi-select Functions
+        function toggleMultiSelect(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            dropdown.classList.toggle('active');
+            
+            // Close other dropdowns
+            document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+                if (d.id !== dropdownId) {
+                    d.classList.remove('active');
+                }
+            });
+        }
+
+        function toggleOption(category, value) {
+            event.stopPropagation();
+            const checkbox = event.currentTarget.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+            
+            let selectedArray;
+            let displayId;
+            
+            if (category === 'useCase') {
+                selectedArray = selectedUseCases;
+                displayId = 'useCaseSelected';
+            } else if (category === 'products') {
+                selectedArray = selectedProducts;
+                displayId = 'productsSelected';
+            } else if (category === 'channels') {
+                selectedArray = selectedChannels;
+                displayId = 'channelsSelected';
+            } else if (category === 'pocProducts') {
+                if (!window.selectedPocProducts) window.selectedPocProducts = [];
+                selectedArray = window.selectedPocProducts;
+                displayId = 'pocProductsSelected';
+            }
+            
+            if (checkbox.checked) {
+                if (!selectedArray.includes(value)) {
+                    selectedArray.push(value);
+                }
+            } else {
+                const index = selectedArray.indexOf(value);
+                if (index > -1) {
+                    selectedArray.splice(index, 1);
+                }
+            }
+            
+            // Update display
+            const display = document.getElementById(displayId);
+            if (selectedArray.length === 0) {
+                display.textContent = display.id.includes('product') ? 'Select products...' : 
+                                      display.id.includes('channel') ? 'Select channels...' : 
+                                      'Select use cases...';
+            } else {
+                display.innerHTML = selectedArray.map(item => 
+                    `<span class="multi-select-tag">${item}</span>`
+                ).join('');
+            }
+        }
+
+        // Save Functions
+        function saveCustomerActivity(event) {
+            event.preventDefault();
+            
+            const accountId = document.getElementById('selectedAccountId').value;
+            const accountName = document.getElementById('accountSearch').value;
+            const projectId = document.getElementById('selectedProjectId').value;
+            const projectName = document.getElementById('projectSearch').value;
+            
+            if (!accountId || !accountName) {
+                alert('Please select or create an account');
+                return;
+            }
+            
+            // Create or get account
+            let finalAccountId = accountId;
+            if (accountId === 'new') {
+                const newAccount = {
+                    id: generateId(),
+                    name: accountName,
+                    industry: document.getElementById('industry').value,
+                    salesRep: document.getElementById('salesRep').value,
+                    projects: [],
+                    createdAt: new Date().toISOString()
+                };
+                
+                const accounts = getAccounts();
+                accounts.push(newAccount);
+                localStorage.setItem('accounts', JSON.stringify(accounts));
+                finalAccountId = newAccount.id;
+            }
+            
+            // Create or get project
+            let finalProjectId = projectId;
+            if (projectId === 'new' && projectName) {
+                const newProject = {
+                    id: generateId(),
+                    name: projectName,
+                    sfdcLink: document.getElementById('sfdcLink').value,
+                    useCases: selectedUseCases,
+                    status: 'active',
+                    activities: [],
+                    createdAt: new Date().toISOString()
+                };
+                
+                const accounts = getAccounts();
+                const account = accounts.find(a => a.id === finalAccountId);
+                if (!account.projects) account.projects = [];
+                account.projects.push(newProject);
+                localStorage.setItem('accounts', JSON.stringify(accounts));
+                finalProjectId = newProject.id;
+            }
+            
+            // Create activity
+            const activityType = document.getElementById('customerActivityType').value;
+            const activity = {
+                id: generateId(),
+                date: document.getElementById('activityDate').value,
+                type: activityType,
+                salesRep: document.getElementById('salesRep').value,
+                industry: document.getElementById('industry').value,
+                customerType: document.getElementById('customerType').value,
+                location: document.getElementById('location').value,
+                participantCount: document.getElementById('participantCount').value,
+                participantRoles: document.getElementById('participantRoles').value,
+                details: {},
+                createdAt: new Date().toISOString()
+            };
+            
+            // Add type-specific details
+            if (activityType === 'customerCall') {
+                activity.details = {
+                    callType: document.getElementById('callType').value,
+                    duration: document.getElementById('callDuration').value,
+                    products: selectedProducts,
+                    channels: selectedChannels,
+                    opportunityStatus: document.getElementById('opportunityStatus').value,
+                    dealSize: document.getElementById('dealSize').value,
+                    competitors: document.getElementById('competitors').value,
+                    objectiveNextSteps: document.getElementById('objectiveNextSteps').value
+                };
+            } else if (activityType === 'poc') {
+                activity.details = {
+                    accountType: document.getElementById('pocAccountType').value,
+                    accessType: document.getElementById('accessType').value,
+                    products: window.selectedPocProducts || [],
+                    startDate: document.getElementById('pocStartDate').value,
+                    endDate: document.getElementById('pocEndDate').value,
+                    useCaseDescription: document.getElementById('useCaseDescription').value,
+                    demoEnvironment: document.getElementById('demoEnvironment').value,
+                    botTriggerUrl: document.getElementById('botTriggerUrl').value
+                };
+            } else if (activityType === 'rfx') {
+                activity.details = {
+                    rfxType: document.getElementById('rfxType').value,
+                    submissionDeadline: document.getElementById('submissionDeadline').value,
+                    googleFolderLink: document.getElementById('googleFolderLink').value,
+                    notes: document.getElementById('rfxNotes').value
+                };
+            }
+            
+            // Save activity to project
+            if (finalProjectId && finalProjectId !== 'new') {
+                const accounts = getAccounts();
+                const account = accounts.find(a => a.id === finalAccountId);
+                const project = account?.projects?.find(p => p.id === finalProjectId);
+                if (project) {
+                    if (!project.activities) project.activities = [];
+                    project.activities.push(activity);
+                    localStorage.setItem('accounts', JSON.stringify(accounts));
+                }
+            }
+            
+            closeModal('customerActivityModal');
+            loadDashboard();
+            showNotification('Customer activity logged successfully!');
+        }
+
+        function saveInternalActivity(event) {
+            event.preventDefault();
+            
+            const activity = {
+                id: generateId(),
+                date: document.getElementById('internalDate').value,
+                type: document.getElementById('internalActivityType').value,
+                timeSpent: document.getElementById('internalTimeSpent').value,
+                topic: document.getElementById('internalTopic').value,
+                createdAt: new Date().toISOString()
+            };
+            
+            const activities = getInternalActivities();
+            activities.push(activity);
+            localStorage.setItem('internalActivities', JSON.stringify(activities));
+            
+            closeModal('internalActivityModal');
+            loadDashboard();
+            showNotification('Internal activity logged successfully!');
+        }
+
+        function saveWinLoss(event) {
+            event.preventDefault();
+            
+            const accountId = document.getElementById('winLossAccountId').value;
+            const projectId = document.getElementById('winLossProjectId').value;
+            const status = document.getElementById('winLossStatus').value;
+            
+            const accounts = getAccounts();
+            const account = accounts.find(a => a.id === accountId);
+            const project = account?.projects?.find(p => p.id === projectId);
+            
+            if (!project) return;
+            
+            project.status = status;
+            
+            if (status === 'won' || status === 'lost') {
+                project.winLossData = {
+                    reason: document.getElementById('winLossReason').value,
+                    competitors: document.getElementById('competitorAnalysis').value,
+                    mrr: document.getElementById('winLossMRR').value,
+                    accountType: document.getElementById('accountType').value,
+                    updatedAt: new Date().toISOString()
+                };
+            } else {
+                delete project.winLossData;
+            }
+            
+            localStorage.setItem('accounts', JSON.stringify(accounts));
+            
+            closeModal('winLossModal');
+            loadWinLossView();
+            showNotification('Project status updated!');
+        }
+
+        // Data Access Functions
+        function getAccounts() {
+            const stored = localStorage.getItem('accounts');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function getInternalActivities() {
+            const stored = localStorage.getItem('internalActivities');
+            return stored ? JSON.parse(stored) : [];
+        }
+
+        function getAllActivitiesWithDates() {
+            const activities = [];
+            const accounts = getAccounts();
+            
+            // Customer activities
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    project.activities?.forEach(activity => {
+                        activities.push({
+                            ...activity,
+                            isInternal: false,
+                            accountName: account.name,
+                            projectName: project.name
+                        });
+                    });
+                });
+            });
+            
+            // Internal activities
+            const internalActivities = getInternalActivities();
+            internalActivities.forEach(activity => {
+                activities.push({
+                    ...activity,
+                    isInternal: true
+                });
+            });
+            
+            return activities;
+        }
+
+        // Helper Functions
+        function getActivityTypeLabel(type) {
+            const labels = {
+                'customerCall': 'Customer Call',
+                'poc': 'POC',
+                'rfx': 'RFx'
+            };
+            return labels[type] || type;
+        }
+
+        function getActivitySummary(activity) {
+            if (!activity.details) return '';
+            
+            if (activity.type === 'customerCall') {
+                return `${activity.details.callType || 'Call'} - ${activity.details.duration || '0'} mins`;
+            } else if (activity.type === 'poc') {
+                return `${activity.details.accessType || 'POC'} - ${activity.details.useCaseDescription || ''}`;
+            } else if (activity.type === 'rfx') {
+                return `${activity.details.rfxType || 'RFx'} - Due: ${formatDate(activity.details.submissionDeadline)}`;
+            }
+            
+            return '';
+        }
+
+        function resetCustomerActivityForm() {
+            document.getElementById('customerActivityForm').reset();
+            document.getElementById('selectedAccountId').value = '';
+            document.getElementById('selectedProjectId').value = '';
+            document.getElementById('projectSearch').disabled = true;
+            document.getElementById('projectSearch').placeholder = "Select account first...";
+            document.getElementById('customerActivityFields').innerHTML = '';
+            selectedUseCases = [];
+            selectedProducts = [];
+            selectedChannels = [];
+            window.selectedPocProducts = [];
+        }
+
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function formatMonth(monthString) {
+            const [year, month] = monthString.split('-');
+            const date = new Date(year, month - 1);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        }
+
+        function toggleCollapsible(id) {
+            const content = document.getElementById(id);
+            const chevron = document.getElementById('chevron-' + id);
+            
+            if (content) {
+                content.classList.toggle('active');
+            }
+            if (chevron) {
+                chevron.classList.toggle('rotate');
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function filterWinLoss() {
+            const searchTerm = document.getElementById('winlossSearch').value.toLowerCase();
+            const projectCards = document.querySelectorAll('.project-card');
+            
+            projectCards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function performSearch() {
+            // Implementation for search functionality
+            loadActivitiesView();
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #6B46C1 0%, #805AD5 100%);
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 0.5rem;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                z-index: 1001;
+                animation: slideIn 0.3s ease;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Close modals on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+            
+            // Close dropdowns when clicking outside
+            if (!event.target.closest('.multi-select-container')) {
+                document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+            
+            if (!event.target.closest('.search-select-container')) {
+                document.querySelectorAll('.search-select-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,2834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presales Activity Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .sidebar-active { background-color: #3b82f6; color: white; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .notification { position: fixed; top: 20px; right: 20px; z-index: 1000; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+        .calendar-day { min-height: 120px; border: 1px solid #e5e7eb; }
+        .calendar-day:hover { background-color: #f9fafb; }
+        .account-card { transition: all 0.3s ease; }
+        .account-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .missing-sfdc { border-left: 4px solid #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+<!-- Login Screen -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+        <h1 class="text-2xl font-bold text-center mb-6 text-blue-600">Presales Activity Tracker</h1>
+        <form id="loginForm">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Username</label>
+                <input type="text" id="username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
+                <input type="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">Login</button>
+        </form>
+        <p class="text-xs text-gray-500 mt-4 text-center">Demo: admin/admin123 or user/user123</p>
+    </div>
+</div>
+
+<!-- Main Application -->
+<div id="mainApp" class="hidden">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="flex items-center justify-between px-6 py-4">
+            <h1 class="text-xl font-semibold text-gray-800">Presales Activity Tracker</h1>
+            <div class="flex items-center space-x-4">
+                <div id="userInfo" class="flex items-center space-x-2">
+                    <span id="userName" class="text-sm font-medium text-gray-700"></span>
+                    <div id="userRoles" class="flex space-x-1"></div>
+                </div>
+                <button id="logoutBtn" class="text-sm text-gray-600 hover:text-gray-800">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <nav class="w-64 bg-white shadow-sm min-h-screen">
+            <ul class="py-4">
+                <li><a href="#" data-view="dashboard" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                    </svg>
+                    Dashboard</a></li>
+                <li><a href="#" data-view="accounts" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-2m-2 0H7m5 0v-5a2 2 0 00-2-2H8a2 2 0 00-2 2v5m5 0h4"></path>
+                    </svg>
+                    Accounts</a></li>
+                <li><a href="#" data-view="newEntry" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                    New Entry</a></li>
+                <li><a href="#" data-view="myActivities" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    My Activities</a></li>
+                <li id="analyticsNav" class="hidden"><a href="#" data-view="analytics" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2-2V7a2 2 0 012-2h2a2 2 0 002 2v1M9 19l3 2 3-2M9 19l3-2 3 2m0 0h2a2 2 0 002-2v-1a2 2 0 00-2-2h-2m-6-2V9a2 2 0 012-2h2a2 2 0 012 2v2"></path>
+                    </svg>
+                    Analytics</a></li>
+                <li id="pocAdminNav" class="hidden"><a href="#" data-view="pocAdmin" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    POC Admin</a></li>
+                <li id="adminNav" class="hidden"><a href="#" data-view="admin" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    </svg>
+                    Admin Panel</a></li>
+                <li><a href="#" data-view="settings" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-50 sidebar-link">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Settings</a></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6">
+            <!-- Dashboard View -->
+            <div id="dashboardView" class="view fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
+                
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-blue-100 mr-4">
+                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Today's Activities</p>
+                                <p id="todayActivities" class="text-2xl font-bold text-gray-800">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-green-100 mr-4">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Active POCs</p>
+                                <p id="activePOCs" class="text-2xl font-bold text-gray-800">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-yellow-100 mr-4">
+                                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Total Accounts</p>
+                                <p id="totalAccounts" class="text-2xl font-bold text-gray-800">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <div class="flex items-center">
+                            <div class="p-3 rounded-full bg-red-100 mr-4">
+                                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.966-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Missing SFDC Links</p>
+                                <p id="missingSFDC" class="text-2xl font-bold text-gray-800">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Missing SFDC Links Widget -->
+                <div id="missingSFDCWidget" class="bg-red-50 border-l-4 border-red-400 p-4 mb-6 rounded-lg hidden">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800">Missing SFDC Links Alert</h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p>You have projects missing SFDC links. <a href="#" onclick="app.viewMissingSFDCReport()" class="font-medium underline">View detailed report</a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white p-6 rounded-lg shadow mb-8">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <button data-activity="Customer Call" class="bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 quick-action">New Customer Call</button>
+                        <button data-activity="POC" class="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 quick-action">New POC</button>
+                        <button data-activity="RFP" class="bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 quick-action">New RFP</button>
+                        <button data-activity="Other Activity" class="bg-gray-600 text-white px-4 py-3 rounded-lg hover:bg-gray-700 quick-action">+New Entry</button>
+                    </div>
+                </div>
+
+                <!-- Recent Activities -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold text-gray-800">Recent Activities</h3>
+                    </div>
+                    <div class="p-6">
+                        <div id="recentActivitiesTable" class="overflow-x-auto">
+                            <!-- Table will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accounts View -->
+            <div id="accountsView" class="view hidden fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Accounts</h2>
+                    <div class="flex space-x-4">
+                        <input type="text" id="accountSearch" placeholder="Search accounts..." class="px-4 py-2 border rounded-lg">
+                        <select id="accountRegionFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Regions</option>
+                        </select>
+                        <select id="accountIndustryFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Industries</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="accountsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Account cards will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- New Entry View -->
+            <div id="newEntryView" class="view hidden fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">New Activity Entry</h2>
+                
+                <!-- Step 1: Activity Type Selection -->
+                <div id="activityTypeStep" class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Select Activity Type</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <button data-type="Customer Call" class="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                                </svg>
+                                <p class="font-medium">Customer Call</p>
+                            </div>
+                        </button>
+                        
+                        <button data-type="POC" class="p-4 border-2 border-gray-200 rounded-lg hover:border-green-500 hover:bg-green-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                                <p class="font-medium">POC</p>
+                            </div>
+                        </button>
+                        
+                        <button data-type="SOW" class="p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <p class="font-medium">SOW</p>
+                            </div>
+                        </button>
+                        
+                        <button data-type="RFP" class="p-4 border-2 border-gray-200 rounded-lg hover:border-red-500 hover:bg-red-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V9a2 2 0 012-2h6l2 2h6a2 2 0 012 2v7a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <p class="font-medium">RFP</p>
+                            </div>
+                        </button>
+                        
+                        <button data-type="Demo/Presentation" class="p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2M7 4h10M7 4l-2 14h14l-2-14M11 9h2M9 13h6"></path>
+                                </svg>
+                                <p class="font-medium">Demo/Presentation</p>
+                            </div>
+                        </button>
+                        
+                        <button data-type="Other Activity" class="p-4 border-2 border-gray-200 rounded-lg hover:border-gray-500 hover:bg-gray-50 activity-type-btn">
+                            <div class="text-center">
+                                <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                <p class="font-medium">Other Activity</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Form -->
+                <div id="dynamicForm" class="hidden">
+                    <form id="activityForm" class="space-y-6">
+                        <!-- Form content will be dynamically generated -->
+                    </form>
+                </div>
+            </div>
+
+            <!-- My Activities View -->
+            <div id="myActivitiesView" class="view hidden fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">My Activities</h2>
+                    <div class="flex space-x-4">
+                        <input type="text" id="activitySearch" placeholder="Search activities..." class="px-4 py-2 border rounded-lg">
+                        <select id="activityFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Types</option>
+                            <option value="Customer Call">Customer Call</option>
+                            <option value="POC">POC</option>
+                            <option value="SOW">SOW</option>
+                            <option value="RFP">RFP</option>
+                            <option value="Demo/Presentation">Demo/Presentation</option>
+                            <option value="Other Activity">Other Activity</option>
+                        </select>
+                        <select id="monthFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Months</option>
+                        </select>
+                        <select id="accountActivityFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Accounts</option>
+                        </select>
+                        <button id="deleteActivitiesBtn" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">Delete Activities</button>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow">
+                    <div id="activitiesTable" class="p-6">
+                        <!-- Activities table will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics View -->
+            <div id="analyticsView" class="view hidden fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Analytics Dashboard</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-4">Activities by Type</h3>
+                        <canvas id="activityTypeChart"></canvas>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-4">Monthly Activity Trend</h3>
+                        <canvas id="monthlyTrendChart"></canvas>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-4">Products Discussed</h3>
+                        <canvas id="productsChart"></canvas>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-4">Regional Distribution</h3>
+                        <canvas id="regionalChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Win/Loss Analysis</h3>
+                    <canvas id="winLossChart"></canvas>
+                </div>
+            </div>
+
+            <!-- POC Admin View -->
+            <div id="pocAdminView" class="view hidden fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">POC Admin</h2>
+                    <div id="pocNotifications" class="bg-red-100 text-red-800 px-4 py-2 rounded-lg hidden">
+                        <span id="pocNotificationCount">0</span> new POC requests
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold text-gray-800">POC Management</h3>
+                    </div>
+                    <div class="p-6">
+                        <div id="pocAdminTable" class="overflow-x-auto">
+                            <!-- POC table will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Panel View -->
+            <div id="adminView" class="view hidden fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Admin Panel</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- User Management -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">User Management</h3>
+                        <button id="addUserBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mb-4">Add New User</button>
+                        <div id="usersList" class="space-y-2">
+                            <!-- Users list will be populated by JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <!-- Industry & Region Management -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Industry Management</h3>
+                        <div class="flex mb-4">
+                            <input type="text" id="newIndustry" placeholder="Add new industry" class="flex-1 px-3 py-2 border rounded-l-lg">
+                            <button id="addIndustryBtn" class="bg-green-600 text-white px-4 py-2 rounded-r-lg hover:bg-green-700">Add</button>
+                        </div>
+                        <div id="industriesList" class="space-y-2 max-h-40 overflow-y-auto mb-6">
+                            <!-- Industries list will be populated by JavaScript -->
+                        </div>
+                        
+                        <h4 class="text-md font-semibold text-gray-800 mb-2">Region Management</h4>
+                        <div class="flex mb-4">
+                            <input type="text" id="newRegion" placeholder="Add new region" class="flex-1 px-3 py-2 border rounded-l-lg">
+                            <button id="addRegionBtn" class="bg-green-600 text-white px-4 py-2 rounded-r-lg hover:bg-green-700">Add</button>
+                        </div>
+                        <div id="regionsList" class="space-y-2 max-h-40 overflow-y-auto">
+                            <!-- Regions list will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- All Activities View (Admin) -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">All Activities Management</h3>
+                    <div class="flex mb-4 space-x-4">
+                        <select id="adminPresalesFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Presales Reps</option>
+                        </select>
+                        <select id="adminRegionFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Regions</option>
+                        </select>
+                        <select id="adminActivityFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">All Activity Types</option>
+                        </select>
+                    </div>
+                    <div id="adminActivitiesTable" class="overflow-x-auto">
+                        <!-- Admin activities table will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settingsView" class="view hidden fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Settings</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- My Regions -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">My Regions</h3>
+                        <div id="userRegionsList" class="space-y-2">
+                            <!-- User regions will be populated by JavaScript -->
+                        </div>
+                        <button id="saveRegions" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 mt-4">Save Regions</button>
+                    </div>
+                    
+                    <!-- My Sales Reps -->
+                    <div class="bg-white p-6 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">My Sales Reps</h3>
+                        <div class="flex mb-4">
+                            <input type="text" id="newSalesRep" placeholder="Add sales rep name" class="flex-1 px-3 py-2 border rounded-l-lg">
+                            <button id="addSalesRepBtn" class="bg-green-600 text-white px-4 py-2 rounded-r-lg hover:bg-green-700">Add</button>
+                        </div>
+                        <div id="salesRepsList" class="space-y-2 max-h-60 overflow-y-auto">
+                            <!-- Sales reps list will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Calendar Integration -->
+                <div class="bg-white p-6 rounded-lg shadow mt-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Calendar Integration</h3>
+                    <div class="mb-4">
+                        <p class="text-sm text-gray-600 mb-2">Email for calendar integration:</p>
+                        <div class="bg-gray-100 p-3 rounded-lg">
+                            <code class="text-sm">activities@presales-tracker.com</code>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Share this email with your Google Calendar to automatically log events as activities.</p>
+                    </div>
+                    <button id="connectCalendar" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Connect Calendar</button>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- Modals -->
+<!-- Add User Modal -->
+<div id="addUserModal" class="modal">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+        <h3 class="text-lg font-semibold mb-4">Add New User</h3>
+        <form id="addUserForm">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Username</label>
+                <input type="text" id="newUsername" class="w-full px-3 py-2 border rounded-lg" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <input type="email" id="newUserEmail" class="w-full px-3 py-2 border rounded-lg" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                <input type="password" id="newPassword" class="w-full px-3 py-2 border rounded-lg" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Roles</label>
+                <div class="space-y-2">
+                    <label class="flex items-center">
+                        <input type="checkbox" value="Presales User" class="mr-2 role-checkbox">
+                        <span>Presales User</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" value="POC Admin" class="mr-2 role-checkbox">
+                        <span>POC Admin</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" value="Admin" class="mr-2 role-checkbox">
+                        <span>Admin</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" value="Analytics Access" class="mr-2 role-checkbox">
+                        <span>Analytics Access</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancelAddUser" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Add User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Account Details Modal -->
+<div id="accountDetailsModal" class="modal">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+        <h3 class="text-lg font-semibold mb-4">Account Details</h3>
+        <div id="accountDetailsContent">
+            <!-- Account details will be populated by JavaScript -->
+        </div>
+        <div class="flex justify-end space-x-4 mt-6">
+            <button type="button" id="closeAccountDetails" class="px-4 py-2 text-gray-600 hover:text-gray-800">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- POC Extension Request Modal -->
+<div id="pocExtensionModal" class="modal">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+        <h3 class="text-lg font-semibold mb-4">Request POC Extension</h3>
+        <form id="pocExtensionForm">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Extension Period (days)</label>
+                <input type="number" id="extensionDays" class="w-full px-3 py-2 border rounded-lg" min="1" max="30" required>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Reason for Extension</label>
+                <textarea id="extensionReason" class="w-full px-3 py-2 border rounded-lg" rows="3" required></textarea>
+            </div>
+            <div class="flex justify-end space-x-4">
+                <button type="button" id="cancelPOCExtension" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Request Extension</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Missing SFDC Report Modal -->
+<div id="missingSFDCModal" class="modal">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+        <h3 class="text-lg font-semibold mb-4">Missing SFDC Links Report</h3>
+        <div id="missingSFDCContent">
+            <!-- Missing SFDC report content will be populated by JavaScript -->
+        </div>
+        <div class="flex justify-end space-x-4 mt-6">
+            <button id="exportMissingSFDC" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Export CSV</button>
+            <button type="button" id="closeMissingSFDC" class="px-4 py-2 text-gray-600 hover:text-gray-800">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Notification -->
+<div id="notification" class="notification hidden">
+    <div class="bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg">
+        <span id="notificationText"></span>
+    </div>
+</div>
+
+<script>
+class PresalesTracker {
+    constructor() {
+        this.currentUser = null;
+        this.currentView = 'dashboard';
+        this.selectedActivityType = null;
+        this.editingActivity = null;
+        this.charts = {};
+        this.selectedActivities = new Set();
+        
+        // Default data
+        this.initializeDefaultData();
+        this.initializeEventListeners();
+    }
+
+    initializeDefaultData() {
+        // Initialize default users if none exist
+        if (!JSON.parse(localStorage.getItem('users') || '[]').length) {
+            const defaultUsers = [
+                {
+                    id: 1,
+                    username: 'admin',
+                    email: 'admin@example.com',
+                    password: 'admin123',
+                    roles: ['Admin', 'Presales User', 'POC Admin', 'Analytics Access'],
+                    regions: ['India South', 'India North'],
+                    salesReps: ['John Doe', 'Jane Smith', 'Admin User']
+                },
+                {
+                    id: 2,
+                    username: 'user',
+                    email: 'user@example.com',
+                    password: 'user123',
+                    roles: ['Presales User'],
+                    regions: ['India South'],
+                    salesReps: ['John Doe', 'User Rep']
+                }
+            ];
+            localStorage.setItem('users', JSON.stringify(defaultUsers));
+        }
+
+        // Initialize default industries
+        if (!JSON.parse(localStorage.getItem('industries') || '[]').length) {
+            const defaultIndustries = [
+                'Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing',
+                'Education', 'Government', 'Telecommunications', 'Banking', 'Insurance',
+                'E-commerce', 'Media', 'Transportation', 'Energy'
+            ];
+            localStorage.setItem('industries', JSON.stringify(defaultIndustries));
+        }
+
+        // Initialize default regions
+        if (!JSON.parse(localStorage.getItem('regions') || '[]').length) {
+            const defaultRegions = [
+                'India South', 'India North', 'India West', 'India East',
+                'MENA', 'EU', 'NA', 'SEA', 'Africa', 'APAC', 'LATAM'
+            ];
+            localStorage.setItem('regions', JSON.stringify(defaultRegions));
+        }
+
+        // Initialize activities if none exist
+        if (!localStorage.getItem('activities')) {
+            localStorage.setItem('activities', JSON.stringify([]));
+        }
+
+        // Initialize projects if none exist
+        if (!localStorage.getItem('projects')) {
+            localStorage.setItem('projects', JSON.stringify([]));
+        }
+    }
+
+    initializeEventListeners() {
+        // Login form
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleLogin();
+        });
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.logout();
+        });
+
+        // Navigation
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = e.currentTarget.dataset.view;
+                this.switchView(view);
+            });
+        });
+
+        // Activity type selection
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.activity-type-btn')) {
+                this.selectedActivityType = e.target.closest('.activity-type-btn').dataset.type;
+                this.showDynamicForm();
+            }
+        });
+
+        // Quick actions
+        document.querySelectorAll('.quick-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.selectedActivityType = e.currentTarget.dataset.activity;
+                this.switchView('newEntry');
+                setTimeout(() => this.showDynamicForm(), 100);
+            });
+        });
+
+        // Settings
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'saveRegions') this.saveUserRegions();
+            if (e.target.id === 'addSalesRepBtn') this.addSalesRep();
+            if (e.target.id === 'addUserBtn') this.showAddUserModal();
+            if (e.target.id === 'addIndustryBtn') this.addIndustry();
+            if (e.target.id === 'addRegionBtn') this.addRegion();
+            if (e.target.id === 'deleteActivitiesBtn') this.deleteSelectedActivities();
+        });
+
+        // Modal handlers
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'cancelAddUser') this.hideModal('addUserModal');
+            if (e.target.id === 'closeAccountDetails') this.hideModal('accountDetailsModal');
+            if (e.target.id === 'cancelPOCExtension') this.hideModal('pocExtensionModal');
+            if (e.target.id === 'closeMissingSFDC') this.hideModal('missingSFDCModal');
+            if (e.target.id === 'exportMissingSFDC') this.exportMissingSFDCReport();
+        });
+
+        // Form submissions
+        document.addEventListener('submit', (e) => {
+            if (e.target.id === 'addUserForm') {
+                e.preventDefault();
+                this.addUser();
+            }
+            if (e.target.id === 'activityForm') {
+                e.preventDefault();
+                this.submitActivity();
+            }
+            if (e.target.id === 'pocExtensionForm') {
+                e.preventDefault();
+                this.submitPOCExtension();
+            }
+        });
+
+        // Search and filter
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'activitySearch' || e.target.id === 'accountSearch') this.handleSearch();
+        });
+
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'activityFilter' || e.target.id === 'monthFilter' || e.target.id === 'accountActivityFilter') this.filterActivities();
+            if (e.target.id === 'accountRegionFilter' || e.target.id === 'accountIndustryFilter') this.filterAccounts();
+            if (e.target.id === 'adminPresalesFilter' || e.target.id === 'adminRegionFilter' || e.target.id === 'adminActivityFilter') this.filterAdminActivities();
+        });
+
+        // Calendar integration
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'connectCalendar') this.connectCalendar();
+        });
+    }
+
+    handleLogin() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const user = users.find(u => u.username === username && u.password === password);
+        
+        if (user) {
+            this.currentUser = user;
+            this.showMainApp();
+            this.updateNavigation();
+            this.switchView('dashboard');
+        } else {
+            this.showNotification('Invalid credentials', 'error');
+        }
+    }
+
+    logout() {
+        this.currentUser = null;
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+    }
+
+    showMainApp() {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('mainApp').classList.remove('hidden');
+        
+        // Update user info
+        document.getElementById('userName').textContent = this.currentUser.username;
+        
+        // Update user roles display
+        const rolesContainer = document.getElementById('userRoles');
+        rolesContainer.innerHTML = '';
+        this.currentUser.roles.forEach(role => {
+            const badge = document.createElement('span');
+            badge.className = 'px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full';
+            badge.textContent = role;
+            rolesContainer.appendChild(badge);
+        });
+    }
+
+    updateNavigation() {
+        // Show/hide navigation items based on user roles
+        document.getElementById('analyticsNav').classList.toggle('hidden', 
+            !this.currentUser.roles.includes('Analytics Access') && !this.currentUser.roles.includes('Admin'));
+        document.getElementById('pocAdminNav').classList.toggle('hidden', 
+            !this.currentUser.roles.includes('POC Admin') && !this.currentUser.roles.includes('Admin'));
+        document.getElementById('adminNav').classList.toggle('hidden', 
+            !this.currentUser.roles.includes('Admin'));
+    }
+
+    switchView(viewName) {
+        // Hide all views
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.add('hidden');
+        });
+
+        // Remove active class from all sidebar links
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.classList.remove('sidebar-active');
+        });
+
+        // Show selected view
+        document.getElementById(viewName + 'View').classList.remove('hidden');
+        
+        // Add active class to current sidebar link
+        const currentLink = document.querySelector(`[data-view="${viewName}"]`);
+        if (currentLink) currentLink.classList.add('sidebar-active');
+
+        this.currentView = viewName;
+
+        // Load view-specific data
+        switch(viewName) {
+            case 'dashboard':
+                this.loadDashboard();
+                break;
+            case 'accounts':
+                this.loadAccounts();
+                break;
+            case 'myActivities':
+                this.loadMyActivities();
+                break;
+            case 'analytics':
+                this.loadAnalytics();
+                break;
+            case 'pocAdmin':
+                this.loadPOCAdmin();
+                break;
+            case 'admin':
+                this.loadAdminPanel();
+                break;
+            case 'settings':
+                this.loadSettings();
+                break;
+            case 'newEntry':
+                this.resetNewEntryForm();
+                break;
+        }
+    }
+
+    loadDashboard() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        const userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        const userProjects = projects.filter(project => project.userId === this.currentUser.id);
+        
+        const today = new Date().toDateString();
+        const thisMonth = new Date().getMonth();
+        
+        // Update stats
+        document.getElementById('todayActivities').textContent = 
+            userActivities.filter(activity => new Date(activity.createdAt).toDateString() === today).length;
+        
+        document.getElementById('activePOCs').textContent = 
+            userActivities.filter(activity => activity.type === 'POC' && 
+                !['Completed', 'Closed', 'Cancelled'].includes(activity.status)).length;
+        
+        const uniqueAccounts = new Set(userActivities.map(activity => activity.account).filter(Boolean));
+        document.getElementById('totalAccounts').textContent = uniqueAccounts.size;
+
+        // Calculate missing SFDC links
+        const missingSFDC = userProjects.filter(project => !project.sfdcLink || project.sfdcLink.trim() === '').length;
+        document.getElementById('missingSFDC').textContent = missingSFDC;
+        
+        // Show/hide missing SFDC widget
+        const widget = document.getElementById('missingSFDCWidget');
+        if (missingSFDC > 0) {
+            widget.classList.remove('hidden');
+        } else {
+            widget.classList.add('hidden');
+        }
+
+        // Load recent activities
+        this.loadRecentActivities();
+    }
+
+    loadAccounts() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        
+        const userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        const userProjects = projects.filter(project => project.userId === this.currentUser.id);
+        
+        // Group activities by account
+        const accountsMap = new Map();
+        
+        userActivities.forEach(activity => {
+            if (!activity.account) return;
+            
+            if (!accountsMap.has(activity.account)) {
+                accountsMap.set(activity.account, {
+                    name: activity.account,
+                    industry: activity.industry,
+                    region: activity.region,
+                    salesRep: activity.salesRep,
+                    activities: [],
+                    projects: [],
+                    lastActivity: null
+                });
+            }
+            
+            const account = accountsMap.get(activity.account);
+            account.activities.push(activity);
+            
+            if (!account.lastActivity || new Date(activity.createdAt) > new Date(account.lastActivity.createdAt)) {
+                account.lastActivity = activity;
+            }
+        });
+
+        // Add projects to accounts
+        userProjects.forEach(project => {
+            if (!project.account) return;
+            
+            if (accountsMap.has(project.account)) {
+                accountsMap.get(project.account).projects.push(project);
+            }
+        });
+
+        this.displayAccounts(Array.from(accountsMap.values()));
+        this.populateAccountFilters();
+    }
+
+    displayAccounts(accounts) {
+        const container = document.getElementById('accountsContainer');
+        
+        if (accounts.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-8 col-span-full">No accounts found</p>';
+            return;
+        }
+
+        const html = accounts.map(account => `
+            <div class="account-card bg-white p-6 rounded-lg shadow cursor-pointer ${!account.projects.some(p => p.sfdcLink) ? 'missing-sfdc' : ''}" 
+                 onclick="app.viewAccountDetails('${account.name}')">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">${account.name}</h3>
+                    ${!account.projects.some(p => p.sfdcLink) ? '<div class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">Missing SFDC</div>' : ''}
+                </div>
+                <div class="space-y-2 text-sm text-gray-600">
+                    <div><strong>Industry:</strong> ${account.industry || 'N/A'}</div>
+                    <div><strong>Region:</strong> ${account.region || 'N/A'}</div>
+                    <div><strong>Sales Rep:</strong> ${account.salesRep || 'N/A'}</div>
+                    <div><strong>Projects:</strong> ${account.projects.length}</div>
+                    <div><strong>Activities:</strong> ${account.activities.length}</div>
+                    ${account.lastActivity ? `<div><strong>Last Activity:</strong> ${new Date(account.lastActivity.createdAt).toLocaleDateString()} (${account.lastActivity.type})</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+    }
+
+    populateAccountFilters() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        
+        // Populate region filter
+        const regions = [...new Set(userActivities.map(a => a.region).filter(Boolean))];
+        const regionFilter = document.getElementById('accountRegionFilter');
+        regionFilter.innerHTML = '<option value="">All Regions</option>' + 
+            regions.map(region => `<option value="${region}">${region}</option>`).join('');
+        
+        // Populate industry filter
+        const industries = [...new Set(userActivities.map(a => a.industry).filter(Boolean))];
+        const industryFilter = document.getElementById('accountIndustryFilter');
+        industryFilter.innerHTML = '<option value="">All Industries</option>' + 
+            industries.map(industry => `<option value="${industry}">${industry}</option>`).join('');
+    }
+
+    filterAccounts() {
+        // Implement account filtering logic
+        this.loadAccounts();
+    }
+
+    viewAccountDetails(accountName) {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        
+        const accountActivities = activities.filter(a => a.account === accountName && a.userId === this.currentUser.id);
+        const accountProjects = projects.filter(p => p.account === accountName && p.userId === this.currentUser.id);
+        
+        const content = document.getElementById('accountDetailsContent');
+        content.innerHTML = `
+            <h4 class="text-lg font-semibold mb-4">${accountName}</h4>
+            
+            <!-- Projects Section -->
+            <div class="mb-6">
+                <h5 class="font-semibold mb-2">Projects (${accountProjects.length})</h5>
+                ${accountProjects.length > 0 ? `
+                    <div class="space-y-2">
+                        ${accountProjects.map(project => `
+                            <div class="border rounded-lg p-3 ${!project.sfdcLink ? 'border-red-300 bg-red-50' : 'border-gray-200'}">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h6 class="font-medium">${project.name}</h6>
+                                        <p class="text-sm text-gray-600">Industry: ${project.industry || 'N/A'} | Region: ${project.region || 'N/A'}</p>
+                                        ${project.sfdcLink ? `<p class="text-sm"><a href="${project.sfdcLink}" target="_blank" class="text-blue-600 hover:underline">SFDC Link</a></p>` : '<p class="text-sm text-red-600">Missing SFDC Link</p>'}
+                                    </div>
+                                    ${!project.sfdcLink ? `<button onclick="app.addSFDCLink(${project.id})" class="text-xs bg-blue-600 text-white px-2 py-1 rounded">Add Link</button>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<p class="text-gray-500">No projects found</p>'}
+            </div>
+            
+            <!-- Activities Section -->
+            <div class="mb-6">
+                <h5 class="font-semibold mb-2">Recent Activities (${accountActivities.length})</h5>
+                ${accountActivities.length > 0 ? `
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                        ${accountActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(activity => `
+                            <div class="border rounded-lg p-3">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h6 class="font-medium">${activity.type}</h6>
+                                        <p class="text-sm text-gray-600">${new Date(activity.createdAt).toLocaleDateString()}</p>
+                                        ${activity.notes ? `<p class="text-sm mt-1">${activity.notes}</p>` : ''}
+                                    </div>
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${this.getStatusColor(activity.status)}">
+                                        ${activity.status || 'Completed'}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<p class="text-gray-500">No activities found</p>'}
+            </div>
+        `;
+        
+        this.showModal('accountDetailsModal');
+    }
+
+    addSFDCLink(projectId) {
+        const link = prompt('Enter SFDC Link:');
+        if (link) {
+            const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+            const projectIndex = projects.findIndex(p => p.id === projectId);
+            if (projectIndex !== -1) {
+                projects[projectIndex].sfdcLink = link;
+                localStorage.setItem('projects', JSON.stringify(projects));
+                this.showNotification('SFDC Link added successfully!');
+                this.hideModal('accountDetailsModal');
+                this.loadDashboard();
+            }
+        }
+    }
+
+    viewMissingSFDCReport() {
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        const userProjects = projects.filter(p => p.userId === this.currentUser.id);
+        const missingSFDCProjects = userProjects.filter(project => !project.sfdcLink || project.sfdcLink.trim() === '');
+        
+        const content = document.getElementById('missingSFDCContent');
+        content.innerHTML = `
+            <div class="mb-4">
+                <h4 class="font-semibold">Projects Missing SFDC Links (${missingSFDCProjects.length})</h4>
+                <p class="text-sm text-gray-600">These projects require SFDC links to be added for proper tracking.</p>
+            </div>
+            
+            ${missingSFDCProjects.length > 0 ? `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Industry</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${missingSFDCProjects.map(project => `
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${project.name}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${project.account}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${project.industry || 'N/A'}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${project.region || 'N/A'}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(project.createdAt).toLocaleDateString()}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        <button onclick="app.addSFDCLink(${project.id})" class="text-blue-600 hover:text-blue-900">Add Link</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '<p class="text-gray-500 text-center py-8">All projects have SFDC links!</p>'}
+        `;
+        
+        this.showModal('missingSFDCModal');
+    }
+
+    exportMissingSFDCReport() {
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        const userProjects = projects.filter(p => p.userId === this.currentUser.id);
+        const missingSFDCProjects = userProjects.filter(project => !project.sfdcLink || project.sfdcLink.trim() === '');
+        
+        const csvContent = [
+            ['Project Name', 'Account', 'Industry', 'Region', 'Created Date'],
+            ...missingSFDCProjects.map(project => [
+                project.name,
+                project.account,
+                project.industry || '',
+                project.region || '',
+                new Date(project.createdAt).toLocaleDateString()
+            ])
+        ];
+        
+        const csv = csvContent.map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'missing-sfdc-links-report.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    showDynamicForm() {
+        document.getElementById('activityTypeStep').classList.add('hidden');
+        document.getElementById('dynamicForm').classList.remove('hidden');
+        this.generateDynamicForm();
+    }
+
+    generateDynamicForm() {
+        const form = document.getElementById('activityForm');
+        const formData = this.getFormFields();
+        
+        let html = '';
+        
+        formData.forEach(field => {
+            html += this.generateFieldHTML(field);
+        });
+        
+        html += `
+            <div class="flex justify-end space-x-4 pt-6">
+                <button type="button" id="backToSelection" class="px-4 py-2 text-gray-600 hover:text-gray-800">Back</button>
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">Submit Activity</button>
+            </div>
+        `;
+        
+        form.innerHTML = `<div class="bg-white p-6 rounded-lg shadow">${html}</div>`;
+        
+        // Add event listeners
+        document.getElementById('backToSelection').addEventListener('click', () => {
+            this.resetNewEntryForm();
+        });
+
+        // Add dynamic field behaviors
+        this.addDynamicFieldBehaviors();
+    }
+
+    getFormFields() {
+        const commonFields = [
+            { name: 'date', label: 'Date of Activity', type: 'date', required: true },
+            { name: 'salesRep', label: 'Sales Rep Name', type: 'salesrep', required: true },
+            { name: 'account', label: 'Account Name', type: 'account', required: true },
+            { name: 'project', label: 'Project Name', type: 'project', required: true },
+            { name: 'industry', label: 'Industry', type: 'industry', required: true },
+            { name: 'region', label: 'Region', type: 'region', required: true }
+        ];
+
+        const projectFields = [
+            { name: 'sfdcLink', label: 'SFDC Link', type: 'url', required: false },
+            { name: 'primaryUseCase', label: 'Primary Use Case', type: 'usecase', required: true },
+            { name: 'productsInterested', label: 'Products Interested In', type: 'products', required: false }
+        ];
+
+        switch(this.selectedActivityType) {
+            case 'Customer Call':
+                return [
+                    ...commonFields,
+                    ...projectFields,
+                    { name: 'callType', label: 'Call Type', type: 'calltype', required: true },
+                    { name: 'meetingType', label: 'Meeting Type', type: 'meetingtype', required: true },
+                    { name: 'channels', label: 'Channels Discussed', type: 'channels', required: false },
+                    { name: 'minutes', label: 'Minutes of Meeting', type: 'textarea', required: false },
+                    { name: 'sentiment', label: 'Sentiment Analysis', type: 'sentiment', required: false },
+                    { name: 'productFitment', label: 'Product Fitment Rating', type: 'rating', required: false },
+                    { name: 'opportunityRating', label: 'Opportunity Rating', type: 'rating', required: false }
+                ];
+
+            case 'POC':
+                return [
+                    ...commonFields,
+                    ...projectFields,
+                    { name: 'pocAccountType', label: 'POC Account Type', type: 'pocaccounttype', required: true },
+                    { name: 'pocType', label: 'POC Type', type: 'poctype', required: true },
+                    { name: 'startDate', label: 'Start Date', type: 'date', required: true, dependsOn: 'pocType', showFor: ['Sandbox Access'] },
+                    { name: 'endDate', label: 'End Date', type: 'date', required: true, dependsOn: 'pocType', showFor: ['Sandbox Access'] },
+                    { name: 'triggerKeyword', label: 'Trigger Keyword/Number', type: 'text', required: true, dependsOn: 'pocType', hideFor: ['Structured POC'] },
+                    { name: 'pocNumber', label: 'Which Number POC Deployed', type: 'number', required: true, dependsOn: 'pocType', hideFor: ['Sandbox Access'] },
+                    { name: 'pocDescription', label: 'POC Description', type: 'textarea', required: false }
+                ];
+
+            case 'SOW':
+                return [
+                    ...commonFields,
+                    ...projectFields,
+                    { name: 'sowUrl', label: 'SOW URL', type: 'url', required: true },
+                    { name: 'description', label: 'Description', type: 'textarea', required: false }
+                ];
+
+            case 'RFP':
+                return [
+                    ...commonFields,
+                    ...projectFields,
+                    { name: 'timeSpent', label: 'Time Spent (hours)', type: 'number', required: true },
+                    { name: 'driveLink', label: 'Google Drive Folder Link', type: 'url', required: true },
+                    { name: 'requirements', label: 'Requirements Description', type: 'textarea', required: true }
+                ];
+
+            case 'Demo/Presentation':
+                return [
+                    ...commonFields,
+                    ...projectFields,
+                    { name: 'meetingType', label: 'Meeting Type', type: 'meetingtype', required: true },
+                    { name: 'channels', label: 'Channels Demonstrated', type: 'channels', required: false },
+                    { name: 'demoNotes', label: 'Demo Notes', type: 'textarea', required: false }
+                ];
+
+            case 'Other Activity':
+                return [
+                    ...commonFields,
+                    { name: 'activityType', label: 'Activity Type', type: 'text', required: true },
+                    { name: 'details', label: 'What was done', type: 'textarea', required: true },
+                    { name: 'notes', label: 'Additional Notes', type: 'textarea', required: false }
+                ];
+
+            default:
+                return commonFields;
+        }
+    }
+
+    generateFieldHTML(field) {
+        const isRequired = field.required ? 'required' : '';
+        const dependsOn = field.dependsOn ? `data-depends="${field.dependsOn}"` : '';
+        const showFor = field.showFor ? `data-show-for="${field.showFor.join(',')}"` : '';
+        const hideFor = field.hideFor ? `data-hide-for="${field.hideFor.join(',')}"` : '';
+        let html = '';
+
+        switch(field.type) {
+            case 'salesrep':
+                const salesReps = this.currentUser.salesReps || [];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Sales Rep</option>
+                            ${salesReps.map(rep => `<option value="${rep}">${rep}</option>`).join('')}
+                            <option value="other">Other</option>
+                        </select>
+                        <input type="text" name="${field.name}_other" placeholder="Enter new sales rep name" class="w-full px-3 py-2 border rounded-lg mt-2 hidden">
+                    </div>
+                `;
+                break;
+
+            case 'account':
+                const accounts = this.getUniqueAccounts();
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Account</option>
+                            ${accounts.map(account => `<option value="${account}">${account}</option>`).join('')}
+                            <option value="new">New Account</option>
+                        </select>
+                        <input type="text" name="${field.name}_new" placeholder="Enter new account name" class="w-full px-3 py-2 border rounded-lg mt-2 hidden">
+                    </div>
+                `;
+                break;
+
+            case 'project':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired} id="projectSelect">
+                            <option value="">Select Account First</option>
+                        </select>
+                        <input type="text" name="${field.name}_new" placeholder="Enter new project name" class="w-full px-3 py-2 border rounded-lg mt-2 hidden">
+                    </div>
+                `;
+                break;
+
+            case 'industry':
+                const industries = JSON.parse(localStorage.getItem('industries') || '[]');
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Industry</option>
+                            ${industries.map(industry => `<option value="${industry}">${industry}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'region':
+                const regions = JSON.parse(localStorage.getItem('regions') || '[]');
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Region</option>
+                            ${regions.map(region => `<option value="${region}">${region}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'usecase':
+                const useCases = ['Data Migration', 'Analytics', 'Data Governance', 'Security', 'Customer Engagement', 'Marketing Automation', 'Support Automation'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" multiple ${isRequired}>
+                            ${useCases.map(useCase => `<option value="${useCase}">${useCase}</option>`).join('')}
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple options</p>
+                    </div>
+                `;
+                break;
+
+            case 'products':
+                const products = ['Journey Builder', 'Agent Assist', 'Advertise', 'AI Chat Agent', 'AI Voice Agent', 'Personalise', 'Knowlarity', 'Optimizer', 'Analyser'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${products.map(product => `
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="${field.name}" value="${product}" class="mr-2">
+                                    <span class="text-sm">${product}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                break;
+
+            case 'channels':
+                const channels = ['WhatsApp', 'RCS', 'Voice', 'Web', 'Instagram', 'Facebook', 'SMS', 'Email'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            ${channels.map(channel => `
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="${field.name}" value="${channel}" class="mr-2">
+                                    <span class="text-sm">${channel}</span>
+                                </label>
+                            `).join('')}
+                            <label class="flex items-center">
+                                <input type="checkbox" name="${field.name}" value="other" class="mr-2 channel-other">
+                                <span class="text-sm">Other</span>
+                            </label>
+                        </div>
+                        <input type="text" name="${field.name}_other" placeholder="Specify other channel" class="w-full px-3 py-2 border rounded-lg mt-2 hidden">
+                    </div>
+                `;
+                break;
+
+            case 'calltype':
+                const callTypes = ['Discovery', 'Demo', 'Kickoff', 'Follow-up'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Call Type</option>
+                            ${callTypes.map(type => `<option value="${type}">${type}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'meetingtype':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Meeting Type</option>
+                            <option value="Virtual" selected>Virtual</option>
+                            <option value="In-person">In-person</option>
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'sentiment':
+                const sentiments = ['Very Positive', 'Positive', 'Neutral', 'Negative', 'Very Negative'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Sentiment</option>
+                            ${sentiments.map(sentiment => `<option value="${sentiment}">${sentiment}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'rating':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Rating</option>
+                            <option value="1">1 - Poor</option>
+                            <option value="2">2 - Fair</option>
+                            <option value="3">3 - Good</option>
+                            <option value="4">4 - Very Good</option>
+                            <option value="5">5 - Excellent</option>
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'pocaccounttype':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                            <option value="">Select Account Type</option>
+                            <option value="New Account">New Account</option>
+                            <option value="Existing Account">Existing Account</option>
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'poctype':
+                const pocTypes = ['Structured POC', 'Sandbox Access', 'AI Chat POC', 'AI Voice POC'];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <select name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired} id="pocTypeSelect">
+                            <option value="">Select POC Type</option>
+                            ${pocTypes.map(type => `<option value="${type}">${type}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+                break;
+
+            case 'textarea':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <textarea name="${field.name}" class="w-full px-3 py-2 border rounded-lg" rows="3" ${isRequired}></textarea>
+                    </div>
+                `;
+                break;
+
+            case 'number':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <input type="number" name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                    </div>
+                `;
+                break;
+
+            case 'url':
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <input type="url" name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                    </div>
+                `;
+                break;
+
+            case 'date':
+                const today = new Date().toISOString().split('T')[0];
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <input type="date" name="${field.name}" class="w-full px-3 py-2 border rounded-lg" value="${today}" ${isRequired}>
+                    </div>
+                `;
+                break;
+
+            default:
+                html = `
+                    <div class="mb-4" ${dependsOn} ${showFor} ${hideFor}>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+                        <input type="text" name="${field.name}" class="w-full px-3 py-2 border rounded-lg" ${isRequired}>
+                    </div>
+                `;
+        }
+
+        return html;
+    }
+
+    addDynamicFieldBehaviors() {
+        // Sales rep dropdown behavior
+        const salesRepSelect = document.querySelector('select[name="salesRep"]');
+        if (salesRepSelect) {
+            salesRepSelect.addEventListener('change', (e) => {
+                const otherInput = document.querySelector('input[name="salesRep_other"]');
+                if (e.target.value === 'other') {
+                    otherInput.classList.remove('hidden');
+                    otherInput.required = true;
+                } else {
+                    otherInput.classList.add('hidden');
+                    otherInput.required = false;
+                }
+            });
+        }
+
+        // Account dropdown behavior
+        const accountSelect = document.querySelector('select[name="account"]');
+        if (accountSelect) {
+            accountSelect.addEventListener('change', (e) => {
+                const newInput = document.querySelector('input[name="account_new"]');
+                
+                if (e.target.value === 'new') {
+                    newInput.classList.remove('hidden');
+                    newInput.required = true;
+                } else {
+                    newInput.classList.add('hidden');
+                    newInput.required = false;
+                }
+                
+                // Update project dropdown
+                this.updateProjectDropdown(e.target.value);
+            });
+        }
+
+        // POC type dropdown behavior
+        const pocTypeSelect = document.getElementById('pocTypeSelect');
+        if (pocTypeSelect) {
+            pocTypeSelect.addEventListener('change', (e) => {
+                this.handlePOCTypeChange(e.target.value);
+            });
+        }
+
+        // Channel other checkbox behavior
+        const channelOther = document.querySelector('.channel-other');
+        if (channelOther) {
+            channelOther.addEventListener('change', (e) => {
+                const otherInput = document.querySelector('input[name="channels_other"]');
+                if (e.target.checked) {
+                    otherInput.classList.remove('hidden');
+                    otherInput.required = true;
+                } else {
+                    otherInput.classList.add('hidden');
+                    otherInput.required = false;
+                }
+            });
+        }
+    }
+
+    getUniqueAccounts() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        return [...new Set(userActivities.map(activity => activity.account).filter(Boolean))];
+    }
+
+    updateProjectDropdown(accountName) {
+        const projectSelect = document.getElementById('projectSelect');
+        if (!projectSelect || !accountName || accountName === 'new') {
+            if (projectSelect) {
+                projectSelect.innerHTML = '<option value="">Select Account First</option>';
+            }
+            return;
+        }
+        
+        const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+        const accountProjects = projects.filter(project => project.account === accountName && project.userId === this.currentUser.id);
+        
+        projectSelect.innerHTML = `
+            <option value="">Select Project</option>
+            ${accountProjects.map(project => `<option value="${project.name}">${project.name}</option>`).join('')}
+            <option value="new">New Project</option>
+        `;
+        
+        // Add event listener for new project input
+        projectSelect.addEventListener('change', (e) => {
+            const newInput = document.querySelector('input[name="project_new"]');
+            if (e.target.value === 'new') {
+                newInput.classList.remove('hidden');
+                newInput.required = true;
+            } else {
+                newInput.classList.add('hidden');
+                newInput.required = false;
+            }
+        });
+    }
+
+    handlePOCTypeChange(pocType) {
+        // Show/hide fields based on POC type
+        const dependentFields = document.querySelectorAll('[data-depends="pocType"]');
+        
+        dependentFields.forEach(field => {
+            const showFor = field.dataset.showFor ? field.dataset.showFor.split(',') : [];
+            const hideFor = field.dataset.hideFor ? field.dataset.hideFor.split(',') : [];
+            
+            let shouldShow = true;
+            
+            if (showFor.length > 0) {
+                shouldShow = showFor.includes(pocType);
+            }
+            
+            if (hideFor.length > 0) {
+                shouldShow = shouldShow && !hideFor.includes(pocType);
+            }
+            
+            if (shouldShow) {
+                field.classList.remove('hidden');
+                const input = field.querySelector('input, select, textarea');
+                if (input) input.required = field.querySelector('[required]') !== null;
+            } else {
+                field.classList.add('hidden');
+                const input = field.querySelector('input, select, textarea');
+                if (input) input.required = false;
+            }
+        });
+    }
+
+    submitActivity() {
+        const formData = new FormData(document.getElementById('activityForm'));
+        
+        // Create activity object
+        const activity = {
+            id: Date.now(),
+            type: this.selectedActivityType,
+            userId: this.currentUser.id,
+            createdAt: new Date().toISOString(),
+            status: this.selectedActivityType === 'POC' ? 'Requested' : 'Completed'
+        };
+
+        // Create project object if needed
+        let project = null;
+        const projectName = formData.get('project_new') || formData.get('project');
+        const accountName = formData.get('account_new') || formData.get('account');
+        
+        if (projectName && accountName) {
+            // Auto-prefix project name with company name
+            const finalProjectName = projectName.startsWith(accountName) ? 
+                projectName : 
+                `${accountName} - ${projectName} - ${new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+            
+            // Check if project already exists
+            const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+            project = projects.find(p => p.name === finalProjectName && p.account === accountName && p.userId === this.currentUser.id);
+            
+            if (!project) {
+                project = {
+                    id: Date.now() + 1,
+                    name: finalProjectName,
+                    account: accountName,
+                    industry: formData.get('industry'),
+                    region: formData.get('region'),
+                    salesRep: formData.get('salesRep_other') || formData.get('salesRep'),
+                    sfdcLink: formData.get('sfdcLink'),
+                    primaryUseCase: Array.from(formData.getAll('primaryUseCase')),
+                    productsInterested: Array.from(formData.getAll('productsInterested')),
+                    userId: this.currentUser.id,
+                    createdAt: new Date().toISOString()
+                };
+                
+                projects.push(project);
+                localStorage.setItem('projects', JSON.stringify(projects));
+            }
+            
+            activity.projectId = project.id;
+        }
+
+        // Process form data
+        for (let [key, value] of formData.entries()) {
+            if (key.endsWith('_other') || key.endsWith('_new')) {
+                const originalKey = key.replace('_other', '').replace('_new', '');
+                if (value) activity[originalKey] = value;
+            } else {
+                if (activity[key] && activity[key] !== value) {
+                    // Handle multiple values (checkboxes)
+                    if (Array.isArray(activity[key])) {
+                        activity[key].push(value);
+                    } else {
+                        activity[key] = [activity[key], value];
+                    }
+                } else {
+                    activity[key] = value;
+                }
+            }
+        }
+
+        // Handle multi-select fields
+        const multiSelectFields = ['primaryUseCase', 'productsInterested', 'channels'];
+        multiSelectFields.forEach(field => {
+            activity[field] = formData.getAll(field);
+        });
+
+        // Save new sales rep if added
+        const salesRep = activity.salesRep;
+        if (salesRep && !this.currentUser.salesReps.includes(salesRep)) {
+            this.currentUser.salesReps.push(salesRep);
+            this.updateCurrentUser();
+        }
+
+        // Save activity
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        activities.push(activity);
+        localStorage.setItem('activities', JSON.stringify(activities));
+
+        // Check if it's a POC for notifications
+        if (activity.type === 'POC') {
+            this.addPOCNotification(activity);
+        }
+
+        this.showNotification('Activity submitted successfully!');
+        this.resetNewEntryForm();
+        this.switchView('dashboard');
+    }
+
+    addPOCNotification(activity) {
+        const notifications = JSON.parse(localStorage.getItem('pocNotifications') || '[]');
+        notifications.push({
+            id: Date.now(),
+            activityId: activity.id,
+            message: `New POC request: ${activity.pocType} for ${activity.account}`,
+            timestamp: new Date().toISOString(),
+            read: false
+        });
+        localStorage.setItem('pocNotifications', JSON.stringify(notifications));
+    }
+
+    resetNewEntryForm() {
+        document.getElementById('activityTypeStep').classList.remove('hidden');
+        document.getElementById('dynamicForm').classList.add('hidden');
+        this.selectedActivityType = null;
+    }
+
+    updateCurrentUser() {
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const userIndex = users.findIndex(u => u.id === this.currentUser.id);
+        if (userIndex !== -1) {
+            users[userIndex] = this.currentUser;
+            localStorage.setItem('users', JSON.stringify(users));
+        }
+    }
+
+    loadRecentActivities() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        let userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        
+        // Sort by most recent and take last 10
+        userActivities = userActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 10);
+        
+        const tableContainer = document.getElementById('recentActivitiesTable');
+        
+        if (userActivities.length === 0) {
+            tableContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No activities found</p>';
+            return;
+        }
+
+        const html = `
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${userActivities.map(activity => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${activity.type}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.account || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(activity.createdAt).toLocaleDateString()}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${this.getStatusColor(activity.status)}">
+                                    ${activity.status || 'Completed'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        tableContainer.innerHTML = html;
+    }
+
+    getStatusColor(status) {
+        switch(status) {
+            case 'Requested': return 'bg-yellow-100 text-yellow-800';
+            case 'Assigned': return 'bg-blue-100 text-blue-800';
+            case 'In Progress': return 'bg-purple-100 text-purple-800';
+            case 'Completed': return 'bg-green-100 text-green-800';
+            case 'Closed': return 'bg-gray-100 text-gray-800';
+            case 'Extension Requested': return 'bg-orange-100 text-orange-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    }
+
+    loadMyActivities() {
+        this.populateActivityFilters();
+        this.filterActivities();
+    }
+
+    populateActivityFilters() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        
+        // Populate month filter
+        const months = [...new Set(userActivities.map(a => {
+            const date = new Date(a.createdAt);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        }))].sort().reverse();
+        
+        const monthFilter = document.getElementById('monthFilter');
+        if (monthFilter) {
+            monthFilter.innerHTML = '<option value="">All Months</option>' + 
+                months.map(month => {
+                    const [year, monthNum] = month.split('-');
+                    const monthName = new Date(year, monthNum - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    return `<option value="${month}">${monthName}</option>`;
+                }).join('');
+        }
+        
+        // Populate account filter
+        const accounts = [...new Set(userActivities.map(a => a.account).filter(Boolean))];
+        const accountFilter = document.getElementById('accountActivityFilter');
+        if (accountFilter) {
+            accountFilter.innerHTML = '<option value="">All Accounts</option>' + 
+                accounts.map(account => `<option value="${account}">${account}</option>`).join('');
+        }
+    }
+
+    filterActivities() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        let userActivities = activities.filter(activity => activity.userId === this.currentUser.id);
+        
+        // Apply search filter
+        const searchTerm = document.getElementById('activitySearch')?.value.toLowerCase() || '';
+        if (searchTerm) {
+            userActivities = userActivities.filter(activity => 
+                activity.type.toLowerCase().includes(searchTerm) ||
+                (activity.account && activity.account.toLowerCase().includes(searchTerm)) ||
+                (activity.project && activity.project.toLowerCase().includes(searchTerm))
+            );
+        }
+        
+        // Apply type filter
+        const typeFilter = document.getElementById('activityFilter')?.value || '';
+        if (typeFilter) {
+            userActivities = userActivities.filter(activity => activity.type === typeFilter);
+        }
+
+        // Apply month filter
+        const monthFilter = document.getElementById('monthFilter')?.value || '';
+        if (monthFilter) {
+            userActivities = userActivities.filter(activity => {
+                const activityMonth = new Date(activity.createdAt);
+                const filterMonth = `${activityMonth.getFullYear()}-${String(activityMonth.getMonth() + 1).padStart(2, '0')}`;
+                return filterMonth === monthFilter;
+            });
+        }
+
+        // Apply account filter
+        const accountFilter = document.getElementById('accountActivityFilter')?.value || '';
+        if (accountFilter) {
+            userActivities = userActivities.filter(activity => activity.account === accountFilter);
+        }
+        
+        // Sort by most recent
+        userActivities = userActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        this.displayActivitiesTable(userActivities);
+    }
+
+    displayActivitiesTable(activities) {
+        const tableContainer = document.getElementById('activitiesTable');
+        
+        if (activities.length === 0) {
+            tableContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No activities found</p>';
+            return;
+        }
+
+        const html = `
+            <div class="mb-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="selectAllActivities" class="mr-2">
+                    <span class="text-sm font-medium">Select All</span>
+                </label>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Select</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${activities.map(activity => `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="checkbox" class="activity-checkbox" data-activity-id="${activity.id}">
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${activity.type}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.account || 'N/A'}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.project || 'N/A'}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.region || 'N/A'}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(activity.createdAt).toLocaleDateString()}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${this.getStatusColor(activity.status)}">
+                                        ${activity.status || 'Completed'}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    ${activity.type === 'POC' && activity.status !== 'Completed' && activity.status !== 'Closed' ? 
+                                        `<button onclick="app.requestPOCExtension(${activity.id})" class="text-orange-600 hover:text-orange-900 mr-3">Request Extension</button>` : ''}
+                                    <button onclick="app.editActivity(${activity.id})" class="text-blue-600 hover:text-blue-900">Edit</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        tableContainer.innerHTML = html;
+
+        // Add select all functionality
+        const selectAllCheckbox = document.getElementById('selectAllActivities');
+        const activityCheckboxes = document.querySelectorAll('.activity-checkbox');
+        
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                activityCheckboxes.forEach(checkbox => {
+                    checkbox.checked = e.target.checked;
+                    if (e.target.checked) {
+                        this.selectedActivities.add(parseInt(checkbox.dataset.activityId));
+                    } else {
+                        this.selectedActivities.delete(parseInt(checkbox.dataset.activityId));
+                    }
+                });
+            });
+        }
+
+        activityCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const activityId = parseInt(e.target.dataset.activityId);
+                if (e.target.checked) {
+                    this.selectedActivities.add(activityId);
+                } else {
+                    this.selectedActivities.delete(activityId);
+                }
+            });
+        });
+    }
+
+    deleteSelectedActivities() {
+        if (this.selectedActivities.size === 0) {
+            this.showNotification('Please select activities to delete', 'error');
+            return;
+        }
+
+        if (confirm(`Are you sure you want to delete ${this.selectedActivities.size} selected activities?`)) {
+            const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+            const filteredActivities = activities.filter(activity => !this.selectedActivities.has(activity.id));
+            localStorage.setItem('activities', JSON.stringify(filteredActivities));
+            
+            this.selectedActivities.clear();
+            this.showNotification('Selected activities deleted successfully!');
+            this.filterActivities();
+        }
+    }
+
+    requestPOCExtension(activityId) {
+        this.editingActivity = { id: activityId };
+        this.showModal('pocExtensionModal');
+    }
+
+    submitPOCExtension() {
+        const days = parseInt(document.getElementById('extensionDays').value);
+        const reason = document.getElementById('extensionReason').value;
+
+        if (!days || !reason) {
+            this.showNotification('Please fill all fields', 'error');
+            return;
+        }
+
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const activityIndex = activities.findIndex(a => a.id === this.editingActivity.id);
+        
+        if (activityIndex !== -1) {
+            activities[activityIndex].status = 'Extension Requested';
+            activities[activityIndex].extensionDays = days;
+            activities[activityIndex].extensionReason = reason;
+            activities[activityIndex].extensionRequestedAt = new Date().toISOString();
+            
+            localStorage.setItem('activities', JSON.stringify(activities));
+            
+            this.hideModal('pocExtensionModal');
+            this.showNotification('Extension request submitted successfully!');
+            this.filterActivities();
+        }
+    }
+
+    editActivity(activityId) {
+        // Implementation for editing activities
+        this.showNotification('Edit functionality will be implemented in next phase');
+    }
+
+    loadAnalytics() {
+        if (!this.currentUser.roles.includes('Analytics Access') && !this.currentUser.roles.includes('Admin')) {
+            document.getElementById('analyticsView').innerHTML = '<p class="text-center text-gray-500 py-8">Access denied. You need Analytics Access role.</p>';
+            return;
+        }
+
+        // Load all activities for analytics (admin) or user activities (analytics access)
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const dataActivities = this.currentUser.roles.includes('Admin') ? activities : activities.filter(a => a.userId === this.currentUser.id);
+
+        this.createActivityTypeChart(dataActivities);
+        this.createMonthlyTrendChart(dataActivities);
+        this.createProductsChart(dataActivities);
+        this.createRegionalChart(dataActivities);
+        this.createWinLossChart(dataActivities);
+    }
+
+    createActivityTypeChart(activities) {
+        const ctx = document.getElementById('activityTypeChart');
+        if (!ctx) return;
+
+        // Destroy existing chart
+        if (this.charts.activityType) {
+            this.charts.activityType.destroy();
+        }
+
+        const activityTypes = {};
+        activities.forEach(activity => {
+            activityTypes[activity.type] = (activityTypes[activity.type] || 0) + 1;
+        });
+
+        this.charts.activityType = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(activityTypes),
+                datasets: [{
+                    data: Object.values(activityTypes),
+                    backgroundColor: [
+                        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', 
+                        '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    createMonthlyTrendChart(activities) {
+        const ctx = document.getElementById('monthlyTrendChart');
+        if (!ctx) return;
+
+        if (this.charts.monthlyTrend) {
+            this.charts.monthlyTrend.destroy();
+        }
+
+        const monthlyData = {};
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        activities.forEach(activity => {
+            const month = new Date(activity.createdAt).getMonth();
+            const monthName = months[month];
+            monthlyData[monthName] = (monthlyData[monthName] || 0) + 1;
+        });
+
+        this.charts.monthlyTrend = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Activities',
+                    data: months.map(month => monthlyData[month] || 0),
+                    borderColor: '#3B82F6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    createProductsChart(activities) {
+        const ctx = document.getElementById('productsChart');
+        if (!ctx) return;
+
+        if (this.charts.products) {
+            this.charts.products.destroy();
+        }
+
+        const productCounts = {};
+        activities.forEach(activity => {
+            if (activity.productsInterested && Array.isArray(activity.productsInterested)) {
+                activity.productsInterested.forEach(product => {
+                    productCounts[product] = (productCounts[product] || 0) + 1;
+                });
+            } else if (activity.productsInterested) {
+                productCounts[activity.productsInterested] = (productCounts[activity.productsInterested] || 0) + 1;
+            }
+        });
+
+        this.charts.products = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(productCounts),
+                datasets: [{
+                    label: 'Interest Count',
+                    data: Object.values(productCounts),
+                    backgroundColor: '#10B981'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    createRegionalChart(activities) {
+        const ctx = document.getElementById('regionalChart');
+        if (!ctx) return;
+
+        if (this.charts.regional) {
+            this.charts.regional.destroy();
+        }
+
+        const regionCounts = {};
+        activities.forEach(activity => {
+            if (activity.region) {
+                regionCounts[activity.region] = (regionCounts[activity.region] || 0) + 1;
+            }
+        });
+
+        this.charts.regional = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(regionCounts),
+                datasets: [{
+                    label: 'Activities',
+                    data: Object.values(regionCounts),
+                    backgroundColor: '#F59E0B'
+                }]
+            },
+            options: {
+                responsive: true,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    createWinLossChart(activities) {
+        const ctx = document.getElementById('winLossChart');
+        if (!ctx) return;
+
+        if (this.charts.winLoss) {
+            this.charts.winLoss.destroy();
+        }
+
+        const winLossData = { Won: 0, Lost: 0, Pending: 0 };
+        activities.forEach(activity => {
+            if (activity.winLossStatus) {
+                winLossData[activity.winLossStatus]++;
+            } else {
+                winLossData.Pending++;
+            }
+        });
+
+        this.charts.winLoss = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(winLossData),
+                datasets: [{
+                    data: Object.values(winLossData),
+                    backgroundColor: ['#10B981', '#EF4444', '#6B7280']
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+
+    loadPOCAdmin() {
+        if (!this.currentUser.roles.includes('POC Admin') && !this.currentUser.roles.includes('Admin')) {
+            document.getElementById('pocAdminView').innerHTML = '<p class="text-center text-gray-500 py-8">Access denied. You need POC Admin role.</p>';
+            return;
+        }
+
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const pocActivities = activities.filter(activity => activity.type === 'POC');
+
+        // Update notifications
+        const pendingPOCs = pocActivities.filter(poc => poc.status === 'Requested').length;
+        const notificationDiv = document.getElementById('pocNotifications');
+        const countSpan = document.getElementById('pocNotificationCount');
+        
+        if (pendingPOCs > 0) {
+            notificationDiv.classList.remove('hidden');
+            countSpan.textContent = pendingPOCs;
+        } else {
+            notificationDiv.classList.add('hidden');
+        }
+
+        // Create POC table
+        const tableContainer = document.getElementById('pocAdminTable');
+        
+        if (pocActivities.length === 0) {
+            tableContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No POCs found</p>';
+            return;
+        }
+
+        const html = `
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">POC Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Start Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Environment</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${pocActivities.map(poc => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${poc.account}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${poc.pocType || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${Array.isArray(poc.productsInterested) ? poc.productsInterested.join(', ') : poc.productsInterested || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${poc.startDate ? new Date(poc.startDate).toLocaleDateString() : 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${poc.endDate ? new Date(poc.endDate).toLocaleDateString() : 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <select onchange="app.updatePOCStatus(${poc.id}, this.value)" class="px-2 py-1 text-xs border rounded">
+                                    <option value="Requested" ${poc.status === 'Requested' ? 'selected' : ''}>Requested</option>
+                                    <option value="Assigned" ${poc.status === 'Assigned' ? 'selected' : ''}>Assigned</option>
+                                    <option value="In Progress" ${poc.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                    <option value="Completed" ${poc.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                    <option value="Closed" ${poc.status === 'Closed' ? 'selected' : ''}>Closed</option>
+                                </select>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <input type="text" value="${poc.pocEnvironment || ''}" placeholder="Environment name" class="px-2 py-1 text-xs border rounded w-24" onchange="app.updatePOCEnvironment(${poc.id}, this.value)">
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                ${poc.status === 'Extension Requested' ? `<button onclick="app.approveExtension(${poc.id})" class="text-green-600 hover:text-green-900 mr-2">Approve</button><button onclick="app.rejectExtension(${poc.id})" class="text-red-600 hover:text-red-900">Reject</button>` : ''}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        tableContainer.innerHTML = html;
+    }
+
+    updatePOCStatus(pocId, newStatus) {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const activityIndex = activities.findIndex(a => a.id === pocId);
+        
+        if (activityIndex !== -1) {
+            activities[activityIndex].status = newStatus;
+            activities[activityIndex].statusUpdatedAt = new Date().toISOString();
+            activities[activityIndex].statusUpdatedBy = this.currentUser.id;
+            
+            // Auto-close POCs on end date
+            if (newStatus === 'In Progress' && activities[activityIndex].endDate) {
+                const endDate = new Date(activities[activityIndex].endDate);
+                if (new Date() > endDate) {
+                    activities[activityIndex].status = 'Closed';
+                }
+            }
+            
+            localStorage.setItem('activities', JSON.stringify(activities));
+            this.showNotification('POC status updated successfully!');
+        }
+    }
+
+    updatePOCEnvironment(pocId, environment) {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const activityIndex = activities.findIndex(a => a.id === pocId);
+        
+        if (activityIndex !== -1) {
+            activities[activityIndex].pocEnvironment = environment;
+            localStorage.setItem('activities', JSON.stringify(activities));
+        }
+    }
+
+    approveExtension(pocId) {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const activityIndex = activities.findIndex(a => a.id === pocId);
+        
+        if (activityIndex !== -1) {
+            const activity = activities[activityIndex];
+            const currentEndDate = new Date(activity.endDate);
+            const newEndDate = new Date(currentEndDate.getTime() + (activity.extensionDays * 24 * 60 * 60 * 1000));
+            
+            activities[activityIndex].endDate = newEndDate.toISOString().split('T')[0];
+            activities[activityIndex].status = 'In Progress';
+            activities[activityIndex].extensionApprovedAt = new Date().toISOString();
+            activities[activityIndex].extensionApprovedBy = this.currentUser.id;
+            
+            localStorage.setItem('activities', JSON.stringify(activities));
+            this.showNotification('POC extension approved successfully!');
+            this.loadPOCAdmin();
+        }
+    }
+
+    rejectExtension(pocId) {
+        const reason = prompt('Reason for rejection:');
+        if (!reason) return;
+        
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const activityIndex = activities.findIndex(a => a.id === pocId);
+        
+        if (activityIndex !== -1) {
+            activities[activityIndex].status = 'In Progress';
+            activities[activityIndex].extensionRejectedAt = new Date().toISOString();
+            activities[activityIndex].extensionRejectedBy = this.currentUser.id;
+            activities[activityIndex].extensionRejectionReason = reason;
+            
+            localStorage.setItem('activities', JSON.stringify(activities));
+            this.showNotification('POC extension rejected');
+            this.loadPOCAdmin();
+        }
+    }
+
+    loadAdminPanel() {
+        if (!this.currentUser.roles.includes('Admin')) {
+            document.getElementById('adminView').innerHTML = '<p class="text-center text-gray-500 py-8">Access denied. You need Admin role.</p>';
+            return;
+        }
+
+        this.loadUsersList();
+        this.loadIndustriesList();
+        this.loadRegionsList();
+        this.populateAdminFilters();
+        this.filterAdminActivities();
+    }
+
+    loadUsersList() {
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const container = document.getElementById('usersList');
+        
+        const html = users.map(user => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                    <div class="font-medium">${user.username}</div>
+                    <div class="text-sm text-gray-500">${user.email}</div>
+                    <div class="text-sm text-gray-500">${user.roles.join(', ')}</div>
+                </div>
+                <button onclick="app.deleteUser(${user.id})" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+    }
+
+    loadIndustriesList() {
+        const industries = JSON.parse(localStorage.getItem('industries') || '[]');
+        const container = document.getElementById('industriesList');
+        
+        const html = industries.map(industry => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span>${industry}</span>
+                <button onclick="app.removeIndustry('${industry}')" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+    }
+
+    loadRegionsList() {
+        const regions = JSON.parse(localStorage.getItem('regions') || '[]');
+        const container = document.getElementById('regionsList');
+        
+        const html = regions.map(region => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span>${region}</span>
+                <button onclick="app.removeRegion('${region}')" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+    }
+
+    populateAdminFilters() {
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        
+        // Populate presales rep filter
+        const presalesFilter = document.getElementById('adminPresalesFilter');
+        const presalesReps = [...new Set(activities.map(a => a.salesRep).filter(Boolean))];
+        if (presalesFilter) {
+            presalesFilter.innerHTML = '<option value="">All Presales Reps</option>' + 
+                presalesReps.map(rep => `<option value="${rep}">${rep}</option>`).join('');
+        }
+        
+        // Populate region filter
+        const regionFilter = document.getElementById('adminRegionFilter');
+        const regions = [...new Set(activities.map(a => a.region).filter(Boolean))];
+        if (regionFilter) {
+            regionFilter.innerHTML = '<option value="">All Regions</option>' + 
+                regions.map(region => `<option value="${region}">${region}</option>`).join('');
+        }
+        
+        // Populate activity filter
+        const activityFilter = document.getElementById('adminActivityFilter');
+        const activityTypes = [...new Set(activities.map(a => a.type).filter(Boolean))];
+        if (activityFilter) {
+            activityFilter.innerHTML = '<option value="">All Activity Types</option>' + 
+                activityTypes.map(type => `<option value="${type}">${type}</option>`).join('');
+        }
+    }
+
+    filterAdminActivities() {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        let filteredActivities = [...activities];
+        
+        // Apply filters
+        const presalesFilter = document.getElementById('adminPresalesFilter')?.value || '';
+        if (presalesFilter) {
+            filteredActivities = filteredActivities.filter(activity => activity.salesRep === presalesFilter);
+        }
+        
+        const regionFilter = document.getElementById('adminRegionFilter')?.value || '';
+        if (regionFilter) {
+            filteredActivities = filteredActivities.filter(activity => activity.region === regionFilter);
+        }
+        
+        const activityFilter = document.getElementById('adminActivityFilter')?.value || '';
+        if (activityFilter) {
+            filteredActivities = filteredActivities.filter(activity => activity.type === activityFilter);
+        }
+        
+        // Sort by most recent
+        filteredActivities = filteredActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        this.displayAdminActivitiesTable(filteredActivities);
+    }
+
+    displayAdminActivitiesTable(activities) {
+        const tableContainer = document.getElementById('adminActivitiesTable');
+        
+        if (activities.length === 0) {
+            tableContainer.innerHTML = '<p class="text-gray-500 text-center py-4">No activities found</p>';
+            return;
+        }
+
+        const html = `
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Activity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sales Rep</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${activities.map(activity => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${activity.type}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.account || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.salesRep || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${activity.region || 'N/A'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(activity.createdAt).toLocaleDateString()}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${this.getStatusColor(activity.status)}">
+                                    ${activity.status || 'Completed'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+        
+        tableContainer.innerHTML = html;
+    }
+
+    showAddUserModal() {
+        this.showModal('addUserModal');
+    }
+
+    addUser() {
+        const username = document.getElementById('newUsername').value;
+        const email = document.getElementById('newUserEmail').value;
+        const password = document.getElementById('newPassword').value;
+        const roles = Array.from(document.querySelectorAll('.role-checkbox:checked')).map(cb => cb.value);
+        
+        if (!username || !email || !password || roles.length === 0) {
+            this.showNotification('Please fill all fields and select at least one role', 'error');
+            return;
+        }
+        
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        
+        if (users.find(u => u.username === username || u.email === email)) {
+            this.showNotification('Username or email already exists', 'error');
+            return;
+        }
+        
+        const newUser = {
+            id: Date.now(),
+            username,
+            email,
+            password,
+            roles,
+            regions: [],
+            salesReps: [username]
+        };
+        
+        users.push(newUser);
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        this.hideModal('addUserModal');
+        this.showNotification('User added successfully!');
+        this.loadUsersList();
+        
+        // Clear form
+        document.getElementById('addUserForm').reset();
+    }
+
+    deleteUser(userId) {
+        if (userId === this.currentUser.id) {
+            this.showNotification('Cannot delete your own account', 'error');
+            return;
+        }
+        
+        if (confirm('Are you sure you want to delete this user?')) {
+            const users = JSON.parse(localStorage.getItem('users') || '[]');
+            const filteredUsers = users.filter(u => u.id !== userId);
+            localStorage.setItem('users', JSON.stringify(filteredUsers));
+            
+            this.showNotification('User deleted successfully!');
+            this.loadUsersList();
+        }
+    }
+
+    addIndustry() {
+        const industry = document.getElementById('newIndustry').value.trim();
+        
+        if (!industry) return;
+        
+        const industries = JSON.parse(localStorage.getItem('industries') || '[]');
+        
+        if (industries.includes(industry)) {
+            this.showNotification('Industry already exists', 'error');
+            return;
+        }
+        
+        industries.push(industry);
+        localStorage.setItem('industries', JSON.stringify(industries));
+        
+        document.getElementById('newIndustry').value = '';
+        this.showNotification('Industry added successfully!');
+        this.loadIndustriesList();
+    }
+
+    removeIndustry(industry) {
+        const industries = JSON.parse(localStorage.getItem('industries') || '[]');
+        const filteredIndustries = industries.filter(i => i !== industry);
+        localStorage.setItem('industries', JSON.stringify(filteredIndustries));
+        
+        this.showNotification('Industry removed successfully!');
+        this.loadIndustriesList();
+    }
+
+    addRegion() {
+        const region = document.getElementById('newRegion').value.trim();
+        
+        if (!region) return;
+        
+        const regions = JSON.parse(localStorage.getItem('regions') || '[]');
+        
+        if (regions.includes(region)) {
+            this.showNotification('Region already exists', 'error');
+            return;
+        }
+        
+        regions.push(region);
+        localStorage.setItem('regions', JSON.stringify(regions));
+        
+        document.getElementById('newRegion').value = '';
+        this.showNotification('Region added successfully!');
+        this.loadRegionsList();
+    }
+
+    removeRegion(region) {
+        const regions = JSON.parse(localStorage.getItem('regions') || '[]');
+        const filteredRegions = regions.filter(r => r !== region);
+        localStorage.setItem('regions', JSON.stringify(filteredRegions));
+        
+        this.showNotification('Region removed successfully!');
+        this.loadRegionsList();
+    }
+
+    loadSettings() {
+        // Load user regions
+        const allRegions = JSON.parse(localStorage.getItem('regions') || '[]');
+        const userRegions = this.currentUser.regions || [];
+        
+        const regionsList = document.getElementById('userRegionsList');
+        const html = allRegions.map(region => `
+            <label class="flex items-center p-2">
+                <input type="checkbox" value="${region}" class="mr-2 region-checkbox" ${userRegions.includes(region) ? 'checked' : ''}>
+                <span>${region}</span>
+            </label>
+        `).join('');
+        regionsList.innerHTML = html;
+        
+        // Load sales reps
+        this.loadSalesRepsList();
+    }
+
+    saveUserRegions() {
+        const selectedRegions = Array.from(document.querySelectorAll('.region-checkbox:checked')).map(cb => cb.value);
+        this.currentUser.regions = selectedRegions;
+        this.updateCurrentUser();
+        this.showNotification('Regions saved successfully!');
+    }
+
+    loadSalesRepsList() {
+        const salesReps = this.currentUser.salesReps || [];
+        const container = document.getElementById('salesRepsList');
+        
+        const html = salesReps.map(rep => `
+            <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span>${rep}</span>
+                <button onclick="app.removeSalesRep('${rep}')" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+            </div>
+        `).join('');
+        
+        container.innerHTML = html;
+    }
+
+    addSalesRep() {
+        const salesRep = document.getElementById('newSalesRep').value.trim();
+        
+        if (!salesRep) return;
+        
+        if (this.currentUser.salesReps && this.currentUser.salesReps.includes(salesRep)) {
+            this.showNotification('Sales rep already exists', 'error');
+            return;
+        }
+        
+        if (!this.currentUser.salesReps) this.currentUser.salesReps = [];
+        this.currentUser.salesReps.push(salesRep);
+        this.updateCurrentUser();
+        
+        document.getElementById('newSalesRep').value = '';
+        this.showNotification('Sales rep added successfully!');
+        this.loadSalesRepsList();
+    }
+
+    removeSalesRep(salesRep) {
+        this.currentUser.salesReps = this.currentUser.salesReps.filter(rep => rep !== salesRep);
+        this.updateCurrentUser();
+        this.showNotification('Sales rep removed successfully!');
+        this.loadSalesRepsList();
+    }
+
+    connectCalendar() {
+        // Simulate calendar connection
+        this.showNotification('Calendar integration email provided. Share activities@presales-tracker.com with your Google Calendar!');
+    }
+
+    handleSearch() {
+        if (this.currentView === 'myActivities') {
+            this.filterActivities();
+        } else if (this.currentView === 'accounts') {
+            this.filterAccounts();
+        }
+    }
+
+    showModal(modalId) {
+        document.getElementById(modalId).classList.add('show');
+    }
+
+    hideModal(modalId) {
+        document.getElementById(modalId).classList.remove('show');
+    }
+
+    showNotification(message, type = 'success') {
+        const notification = document.getElementById('notification');
+        const text = document.getElementById('notificationText');
+        
+        text.textContent = message;
+        notification.classList.remove('hidden');
+        
+        // Change color based on type
+        const alertDiv = notification.querySelector('div');
+        if (type === 'error') {
+            alertDiv.className = 'bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg';
+        } else {
+            alertDiv.className = 'bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg';
+        }
+        
+        // Auto hide after 3 seconds
+        setTimeout(() => {
+            notification.classList.add('hidden');
+        }, 3000);
+    }
+}
+
+// Initialize the application
+const app = new PresalesTracker();
+
+// Handle clicks outside modals to close them
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+        e.target.classList.remove('show');
+    }
+});
+
+// Handle escape key to close modals
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal.show').forEach(modal => {
+            modal.classList.remove('show');
+        });
+    }
+});
+
+// Auto-refresh dashboard stats every 30 seconds
+setInterval(() => {
+    if (app.currentView === 'dashboard' && app.currentUser) {
+        app.loadDashboard();
+    }
+}, 30000);
+
+// Check for POC notifications every minute
+setInterval(() => {
+    if (app.currentUser && (app.currentUser.roles.includes('POC Admin') || app.currentUser.roles.includes('Admin'))) {
+        const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+        const pendingPOCs = activities.filter(activity => 
+            activity.type === 'POC' && 
+            activity.status === 'Requested'
+        ).length;
+        
+        if (pendingPOCs > 0 && app.currentView === 'pocAdmin') {
+            app.loadPOCAdmin();
+        }
+    }
+}, 60000);
+
+// Auto-close POCs on end date
+setInterval(() => {
+    const activities = JSON.parse(localStorage.getItem('activities') || '[]');
+    const today = new Date();
+    let updated = false;
+    
+    activities.forEach(activity => {
+        if (activity.type === 'POC' && 
+            activity.status === 'In Progress' && 
+            activity.endDate && 
+            new Date(activity.endDate) < today) {
+            activity.status = 'Closed';
+            activity.autoClosedAt = new Date().toISOString();
+            updated = true;
+        }
+    });
+    
+    if (updated) {
+        localStorage.setItem('activities', JSON.stringify(activities));
+    }
+}, 24 * 60 * 60 * 1000); // Check daily
+</script>
+
+</body>
+</html>
