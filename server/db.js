@@ -2,17 +2,80 @@ const { Pool } = require('pg');
 
 let pool;
 
+const normalizeFlag = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase() === 'true';
+
+const buildConnectionString = () => {
+  const directUrl =
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_PUBLIC_URL;
+
+  if (directUrl) {
+    return directUrl;
+  }
+
+  const user =
+    process.env.PGUSER ||
+    process.env.POSTGRES_USER ||
+    process.env.POSTGRES_USERNAME;
+  const password =
+    process.env.PGPASSWORD ||
+    process.env.POSTGRES_PASSWORD ||
+    process.env.POSTGRES_PASS;
+  const host =
+    process.env.PGHOST ||
+    process.env.RAILWAY_PRIVATE_DOMAIN ||
+    process.env.RAILWAY_TCP_PROXY_DOMAIN ||
+    process.env.POSTGRES_HOST;
+  const port =
+    process.env.PGPORT ||
+    process.env.RAILWAY_TCP_PROXY_PORT ||
+    process.env.POSTGRES_PORT ||
+    '5432';
+  const database =
+    process.env.PGDATABASE || process.env.POSTGRES_DB || process.env.PGDATABASE;
+
+  if (!user || !password || !host || !database) {
+    return null;
+  }
+
+  const encodedPassword = encodeURIComponent(password);
+  return `postgresql://${user}:${encodedPassword}@${host}:${port}/${database}`;
+};
+
+const appendSslMode = (connectionString, useSsl) => {
+  if (!useSsl || !connectionString) {
+    return connectionString;
+  }
+
+  if (connectionString.includes('sslmode=')) {
+    return connectionString;
+  }
+
+  return connectionString.includes('?')
+    ? `${connectionString}&sslmode=require`
+    : `${connectionString}?sslmode=require`;
+};
+
 const createPool = () => {
-  const connectionString = process.env.DATABASE_URL;
+  let connectionString = buildConnectionString();
   if (!connectionString) {
     throw new Error(
-      'DATABASE_URL is not defined. Set it in your environment before starting the server.'
+      'Unable to determine PostgreSQL connection string. Provide DATABASE_URL or the PG*/POSTGRES_* environment variables.'
     );
   }
 
   const useSsl =
     process.env.NODE_ENV === 'production' ||
-    String(process.env.FORCE_PG_SSL || '').toLowerCase() === 'true';
+    normalizeFlag(process.env.FORCE_PG_SSL) ||
+    normalizeFlag(process.env.RAILWAY_ENVIRONMENT) ||
+    normalizeFlag(process.env.PGSSLMODE) ||
+    normalizeFlag(process.env.RAILWAY_REQUIRE_SSL);
+
+  connectionString = appendSslMode(connectionString, useSsl);
 
   return new Pool({
     connectionString,
