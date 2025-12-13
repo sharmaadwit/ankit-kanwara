@@ -5,6 +5,7 @@
     --primary-light: #BDBBEF;
     --secondary-color: #FF3964;
     --accent-color: #D01692;
+    --brand-gradient: linear-gradient(90deg, #5E34F1 0%, #D01692 50%, #FF3964 100%);
     --bg-color: #F7FAFC;
     --surface-color: #FFFFFF;
     --surface-muted: #F6F4FF;
@@ -61,7 +62,7 @@
     --shadow-hover: rgba(94, 52, 241, 0.12);
     --sidebar-bg: #FFFFFF;
     --sidebar-text: #1A202C;
-    --card-bg: #EAE7FB;
+    --card-bg: #BDBBEF;
     --card-border: rgba(94, 52, 241, 0.08);
     --card-shadow: rgba(94, 52, 241, 0.12);
     --card-shadow-hover: rgba(94, 52, 241, 0.18);
@@ -84,7 +85,7 @@
     --shadow-hover: rgba(15, 23, 42, 0.75);
     --sidebar-bg: linear-gradient(180deg, #1F2937 0%, #111827 100%);
     --sidebar-text: #F9FAFB;
-    --card-bg: #1F2937;
+    --card-bg: #BDBBEF;
     --card-border: rgba(148, 163, 184, 0.25);
     --card-shadow: rgba(8, 15, 26, 0.6);
     --card-shadow-hover: rgba(8, 15, 26, 0.75);
@@ -107,7 +108,7 @@
     --shadow-hover: rgba(94, 52, 241, 0.22);
     --sidebar-bg: linear-gradient(180deg, #5E34F1 0%, #D01692 100%);
     --sidebar-text: #FFFFFF;
-    --card-bg: #EEEAFD;
+    --card-bg: #BDBBEF;
     --card-border: rgba(94, 52, 241, 0.12);
     --card-shadow: rgba(94, 52, 241, 0.18);
     --card-shadow-hover: rgba(94, 52, 241, 0.26);
@@ -154,7 +155,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(90deg, #5E34F1 0%, #D01692 50%, #FF3964 100%);
+    background: var(--brand-gradient);
 }
 
 .login-container {
@@ -201,7 +202,7 @@ body {
 }
 
 .app-header {
-    background: linear-gradient(90deg, #5E34F1 0%, #D01692 50%, #FF3964 100%);
+    background: var(--brand-gradient);
     height: var(--header-height);
     box-shadow: 0 2px 10px rgba(107, 70, 193, 0.1);
     position: sticky;
@@ -1253,11 +1254,6 @@ body {
 .nav-card.non-clickable:hover {
     transform: translateY(-4px);
     box-shadow: 0 16px 32px var(--card-shadow-hover);
-}
-
-.nav-card.clickable:hover .nav-card-title,
-.nav-card.non-clickable:hover .nav-card-title {
-    color: var(--card-title-color);
 }
 
 .nav-card.clickable:hover .nav-card-subtitle,

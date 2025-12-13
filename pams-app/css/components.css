@@ -54,7 +54,7 @@
 }
 
 .btn-primary {
-    background: linear-gradient(90deg, #5E34F1 0%, #D01692 50%, #FF3964 100%);
+    background: var(--brand-gradient);
     color: var(--white);
     box-shadow: 0 6px 18px rgba(94, 52, 241, 0.25);
 }

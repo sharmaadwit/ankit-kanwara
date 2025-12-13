@@ -189,11 +189,6 @@
     color: var(--card-icon-color);
 }
 
-.nav-card.clickable .nav-card-title,
-.nav-card.non-clickable .nav-card-title {
-    color: var(--card-title-color);
-}
-
 .nav-card.clickable .nav-card-subtitle,
 .nav-card.non-clickable .nav-card-subtitle {
     color: var(--card-subtitle-color);
@@ -209,14 +204,6 @@
     font-size: 1.25rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
-}
-
-.nav-card.clickable .nav-card-title {
-    color: var(--white);
-}
-
-.nav-card.non-clickable .nav-card-title {
-    color: var(--gray-900);
 }
 
 .nav-card-subtitle {
@@ -503,5 +490,19 @@
 
 .card-grid.minimal-nav {
     gap: 1.5rem;
+}
+
+.nav-card.clickable .nav-card-title,
+.nav-card.non-clickable .nav-card-title,
+.content-card .content-card-title,
+.account-card .account-card-name,
+.account-card .account-card-stat-value,
+.activity-card .activity-card-type,
+.month-stat-card .month-stat-value {
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
 }
 

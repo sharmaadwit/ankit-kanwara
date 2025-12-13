@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const logger = require('./logger');
 
 let pool;
 
@@ -77,7 +78,7 @@ const createPool = () => {
 
   connectionString = appendSslMode(connectionString, useSsl);
 
-  return new Pool({
+  const createdPool = new Pool({
     connectionString,
     ssl: useSsl
       ? {
@@ -88,6 +89,20 @@ const createPool = () => {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000
   });
+
+  createdPool.on('error', (error) => {
+    logger.error('pg_pool_error', {
+      message: error.message,
+      stack: error.stack
+    });
+  });
+
+  logger.info('pg_pool_created', {
+    sslEnabled: useSsl,
+    maxConnections: parseInt(process.env.PGPOOL_MAX || '10', 10)
+  });
+
+  return createdPool;
 };
 
 const getPool = () => {
