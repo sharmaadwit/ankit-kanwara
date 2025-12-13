@@ -56,8 +56,8 @@ const appendSslMode = (connectionString, useSsl) => {
   }
 
   return connectionString.includes('?')
-    ? `${connectionString}&sslmode=require`
-    : `${connectionString}?sslmode=require`;
+    ? `${connectionString}&sslmode=no-verify`
+    : `${connectionString}?sslmode=no-verify`;
 };
 
 const createPool = () => {
