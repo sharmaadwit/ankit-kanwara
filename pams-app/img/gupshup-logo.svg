@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bubbleGradient" x1="64" y1="64" x2="448" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5E34F1"/>
+      <stop offset="50%" stop-color="#D01692"/>
+      <stop offset="100%" stop-color="#FF3964"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="rgba(0,0,0,0)"/>
+  <path d="M128 64C76.2944 64 34 106.294 34 158V304C34 355.706 76.2944 398 128 398H188V446C188 462.836 208.441 470.88 220.485 458.837L280 398H384C435.706 398 478 355.706 478 304V158C478 106.294 435.706 64 384 64H128Z" fill="url(#bubbleGradient)"/>
+  <path d="M346 120H274C242.833 120 217.5 145.333 217.5 176.5V260.5C217.5 291.667 242.833 317 274 317H325V356C325 368.15 339.36 373.96 347.8 365.52L402.5 310.82V176.5C402.5 145.333 377.167 120 346 120Z" fill="#FF3964"/>
+  <path d="M258 154L242.92 198.6H200L236.56 222.4L221.48 267L258 243.2L294.52 267L279.44 222.4L316 198.6H273.08L258 154Z" fill="white"/>
+  <path d="M338.5 176L330.82 200.18H305.5L324.79 212.32L317.11 236.5L338.5 223.05L359.89 236.5L352.21 212.32L371.5 200.18H346.18L338.5 176Z" fill="white"/>
+  <text x="256" y="452" text-anchor="middle" font-family="'Poppins','Inter','Arial',sans-serif" font-weight="700" font-size="72" fill="#FFFFFF">gupshup.ai</text>
+</svg>

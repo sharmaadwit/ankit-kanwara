@@ -1,0 +1,2073 @@
+// Activities Management Module
+
+// Common Products List (avoid code duplication)
+const COMMON_PRODUCTS = [
+    'AI Agents',
+    'Campaign Manager',
+    'Agent Assist',
+    'Journey Builder',
+    'Personalize',
+    'Voice AI',
+    'Other'
+];
+
+const Activities = {
+    selectedUseCases: [],
+    selectedChannels: [],
+    selectedProjectProducts: [],
+    editingContext: null,
+    activityType: null, // 'internal' or 'external'
+    allAccounts: [],
+    currentProjectOptions: [],
+
+    // Open unified activity modal
+    openActivityModal(context = {}) {
+        this.resetActivityForm();
+        this.createActivityModal();
+
+        const {
+            mode = 'create',
+            activity = null,
+            isInternal = false
+        } = context || {};
+
+        const isEdit = mode === 'edit' && activity;
+
+        this.editingContext = isEdit
+            ? {
+                activity: JSON.parse(JSON.stringify(activity)),
+                isInternal: !!isInternal,
+                originalAccountId: activity.accountId || null,
+                originalProjectId: activity.projectId || null
+            }
+            : null;
+
+        const modalId = 'activityModal';
+        const modalTitle = document.querySelector(`#${modalId} .modal-title`);
+        const submitButton = document.querySelector(`#${modalId} .modal-footer .btn-primary`);
+
+        if (modalTitle) {
+            modalTitle.textContent = isEdit ? 'Edit Activity' : 'Log Activity';
+        }
+
+        if (submitButton) {
+            submitButton.textContent = isEdit ? 'Update Activity' : 'Save Activity';
+        }
+
+        const categoryRadios = document.querySelectorAll(`#${modalId} input[name="activityCategory"]`);
+        categoryRadios.forEach(radio => {
+            radio.checked = false;
+            radio.disabled = false;
+        });
+
+        if (isEdit) {
+            const desiredCategory = isInternal ? 'internal' : 'external';
+            categoryRadios.forEach(radio => {
+                if (radio.value !== desiredCategory) {
+                    radio.disabled = true;
+                }
+            });
+        }
+
+        UI.showModal(modalId);
+
+        if (isEdit && activity) {
+            this.populateEditForm(activity, !!isInternal);
+        }
+    },
+
+    formatDateForInput(value) {
+        if (!value) return '';
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+            return value;
+        }
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return '';
+        }
+        return parsed.toISOString().split('T')[0];
+    },
+
+    populateEditForm(activity, isInternal) {
+        if (!activity) return;
+
+        const categoryValue = isInternal ? 'internal' : 'external';
+        const categoryRadio = document.querySelector(`input[name="activityCategory"][value="${categoryValue}"]`);
+        if (categoryRadio) {
+            categoryRadio.checked = true;
+        }
+
+        this.setActivityCategory(categoryValue);
+
+        const dateInput = document.getElementById('activityDate');
+        const formattedDate = this.formatDateForInput(activity.date || activity.createdAt);
+        if (dateInput && formattedDate) {
+            dateInput.value = formattedDate;
+        }
+
+        const activityTypeSelect = document.getElementById('activityTypeSelect');
+        if (activityTypeSelect) {
+            activityTypeSelect.value = activity.type || '';
+        }
+
+        this.showActivityFields();
+
+        if (isInternal) {
+            this.populateInternalEditFields(activity);
+        } else {
+            this.populateExternalEditFields(activity);
+        }
+    },
+
+    populateInternalEditFields(activity) {
+        if (!activity) return;
+
+        const timeSpent = activity.timeSpent || '';
+        if (timeSpent) {
+            const normalized = timeSpent.toLowerCase();
+            let typeValue = '';
+            if (normalized.includes('day')) {
+                typeValue = 'day';
+            } else if (normalized.includes('hour')) {
+                typeValue = 'hour';
+            }
+
+            if (typeValue) {
+                const radio = document.querySelector(`input[name="timeSpentType"][value="${typeValue}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    this.toggleTimeSpentInput();
+                }
+
+                const valueMatch = timeSpent.match(/[\d.]+/);
+                if (valueMatch) {
+                    const timeInput = document.getElementById('timeSpentValue');
+                    if (timeInput) {
+                        timeInput.value = valueMatch[0];
+                    }
+                }
+            }
+        }
+
+        const activityNameInput = document.getElementById('internalActivityName');
+        if (activityNameInput) activityNameInput.value = activity.activityName || '';
+
+        const topicInput = document.getElementById('internalTopic');
+        if (topicInput) topicInput.value = activity.topic || '';
+
+        const descriptionInput = document.getElementById('internalDescription');
+        if (descriptionInput) descriptionInput.value = activity.description || '';
+    },
+
+    populateExternalEditFields(activity) {
+        if (!activity) return;
+
+        const desiredAccountId = activity.accountId || null;
+        let accountResolved = false;
+
+        if (desiredAccountId) {
+            const account = DataManager.getAccountById(desiredAccountId);
+            if (account) {
+                this.selectAccount(account.id, account.name || activity.accountName || 'Account');
+                accountResolved = true;
+            }
+        }
+
+        if (!accountResolved) {
+            this.prefillNewAccountForEdit(activity);
+        }
+
+        const desiredProjectId = activity.projectId || null;
+        let projectResolved = false;
+        const selectedAccountId = document.getElementById('selectedAccountId')?.value;
+
+        if (selectedAccountId && selectedAccountId !== 'new' && desiredProjectId) {
+            const account = DataManager.getAccountById(selectedAccountId);
+            const project = account?.projects?.find(p => p.id === desiredProjectId);
+            if (project) {
+                this.selectProject(project.id, project.name || activity.projectName || 'Project');
+                projectResolved = true;
+            }
+        }
+
+        if (!projectResolved) {
+            this.prefillNewProjectForEdit(activity);
+        }
+
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        if (salesRepSelect && activity.salesRep) {
+            const targetName = activity.salesRep.toLowerCase();
+            const matchedOption = Array.from(salesRepSelect.options).find(option => {
+                const optionName = (option.getAttribute('data-name') || option.text || '').toLowerCase();
+                return optionName === targetName;
+            });
+            if (matchedOption) {
+                salesRepSelect.value = matchedOption.value;
+            }
+        }
+
+        const industrySelect = document.getElementById('industry');
+        if (industrySelect && activity.industry) {
+            industrySelect.value = activity.industry;
+        }
+
+        this.populateExternalDetailFields(activity);
+    },
+
+    prefillNewAccountForEdit(activity) {
+        const selectedAccountId = document.getElementById('selectedAccountId');
+        if (selectedAccountId) selectedAccountId.value = 'new';
+
+        const accountDisplay = document.getElementById('accountDisplay');
+        if (accountDisplay) accountDisplay.textContent = activity.accountName || 'New Account';
+
+        const newAccountFields = document.getElementById('newAccountFields');
+        if (newAccountFields) newAccountFields.style.display = 'block';
+
+        const newAccountName = document.getElementById('newAccountName');
+        if (newAccountName) {
+            newAccountName.required = true;
+            newAccountName.value = activity.accountName || '';
+        }
+
+        const projectDisplayContainer = document.getElementById('projectDisplayContainer');
+        if (projectDisplayContainer) {
+            projectDisplayContainer.style.background = '';
+            projectDisplayContainer.style.cursor = 'pointer';
+        }
+
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = 'Select or create project...';
+
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = '';
+
+        this.clearProjectFields();
+    },
+
+    prefillNewProjectForEdit(activity) {
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = 'new';
+
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = activity.projectName || 'New Project';
+
+        const newProjectFields = document.getElementById('newProjectFields');
+        if (newProjectFields) newProjectFields.style.display = 'block';
+
+        const newProjectName = document.getElementById('newProjectName');
+        if (newProjectName) {
+            newProjectName.required = true;
+            newProjectName.value = activity.projectName || '';
+        }
+
+        const sfdcLinkInput = document.getElementById('sfdcLink');
+        const noSfdcLinkCheckbox = document.getElementById('noSfdcLink');
+        if (sfdcLinkInput && noSfdcLinkCheckbox) {
+            if (activity.sfdcLink) {
+                noSfdcLinkCheckbox.checked = false;
+                sfdcLinkInput.style.display = 'block';
+                sfdcLinkInput.value = activity.sfdcLink;
+            } else {
+                noSfdcLinkCheckbox.checked = true;
+                sfdcLinkInput.style.display = 'none';
+                sfdcLinkInput.value = '';
+            }
+        }
+
+        this.selectedUseCases = [];
+        this.selectedProjectProducts = [];
+        this.selectedChannels = [];
+        this.updateMultiSelectDisplay('useCaseSelected', []);
+        this.updateMultiSelectDisplay('projectProductsSelected', []);
+        this.updateMultiSelectDisplay('channelsSelected', []);
+    },
+
+    populateExternalDetailFields(activity) {
+        if (!activity) return;
+        const details = activity.details || {};
+
+        if (activity.type === 'customerCall') {
+            const callType = document.getElementById('callType');
+            if (callType && details.callType) {
+                callType.value = details.callType;
+            }
+            const description = document.getElementById('callDescription');
+            if (description) {
+                description.value = details.description || '';
+            }
+        } else if (activity.type === 'sow') {
+            const sowLink = document.getElementById('sowLink');
+            if (sowLink) {
+                sowLink.value = details.sowLink || '';
+            }
+        } else if (activity.type === 'poc') {
+            const accessType = document.getElementById('accessType');
+            if (accessType && details.accessType) {
+                accessType.value = details.accessType;
+                this.togglePOCFields();
+            }
+
+            const useCaseDescription = document.getElementById('useCaseDescription');
+            if (useCaseDescription) {
+                useCaseDescription.value = details.useCaseDescription || '';
+            }
+
+            const startDate = document.getElementById('pocStartDate');
+            if (startDate && details.startDate) {
+                startDate.value = this.formatDateForInput(details.startDate);
+            }
+
+            const endDate = document.getElementById('pocEndDate');
+            if (endDate && details.endDate) {
+                endDate.value = this.formatDateForInput(details.endDate);
+            }
+
+            const demoEnvironment = document.getElementById('demoEnvironment');
+            if (demoEnvironment && details.demoEnvironment) {
+                demoEnvironment.value = details.demoEnvironment;
+            }
+
+            const botTriggerUrl = document.getElementById('botTriggerUrl');
+            if (botTriggerUrl && details.botTriggerUrl) {
+                botTriggerUrl.value = details.botTriggerUrl;
+            }
+        } else if (activity.type === 'rfx') {
+            const rfxType = document.getElementById('rfxType');
+            if (rfxType && details.rfxType) {
+                rfxType.value = details.rfxType;
+            }
+
+            const submissionDeadline = document.getElementById('submissionDeadline');
+            if (submissionDeadline && details.submissionDeadline) {
+                submissionDeadline.value = this.formatDateForInput(details.submissionDeadline);
+            }
+
+            const googleFolderLink = document.getElementById('googleFolderLink');
+            if (googleFolderLink) {
+                googleFolderLink.value = details.googleFolderLink || '';
+            }
+
+            const notes = document.getElementById('rfxNotes');
+            if (notes) {
+                notes.value = details.notes || '';
+            }
+        }
+    },
+
+    closeActivityModal() {
+        this.editingContext = null;
+        const categoryRadios = document.querySelectorAll('#activityModal input[name="activityCategory"]');
+        categoryRadios.forEach(radio => {
+            radio.disabled = false;
+        });
+        UI.hideModal('activityModal');
+    },
+
+    // Create unified activity modal HTML
+    createActivityModal() {
+        const container = document.getElementById('modalsContainer');
+        const modalId = 'activityModal';
+        
+        if (document.getElementById(modalId)) return; // Already exists
+
+        const modalHTML = `
+            <div id="${modalId}" class="modal">
+                <div class="modal-content large">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Log Activity</h2>
+                        <button class="modal-close" onclick="Activities.closeActivityModal()">&times;</button>
+                    </div>
+                    <form id="activityForm" onsubmit="Activities.saveActivity(event)">
+                        <!-- SECTION 1: Activity Type (Internal/External) -->
+                        <div class="form-section">
+                            <h3>Activity Type</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Select Activity Category</label>
+                                    <div class="radio-group">
+                                        <label class="radio-label">
+                                            <input type="radio" name="activityCategory" value="internal" onchange="Activities.setActivityCategory('internal')" required>
+                                            <span>Internal Activity</span>
+                                        </label>
+                                        <label class="radio-label">
+                                            <input type="radio" name="activityCategory" value="external" onchange="Activities.setActivityCategory('external')" required>
+                                            <span>External Activity</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 2: Account Section (Only for External) -->
+                        <div id="accountSection" class="form-section hidden">
+                            <h3>Account Information</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Account Name</label>
+                                    <div class="search-select-container" style="position: relative;">
+                                        <div class="form-control" style="display: flex; align-items: center; cursor: pointer; position: relative;" onclick="Activities.toggleAccountDropdown()">
+                                            <span id="accountDisplay" style="flex: 1;">Select account...</span>
+                                            <span style="margin-left: 0.5rem;">▼</span>
+                                        </div>
+                                        <div class="search-select-dropdown" id="accountDropdown" style="display: none; position: absolute; z-index: 1000; width: 100%;">
+                                            <!-- Will be populated by loadAccountDropdown() -->
+                                        </div>
+                                    </div>
+                                    <input type="hidden" id="selectedAccountId">
+                                    <div id="newAccountFields" style="margin-top: 0.5rem; display: none;">
+                                        <input type="text" class="form-control" id="newAccountName" placeholder="Account Name" style="margin-bottom: 0.5rem;">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label required">Sales Rep</label>
+                                    <select class="form-control" id="salesRepSelect" data-was-required="true" required>
+                                        <option value="">Select Sales Rep...</option>
+                                        ${DataManager.getGlobalSalesReps().filter(r => r.isActive).map(rep => 
+                                            `<option value="${rep.email}" data-name="${rep.name}">${rep.name}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Industry</label>
+                                    <select class="form-control" id="industry" data-was-required="true" required>
+                                        <option value="">Select Industry</option>
+                                        ${DataManager.getIndustries().map(ind => `<option value="${ind}">${ind}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SECTION 3: Project Section (Only for External) -->
+                        <div id="projectSection" class="form-section hidden">
+                            <h3>Project Information</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Project Name</label>
+                                    <div class="search-select-container">
+                                        <div class="form-control" id="projectDisplayContainer" style="display: flex; align-items: center; cursor: pointer; position: relative; background: #e5e7eb; cursor: not-allowed;" onclick="Activities.toggleProjectDropdown()">
+                                            <span id="projectDisplay" style="flex: 1;">Select account first...</span>
+                                            <span style="margin-left: 0.5rem;">▼</span>
+                                        </div>
+                                        <div class="search-select-dropdown" id="projectDropdown" style="display: none;">
+                                            <!-- Will be populated by loadProjectDropdown() -->
+                                        </div>
+                                    </div>
+                                    <input type="hidden" id="selectedProjectId">
+                                    <div id="newProjectFields" style="margin-top: 0.5rem; display: none;">
+                                        <input type="text" class="form-control" id="newProjectName" placeholder="Project Name" style="margin-bottom: 0.5rem;">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">SFDC Link</label>
+                                    <div class="checkbox-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="noSfdcLink" onchange="Activities.toggleSfdcLink()">
+                                            <span>No SFDC link exists</span>
+                                        </label>
+                                    </div>
+                                    <input type="url" class="form-control" id="sfdcLink" placeholder="https://..." style="margin-top: 0.5rem;">
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Primary Use Case</label>
+                                    <div class="multi-select-container">
+                                        <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('useCaseDropdown')">
+                                            <span class="multi-select-selected" id="useCaseSelected">Select use cases...</span>
+                                            <span>▼</span>
+                                        </div>
+                                        <div class="multi-select-dropdown" id="useCaseDropdown">
+                                            ${['Marketing', 'Commerce', 'Support'].map(uc => `
+                                                <div class="multi-select-option" onclick="Activities.toggleOption('useCase', '${uc}')">
+                                                    <input type="checkbox" value="${uc}"> ${uc}
+                                                </div>
+                                            `).join('')}
+                                            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
+                                                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input type="text" class="form-control" id="useCaseOtherText" placeholder="Specify other use case..." style="margin-top: 0.5rem; display: none;">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Products Interested</label>
+                                <div class="multi-select-container">
+                                    <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('projectProductsDropdown')">
+                                        <span class="multi-select-selected" id="projectProductsSelected">Select products...</span>
+                                        <span>▼</span>
+                                    </div>
+                                    <div class="multi-select-dropdown" id="projectProductsDropdown">
+                                        ${COMMON_PRODUCTS.map(p => `
+                                            <div class="multi-select-option" onclick="Activities.toggleOption('projectProducts', '${p}')">
+                                                <input type="checkbox" value="${p}"> ${p}
+                                            </div>
+                                        `).join('')}
+                                        <div class="multi-select-option" onclick="Activities.toggleOption('projectProducts', 'Other')">
+                                            <input type="checkbox" value="Other"> Other
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="text" class="form-control" id="projectProductsOtherText" placeholder="Specify other product..." style="margin-top: 0.5rem; display: none;">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Channels</label>
+                                <div class="multi-select-container">
+                                    <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('channelsDropdown')">
+                                        <span class="multi-select-selected" id="channelsSelected">Select channels...</span>
+                                        <span>▼</span>
+                                    </div>
+                                    <div class="multi-select-dropdown" id="channelsDropdown">
+                                        ${['WhatsApp', 'Web', 'Voice', 'RCS', 'Instagram', 'Mobile SDK', 'Other'].map(c => `
+                                            <div class="multi-select-option" onclick="Activities.toggleOption('channels', '${c}')">
+                                                <input type="checkbox" value="${c}"> ${c}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <input type="text" class="form-control" id="channelsOtherText" placeholder="Specify other channel..." style="margin-top: 0.5rem; display: none;">
+                            </div>
+                        </div>
+
+                        <!-- SECTION 4: Activity Details -->
+                        <div class="form-section">
+                            <h3>Activity Details</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label required">Date</label>
+                                    <input type="date" class="form-control" id="activityDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label required">Activity Type</label>
+                                    <select class="form-control" id="activityTypeSelect" onchange="Activities.showActivityFields()" required>
+                                        <option value="">Select Activity Type</option>
+                                        <!-- Options will be populated based on Internal/External -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="activityFields"></div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" onclick="Activities.closeActivityModal()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Activity</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Set default date
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('activityDate');
+        if (dateInput) dateInput.value = today;
+    },
+
+    // Show activity fields based on type
+    showActivityFields() {
+        const activityTypeSelect = document.getElementById('activityTypeSelect');
+        if (!activityTypeSelect) return;
+        
+        const type = activityTypeSelect.value;
+        const container = document.getElementById('activityFields');
+        if (!container) return;
+
+        let html = '';
+        
+        if (this.activityType === 'internal') {
+            html = this.getInternalActivityFields();
+        } else if (this.activityType === 'external') {
+            if (type === 'customerCall') {
+                html = this.getCustomerCallFields();
+            } else if (type === 'sow') {
+                html = this.getSOWFields();
+            } else if (type === 'poc') {
+                html = this.getPOCFields();
+            } else if (type === 'rfx') {
+                html = this.getRFxFields();
+            } else if (type === 'pricing') {
+                html = ''; // No fields for pricing
+            }
+        }
+        
+        container.innerHTML = html;
+    },
+
+    // Get customer call fields
+    getCustomerCallFields() {
+        return `
+            <div class="form-group">
+                <label class="form-label required">Call Type</label>
+                <select class="form-control" id="callType" required>
+                    <option value="">Select Type</option>
+                    <option value="Demo">Demo</option>
+                    <option value="Discovery">Discovery</option>
+                    <option value="Scoping Deep Dive">Scoping Deep Dive</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Q&A">Q&A</option>
+                    <option value="Internal Kickoff">Internal Kickoff</option>
+                    <option value="Customer Kickoff">Customer Kickoff</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Description / MOM</label>
+                <textarea class="form-control" id="callDescription" rows="4" required placeholder="Enter description or minutes of meeting..."></textarea>
+            </div>
+        `;
+    },
+
+    // Get POC fields
+    getPOCFields() {
+        return `
+            <div class="form-group">
+                <label class="form-label required">Access Type</label>
+                <select class="form-control" id="accessType" required onchange="Activities.togglePOCFields()">
+                    <option value="">Select Access Type</option>
+                    <option value="Sandbox">Sandbox</option>
+                    <option value="Custom POC - Structured Journey">Custom POC - Structured Journey</option>
+                    <option value="Custom POC - Agentic">Custom POC - Agentic</option>
+                    <option value="Custom POC - Commerce">Custom POC - Commerce</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Use Case Description</label>
+                <textarea class="form-control" id="useCaseDescription" rows="3" required></textarea>
+            </div>
+            <!-- Sandbox Fields -->
+            <div id="pocSandboxFields" class="hidden">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label required">Start Date</label>
+                        <input type="date" class="form-control" id="pocStartDate" required onchange="Activities.setPOCEndDate()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label required">End Date</label>
+                        <input type="date" class="form-control" id="pocEndDate" required>
+                    </div>
+                </div>
+            </div>
+            <!-- Custom POC Fields -->
+            <div id="pocCustomFields" class="hidden">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Demo Environment</label>
+                        <input type="text" class="form-control" id="demoEnvironment">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Bot Trigger URL/Number</label>
+                        <input type="text" class="form-control" id="botTriggerUrl" placeholder="URL or number">
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    // Toggle POC fields based on Access Type
+    togglePOCFields() {
+        const accessType = document.getElementById('accessType').value;
+        const sandboxFields = document.getElementById('pocSandboxFields');
+        const customFields = document.getElementById('pocCustomFields');
+        
+        if (accessType === 'Sandbox') {
+            if (sandboxFields) sandboxFields.classList.remove('hidden');
+            if (customFields) customFields.classList.add('hidden');
+        } else if (accessType && accessType.startsWith('Custom POC')) {
+            if (sandboxFields) sandboxFields.classList.add('hidden');
+            if (customFields) customFields.classList.remove('hidden');
+        } else {
+            if (sandboxFields) sandboxFields.classList.add('hidden');
+            if (customFields) customFields.classList.add('hidden');
+        }
+    },
+
+    // Get SOW fields
+    getSOWFields() {
+        return `
+            <div class="form-group">
+                <label class="form-label required">SOW Document Link</label>
+                <input type="url" class="form-control" id="sowLink" placeholder="https://..." required>
+            </div>
+        `;
+    },
+
+    // Get Internal Activity fields
+    getInternalActivityFields() {
+        return `
+            <div class="form-group">
+                <label class="form-label required">Time Spent</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="timeSpentType" value="day" onchange="Activities.toggleTimeSpentInput()">
+                        <span>Day(s)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="timeSpentType" value="hour" onchange="Activities.toggleTimeSpentInput()">
+                        <span>Hour(s)</span>
+                    </label>
+                </div>
+                <input type="number" class="form-control" id="timeSpentValue" placeholder="Enter value..." style="margin-top: 0.5rem; display: none;" min="0" step="0.5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Activity Name</label>
+                <input type="text" class="form-control" id="internalActivityName" placeholder="Enter activity name...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Topic</label>
+                <input type="text" class="form-control" id="internalTopic" placeholder="Enter topic...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" id="internalDescription" rows="4" placeholder="Enter description..."></textarea>
+            </div>
+        `;
+    },
+
+    // Toggle time spent input
+    toggleTimeSpentInput() {
+        const timeSpentValue = document.getElementById('timeSpentValue');
+        const selected = document.querySelector('input[name="timeSpentType"]:checked');
+        if (timeSpentValue && selected) {
+            timeSpentValue.style.display = 'block';
+            if (selected.value === 'day') {
+                timeSpentValue.placeholder = 'Enter number of days';
+                timeSpentValue.step = '1';
+            } else {
+                timeSpentValue.placeholder = 'Enter hours';
+                timeSpentValue.step = '0.5';
+            }
+        }
+    },
+
+    // Get RFx fields
+    getRFxFields() {
+        return `
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label required">RFx Type</label>
+                    <select class="form-control" id="rfxType" required>
+                        <option value="">Select Type</option>
+                        <option value="RFP">RFP (Request for Proposal)</option>
+                        <option value="RFI">RFI (Request for Information)</option>
+                        <option value="RFQ">RFQ (Request for Quote)</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label required">Submission Deadline</label>
+                    <input type="date" class="form-control" id="submissionDeadline" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Google Folder Link</label>
+                <input type="url" class="form-control" id="googleFolderLink" placeholder="https://drive.google.com/...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Additional Notes</label>
+                <textarea class="form-control" id="rfxNotes" rows="3"></textarea>
+            </div>
+        `;
+    },
+
+    // Multi-select functions
+    toggleMultiSelect(dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) {
+            dropdown.classList.toggle('active');
+            
+            // Close other dropdowns
+            document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+                if (d.id !== dropdownId) {
+                    d.classList.remove('active');
+                }
+            });
+        }
+    },
+
+    toggleOption(category, value) {
+        if (typeof event !== 'undefined' && event && typeof event.stopPropagation === 'function') {
+            event.stopPropagation();
+        }
+        
+        let selectedArray;
+        let displayId;
+        let otherTextId = null;
+        
+        if (category === 'useCase') {
+            selectedArray = this.selectedUseCases;
+            displayId = 'useCaseSelected';
+            otherTextId = 'useCaseOtherText';
+        } else if (category === 'channels') {
+            selectedArray = this.selectedChannels;
+            displayId = 'channelsSelected';
+            otherTextId = 'channelsOtherText';
+        } else if (category === 'projectProducts') {
+            selectedArray = this.selectedProjectProducts;
+            displayId = 'projectProductsSelected';
+            otherTextId = 'projectProductsOtherText';
+        }
+        
+        const index = selectedArray.indexOf(value);
+        const optionEl = (typeof event !== 'undefined' && event) ? event.currentTarget : null;
+        const checkbox = optionEl ? optionEl.querySelector('input[type="checkbox"]') : null;
+
+        if (index > -1) {
+            selectedArray.splice(index, 1);
+            // Hide other text field if "Other" is deselected
+            if (value === 'Other' && otherTextId) {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) {
+                    otherText.style.display = 'none';
+                    otherText.value = '';
+                    otherText.required = false;
+                }
+            }
+        } else {
+            selectedArray.push(value);
+            // Show other text field if "Other" is selected
+            if (value === 'Other' && otherTextId) {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) {
+                    otherText.style.display = 'block';
+                    otherText.required = true;
+                }
+            }
+        }
+
+        if (checkbox) {
+            checkbox.checked = selectedArray.includes(value);
+        }
+
+        this.syncMultiSelectState(category, selectedArray);
+        this.updateMultiSelectDisplay(displayId, selectedArray);
+    },
+
+    updateMultiSelectDisplay(displayId, selectedArray) {
+        const display = document.getElementById(displayId);
+        if (!display) return;
+        
+        if (selectedArray.length === 0) {
+            display.textContent = displayId.includes('useCase') ? 'Select use cases...' :
+                                 displayId.includes('products') ? 'Select products...' :
+                                 displayId.includes('channels') ? 'Select channels...' :
+                                 'Select products...';
+        } else {
+            display.innerHTML = selectedArray.map(item => 
+                `<span class="multi-select-tag">${item}</span>`
+            ).join('');
+        }
+    },
+
+    syncMultiSelectState(category, selectedValues = []) {
+        let dropdownId = '';
+        if (category === 'useCase') {
+            dropdownId = 'useCaseDropdown';
+        } else if (category === 'projectProducts') {
+            dropdownId = 'projectProductsDropdown';
+        } else if (category === 'channels') {
+            dropdownId = 'channelsDropdown';
+        }
+
+        if (!dropdownId) return;
+
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+
+        dropdown.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = selectedValues.includes(checkbox.value);
+        });
+    },
+
+    // Load account dropdown (with inline search)
+    loadAccountDropdown() {
+        const dropdown = document.getElementById('accountDropdown');
+        if (!dropdown) return;
+
+        this.allAccounts = DataManager.getAccounts();
+        const optionsHtml = this.renderAccountOptions(this.allAccounts);
+
+        dropdown.innerHTML = `
+            <div class="search-select-search">
+                <input type="text"
+                       class="search-select-input form-control"
+                       id="accountDropdownSearch"
+                       placeholder="Search accounts..."
+                       oninput="Activities.filterAccountDropdown(this.value)">
+            </div>
+            <div id="accountDropdownList">
+                ${optionsHtml}
+                <div class="search-select-create" onclick="Activities.showNewAccountFields()">+ Add New Account</div>
+            </div>
+        `;
+    },
+
+    renderAccountOptions(accounts = []) {
+        if (!accounts.length) {
+            return `<div class="search-select-empty">No accounts found</div>`;
+        }
+
+        return accounts.map(account => {
+            const safeName = JSON.stringify(account.name);
+            return `<div class="search-select-item" data-id="${account.id}" onclick='Activities.selectAccount("${account.id}", ${safeName})'>${account.name}</div>`;
+        }).join('');
+    },
+
+    filterAccountDropdown(query = '') {
+        const list = document.getElementById('accountDropdownList');
+        if (!list) return;
+
+        const normalized = query.trim().toLowerCase();
+        const accounts = this.allAccounts || DataManager.getAccounts();
+        const filtered = normalized
+            ? accounts.filter(acc => acc.name.toLowerCase().includes(normalized))
+            : accounts;
+
+        list.innerHTML = `
+            ${this.renderAccountOptions(filtered)}
+            <div class="search-select-create" onclick="Activities.showNewAccountFields()">+ Add New Account</div>
+        `;
+    },
+
+    // Toggle account dropdown
+    toggleAccountDropdown() {
+        const dropdown = document.getElementById('accountDropdown');
+        if (!dropdown) return;
+
+        const isVisible = dropdown.style.display !== 'none';
+        if (isVisible) {
+            dropdown.style.display = 'none';
+        } else {
+            this.loadAccountDropdown();
+            dropdown.style.display = 'block';
+            dropdown.classList.add('active');
+
+            const searchInput = document.getElementById('accountDropdownSearch');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+        }
+    },
+
+    // Show new account fields
+    showNewAccountFields() {
+        const dropdown = document.getElementById('accountDropdown');
+        if (dropdown) dropdown.style.display = 'none';
+
+        const selectedAccountId = document.getElementById('selectedAccountId');
+        const accountDisplay = document.getElementById('accountDisplay');
+        const newAccountFields = document.getElementById('newAccountFields');
+        const newAccountName = document.getElementById('newAccountName');
+
+        if (selectedAccountId) selectedAccountId.value = 'new';
+        if (accountDisplay) accountDisplay.textContent = 'New Account';
+        if (newAccountFields) newAccountFields.style.display = 'block';
+        if (newAccountName) {
+            newAccountName.required = true;
+            newAccountName.value = '';
+        }
+
+        const searchInput = document.getElementById('accountDropdownSearch');
+        if (searchInput && searchInput.value.trim() && newAccountName) {
+            newAccountName.value = searchInput.value.trim();
+        }
+
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        if (salesRepSelect) {
+            salesRepSelect.value = '';
+        }
+        const industrySelect = document.getElementById('industry');
+        if (industrySelect) {
+            industrySelect.value = '';
+        }
+
+        const projectDisplayContainer = document.getElementById('projectDisplayContainer');
+        if (projectDisplayContainer) {
+            projectDisplayContainer.style.background = '';
+            projectDisplayContainer.style.cursor = 'pointer';
+            projectDisplayContainer.removeAttribute('disabled');
+        }
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = 'Select or create project...';
+
+        // Reset project selection state for new account
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = '';
+        const newProjectFields = document.getElementById('newProjectFields');
+        if (newProjectFields) newProjectFields.style.display = 'none';
+        const newProjectName = document.getElementById('newProjectName');
+        if (newProjectName) {
+            newProjectName.value = '';
+            newProjectName.required = false;
+        }
+        this.clearProjectFields();
+    },
+
+    selectAccount(id, name) {
+        const selectedAccountId = document.getElementById('selectedAccountId');
+        const accountDisplay = document.getElementById('accountDisplay');
+        const accountDropdown = document.getElementById('accountDropdown');
+        const newAccountFields = document.getElementById('newAccountFields');
+        const newAccountName = document.getElementById('newAccountName');
+
+        if (selectedAccountId) selectedAccountId.value = id;
+        if (accountDisplay) accountDisplay.textContent = name;
+        if (accountDropdown) accountDropdown.style.display = 'none';
+        if (newAccountFields) newAccountFields.style.display = 'none';
+        if (newAccountName) {
+            newAccountName.required = false;
+            newAccountName.value = '';
+        }
+        this.clearProjectFields();
+        
+        // Auto-populate Sales Rep and Industry from account
+        const account = DataManager.getAccountById(id);
+        if (account) {
+            const salesRepSelect = document.getElementById('salesRepSelect');
+            const industrySelect = document.getElementById('industry');
+            
+            if (salesRepSelect && account.salesRep) {
+                // Find sales rep by name in global list (account stores name, dropdown uses email as value)
+                const salesRep = DataManager.getGlobalSalesReps().find(r => r.name === account.salesRep);
+                if (salesRep) {
+                    // Find option by email (value is email)
+                    const option = Array.from(salesRepSelect.options).find(opt => opt.value === salesRep.email);
+                    if (option) {
+                        salesRepSelect.value = salesRep.email;
+                    }
+                }
+                // Note: If sales rep not in global list, dropdown will be empty
+                // Admin should add sales rep to global list first
+            }
+            if (industrySelect && account.industry) {
+                industrySelect.value = account.industry;
+            }
+        }
+        
+        // Enable project dropdown and load projects
+        const projectDisplayContainer = document.getElementById('projectDisplayContainer');
+        if (projectDisplayContainer) {
+            projectDisplayContainer.style.background = '';
+            projectDisplayContainer.style.cursor = 'pointer';
+            projectDisplayContainer.removeAttribute('disabled');
+        }
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = 'Select project...';
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = '';
+        // Show all projects immediately
+        this.loadProjectDropdown();
+    },
+
+    // Load project dropdown (show all projects immediately)
+    loadProjectDropdown() {
+        const accountId = document.getElementById('selectedAccountId').value;
+        const dropdown = document.getElementById('projectDropdown');
+        if (!dropdown || !accountId) {
+            return;
+        }
+
+        let html = '';
+
+        // If account is 'new', only show "Add New Project" option
+        if (accountId === 'new') {
+            this.currentProjectOptions = [];
+            html = `
+                <div class="search-select-empty">Create the account first to link existing projects.</div>
+                <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
+            `;
+        } else {
+            // For existing accounts, show all projects
+            const accounts = DataManager.getAccounts();
+            const account = accounts.find(a => a.id === accountId);
+            const projects = account?.projects || [];
+            this.currentProjectOptions = projects;
+
+            html = `
+                <div class="search-select-search">
+                    <input type="text"
+                           class="search-select-input form-control"
+                           id="projectDropdownSearch"
+                           placeholder="Search projects..."
+                           oninput="Activities.filterProjectDropdown(this.value)">
+                </div>
+                <div id="projectDropdownList">
+                    ${this.renderProjectOptions(projects)}
+                    <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
+                </div>
+            `;
+        }
+
+        dropdown.innerHTML = html;
+    },
+
+    renderProjectOptions(projects = []) {
+        if (!projects.length) {
+            return `<div class="search-select-empty">No projects found</div>`;
+        }
+
+        return projects.map(project => {
+            const safeName = JSON.stringify(project.name);
+            return `<div class="search-select-item" data-id="${project.id}" onclick='Activities.selectProject("${project.id}", ${safeName})'>${project.name}</div>`;
+        }).join('');
+    },
+
+    filterProjectDropdown(query = '') {
+        const list = document.getElementById('projectDropdownList');
+        if (!list) return;
+
+        const normalized = query.trim().toLowerCase();
+        const projects = this.currentProjectOptions || [];
+        const filtered = normalized
+            ? projects.filter(project => project.name.toLowerCase().includes(normalized))
+            : projects;
+
+        list.innerHTML = `
+            ${this.renderProjectOptions(filtered)}
+            <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
+        `;
+    },
+    
+    // Toggle project dropdown
+    toggleProjectDropdown() {
+        const accountId = document.getElementById('selectedAccountId').value;
+        if (!accountId) {
+            UI.showNotification('Please select an account first', 'error');
+            return;
+        }
+        
+        // For new accounts, ensure account name is entered
+        if (accountId === 'new') {
+            const accountName = document.getElementById('newAccountName')?.value;
+            if (!accountName || !accountName.trim()) {
+                UI.showNotification('Please enter an account name first', 'error');
+                return;
+            }
+        }
+        
+        const dropdown = document.getElementById('projectDropdown');
+        if (!dropdown) return;
+        
+        const isVisible = dropdown.style.display !== 'none';
+        if (isVisible) {
+            dropdown.style.display = 'none';
+        } else {
+            this.loadProjectDropdown();
+            dropdown.style.display = 'block';
+            dropdown.classList.add('active');
+
+            const searchInput = document.getElementById('projectDropdownSearch');
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.focus();
+            }
+        }
+    },
+    
+    // Show new project fields
+    showNewProjectFields() {
+        const projectDropdown = document.getElementById('projectDropdown');
+        if (projectDropdown) projectDropdown.style.display = 'none';
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = 'new';
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = 'New Project';
+        const newProjectFields = document.getElementById('newProjectFields');
+        if (newProjectFields) newProjectFields.style.display = 'block';
+        const newProjectName = document.getElementById('newProjectName');
+        if (newProjectName) {
+            newProjectName.required = true;
+            newProjectName.value = '';
+        }
+        this.clearProjectFields();
+
+        const searchInput = document.getElementById('projectDropdownSearch');
+        if (searchInput && searchInput.value.trim() && newProjectName) {
+            newProjectName.value = searchInput.value.trim();
+        }
+    },
+    
+    selectProject(id, name) {
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = id;
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = name;
+        const projectDropdown = document.getElementById('projectDropdown');
+        if (projectDropdown) projectDropdown.style.display = 'none';
+        const newProjectFields = document.getElementById('newProjectFields');
+        if (newProjectFields) newProjectFields.style.display = 'none';
+        const newProjectName = document.getElementById('newProjectName');
+        if (newProjectName) {
+            newProjectName.required = false;
+            newProjectName.value = '';
+        }
+        
+        // Load and pre-populate project data if existing project
+        if (id && id !== 'new') {
+            this.loadProjectData(id);
+        } else {
+            // Clear project fields for new project
+            this.clearProjectFields();
+        }
+    },
+    
+    // Load project data and pre-populate fields
+    loadProjectData(projectId) {
+        const accountId = document.getElementById('selectedAccountId')?.value;
+        if (!accountId || !projectId) return;
+        
+        this.clearProjectFields();
+        
+        const account = DataManager.getAccountById(accountId);
+        if (!account || !account.projects) return;
+        
+        const project = account.projects.find(p => p.id === projectId);
+        if (!project) return;
+        
+        // Pre-populate SFDC Link
+        const sfdcLink = document.getElementById('sfdcLink');
+        const noSfdcLink = document.getElementById('noSfdcLink');
+        if (sfdcLink && noSfdcLink) {
+            if (project.sfdcLink) {
+                sfdcLink.value = project.sfdcLink;
+                noSfdcLink.checked = false;
+                sfdcLink.style.display = 'block';
+            } else {
+                noSfdcLink.checked = true;
+                sfdcLink.style.display = 'none';
+            }
+        }
+        
+        // Pre-populate Use Cases
+        if (project.useCases && project.useCases.length > 0) {
+            this.selectedUseCases = [];
+            project.useCases.forEach(uc => {
+                if (uc.startsWith('Other: ')) {
+                    this.selectedUseCases.push('Other');
+                    const otherText = document.getElementById('useCaseOtherText');
+                    if (otherText) {
+                        otherText.value = uc.replace('Other: ', '');
+                        otherText.style.display = 'block';
+                        otherText.required = true;
+                    }
+                } else {
+                    this.selectedUseCases.push(uc);
+                }
+            });
+            this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
+            this.syncMultiSelectState('useCase', this.selectedUseCases);
+        }
+        
+        // Pre-populate Products Interested
+        if (project.productsInterested && project.productsInterested.length > 0) {
+            this.selectedProjectProducts = [];
+            project.productsInterested.forEach(prod => {
+                if (prod.startsWith('Other: ')) {
+                    this.selectedProjectProducts.push('Other');
+                    const otherText = document.getElementById('projectProductsOtherText');
+                    if (otherText) {
+                        otherText.value = prod.replace('Other: ', '');
+                        otherText.style.display = 'block';
+                        otherText.required = true;
+                    }
+                } else {
+                    this.selectedProjectProducts.push(prod);
+                }
+            });
+            this.updateMultiSelectDisplay('projectProductsSelected', this.selectedProjectProducts);
+            this.syncMultiSelectState('projectProducts', this.selectedProjectProducts);
+        }
+        
+        // Pre-populate Channels
+        if (project.channels && project.channels.length > 0) {
+            this.selectedChannels = [];
+            project.channels.forEach(ch => {
+                if (ch.startsWith('Other: ')) {
+                    this.selectedChannels.push('Other');
+                    const otherText = document.getElementById('channelsOtherText');
+                    if (otherText) {
+                        otherText.value = ch.replace('Other: ', '');
+                        otherText.style.display = 'block';
+                        otherText.required = true;
+                    }
+                } else {
+                    this.selectedChannels.push(ch);
+                }
+            });
+            this.updateMultiSelectDisplay('channelsSelected', this.selectedChannels);
+            this.syncMultiSelectState('channels', this.selectedChannels);
+        }
+    },
+    
+    // Clear project fields for new project
+    clearProjectFields() {
+        // Clear SFDC
+        const sfdcLink = document.getElementById('sfdcLink');
+        const noSfdcLink = document.getElementById('noSfdcLink');
+        if (sfdcLink) sfdcLink.value = '';
+        if (noSfdcLink) noSfdcLink.checked = false;
+        if (sfdcLink) sfdcLink.style.display = 'block';
+        
+        // Clear Use Cases
+        this.selectedUseCases = [];
+        const useCaseOtherText = document.getElementById('useCaseOtherText');
+        if (useCaseOtherText) {
+            useCaseOtherText.value = '';
+            useCaseOtherText.style.display = 'none';
+            useCaseOtherText.required = false;
+        }
+        this.updateMultiSelectDisplay('useCaseSelected', []);
+        this.syncMultiSelectState('useCase', []);
+        
+        // Clear Products
+        this.selectedProjectProducts = [];
+        const productsOtherText = document.getElementById('projectProductsOtherText');
+        if (productsOtherText) {
+            productsOtherText.value = '';
+            productsOtherText.style.display = 'none';
+            productsOtherText.required = false;
+        }
+        this.updateMultiSelectDisplay('projectProductsSelected', []);
+        this.syncMultiSelectState('projectProducts', []);
+        
+        // Clear Channels
+        this.selectedChannels = [];
+        const channelsOtherText = document.getElementById('channelsOtherText');
+        if (channelsOtherText) {
+            channelsOtherText.value = '';
+            channelsOtherText.style.display = 'none';
+            channelsOtherText.required = false;
+        }
+        this.updateMultiSelectDisplay('channelsSelected', []);
+        this.syncMultiSelectState('channels', []);
+    },
+
+    createNewProject(name) {
+        // This is called when user types in new project name field
+        document.getElementById('selectedProjectId').value = 'new';
+        if (name) {
+            document.getElementById('newProjectName').value = name;
+        }
+    },
+
+    // Save activity (unified for Internal and External)
+    saveActivity(event) {
+        event.preventDefault();
+        
+        try {
+            const currentUser = Auth.getCurrentUser();
+            if (!currentUser) {
+                UI.showNotification('User not authenticated', 'error');
+                return;
+            }
+            
+            const activityCategory = document.querySelector('input[name="activityCategory"]:checked')?.value;
+            if (!activityCategory) {
+                UI.showNotification('Please select activity category (Internal/External)', 'error');
+                return;
+            }
+            
+            // Remove required attributes from hidden fields to prevent validation errors
+            const accountSection = document.getElementById('accountSection');
+            const projectSection = document.getElementById('projectSection');
+            
+            if (activityCategory === 'internal') {
+                // For internal, ALWAYS remove required from account/project fields (even if hidden)
+                if (accountSection) {
+                    // Remove required from all fields in account section
+                    const accountFields = accountSection.querySelectorAll('[required], [data-was-required="true"]');
+                    accountFields.forEach(field => {
+                        field.removeAttribute('required');
+                        field.setAttribute('data-was-required', 'true');
+                    });
+                    // Also clear values to prevent validation issues
+                    const industrySelect = document.getElementById('industry');
+                    const salesRepSelect = document.getElementById('salesRepSelect');
+                    const accountDisplay = document.getElementById('accountDisplay');
+                    if (industrySelect) industrySelect.value = '';
+                    if (salesRepSelect) salesRepSelect.value = '';
+                    if (accountDisplay) accountDisplay.textContent = 'Select account...';
+                }
+                if (projectSection) {
+                    // Remove required from all fields in project section
+                    const projectFields = projectSection.querySelectorAll('[required], [data-was-required="true"]');
+                    projectFields.forEach(field => {
+                        field.removeAttribute('required');
+                        field.setAttribute('data-was-required', 'true');
+                    });
+                }
+            } else {
+                // For external, ensure account/project fields are required
+                if (accountSection) {
+                    const accountFields = accountSection.querySelectorAll('[data-was-required="true"]');
+                    accountFields.forEach(field => {
+                        // Only add required if field is visible (not in hidden section)
+                        if (!accountSection.classList.contains('hidden')) {
+                            field.setAttribute('required', 'required');
+                        }
+                    });
+                }
+                if (projectSection) {
+                    const projectFields = projectSection.querySelectorAll('[data-was-required="true"]');
+                    projectFields.forEach(field => {
+                        // Only add required if field is visible (not in hidden section)
+                        if (!projectSection.classList.contains('hidden')) {
+                            field.setAttribute('required', 'required');
+                        }
+                    });
+                }
+            }
+            
+            const date = document.getElementById('activityDate').value;
+            const activityType = document.getElementById('activityTypeSelect').value;
+            
+            if (!date || !activityType) {
+                UI.showNotification('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const editingContext = this.editingContext;
+            const isEditing = !!editingContext;
+            const originalCategoryIsInternal = editingContext ? editingContext.isInternal : null;
+            const currentIsInternal = activityCategory === 'internal';
+
+            if (isEditing && originalCategoryIsInternal !== currentIsInternal) {
+                UI.showNotification('Switching between internal and external is not supported while editing. Please cancel and create a new activity instead.', 'error');
+                return;
+            }
+
+            const saveOptions = {
+                isEditing,
+                original: editingContext ? editingContext.activity : null
+            };
+
+            if (currentIsInternal) {
+                this.saveInternalActivityUnified(currentUser, date, activityType, saveOptions);
+            } else {
+                this.saveExternalActivityUnified(currentUser, date, activityType, saveOptions);
+            }
+        } catch (error) {
+            console.error('Error saving activity:', error);
+            UI.showNotification('Error saving activity: ' + error.message, 'error');
+        }
+    },
+
+    // Save internal activity (unified)
+    saveInternalActivityUnified(currentUser, date, activityType, options = {}) {
+        const { isEditing = false, original = null } = options || {};
+
+        const timeSpentType = document.querySelector('input[name="timeSpentType"]:checked')?.value;
+        const timeSpentValue = document.getElementById('timeSpentValue')?.value;
+
+        let timeSpent = null;
+        if (timeSpentType && timeSpentValue) {
+            const value = parseFloat(timeSpentValue);
+            if (!Number.isNaN(value) && value > 0) {
+                timeSpent = `${value} ${timeSpentType === 'day' ? 'day(s)' : 'hour(s)'}`;
+            }
+        }
+
+        const activityName = document.getElementById('internalActivityName')?.value?.trim() || '';
+        const topic = document.getElementById('internalTopic')?.value?.trim() || '';
+        const description = document.getElementById('internalDescription')?.value?.trim() || '';
+
+        const payload = {
+            userId: currentUser.id,
+            userName: currentUser.username,
+            date,
+            type: activityType,
+            timeSpent,
+            activityName,
+            topic,
+            description,
+            isInternal: true
+        };
+
+        if (isEditing && original) {
+            const updated = DataManager.updateInternalActivity(original.id, {
+                date,
+                type: activityType,
+                timeSpent,
+                activityName,
+                topic,
+                description,
+                isInternal: true
+            });
+
+            if (!updated) {
+                UI.showNotification('Unable to update internal activity. Please try again.', 'error');
+                return;
+            }
+
+            this.closeActivityModal();
+            UI.showNotification('Internal activity updated successfully!', 'success');
+        } else {
+            DataManager.addInternalActivity(payload);
+            this.closeActivityModal();
+            UI.showNotification('Internal activity logged successfully!', 'success');
+        }
+
+        if (window.app) {
+            window.app.loadDashboard();
+            window.app.loadActivitiesView();
+        }
+    },
+
+    // Save external activity (unified)
+    saveExternalActivityUnified(currentUser, date, activityType, options = {}) {
+        const { isEditing = false, original = null } = options || {};
+        const editingContext = this.editingContext || {};
+
+        // Get account information
+        const accountIdEl = document.getElementById('selectedAccountId');
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        const industryEl = document.getElementById('industry');
+        const projectIdEl = document.getElementById('selectedProjectId');
+        
+        if (!accountIdEl || !salesRepSelect || !industryEl) {
+            UI.showNotification('Please fill in all required account fields', 'error');
+            return;
+        }
+        
+        const accountId = accountIdEl.value;
+        let accountName = document.getElementById('accountDisplay')?.textContent || '';
+        if (accountId === 'new') {
+            accountName = document.getElementById('newAccountName')?.value || '';
+        }
+        const industry = industryEl.value;
+        
+        // Get project info (now from Project Information section)
+        const projectId = projectIdEl ? projectIdEl.value : '';
+        let projectName = document.getElementById('projectDisplay')?.textContent || '';
+        if (projectId === 'new') {
+            projectName = document.getElementById('newProjectName')?.value || '';
+        }
+        
+        if (!accountId || !accountName || !industry) {
+            UI.showNotification('Please fill in all required account fields', 'error');
+            return;
+        }
+        
+        if (accountId === 'new' && !accountName.trim()) {
+            UI.showNotification('Please enter an account name', 'error');
+            return;
+        }
+        
+        if (!projectId || (!projectName && projectId !== 'new')) {
+            UI.showNotification('Please select or create a project', 'error');
+            return;
+        }
+        
+        if (projectId === 'new' && !projectName.trim()) {
+            UI.showNotification('Please enter a project name', 'error');
+            return;
+        }
+        
+        // Handle sales rep (from dropdown only - no adding new)
+        const selectedOption = salesRepSelect.options[salesRepSelect.selectedIndex];
+        const salesRep = selectedOption ? selectedOption.getAttribute('data-name') || selectedOption.text : '';
+        
+        if (!salesRep || !salesRepSelect.value) {
+            UI.showNotification('Please select a sales rep', 'error');
+            return;
+        }
+        
+        // Create or get account
+        let finalAccountId = accountId;
+        if (accountId === 'new') {
+            const newAccount = DataManager.addAccount({
+                name: accountName,
+                industry: industry,
+                salesRep: salesRep,
+                createdBy: currentUser.id
+            });
+            finalAccountId = newAccount.id;
+        } else {
+            // Update account with sales rep if changed
+            const account = DataManager.getAccountById(accountId);
+            if (account && (account.salesRep !== salesRep || account.industry !== industry)) {
+                DataManager.updateAccount(accountId, {
+                    salesRep: salesRep,
+                    industry: industry
+                });
+            }
+        }
+        
+        // Get project information
+        const noSfdcLink = document.getElementById('noSfdcLink')?.checked || false;
+        const sfdcLink = noSfdcLink ? '' : (document.getElementById('sfdcLink')?.value || '');
+        
+        // Get use cases (handle Other)
+        let useCases = [...this.selectedUseCases];
+        const useCaseOtherText = document.getElementById('useCaseOtherText')?.value;
+        if (useCases.includes('Other') && useCaseOtherText) {
+            const otherIndex = useCases.indexOf('Other');
+            useCases[otherIndex] = `Other: ${useCaseOtherText}`;
+        }
+        
+        // Get project products (handle Other) - Required for external activities
+        let projectProducts = this.getProjectProductsWithOther();
+        
+        // Get channels (handle Other) - Required for external activities
+        let projectChannels = this.getChannelsWithOther();
+        
+        // Validate project products (required for external)
+        if (projectProducts.length === 0) {
+            UI.showNotification('Please select at least one product interested for the project', 'error');
+            return;
+        }
+        
+        // Validate channels (required for external)
+        if (projectChannels.length === 0) {
+            UI.showNotification('Please select at least one channel for the project', 'error');
+            return;
+        }
+        
+        // Create or get project
+        let finalProjectId = projectId;
+        if (projectId === 'new' && projectName) {
+            const newProject = DataManager.addProject(finalAccountId, {
+                name: projectName,
+                sfdcLink: sfdcLink,
+                useCases: useCases,
+                productsInterested: projectProducts,
+                channels: projectChannels,
+                createdBy: currentUser.id
+            });
+            finalProjectId = newProject.id;
+        } else if (projectId && projectId !== 'new') {
+            // Update existing project if SFDC link, use cases, products, or channels changed
+            const accounts = DataManager.getAccounts();
+            const account = accounts.find(a => a.id === finalAccountId);
+            const project = account?.projects?.find(p => p.id === projectId);
+            if (project) {
+                if (sfdcLink) project.sfdcLink = sfdcLink;
+                if (useCases.length > 0) project.useCases = useCases;
+                if (projectProducts.length > 0) project.productsInterested = projectProducts;
+                if (projectChannels.length > 0) project.channels = projectChannels;
+                DataManager.saveAccounts(accounts);
+            }
+        }
+        
+        const activeAccount = DataManager.getAccountById(finalAccountId);
+        if (activeAccount && activeAccount.name) {
+            accountName = activeAccount.name;
+        }
+        if (finalProjectId && activeAccount?.projects) {
+            const activeProject = activeAccount.projects.find(p => p.id === finalProjectId);
+            if (activeProject && activeProject.name) {
+                projectName = activeProject.name;
+            }
+        }
+
+        // Create activity based on type
+        const activity = {
+            userId: currentUser.id,
+            userName: currentUser.username,
+            accountId: finalAccountId,
+            accountName: accountName,
+            projectId: finalProjectId || null,
+            projectName: projectName || null,
+            date: date,
+            type: activityType,
+            salesRep: salesRep,
+            industry: industry,
+            details: {},
+            isInternal: false
+        };
+        
+        // Add type-specific details
+        if (activityType === 'customerCall') {
+            const callDescription = document.getElementById('callDescription')?.value || '';
+            if (!callDescription.trim()) {
+                UI.showNotification('Description / MOM is required for Customer Call activities', 'error');
+                return;
+            }
+            activity.details = {
+                callType: document.getElementById('callType')?.value || '',
+                description: callDescription
+            };
+        } else if (activityType === 'sow') {
+            activity.details = {
+                sowLink: document.getElementById('sowLink')?.value || ''
+            };
+        } else if (activityType === 'poc') {
+            const accessType = document.getElementById('accessType')?.value || '';
+            activity.details = {
+                accessType: accessType,
+                useCaseDescription: document.getElementById('useCaseDescription')?.value || ''
+            };
+            
+            if (accessType === 'Sandbox') {
+                activity.details.startDate = document.getElementById('pocStartDate')?.value || '';
+                activity.details.endDate = document.getElementById('pocEndDate')?.value || '';
+                // POC Environment Name - default empty, admin can set later
+                activity.details.pocEnvironmentName = '';
+                activity.details.assignedStatus = 'Unassigned';
+            } else if (accessType && accessType.startsWith('Custom POC')) {
+                activity.details.demoEnvironment = document.getElementById('demoEnvironment')?.value || '';
+                activity.details.botTriggerUrl = document.getElementById('botTriggerUrl')?.value || '';
+            }
+        } else if (activityType === 'rfx') {
+            activity.details = {
+                rfxType: document.getElementById('rfxType')?.value || '',
+                submissionDeadline: document.getElementById('submissionDeadline')?.value || '',
+                googleFolderLink: document.getElementById('googleFolderLink')?.value || '',
+                notes: document.getElementById('rfxNotes')?.value || ''
+            };
+        } else if (activityType === 'pricing') {
+            // No details for pricing
+            activity.details = {};
+        }
+        
+        const originalAccountId = editingContext.originalAccountId ?? original?.accountId ?? null;
+        const originalProjectId = editingContext.originalProjectId ?? original?.projectId ?? null;
+
+        if (isEditing && original) {
+            const updates = {
+                date,
+                type: activityType,
+                accountId: activity.accountId,
+                accountName: activity.accountName,
+                projectId: activity.projectId,
+                projectName: activity.projectName,
+                salesRep: activity.salesRep,
+                industry: activity.industry,
+                details: activity.details,
+                isInternal: false
+            };
+
+            const updated = DataManager.updateActivity(original.id, updates);
+            if (!updated) {
+                UI.showNotification('Unable to update activity. Please try again.', 'error');
+                return;
+            }
+
+            this.syncProjectActivityReference({
+                activity: updated,
+                targetAccountId: updated.accountId,
+                targetProjectId: updated.projectId,
+                previousAccountId: originalAccountId,
+                previousProjectId: originalProjectId
+            });
+
+            this.closeActivityModal();
+            UI.showNotification('Activity updated successfully!', 'success');
+        } else {
+            const created = DataManager.addActivity(activity);
+
+            this.syncProjectActivityReference({
+                activity: created,
+                targetAccountId: created.accountId,
+                targetProjectId: created.projectId
+            });
+
+            this.closeActivityModal();
+            UI.showNotification('Activity logged successfully!', 'success');
+        }
+        
+        if (window.app) {
+            window.app.loadDashboard();
+            window.app.loadActivitiesView();
+        }
+    },
+
+    // Get project products with Other text if applicable
+    getProjectProductsWithOther() {
+        let products = [...this.selectedProjectProducts];
+        const productsOtherText = document.getElementById('projectProductsOtherText')?.value;
+        if (products.includes('Other') && productsOtherText) {
+            const otherIndex = products.indexOf('Other');
+            products[otherIndex] = `Other: ${productsOtherText}`;
+        }
+        return products;
+    },
+
+    // Get channels with Other text if applicable
+    getChannelsWithOther() {
+        let channels = [...this.selectedChannels];
+        const channelsOtherText = document.getElementById('channelsOtherText')?.value;
+        if (channels.includes('Other') && channelsOtherText) {
+            const otherIndex = channels.indexOf('Other');
+            channels[otherIndex] = `Other: ${channelsOtherText}`;
+        }
+        return channels;
+    },
+
+    syncProjectActivityReference({ activity, targetAccountId, targetProjectId, previousAccountId = null, previousProjectId = null }) {
+        if (!activity) return;
+
+        const accounts = DataManager.getAccounts();
+        let mutated = false;
+
+        if (previousAccountId && previousProjectId && (previousAccountId !== targetAccountId || previousProjectId !== targetProjectId)) {
+            const prevAccount = accounts.find(a => a.id === previousAccountId);
+            const prevProject = prevAccount?.projects?.find(p => p.id === previousProjectId);
+            if (prevProject && Array.isArray(prevProject.activities)) {
+                const before = prevProject.activities.length;
+                prevProject.activities = prevProject.activities.filter(a => a.id !== activity.id);
+                if (prevProject.activities.length !== before) {
+                    mutated = true;
+                }
+            }
+        }
+
+        if (targetAccountId && targetProjectId) {
+            const account = accounts.find(a => a.id === targetAccountId);
+            const project = account?.projects?.find(p => p.id === targetProjectId);
+            if (project) {
+                if (!Array.isArray(project.activities)) {
+                    project.activities = [];
+                }
+                const payload = { ...activity, isInternal: false };
+                const idx = project.activities.findIndex(a => a.id === activity.id);
+                if (idx === -1) {
+                    project.activities.push(payload);
+                } else {
+                    project.activities[idx] = { ...project.activities[idx], ...payload };
+                }
+                mutated = true;
+            }
+        }
+
+        if (mutated) {
+            DataManager.saveAccounts(accounts);
+        }
+    },
+
+    // Set activity category (Internal/External)
+    setActivityCategory(category) {
+        this.activityType = category;
+        const accountSection = document.getElementById('accountSection');
+        const projectSection = document.getElementById('projectSection');
+        const activityTypeSelect = document.getElementById('activityTypeSelect');
+        
+        if (category === 'internal') {
+            // Hide Account and Project sections for Internal
+            if (accountSection) {
+                accountSection.classList.add('hidden');
+                // Remove required from all fields in account section
+                const accountFields = accountSection.querySelectorAll('[required], [data-was-required="true"]');
+                accountFields.forEach(field => {
+                    field.removeAttribute('required');
+                    field.setAttribute('data-was-required', 'true');
+                });
+                // Clear values
+                const industrySelect = document.getElementById('industry');
+                const salesRepSelect = document.getElementById('salesRepSelect');
+                const accountDisplay = document.getElementById('accountDisplay');
+                if (industrySelect) industrySelect.value = '';
+                if (salesRepSelect) salesRepSelect.value = '';
+                if (accountDisplay) accountDisplay.textContent = 'Select account...';
+            }
+            if (projectSection) {
+                projectSection.classList.add('hidden');
+                // Remove required from all fields in project section
+                const projectFields = projectSection.querySelectorAll('[required], [data-was-required="true"]');
+                projectFields.forEach(field => {
+                    field.removeAttribute('required');
+                    field.setAttribute('data-was-required', 'true');
+                });
+            }
+            
+            // Populate Internal activity types
+            if (activityTypeSelect) {
+                activityTypeSelect.innerHTML = `
+                    <option value="">Select Activity Type</option>
+                    <option value="Enablement">Enablement</option>
+                    <option value="Video Creation">Video Creation</option>
+                    <option value="Webinar">Webinar</option>
+                    <option value="Event/Booth Hosting">Event/Booth Hosting</option>
+                    <option value="Product Feedback">Product Feedback</option>
+                    <option value="Content Creation">Content Creation</option>
+                    <option value="Training">Training</option>
+                    <option value="Documentation">Documentation</option>
+                    <option value="Internal Meeting">Internal Meeting</option>
+                    <option value="Other">Other</option>
+                `;
+            }
+        } else {
+            // Show Account and Project sections for External
+            if (accountSection) {
+                accountSection.classList.remove('hidden');
+                // Restore required attributes
+                const accountFields = accountSection.querySelectorAll('[data-was-required="true"]');
+                accountFields.forEach(field => {
+                    field.setAttribute('required', 'required');
+                });
+            }
+            if (projectSection) {
+                projectSection.classList.remove('hidden');
+                // Restore required attributes
+                const projectFields = projectSection.querySelectorAll('[data-was-required="true"]');
+                projectFields.forEach(field => {
+                    field.setAttribute('required', 'required');
+                });
+            }
+            
+            // Populate External activity types
+            if (activityTypeSelect) {
+                activityTypeSelect.innerHTML = `
+                    <option value="">Select Activity Type</option>
+                    <option value="customerCall">Customer Call</option>
+                    <option value="sow">SOW (Statement of Work)</option>
+                    <option value="poc">POC (Proof of Concept)</option>
+                    <option value="rfx">RFx</option>
+                    <option value="pricing">Pricing</option>
+                `;
+            }
+        }
+        
+        // Clear activity fields when category changes
+        const activityFields = document.getElementById('activityFields');
+        if (activityFields) activityFields.innerHTML = '';
+    },
+
+    // Toggle SFDC link field
+    toggleSfdcLink() {
+        const checkbox = document.getElementById('noSfdcLink');
+        const sfdcInput = document.getElementById('sfdcLink');
+        if (checkbox && sfdcInput) {
+            if (checkbox.checked) {
+                sfdcInput.style.display = 'none';
+                sfdcInput.value = '';
+            } else {
+                sfdcInput.style.display = 'block';
+            }
+        }
+    },
+
+    // Toggle Use Case Other text field
+    toggleUseCaseOther() {
+        const checkbox = document.getElementById('useCaseOtherCheck');
+        const textInput = document.getElementById('useCaseOtherText');
+        if (checkbox && textInput) {
+            if (checkbox.checked) {
+                textInput.style.display = 'block';
+                textInput.required = true;
+                if (!this.selectedUseCases.includes('Other')) {
+                    this.selectedUseCases.push('Other');
+                }
+            } else {
+                textInput.style.display = 'none';
+                textInput.value = '';
+                textInput.required = false;
+                this.selectedUseCases = this.selectedUseCases.filter(uc => uc !== 'Other');
+            }
+            this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
+        }
+    },
+
+    // Handle sales rep dropdown change
+    handleSalesRepChange() {
+        const select = document.getElementById('salesRepSelect');
+        const newFields = document.getElementById('newSalesRepFields');
+        
+        if (!select || !newFields) return;
+        
+        if (select.value === '__new__') {
+            newFields.style.display = 'block';
+            document.getElementById('newSalesRepName').required = true;
+            document.getElementById('newSalesRepEmail').required = true;
+            document.getElementById('newSalesRepRegion').required = true;
+            // Clear fields
+            document.getElementById('newSalesRepName').value = '';
+            document.getElementById('newSalesRepEmail').value = '';
+            document.getElementById('newSalesRepRegion').value = '';
+        } else {
+            newFields.style.display = 'none';
+            document.getElementById('newSalesRepName').required = false;
+            document.getElementById('newSalesRepEmail').required = false;
+            document.getElementById('newSalesRepRegion').required = false;
+        }
+    },
+
+    // Reset activity form
+    resetActivityForm() {
+        this.activityType = null;
+        this.selectedUseCases = [];
+        this.selectedChannels = [];
+        this.selectedProjectProducts = [];
+        
+        const form = document.getElementById('activityForm');
+        if (form) form.reset();
+        
+        // Reset all sections
+        const accountSection = document.getElementById('accountSection');
+        const projectSection = document.getElementById('projectSection');
+        if (accountSection) accountSection.classList.add('hidden');
+        if (projectSection) projectSection.classList.add('hidden');
+        
+        const accountDisplay = document.getElementById('accountDisplay');
+        if (accountDisplay) accountDisplay.textContent = 'Select account...';
+        const selectedAccountId = document.getElementById('selectedAccountId');
+        if (selectedAccountId) selectedAccountId.value = '';
+        const newAccountFields = document.getElementById('newAccountFields');
+        if (newAccountFields) newAccountFields.style.display = 'none';
+        const newAccountName = document.getElementById('newAccountName');
+        if (newAccountName) {
+            newAccountName.value = '';
+            newAccountName.required = false;
+        }
+        
+        const projectDisplayContainer = document.getElementById('projectDisplayContainer');
+        if (projectDisplayContainer) {
+            projectDisplayContainer.style.background = '#e5e7eb';
+            projectDisplayContainer.style.cursor = 'not-allowed';
+        }
+        const projectDisplay = document.getElementById('projectDisplay');
+        if (projectDisplay) projectDisplay.textContent = 'Select account first...';
+        const selectedProjectId = document.getElementById('selectedProjectId');
+        if (selectedProjectId) selectedProjectId.value = '';
+        const newProjectFields = document.getElementById('newProjectFields');
+        if (newProjectFields) newProjectFields.style.display = 'none';
+        const newProjectName = document.getElementById('newProjectName');
+        if (newProjectName) {
+            newProjectName.value = '';
+            newProjectName.required = false;
+        }
+        
+        this.clearProjectFields();
+        
+        const activityFields = document.getElementById('activityFields');
+        if (activityFields) activityFields.innerHTML = '';
+        
+        // Reset radio buttons
+        const radios = document.querySelectorAll('input[name="activityCategory"]');
+        radios.forEach(radio => radio.checked = false);
+        
+        // Set default date
+        const today = new Date().toISOString().split('T')[0];
+        const dateInput = document.getElementById('activityDate');
+        if (dateInput) dateInput.value = today;
+    },
+
+    // Helper functions
+    toggleDealSize() {
+        const status = document.getElementById('opportunityStatus').value;
+        const group = document.getElementById('dealSizeGroup');
+        if (group) {
+            group.classList.toggle('d-none', status !== 'yes');
+        }
+    },
+
+    setPOCEndDate() {
+        const startDate = document.getElementById('pocStartDate').value;
+        if (startDate) {
+            const endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 7);
+            const endDateInput = document.getElementById('pocEndDate');
+            if (endDateInput) {
+                endDateInput.value = endDate.toISOString().split('T')[0];
+            }
+        }
+    }
+};
+
+// Expose Activities globally for onclick handlers
+window.Activities = Activities;
+

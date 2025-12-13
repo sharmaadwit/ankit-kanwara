@@ -1,0 +1,4295 @@
+// Main Application Module
+
+const App = {
+    currentView: 'dashboard',
+    CHART_CONSTANTS: {
+        palette: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795', '#F6AD55', '#63B3ED', '#4A5568'],
+        extendedPalette: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795', '#F6AD55', '#63B3ED', '#4A5568', '#B794F4', '#68D391', '#F56565', '#ECC94B', '#4FD1C5', '#9F7AEA', '#ED64A6'],
+        industryLimit: 7,
+        userLimit: 8,
+        channelLimit: 6
+    },
+    CURRENCY_SYMBOLS: {
+        INR: '₹',
+        USD: '$',
+        EUR: '€',
+        GBP: '£'
+    },
+    latestAnalytics: {},
+    reportFilters: {},
+    activityFilters: {
+        search: '',
+        industry: '',
+        channel: '',
+        timeframe: 'all'
+    },
+    pendingDuplicateAlerts: [],
+    projectHealthFilters: {
+        threshold: 60,
+        status: 'all',
+        includeNoActivity: true
+    },
+    sfdcFilters: {
+        industry: '',
+        account: '',
+        owner: '',
+        showAll: false
+    },
+    winLossMrrInputHandler: null,
+
+    // Initialize application
+    init() {
+        // Always setup event listeners (needed for login form)
+        this.setupEventListeners();
+        
+        // Check authentication
+        if (!Auth.init()) {
+            // Not logged in - stay on login screen
+            console.log('No active session, showing login screen');
+            return;
+        }
+
+        // Logged in - initialize interface and load default view
+        console.log('User logged in, initializing app');
+        InterfaceManager.init();
+        const defaultView = this.getInitialView();
+        this.switchView(defaultView);
+    },
+
+    // Setup event listeners
+    setupEventListeners() {
+        // Login form
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const result = Auth.login(username, password);
+                if (result.success) {
+                    // After successful login, Auth.login() already called showMainApp()
+                    // Now just initialize interface and load dashboard
+                    InterfaceManager.init();
+                    const defaultView = this.getInitialView();
+                    this.switchView(defaultView);
+                } else {
+                    UI.showNotification(result.message || 'Invalid credentials', 'error');
+                }
+            });
+        }
+
+        // Logout
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                Auth.logout();
+            });
+        }
+
+        // Sidebar navigation
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const view = e.currentTarget.dataset.view;
+                this.switchView(view);
+            });
+        });
+
+        // Sidebar toggle (mobile)
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        if (sidebarToggle) {
+            sidebarToggle.addEventListener('click', () => {
+                UI.toggleSidebar();
+            });
+        }
+
+        // Interface change (admin only)
+        // handled inline via onchange attribute on interfaceSelect
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.multi-select-container')) {
+                document.querySelectorAll('.multi-select-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+            if (!e.target.closest('.search-select-container')) {
+                document.querySelectorAll('.search-select-dropdown').forEach(d => {
+                    d.classList.remove('active');
+                });
+            }
+        });
+    },
+
+    isValidView(viewName) {
+        if (!viewName || typeof viewName !== 'string') return false;
+        return !!document.getElementById(`${viewName}View`);
+    },
+
+    getInitialView() {
+        const params = new URLSearchParams(window.location.search);
+        const requestedView = params.get('view');
+
+        if (requestedView && this.isValidView(requestedView)) {
+            if (!(typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly()) || requestedView === 'reports') {
+                return requestedView;
+            }
+        }
+
+        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly()) {
+            return 'reports';
+        }
+
+        return 'dashboard';
+    },
+
+    // Switch view
+    switchView(viewName) {
+        if (!this.isValidView(viewName)) {
+            console.warn('Attempted to load unknown view:', viewName);
+            return;
+        }
+
+        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
+            console.warn('Analytics-only user restricted to reports view. Redirecting.');
+            viewName = 'reports';
+        }
+
+        // Hide all views
+        document.querySelectorAll('.view').forEach(view => {
+            view.classList.remove('active');
+            view.classList.add('hidden');
+        });
+
+        // Show selected view
+        const view = document.getElementById(`${viewName}View`);
+        if (view) {
+            view.classList.remove('hidden');
+            view.classList.add('active');
+        }
+
+        // Update sidebar active state
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        const activeLink = document.querySelector(`[data-view="${viewName}"]`);
+        if (activeLink) {
+            activeLink.classList.add('active');
+        }
+
+        this.currentView = viewName;
+
+        // Load view content
+        switch(viewName) {
+            case 'dashboard':
+                this.loadDashboard();
+                break;
+            case 'activities':
+                this.loadActivitiesView();
+                break;
+            case 'winloss':
+                this.loadWinLossView();
+                break;
+            case 'import':
+                this.loadImportView();
+                break;
+            case 'reports':
+                if (InterfaceManager.getCurrentInterface() === 'card') {
+                    this.loadCardReportsView();
+                } else {
+                    this.switchReportTab('reports');
+                }
+                break;
+            case 'accounts':
+                this.loadAccountsView();
+                break;
+            case 'projectHealth':
+                this.loadProjectHealthView();
+                break;
+            case 'sfdcCompliance':
+                this.loadSfdcComplianceView();
+                break;
+            case 'admin':
+                if (Auth.isAdmin()) {
+                    console.log('Loading admin panel...');
+                    if (InterfaceManager.getCurrentInterface() === 'card') {
+                        this.loadCardAdminView();
+                    } else {
+                        Admin.loadAdminPanel();
+                    }
+                } else {
+                    console.warn('User is not admin, cannot access admin panel');
+                    UI.showNotification('You do not have admin access', 'error');
+                }
+                break;
+        }
+    },
+
+    // Load dashboard
+    loadDashboard() {
+        // Check if card interface is active
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardDashboard();
+        } else {
+            this.updateStats();
+            this.loadRecentActivities();
+        }
+    },
+    
+    // Load card-based dashboard
+    loadCardDashboard() {
+        const dashboardView = document.getElementById('dashboardView');
+        if (!dashboardView) return;
+        
+        const stats = this.updateStats() || {};
+        
+        // Get current month activities count
+        const activities = DataManager.getAllActivities();
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const monthActivities = activities.filter(a => {
+            const date = a.date || a.createdAt;
+            return date && date.substring(0, 7) === currentMonth;
+        });
+        
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const currentMonthName = monthNames[now.getMonth()];
+        
+        // Get stats
+        const accounts = DataManager.getAccounts();
+        let totalProjects = 0;
+        let customerActivities = 0;
+        const internalActivities = DataManager.getInternalActivities();
+        
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                totalProjects++;
+                customerActivities += project.activities?.length || 0;
+            });
+        });
+        
+        let html = `
+            <!-- Month Header & Key Stats -->
+            <div class="month-summary-row">
+                <div class="month-pill">
+                    <div class="month-pill-label">Monthly Activities</div>
+                    <div class="month-pill-value">${monthActivities.length}</div>
+                    <div class="month-pill-caption">${currentMonthName} ${now.getFullYear()}</div>
+                </div>
+                <div class="month-stat-card">
+                    <div class="month-stat-title">Total Projects</div>
+                    <div class="month-stat-value">${stats.totalProjects ?? totalProjects}</div>
+                </div>
+                <div class="month-stat-card">
+                    <div class="month-stat-title">Total Activities</div>
+                    <div class="month-stat-value">${stats.totalActivities ?? activities.length}</div>
+                    <div class="month-stat-caption">${(stats.customerActivities ?? customerActivities)} Customer • ${(stats.internalActivities ?? internalActivities.length)} Internal</div>
+                </div>
+            </div>
+            
+            <!-- Navigation Cards (3-column layout) -->
+            <div class="card-grid minimal-nav">
+                <!-- Log Activity - First Card -->
+                <div class="nav-card clickable log-activity" onclick="Activities.openActivityModal()">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Log Activity</div>
+                    <div class="nav-card-subtitle">Create a new activity</div>
+                </div>
+                
+                <div class="nav-card clickable activities" onclick="App.navigateToCardView('activities')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">All Activities</div>
+                    <div class="nav-card-subtitle">View and manage activities</div>
+                </div>
+                
+                <div class="nav-card clickable winloss" onclick="App.navigateToCardView('winloss')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Win/Loss</div>
+                    <div class="nav-card-subtitle">Track project wins and losses</div>
+                </div>
+                
+                <div class="nav-card clickable reports" onclick="App.navigateToCardView('reports')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Reports</div>
+                    <div class="nav-card-subtitle">Activity reports and analytics</div>
+                </div>
+                
+                <div class="nav-card clickable accounts" onclick="App.navigateToCardView('accounts')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Accounts</div>
+                    <div class="nav-card-subtitle">Manage accounts and projects</div>
+                </div>
+                
+                <div class="nav-card clickable import" onclick="App.navigateToCardView('import')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+                            <polyline points="7 9 12 4 17 9"></polyline>
+                            <line x1="12" y1="4" x2="12" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Import CSV</div>
+                    <div class="nav-card-subtitle">Bulk upload activities</div>
+                </div>
+                
+                <div class="nav-card clickable project-health" onclick="App.navigateToCardView('projectHealth')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3v18h18"></path>
+                            <polyline points="18 17 13 12 10 15 6 11"></polyline>
+                            <polyline points="18 7 18 17 8 17"></polyline>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Project Health</div>
+                    <div class="nav-card-subtitle">Aging projects & follow-ups</div>
+                </div>
+                
+                <div class="nav-card clickable compliance" onclick="App.navigateToCardView('sfdcCompliance')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">SFDC Compliance</div>
+                    <div class="nav-card-subtitle">Update missing SFDC links</div>
+                </div>
+        `;
+        
+        // Add Admin card if user is admin
+        if (Auth.isAdmin()) {
+            html += `
+                <div class="nav-card clickable admin" onclick="App.navigateToCardView('admin')">
+                    <div class="nav-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
+                    </div>
+                    <div class="nav-card-title">Admin & Settings</div>
+                    <div class="nav-card-subtitle">System administration</div>
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        dashboardView.innerHTML = html;
+    },
+    
+    // Navigate to card view (for card interface)
+    navigateToCardView(viewName) {
+        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
+            console.warn('Analytics-only user restricted to reports view. Redirecting.');
+            viewName = 'reports';
+        }
+        if (InterfaceManager.getCurrentInterface() !== 'card') {
+            // Fallback to normal navigation
+            this.switchView(viewName);
+            return;
+        }
+        
+        // For card interface, load card-based views
+        this.switchView(viewName);
+        
+        // Reload the view with card layout
+        setTimeout(() => {
+            switch(viewName) {
+                case 'dashboard':
+                    this.loadCardDashboard();
+                    break;
+                case 'activities':
+                    this.loadCardActivitiesView();
+                    break;
+                case 'winloss':
+                    this.loadCardWinLossView();
+                    break;
+                case 'reports':
+                    this.loadCardReportsView();
+                    break;
+                case 'accounts':
+                    this.loadCardAccountsView();
+                    break;
+                case 'import':
+                    this.loadImportView();
+                    break;
+                case 'projectHealth':
+                    this.loadCardProjectHealthView();
+                    break;
+                case 'sfdcCompliance':
+                    this.loadCardSfdcComplianceView();
+                    break;
+                case 'admin':
+                    if (Auth.isAdmin()) {
+                        this.loadCardAdminView();
+                    }
+                    break;
+            }
+        }, 100);
+    },
+
+    // Update statistics
+    updateStats() {
+        try {
+            const accounts = DataManager.getAccounts();
+            const activities = DataManager.getAllActivities();
+            const internalActivities = DataManager.getInternalActivities();
+
+            let totalProjects = 0;
+            let customerActivities = 0;
+            let wonProjects = 0;
+            let lostProjects = 0;
+            let activeProjects = 0;
+
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    totalProjects++;
+                    customerActivities += project.activities?.length || 0;
+                    
+                    if (project.status === 'won') wonProjects++;
+                    else if (project.status === 'lost') lostProjects++;
+                    else activeProjects++;
+                });
+            });
+
+            const stats = {
+                totalAccounts: accounts.length,
+                totalProjects,
+                totalActivities: activities.length,
+                customerActivities,
+                internalActivities: internalActivities.length,
+                wonProjects,
+                lostProjects,
+                activeProjects
+            };
+
+            const setTextContent = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value;
+            };
+
+            setTextContent('totalAccountsStat', stats.totalAccounts);
+            setTextContent('totalProjectsStat', stats.totalProjects);
+            setTextContent('totalActivitiesStat', stats.totalActivities);
+            setTextContent('customerActivitiesStat', stats.customerActivities);
+            setTextContent('internalActivitiesStat', stats.internalActivities);
+            setTextContent('projectStatusStat', stats.totalProjects);
+            setTextContent('wonProjectsStat', stats.wonProjects);
+            setTextContent('lostProjectsStat', stats.lostProjects);
+            setTextContent('activeProjectsStat', stats.activeProjects);
+
+            return stats;
+        } catch (error) {
+            console.error('Error updating stats:', error);
+            return null;
+        }
+    },
+
+    // Load recent activities
+    loadRecentActivities() {
+        try {
+            const activities = DataManager.getAllActivities().slice(0, 10);
+            const container = document.getElementById('recentActivitiesList');
+            if (!container) {
+                console.error('recentActivitiesList container not found');
+                return;
+            }
+
+            if (activities.length === 0) {
+                container.innerHTML = UI.emptyState('No recent activities');
+                return;
+            }
+
+            let html = '';
+            activities.forEach(activity => {
+                html += `
+                    <div class="activity-item">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div>
+                                <strong>${UI.getActivityTypeLabel(activity.type)}</strong>
+                                <span class="activity-badge ${activity.isInternal ? 'internal' : 'customer'}">
+                                    ${activity.isInternal ? 'Internal' : 'Customer'}
+                                </span>
+                                <div class="text-muted" style="margin-top: 0.5rem; font-size: 0.875rem;">
+                                    ${activity.accountName || 'N/A'} ${activity.projectName ? '→ ' + activity.projectName : ''}
+                                </div>
+                                <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                                    ${UI.formatDate(activity.date || activity.createdAt)} • ${activity.userName || 'Unknown'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading recent activities:', error);
+            const container = document.getElementById('recentActivitiesList');
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading activities');
+            }
+        }
+    },
+
+    // Load card-based activities view
+    loadCardActivitiesView() {
+        const activitiesView = document.getElementById('activitiesView');
+        if (!activitiesView) return;
+        
+        const activities = this.applyActivityFilters(DataManager.getAllActivities());
+        
+        // Group by month
+        const activitiesByMonth = {};
+        activities.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+        
+        let html = `
+            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            </a>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">All Activities</h1>
+                <button class="btn btn-primary" onclick="Activities.openActivityModal()">+ Log Activity</button>
+            </div>
+            <div class="analytics-filter-bar">
+                <div class="form-group" style="flex: 1; min-width: 220px;">
+                    <label class="form-label">Search</label>
+                    <input type="text" id="cardActivitySearch" class="form-control" placeholder="Search activities..." oninput="App.handleActivitySearch(this.value, 'card')">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select id="cardActivityFilterIndustry" class="form-control" onchange="App.handleActivityFiltersChange('card')">
+                        <option value="">All Industries</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Channel</label>
+                    <select id="cardActivityFilterChannel" class="form-control" onchange="App.handleActivityFiltersChange('card')">
+                        <option value="">All Channels</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Timeframe</label>
+                    <select id="cardActivityFilterTimeframe" class="form-control" onchange="App.handleActivityFiltersChange('card')">
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button class="btn btn-link" onclick="App.resetActivityFilters(); return false;">Reset</button>
+                </div>
+            </div>
+        `;
+        
+        if (activities.length === 0) {
+            html += `<div class="content-card">${UI.emptyState('No activities match the current filters.')}</div>`;
+        } else {
+            Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <h2 class="content-card-title">${UI.formatMonth(month)}</h2>
+                            <span style="color: var(--gray-600); font-size: 0.875rem;">${activitiesByMonth[month].length} activities</span>
+                        </div>
+                        <div class="card-grid-4">
+                `;
+                
+                activitiesByMonth[month].forEach(activity => {
+                    const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                    html += `
+                        <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
+                            <div class="activity-card-header">
+                                <div>
+                                    <div class="activity-card-type">${UI.getActivityTypeLabel(activity.type)}</div>
+                                    <span class="activity-card-badge ${activity.isInternal ? 'internal' : 'customer'}">
+                                        ${activity.isInternal ? 'Internal' : 'Customer'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="activity-card-info">
+                                <div><strong>Account:</strong> ${activity.accountName || 'N/A'}</div>
+                                ${activity.projectName ? `<div><strong>Project:</strong> ${activity.projectName}</div>` : ''}
+                            </div>
+                            <div class="activity-card-meta">
+                                ${UI.formatDate(activity.date || activity.createdAt)}<br>
+                                By: ${activity.userName || 'Unknown'}
+                            </div>
+                            ${isOwner ? `
+                                <div class="activity-card-actions">
+                                    <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
+                                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
+            });
+        }
+        
+        activitiesView.innerHTML = html;
+        this.populateActivityFilterControls();
+    },
+    
+    // Load card-based win/loss view
+    loadCardWinLossView() {
+        const winlossView = document.getElementById('winlossView');
+        if (!winlossView) return;
+        
+        const accounts = DataManager.getAccounts();
+        let wonProjects = 0;
+        let lostProjects = 0;
+        let activeProjects = 0;
+        const projectsList = [];
+        
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                if (project.status === 'won') wonProjects++;
+                else if (project.status === 'lost') lostProjects++;
+                else activeProjects++;
+                
+                projectsList.push({ account, project });
+            });
+        });
+        
+        let html = `
+            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            </a>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Win/Loss Tracking</h1>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div class="card-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 2rem;">
+                <div class="dashboard-stat-card" style="border-left-color: #48BB78;">
+                    <div class="dashboard-stat-card-title">Won Projects</div>
+                    <div class="dashboard-stat-card-value" style="color: #48BB78;">${wonProjects}</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #F56565;">
+                    <div class="dashboard-stat-card-title">Lost Projects</div>
+                    <div class="dashboard-stat-card-value" style="color: #F56565;">${lostProjects}</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #4299E1;">
+                    <div class="dashboard-stat-card-title">Active Projects</div>
+                    <div class="dashboard-stat-card-value" style="color: #4299E1;">${activeProjects}</div>
+                </div>
+            </div>
+        `;
+        
+        if (projectsList.length === 0) {
+            html += `<div class="content-card">${UI.emptyState('No projects found')}</div>`;
+        } else {
+            projectsList.forEach(({ account, project }) => {
+                const statusColor = project.status === 'won' ? '#48BB78' : project.status === 'lost' ? '#F56565' : '#4299E1';
+                html += `
+                    <div class="content-card">
+                        <div class="content-card-header">
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">${project.name}</h3>
+                                <div style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.25rem;">${account.name}</div>
+                            </div>
+                            <span style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">
+                                ${project.status || 'active'}
+                            </span>
+                        </div>
+                        ${project.winLossData ? `
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
+                                ${project.winLossData.reason ? `<p><strong>Reason:</strong> ${project.winLossData.reason}</p>` : ''}
+                                ${this.formatWinLossAmount(project.winLossData) ? `<p><strong>MRR:</strong> ${this.formatWinLossAmount(project.winLossData)}</p>` : ''}
+                                ${project.winLossData.otd ? `<p><strong>OTD:</strong> ${project.winLossData.otd}</p>` : ''}
+                            </div>
+                        ` : ''}
+                        <p class="text-muted" style="margin-top: 0.75rem;">
+                            <strong>SFDC:</strong> ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>` : 'Not set'}
+                        </p>
+                        <div style="margin-top: 1rem;">
+                            <button class="btn btn-sm btn-primary" onclick="App.openWinLossModal('${account.id}', '${project.id}')">
+                                ${project.status ? 'Update Status' : 'Set Win/Loss'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        winlossView.innerHTML = html;
+    },
+
+    promptProjectSfdcLink(accountId, projectId) {
+        const accounts = DataManager.getAccounts();
+        const account = accounts.find(a => a.id === accountId);
+        const project = account?.projects?.find(p => p.id === projectId);
+
+        if (!project) {
+            UI.showNotification('Project not found', 'error');
+            return;
+        }
+
+        const currentLink = project.sfdcLink || '';
+        const updatedLink = prompt(`Update SFDC link for "${project.name}"`, currentLink);
+        if (updatedLink === null) {
+            return;
+        }
+
+        const trimmed = updatedLink.trim();
+        if (!trimmed) {
+            UI.showNotification('SFDC link cannot be empty.', 'error');
+            return;
+        }
+
+        if (!/^https?:\/\//i.test(trimmed)) {
+            UI.showNotification('Please enter a valid SFDC link starting with http:// or https://', 'error');
+            return;
+        }
+
+        DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
+        UI.showNotification('SFDC link updated successfully.', 'success');
+
+        this.loadAccountsView();
+        this.loadWinLossView();
+        this.loadProjectHealthView();
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardAccountsView();
+            this.loadCardWinLossView();
+            this.loadCardProjectHealthView();
+            this.loadCardSfdcComplianceView();
+        }
+    },
+
+    updateSfdcLinkFromInput(accountId, projectId, inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            UI.showNotification('Unable to find SFDC input field.', 'error');
+            return;
+        }
+        const trimmed = input.value.trim();
+        if (!trimmed) {
+            UI.showNotification('SFDC link cannot be empty.', 'error');
+            return;
+        }
+        if (!/^https?:\/\//i.test(trimmed)) {
+            UI.showNotification('Please enter a valid SFDC link starting with http:// or https://', 'error');
+            return;
+        }
+        DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
+        UI.showNotification('SFDC link updated successfully.', 'success');
+        this.loadAccountsView();
+        this.loadWinLossView();
+        this.loadProjectHealthView();
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardAccountsView();
+            this.loadCardWinLossView();
+            this.loadCardProjectHealthView();
+            this.loadCardSfdcComplianceView();
+        }
+    },
+    
+    // Load card-based accounts view
+    loadCardAccountsView() {
+        const accountsView = document.getElementById('accountsView');
+        if (!accountsView) return;
+        
+        const accounts = DataManager.getAccounts();
+        
+        let html = `
+            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            </a>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Accounts</h1>
+            </div>
+        `;
+        
+        if (accounts.length === 0) {
+            html += `<div class="content-card">${UI.emptyState('No accounts found')}</div>`;
+        } else {
+            html += `<div class="card-grid-4">`;
+            accounts.forEach(account => {
+                const projectCount = account.projects?.length || 0;
+                const activityCount = this.getAccountActivityCount(account.id);
+                html += `
+                    <div class="account-card">
+                        <div class="account-card-header">
+                            <div>
+                                <div class="account-card-name">${account.name}</div>
+                                <div class="account-card-meta">
+                                    ${account.industry || 'N/A'} • ${account.salesRep || 'N/A'}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="account-card-stats">
+                            <div class="account-card-stat">
+                                <div class="account-card-stat-label">Projects</div>
+                                <div class="account-card-stat-value">${projectCount}</div>
+                            </div>
+                            <div class="account-card-stat">
+                                <div class="account-card-stat-label">Activities</div>
+                                <div class="account-card-stat-value">${activityCount}</div>
+                            </div>
+                        </div>
+                        <div class="account-card-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>
+                            <button class="btn btn-sm btn-info" onclick="event.stopPropagation(); App.showMergeAccountModal('${account.id}')" style="flex: 1;">Merge</button>
+                            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.showDeleteAccountModal('${account.id}')" style="flex: 1;">Delete</button>
+                        </div>
+                        ${this.buildAccountProjectsMarkup(account, 'card')}
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        }
+        
+        accountsView.innerHTML = html;
+    },
+    
+    // Load card-based reports view
+    loadCardReportsView() {
+        const reportsView = document.getElementById('reportsView');
+        if (!reportsView) return;
+        const analyticsOnly = typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly();
+        
+        // Store current tab in a data attribute
+        let currentTab = reportsView.dataset.currentTab || 'reports';
+        if (!['reports', 'management'].includes(currentTab)) {
+            currentTab = 'reports';
+        }
+        
+        let html = `
+            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            </a>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Reports</h1>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="tabs" style="margin-bottom: 2rem;">
+                <button class="tab-btn ${currentTab === 'reports' ? 'active' : ''}" onclick="App.switchCardReportTab('reports')">Reports & Charts</button>
+                ${analyticsOnly ? '' : `<button class="tab-btn ${currentTab === 'management' ? 'active' : ''}" onclick="App.switchCardReportTab('management')">Activity Management</button>`}
+            </div>
+        `;
+        
+        // Load tab content
+        if (currentTab === 'reports') {
+            const existingMonthInput = document.getElementById('cardReportMonth');
+            const defaultMonth = new Date().toISOString().substring(0, 7);
+            const selectedMonth = existingMonthInput && existingMonthInput.value
+                ? existingMonthInput.value
+                : (this.latestAnalytics.cardMonth || defaultMonth);
+            html += this.loadCardReportReportsTab(selectedMonth);
+        } else {
+            html += this.loadCardReportManagementTab();
+        }
+        
+        reportsView.innerHTML = html;
+        reportsView.dataset.currentTab = currentTab;
+
+        if (currentTab === 'reports') {
+            const selectedMonth = this.latestAnalytics.cardMonth || new Date().toISOString().substring(0, 7);
+            const analytics = this.latestAnalytics.card || DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+            this.setAnalyticsLoading('card', true);
+            this.initAnalyticsCharts({ prefix: 'card', analytics });
+            this.setAnalyticsLoading('card', false);
+        }
+    },
+    
+    // Switch card report tab
+    switchCardReportTab(tab) {
+        const reportsView = document.getElementById('reportsView');
+        if (!reportsView) return;
+        const normalized = tab === 'management' ? 'management' : 'reports';
+        reportsView.dataset.currentTab = normalized;
+        this.loadCardReportsView();
+    },
+    
+    // Load card report activities tab
+    loadCardReportActivitiesTab() {
+        const activities = DataManager.getAllActivities();
+        
+        if (activities.length === 0) {
+            return `<div class="content-card">${UI.emptyState('No activities found')}</div>`;
+        }
+        
+        // Group by month
+        const activitiesByMonth = {};
+        activities.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+        
+        let html = '';
+        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <h2 class="content-card-title">${UI.formatMonth(month)}</h2>
+                        <span style="color: var(--gray-600); font-size: 0.875rem;">${activitiesByMonth[month].length} activities</span>
+                    </div>
+                    <div class="card-grid-4">
+            `;
+            
+            activitiesByMonth[month].forEach(activity => {
+                const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                html += `
+                    <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
+                        <div class="activity-card-header">
+                            <div>
+                                <div class="activity-card-type">${UI.getActivityTypeLabel(activity.type)}</div>
+                                <span class="activity-card-badge ${activity.isInternal ? 'internal' : 'customer'}">
+                                    ${activity.isInternal ? 'Internal' : 'Customer'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="activity-card-info">
+                            <div><strong>Account:</strong> ${activity.accountName || 'N/A'}</div>
+                            ${activity.projectName ? `<div><strong>Project:</strong> ${activity.projectName}</div>` : ''}
+                        </div>
+                        <div class="activity-card-meta">
+                            ${UI.formatDate(activity.date || activity.createdAt)}<br>
+                            By: ${activity.userName || 'Unknown'}
+                        </div>
+                        ${isOwner ? `
+                            <div class="activity-card-actions">
+                                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
+        });
+        
+        return html;
+    },
+    
+    // Load card report reports tab
+    loadCardReportReportsTab(selectedMonth) {
+        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+        this.latestAnalytics.card = analytics;
+        this.latestAnalytics.cardMonth = selectedMonth;
+        this.latestAnalytics.standard = analytics;
+        this.latestAnalytics.standardMonth = selectedMonth;
+        const actionBar = `
+            <div class="action-bar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
+                <div class="form-group">
+                    <label class="form-label">Select Month</label>
+                    <input type="month" id="cardReportMonth" class="form-control" value="${selectedMonth}" onchange="App.handleCardReportMonthChange(this.value)">
+                </div>
+                <button class="btn btn-secondary" onclick="App.exportReportsCsv()">Export CSV</button>
+            </div>
+        `;
+        const filterBar = this.buildAnalyticsFilterBar('card');
+        return `
+            ${actionBar}
+            ${filterBar}
+            ${this.buildAnalyticsMarkup(analytics, {
+                variant: 'card',
+                month: selectedMonth
+            })}
+        `;
+    },
+    
+    // Load card report management tab
+    loadCardReportManagementTab() {
+        const activities = DataManager.getAllActivities();
+        const users = DataManager.getUsers();
+        const regions = DataManager.getRegions();
+        
+        // Get unique activity types
+        const activityTypes = [...new Set(activities.map(a => a.type))];
+        
+        let html = `
+            <div class="content-card">
+                <h2 style="margin-bottom: 1.5rem;">Filter Activities</h2>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                    <div class="form-group">
+                        <label class="form-label">User</label>
+                        <select id="cardReportUserFilter" class="form-control" onchange="App.filterCardReportActivities()">
+                            <option value="">All Users</option>
+                            ${users.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Region</label>
+                        <select id="cardReportRegionFilter" class="form-control" onchange="App.filterCardReportActivities()">
+                            <option value="">All Regions</option>
+                            ${regions.map(r => `<option value="${r}">${r}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Activity Type</label>
+                        <select id="cardReportActivityTypeFilter" class="form-control" onchange="App.filterCardReportActivities()">
+                            <option value="">All Activity Types</option>
+                            ${activityTypes.map(t => `<option value="${t}">${UI.getActivityTypeLabel(t)}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="cardReportManagementContent"></div>
+        `;
+        
+        // Load initial filtered activities
+        setTimeout(() => {
+            this.filterCardReportActivities();
+        }, 100);
+        
+        return html;
+    },
+    
+    // Filter card report activities
+    filterCardReportActivities() {
+        const activities = DataManager.getAllActivities();
+        const userId = document.getElementById('cardReportUserFilter')?.value;
+        const region = document.getElementById('cardReportRegionFilter')?.value;
+        const activityType = document.getElementById('cardReportActivityTypeFilter')?.value;
+        
+        let filtered = activities;
+        
+        if (userId) {
+            filtered = filtered.filter(a => a.userId === userId);
+        }
+        
+        if (region) {
+            filtered = filtered.filter(a => a.region === region || a.salesRepRegion === region);
+        }
+        
+        if (activityType) {
+            filtered = filtered.filter(a => a.type === activityType);
+        }
+        
+        const container = document.getElementById('cardReportManagementContent');
+        if (!container) return;
+        
+        if (filtered.length === 0) {
+            container.innerHTML = `<div class="content-card">${UI.emptyState('No activities found')}</div>`;
+            return;
+        }
+        
+        // Group by month
+        const activitiesByMonth = {};
+        filtered.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+        
+        let html = '';
+        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+            html += `
+                <div class="content-card">
+                    <div class="content-card-header">
+                        <h2 class="content-card-title">${UI.formatMonth(month)}</h2>
+                        <span style="color: var(--gray-600); font-size: 0.875rem;">${activitiesByMonth[month].length} activities</span>
+                    </div>
+                    <div class="card-grid-4">
+            `;
+            
+            activitiesByMonth[month].forEach(activity => {
+                const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                html += `
+                    <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
+                        <div class="activity-card-header">
+                            <div>
+                                <div class="activity-card-type">${UI.getActivityTypeLabel(activity.type)}</div>
+                                <span class="activity-card-badge ${activity.isInternal ? 'internal' : 'customer'}">
+                                    ${activity.isInternal ? 'Internal' : 'Customer'}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="activity-card-info">
+                            <div><strong>Account:</strong> ${activity.accountName || 'N/A'}</div>
+                            ${activity.projectName ? `<div><strong>Project:</strong> ${activity.projectName}</div>` : ''}
+                        </div>
+                        <div class="activity-card-meta">
+                            ${UI.formatDate(activity.date || activity.createdAt)}<br>
+                            By: ${activity.userName || 'Unknown'}
+                        </div>
+                        ${isOwner ? `
+                            <div class="activity-card-actions">
+                                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
+                                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
+        });
+        
+        container.innerHTML = html;
+    },
+    
+    // Load card-based admin view
+    loadCardAdminView() {
+        const adminView = document.getElementById('adminView');
+        if (!adminView) return;
+        
+        // Build full admin layout for card interface
+        adminView.innerHTML = `
+            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            </a>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Admin & Settings</h1>
+            </div>
+            
+            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+                <div class="content-card">
+                    <div class="content-card-header" style="align-items: center;">
+                        <h2 class="content-card-title">System Users</h2>
+                        <button id="addUserBtnCard" class="btn btn-primary" onclick="Admin.showAddUserModal()">Add New User</button>
+                    </div>
+                    <div id="usersList" class="space-y-2"></div>
+                </div>
+                
+                <div class="content-card">
+                    <div class="content-card-header" style="align-items: center;">
+                        <h2 class="content-card-title">Sales Users</h2>
+                        <button id="addSalesRepBtnCard" class="btn btn-primary" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
+                    </div>
+                    <div id="salesRepsList" class="space-y-2"></div>
+                </div>
+            </div>
+            
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h2 class="content-card-title">Interface Preference (Global)</h2>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Interface Layout</label>
+                    <select id="interfaceSelect" class="form-control" onchange="InterfaceManager.changeInterface(this.value)">
+                        <option value="card">Card Interface</option>
+                        <option value="modern">Modern Sidebar</option>
+                        <option value="compact">Compact Sidebar</option>
+                        <option value="dashboard">Dashboard First</option>
+                        <option value="minimal">Minimal Clean</option>
+                    </select>
+                    <small class="text-muted">Applies globally on next reload for every user.</small>
+                </div>
+                <div class="form-group" style="margin-top: 1.5rem;">
+                    <label class="form-label">Color Scheme</label>
+                    <select id="interfaceThemeSelect" class="form-control" onchange="InterfaceManager.changeTheme(this.value)">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                        <option value="gupshup">Gupshup</option>
+                    </select>
+                    <small class="text-muted">Controls the default palette used across the app.</small>
+                </div>
+            </div>
+            
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h2 class="content-card-title">Analytics Targets</h2>
+                </div>
+                <form onsubmit="Admin.savePresalesTarget(event)">
+                    <div class="form-group">
+                        <label class="form-label required">Monthly Activity Target per Presales User</label>
+                        <input type="number" class="form-control" id="cardPresalesTargetInput" min="0" step="1" required>
+                    </div>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                        <button type="submit" class="btn btn-primary">Save Target</button>
+                        <span class="text-muted" id="cardPresalesTargetMeta"></span>
+                    </div>
+                </form>
+                <p class="text-muted" id="cardPresalesTargetSummary" style="margin-top: 1rem;"></p>
+            </div>
+            
+            <div class="content-card">
+                <div class="content-card-header">
+                    <h2 class="content-card-title">POC Sandbox Access Management</h2>
+                </div>
+                <div class="action-bar" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 1rem;">
+                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                        <option value="">All Status</option>
+                        <option value="Assigned">Assigned</option>
+                        <option value="Unassigned">Unassigned</option>
+                    </select>
+                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                        <option value="">All Accounts</option>
+                    </select>
+                    <input type="date" id="pocDateFrom" class="form-control" placeholder="From Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                    <input type="date" id="pocDateTo" class="form-control" placeholder="To Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                </div>
+                <div id="pocSandboxTable"></div>
+            </div>
+        `;
+        
+        // Populate admin data after rendering
+        setTimeout(() => {
+            Admin.loadAdminPanel();
+            const interfaceSelect = document.getElementById('interfaceSelect');
+            if (interfaceSelect) {
+                interfaceSelect.value = InterfaceManager.getCurrentInterface();
+            }
+
+            const themeSelect = document.getElementById('interfaceThemeSelect');
+            if (themeSelect) {
+                themeSelect.value = InterfaceManager.getCurrentTheme();
+            }
+        }, 0);
+    },
+
+    // Load activities view
+    loadActivitiesView() {
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardActivitiesView();
+            return;
+        }
+        this.renderActivitiesList('activitiesContent');
+    },
+
+    // Load win/loss view
+    loadWinLossView() {
+        // Check if card interface is active
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardWinLossView();
+            return;
+        }
+        
+        try {
+            const accounts = DataManager.getAccounts();
+            const container = document.getElementById('winlossContent');
+            if (!container) {
+                console.error('winlossContent container not found');
+                return;
+            }
+
+            let allProjects = [];
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    allProjects.push({
+                        ...project,
+                        accountName: account.name,
+                        accountId: account.id
+                    });
+                });
+            });
+
+            const wins = allProjects.filter(p => p.status === 'won').length;
+            const losses = allProjects.filter(p => p.status === 'lost').length;
+            const active = allProjects.filter(p => p.status === 'active').length;
+
+            document.getElementById('totalWins').textContent = `${wins} Wins`;
+            document.getElementById('totalLosses').textContent = `${losses} Losses`;
+            document.getElementById('totalActive').textContent = `${active} Active`;
+
+            if (allProjects.length === 0) {
+                container.innerHTML = UI.emptyState('No projects found');
+                return;
+            }
+
+            let html = '';
+            allProjects.forEach(project => {
+                const statusClass = project.status === 'won' ? 'won' : 
+                                  project.status === 'lost' ? 'lost' : 'pending';
+                const winLossDetails = project.winLossData ? `
+                                <div style="margin-top: 0.5rem;">
+                                    ${this.formatWinLossAmount(project.winLossData) ? `<p><strong>MRR:</strong> ${this.formatWinLossAmount(project.winLossData)}</p>` : ''}
+                                    ${project.winLossData.reason ? `<p><strong>Reason:</strong> ${project.winLossData.reason}</p>` : ''}
+                                    ${project.winLossData.otd ? `<p><strong>OTD:</strong> ${project.winLossData.otd}</p>` : ''}
+                                </div>
+                ` : '';
+                
+                html += `
+                    <div class="project-card ${statusClass}">
+                        <div class="project-info">
+                            <h4>${project.name}</h4>
+                            <p class="text-muted">${project.accountName}</p>
+                            ${winLossDetails}
+                            <p class="text-muted" style="margin-top: 0.5rem;">
+                                <strong>SFDC:</strong> ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>` : 'Not set'}
+                            </p>
+                        </div>
+                        <div class="win-loss-actions">
+                            <button class="btn btn-sm btn-primary" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
+                                Update Status
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading win/loss view:', error);
+            const container = document.getElementById('winlossContent');
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading projects');
+            }
+        }
+    },
+
+    loadImportView() {
+        if (typeof BulkImport !== 'undefined') {
+            BulkImport.reset();
+        }
+
+        const importView = document.getElementById('importView');
+        if (!importView) return;
+
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            if (!importView.querySelector('.back-to-home')) {
+                const backLink = document.createElement('a');
+                backLink.href = '#';
+                backLink.className = 'back-to-home';
+                backLink.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                    </svg>
+                    Back to Home
+                `;
+                backLink.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    App.navigateToCardView('dashboard');
+                });
+                importView.insertBefore(backLink, importView.firstChild);
+            }
+        } else {
+            const header = importView.querySelector('.page-header');
+            if (header && !header.querySelector('.view-back-link')) {
+                const backBtn = document.createElement('button');
+                backBtn.className = 'btn btn-link view-back-link';
+                backBtn.textContent = '← Back to Dashboard';
+                backBtn.addEventListener('click', () => App.switchView('dashboard'));
+                header.appendChild(backBtn);
+            }
+        }
+    },
+
+    // Filter win/loss
+    filterWinLoss() {
+        const query = document.getElementById('winlossSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('.project-card');
+        
+        cards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            card.style.display = text.includes(query) ? '' : 'none';
+        });
+    },
+
+    // Load reports
+    loadReports() {
+        try {
+            const today = new Date();
+            const defaultMonth = today.toISOString().substring(0, 7);
+            const existingInput = document.getElementById('reportMonth');
+            const selectedMonth = existingInput && existingInput.value ? existingInput.value : defaultMonth;
+
+            const container = document.getElementById('reportsContent');
+            if (!container) {
+                console.error('reportsContent container not found');
+                return;
+            }
+
+            container.innerHTML = Analytics.buildLoadingMarkup('standard');
+
+            requestAnimationFrame(() => {
+                const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+                this.latestAnalytics.standard = analytics;
+                this.latestAnalytics.standardMonth = selectedMonth;
+
+                const filterBar = this.buildAnalyticsFilterBar('standard');
+                container.innerHTML = `
+                    ${filterBar}
+                    ${this.buildAnalyticsMarkup(analytics, {
+                        variant: 'standard',
+                        month: selectedMonth
+                    })}
+                `;
+
+                this.setAnalyticsLoading('reports', true);
+                this.initAnalyticsCharts({ prefix: 'reports', analytics });
+                this.setAnalyticsLoading('reports', false);
+            });
+        } catch (error) {
+            console.error('Error loading reports:', error);
+            const container = document.getElementById('reportsContent');
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading reports');
+            }
+        }
+    },
+
+    exportReportsCsv() {
+        try {
+            const monthInput = document.getElementById('reportMonth') || document.getElementById('cardReportMonth');
+            const fallbackMonth = new Date().toISOString().substring(0, 7);
+            const selectedMonth = monthInput && monthInput.value ? monthInput.value : (this.latestAnalytics.standardMonth || fallbackMonth);
+
+            const analytics = (this.latestAnalytics.standard && this.latestAnalytics.standardMonth === selectedMonth)
+                ? this.latestAnalytics.standard
+                : DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+
+            if (!analytics) {
+                UI.showNotification('No analytics data available to export.', 'error');
+                return;
+            }
+
+            const rows = [];
+
+            rows.push(['Summary']);
+            rows.push(['Month', DataManager.formatMonth(analytics.month)]);
+            rows.push(['Total Activities', analytics.totalActivities]);
+            rows.push(['Internal Activities', analytics.internalActivities]);
+            rows.push(['External Activities', analytics.externalActivities]);
+            rows.push(['Presales Users', analytics.totalPresalesUsers]);
+            rows.push(['Target per Presales User', analytics.targetValue]);
+            rows.push(['Team Target', analytics.teamTarget]);
+            rows.push([]);
+
+            rows.push(['User Activity Breakdown']);
+            rows.push(['User', 'Total', 'External', 'Internal']);
+            (analytics.userSummaries || []).forEach(summary => {
+                rows.push([
+                    summary.userName || 'Unknown',
+                    summary.total || 0,
+                    summary.external || 0,
+                    summary.internal || 0
+                ]);
+            });
+            rows.push([]);
+
+            rows.push(['Activity Types']);
+            rows.push(['Type', 'Count']);
+            Object.entries(analytics.activityTypeCounts || {}).forEach(([type, count]) => {
+                rows.push([type, count]);
+            });
+            rows.push([]);
+
+            rows.push(['Industries']);
+            rows.push(['Industry', 'Count']);
+            Object.entries(analytics.industryCounts || {}).forEach(([industry, count]) => {
+                rows.push([industry, count]);
+            });
+            rows.push([]);
+
+            rows.push(['Products Discussed']);
+            rows.push(['Product', 'Count']);
+            Object.entries(analytics.productTotals || {}).forEach(([product, count]) => {
+                rows.push([product, count]);
+            });
+
+            const filename = `pams_reports_${selectedMonth}.csv`;
+            this.downloadCsv(filename, rows);
+            UI.showNotification('Report exported successfully.', 'success');
+        } catch (error) {
+            console.error('Error exporting reports:', error);
+            UI.showNotification('Unable to export reports.', 'error');
+        }
+    },
+
+    handleCardReportMonthChange(value) {
+        const selected = value || new Date().toISOString().substring(0, 7);
+        this.latestAnalytics.cardMonth = selected;
+        const reportsView = document.getElementById('reportsView');
+        if (reportsView) {
+            reportsView.dataset.currentTab = 'reports';
+        }
+        this.loadCardReportsView();
+    },
+
+    handleWinLossCurrencyChange(value) {
+        const currency = value || 'INR';
+        const mrrInput = document.getElementById('winLossMRR');
+        if (!mrrInput) return;
+
+        const accountId = document.getElementById('winLossAccountId')?.value;
+        let fx = null;
+        if (accountId) {
+            const account = DataManager.getAccountById(accountId);
+            const rep = account?.salesRep ? DataManager.getGlobalSalesRepByName(account.salesRep) : null;
+            if (rep && rep.currency === currency && Number.isFinite(rep.fxToInr) && rep.fxToInr > 0) {
+                fx = rep.fxToInr;
+            }
+        }
+
+        mrrInput.dataset.currency = currency;
+        if (fx) {
+            mrrInput.dataset.fx = String(fx);
+        } else {
+            delete mrrInput.dataset.fx;
+        }
+        this.updateWinLossMrrHelper();
+    },
+
+    buildAnalyticsMarkup(analytics, options) {
+        if (typeof Analytics === 'undefined') return '';
+        return Analytics.buildMarkup(analytics, options);
+    },
+
+    buildAnalyticsFilterBar(variant = 'standard') {
+        const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
+        const channels = this.getAvailableChannels();
+        const selectedIndustry = this.reportFilters.industry || '';
+        const selectedChannel = this.reportFilters.channel || '';
+        const handlerVariantArg = variant === 'card' ? "'card'" : "'standard'";
+        return `
+            <div class="analytics-filter-bar">
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select class="form-control" onchange="App.handleReportFilterChange('industry', this.value, ${handlerVariantArg})">
+                        <option value="">All Industries</option>
+                        ${industries.map(industry => `
+                            <option value="${industry}" ${industry === selectedIndustry ? 'selected' : ''}>${industry}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Channel</label>
+                    <select class="form-control" onchange="App.handleReportFilterChange('channel', this.value, ${handlerVariantArg})">
+                        <option value="">All Channels</option>
+                        ${channels.map(channel => `
+                            <option value="${channel}" ${channel === selectedChannel ? 'selected' : ''}>${channel}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button class="btn btn-link" onclick="App.resetReportFilters('${variant}'); return false;">Reset Filters</button>
+                </div>
+            </div>
+        `;
+    },
+
+    handleReportFilterChange(key, value, variant = 'standard') {
+        if (!['industry', 'channel'].includes(key)) return;
+        this.reportFilters[key] = value || '';
+        if (variant === 'card') {
+            this.loadCardReportsView();
+        } else {
+            this.loadReports();
+        }
+    },
+
+    resetReportFilters(variant = 'standard') {
+        this.reportFilters.industry = '';
+        this.reportFilters.channel = '';
+        if (variant === 'card') {
+            this.loadCardReportsView();
+        } else {
+            this.loadReports();
+        }
+    },
+
+    getAvailableChannels() {
+        const accounts = DataManager.getAccounts();
+        const channelsSet = new Set();
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                (project.channels || []).forEach(channel => {
+                    if (channel && typeof channel === 'string') {
+                        channelsSet.add(channel.trim());
+                    }
+                });
+            });
+        });
+        return Array.from(channelsSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+    },
+
+    populateActivityFilterControls() {
+        const channels = this.getAvailableChannels();
+        const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
+        const timeframeOptions = [
+            { value: 'all', label: 'All Time' },
+            { value: 'month', label: 'This Month' },
+            { value: '30', label: 'Last 30 Days' },
+            { value: '90', label: 'Last 90 Days' },
+            { value: '365', label: 'Last 12 Months' }
+        ];
+
+        const variants = [
+            { prefix: '', searchId: 'activitySearch', channelId: 'activityFilterChannel', industryId: 'activityFilterIndustry', timeframeId: 'activityFilterTimeframe' },
+            { prefix: 'card', searchId: 'cardActivitySearch', channelId: 'cardActivityFilterChannel', industryId: 'cardActivityFilterIndustry', timeframeId: 'cardActivityFilterTimeframe' }
+        ];
+
+        variants.forEach(variant => {
+            const channelSelect = document.getElementById(variant.channelId);
+            if (channelSelect) {
+                channelSelect.innerHTML = [
+                    `<option value="">All Channels</option>`,
+                    ...channels.map(channel => `<option value="${channel}">${channel}</option>`)
+                ].join('');
+                channelSelect.value = this.activityFilters.channel || '';
+            }
+
+            const industrySelect = document.getElementById(variant.industryId);
+            if (industrySelect) {
+                industrySelect.innerHTML = [
+                    `<option value="">All Industries</option>`,
+                    ...industries.map(industry => `<option value="${industry}">${industry}</option>`)
+                ].join('');
+                industrySelect.value = this.activityFilters.industry || '';
+            }
+
+            const timeframeSelect = document.getElementById(variant.timeframeId);
+            if (timeframeSelect) {
+                timeframeSelect.innerHTML = timeframeOptions.map(option => `
+                    <option value="${option.value}" ${option.value === this.activityFilters.timeframe ? 'selected' : ''}>
+                        ${option.label}
+                    </option>
+                `).join('');
+            }
+
+            const searchInput = document.getElementById(variant.searchId);
+            if (searchInput && searchInput.value !== this.activityFilters.search) {
+                searchInput.value = this.activityFilters.search;
+            }
+        });
+    },
+
+    applyActivityFilters(activities = []) {
+        const filters = this.activityFilters || {};
+        const searchTerm = (filters.search || '').toLowerCase().trim();
+        const industryFilter = (filters.industry || '').toLowerCase();
+        const channelFilter = (filters.channel || '').toLowerCase();
+        const timeframe = filters.timeframe || 'all';
+        const channelMap = {};
+        const accounts = DataManager.getAccounts();
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                if (!channelMap[project.id]) {
+                    channelMap[project.id] = (project.channels || []).map(channel => (channel || '').toLowerCase());
+                }
+            });
+        });
+
+        const accountMap = {};
+        accounts.forEach(account => {
+            accountMap[account.id] = account;
+        });
+
+        const now = new Date();
+
+        return activities.filter(activity => {
+            const activityDate = new Date(activity.date || activity.createdAt);
+            if (timeframe !== 'all' && !Number.isNaN(activityDate.getTime())) {
+                const diffDays = (now - activityDate) / (1000 * 60 * 60 * 24);
+                if (timeframe === 'month') {
+                    const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                    const currentMonth = now.toISOString().substring(0, 7);
+                    if (monthKey !== currentMonth) return false;
+                } else if (timeframe === '30' && diffDays > 30) {
+                    return false;
+                } else if (timeframe === '90' && diffDays > 90) {
+                    return false;
+                } else if (timeframe === '365' && diffDays > 365) {
+                    return false;
+                }
+            }
+
+            if (industryFilter) {
+                if (activity.isInternal) return false;
+                const industry = (activity.industry || accountMap[activity.accountId]?.industry || '').toLowerCase();
+                if (!industry || industry !== industryFilter) return false;
+            }
+
+            if (channelFilter) {
+                if (activity.isInternal) return false;
+                const channels = channelMap[activity.projectId] || [];
+                const matches = channels.some(channel => channel === channelFilter || channel.includes(channelFilter));
+                if (!matches) return false;
+            }
+
+            if (searchTerm) {
+                const haystack = [
+                    activity.accountName,
+                    activity.projectName,
+                    activity.userName,
+                    UI.getActivityTypeLabel(activity.type),
+                    activity.details?.description,
+                    activity.activityName,
+                    activity.topic
+                ].filter(Boolean).join(' ').toLowerCase();
+                if (!haystack.includes(searchTerm)) return false;
+            }
+
+            return true;
+        });
+    },
+
+    handleActivitySearch(value, variant = 'standard') {
+        this.activityFilters.search = value || '';
+        this.renderActivitiesList();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardActivitiesView();
+        }
+    },
+
+    handleActivityFiltersChange(variant = 'standard') {
+        const channelId = variant === 'card' ? 'cardActivityFilterChannel' : 'activityFilterChannel';
+        const industryId = variant === 'card' ? 'cardActivityFilterIndustry' : 'activityFilterIndustry';
+        const timeframeId = variant === 'card' ? 'cardActivityFilterTimeframe' : 'activityFilterTimeframe';
+        const channelSelect = document.getElementById(channelId);
+        const industrySelect = document.getElementById(industryId);
+        const timeframeSelect = document.getElementById(timeframeId);
+        this.activityFilters.channel = channelSelect ? channelSelect.value : '';
+        this.activityFilters.industry = industrySelect ? industrySelect.value : '';
+        this.activityFilters.timeframe = timeframeSelect ? timeframeSelect.value || 'all' : 'all';
+        this.renderActivitiesList();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardActivitiesView();
+        }
+    },
+
+    resetActivityFilters() {
+        this.activityFilters = {
+            search: '',
+            industry: '',
+            channel: '',
+            timeframe: 'all'
+        };
+        const searchInput = document.getElementById('activitySearch');
+        if (searchInput) searchInput.value = '';
+        const cardSearch = document.getElementById('cardActivitySearch');
+        if (cardSearch) cardSearch.value = '';
+        this.populateActivityFilterControls();
+        this.renderActivitiesList();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardActivitiesView();
+        }
+    },
+
+    setPendingDuplicateAlerts(rows = []) {
+        this.pendingDuplicateAlerts = rows.map(row => ({
+            source: 'import',
+            accountName: row.payload?.accountName || row.payload?.account || 'Unknown Account',
+            projectName: row.payload?.projectName || row.payload?.project || 'Unknown Project',
+            date: row.payload?.date || '',
+            activityType: row.payload?.activityType || row.category || '',
+            count: 2 // minimum duplicate pair
+        }));
+    },
+
+    clearPendingDuplicateAlerts() {
+        this.pendingDuplicateAlerts = [];
+    },
+
+    downloadCsv(filename, rows) {
+        const csvContent = this.toCsv(rows);
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename || 'export.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
+
+    toCsv(rows = []) {
+        if (!Array.isArray(rows)) return '';
+        return rows.map(row => {
+            const normalizedRow = Array.isArray(row) ? row : [row];
+            return normalizedRow.map(value => {
+                if (value === null || value === undefined) return '';
+                const text = String(value);
+                return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+            }).join(',');
+        }).join('\r\n');
+    },
+
+    formatCurrencyValue(value, currencyCode = 'INR', options = {}) {
+        if (value === null || value === undefined || value === '') return '';
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return String(value);
+        const symbol = this.CURRENCY_SYMBOLS[currencyCode] || '';
+        const formatted = numericValue.toLocaleString(undefined, {
+            minimumFractionDigits: options.minimumFractionDigits ?? 2,
+            maximumFractionDigits: options.maximumFractionDigits ?? 2
+        });
+        return symbol ? `${symbol}${formatted}` : `${currencyCode} ${formatted}`;
+    },
+
+    formatWinLossAmount(winLossData) {
+        if (!winLossData) return '';
+        const currency = winLossData.currency || 'INR';
+        const primary = this.formatCurrencyValue(winLossData.mrr !== undefined ? winLossData.mrr : winLossData.mrrValue, currency);
+        if (!primary) return '';
+        if (currency !== 'INR' && winLossData.mrrInInr) {
+            const converted = this.formatCurrencyValue(winLossData.mrrInInr, 'INR');
+            return converted ? `${primary} (${converted})` : primary;
+        }
+        return primary;
+    },
+
+    updateWinLossMrrHelper() {
+        const input = document.getElementById('winLossMRR');
+        const helper = document.getElementById('winLossMrrHelper');
+        const label = document.getElementById('winLossMrrLabel');
+
+        if (!input || !helper || !label) return;
+
+        const currency = input.dataset.currency || 'INR';
+        const fx = parseFloat(input.dataset.fx || '');
+
+        label.textContent = `MRR (${currency})`;
+
+        const rawValue = input.value ? input.value.trim() : '';
+        if (!rawValue) {
+            if (currency === 'INR') {
+                helper.textContent = 'Enter the deal value in INR.';
+            } else if (!Number.isNaN(fx) && fx) {
+                helper.textContent = `Enter the amount in ${currency}. We will also store the INR equivalent using ${fx}.`;
+            } else {
+                helper.textContent = `Enter the amount in ${currency}.`;
+            }
+            return;
+        }
+
+        const numericValue = Number(rawValue);
+        if (!Number.isFinite(numericValue)) {
+            helper.textContent = `Enter a numeric amount in ${currency}.`;
+            return;
+        }
+
+        const primary = this.formatCurrencyValue(numericValue, currency);
+        if (currency !== 'INR' && !Number.isNaN(fx) && fx) {
+            const converted = this.formatCurrencyValue(numericValue * fx, 'INR');
+            helper.textContent = `${primary} ≈ ${converted}`;
+        } else {
+            helper.textContent = primary;
+        }
+    },
+
+    getExistingDuplicateActivities(activities = []) {
+        const map = {};
+        activities.forEach(activity => {
+            if (!activity) return;
+            if (activity.isInternal) return;
+            const accountKey = (activity.accountName || '').toLowerCase();
+            const projectKey = (activity.projectName || '').toLowerCase();
+            const dateKey = (activity.date || activity.createdAt || '').substring(0, 10);
+            const typeKey = activity.type || '';
+            const key = `${accountKey}|${projectKey}|${dateKey}|${typeKey}|${activity.isInternal ? 'internal' : 'external'}`;
+            if (!map[key]) {
+                map[key] = {
+                    source: 'existing',
+                    accountName: activity.accountName || 'Unknown Account',
+                    projectName: activity.projectName || (activity.isInternal ? 'Internal Activity' : 'Unknown Project'),
+                    date: dateKey,
+                    activityType: typeKey,
+                    count: 0
+                };
+            }
+            map[key].count += 1;
+        });
+        return Object.values(map).filter(entry => entry.count > 1);
+    },
+
+    computeProjectHealthData() {
+        const accounts = DataManager.getAccounts();
+        const activities = DataManager.getAllActivities();
+        const projectActivityMap = {};
+        const dayMs = 1000 * 60 * 60 * 24;
+
+        activities.forEach(activity => {
+            if (activity.isInternal || !activity.projectId) return;
+            const entry = projectActivityMap[activity.projectId] || { count: 0, lastDate: null };
+            entry.count += 1;
+            const activityDate = activity.date || activity.createdAt;
+            if (activityDate && (!entry.lastDate || activityDate > entry.lastDate)) {
+                entry.lastDate = activityDate;
+            }
+            projectActivityMap[activity.projectId] = entry;
+        });
+
+        const now = new Date();
+        const projects = [];
+
+        accounts.forEach(account => {
+            (account.projects || []).forEach(project => {
+                const stats = projectActivityMap[project.id] || { count: 0, lastDate: null };
+                const lastDateString = stats.lastDate || project.updatedAt || null;
+                const lastDate = lastDateString ? new Date(lastDateString) : null;
+                const daysSinceActivity = lastDate ? Math.round((now - lastDate) / dayMs) : null;
+                const createdString = project.createdAt || account.createdAt || null;
+                const createdDate = createdString ? new Date(createdString) : null;
+                const daysSinceCreation = createdDate ? Math.round((now - createdDate) / dayMs) : null;
+                const sfdcLink = project.sfdcLink || '';
+                const sfdcMissing = !sfdcLink || !/^https?:\/\//i.test(sfdcLink.trim());
+
+                projects.push({
+                    accountId: account.id,
+                    accountName: account.name,
+                    projectId: project.id,
+                    projectName: project.name,
+                    industry: account.industry || 'Unspecified',
+                    salesRep: account.salesRep || '',
+                    status: project.status || 'active',
+                    activityCount: stats.count,
+                    lastActivityDate: lastDateString,
+                    daysSinceActivity,
+                    createdAt: createdString,
+                    daysSinceCreation,
+                    sfdcLink: sfdcLink.trim(),
+                    sfdcMissing
+                });
+            });
+        });
+
+        return projects;
+    },
+
+    getFilteredProjectHealthProjects(projects) {
+        const threshold = Number(this.projectHealthFilters.threshold) || 60;
+        const statusFilter = this.projectHealthFilters.status || 'all';
+        const includeNoActivity = this.projectHealthFilters.includeNoActivity !== false;
+        const mediumThreshold = Math.max(15, Math.floor(threshold * 0.6));
+
+        const derived = projects.map(project => {
+            let risk = 'low';
+            if (!project.activityCount) {
+                risk = 'no-activity';
+            } else if (project.daysSinceActivity != null) {
+                if (project.daysSinceActivity >= threshold) {
+                    risk = 'high';
+                } else if (project.daysSinceActivity >= mediumThreshold) {
+                    risk = 'medium';
+                }
+            }
+            return { ...project, risk };
+        });
+
+        const filtered = derived.filter(project => {
+            if (project.risk === 'no-activity') {
+                if (!includeNoActivity) return false;
+                return statusFilter === 'all' || statusFilter === 'no-activity';
+            }
+            if (project.risk === 'high') {
+                return statusFilter === 'all' || statusFilter === 'high';
+            }
+            if (project.risk === 'medium') {
+                return statusFilter === 'all' || statusFilter === 'medium';
+            }
+            return false;
+        });
+
+        const activeProjects = derived.filter(project => project.activityCount > 0 && project.daysSinceActivity != null);
+        const averageDays = activeProjects.length
+            ? (activeProjects.reduce((sum, project) => sum + project.daysSinceActivity, 0) / activeProjects.length).toFixed(1)
+            : '0';
+        const oldestProject = activeProjects.reduce((acc, project) => {
+            if (!acc || project.daysSinceActivity > acc.daysSinceActivity) {
+                return project;
+            }
+            return acc;
+        }, null);
+
+        const summary = {
+            total: projects.length,
+            withActivity: derived.filter(project => project.activityCount > 0).length,
+            noActivity: derived.filter(project => !project.activityCount).length,
+            highRisk: derived.filter(project => project.risk === 'high').length,
+            mediumRisk: derived.filter(project => project.risk === 'medium').length,
+            attentionCount: filtered.length,
+            averageDays,
+            threshold,
+            oldestProjectDays: oldestProject ? oldestProject.daysSinceActivity : null
+        };
+
+        return { projects: filtered, summary };
+    },
+
+    buildProjectHealthMarkup(projects, summary, variant = 'standard') {
+        const prefix = variant === 'card' ? 'card' : '';
+        const wrapperClass = variant === 'card' ? 'content-card' : 'card';
+        const headerClass = variant === 'card' ? 'content-card-header' : 'card-header';
+        const bodyClass = variant === 'card' ? 'card-body' : 'card-body';
+        const filtersMarkup = `
+            <div class="analytics-filter-bar">
+                <div class="form-group">
+                    <label class="form-label">Inactivity Threshold</label>
+                    <select id="${prefix ? `${prefix}ProjectHealthThreshold` : 'projectHealthThreshold'}" class="form-control" onchange="App.handleProjectHealthFilterChange('threshold', this.value, '${variant}')">
+                        <option value="30">30 days</option>
+                        <option value="45">45 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90">90 days</option>
+                        <option value="120">120 days</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Risk Level</label>
+                    <select id="${prefix ? `${prefix}ProjectHealthStatus` : 'projectHealthStatus'}" class="form-control" onchange="App.handleProjectHealthFilterChange('status', this.value, '${variant}')">
+                        <option value="all">High & Medium Risk</option>
+                        <option value="high">High Risk Only</option>
+                        <option value="medium">Medium Risk Only</option>
+                        <option value="no-activity">No Activity</option>
+                    </select>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="${prefix ? `${prefix}ProjectHealthInclude` : 'projectHealthInclude'}" onchange="App.toggleProjectHealthInclude(this.checked, '${variant}')">
+                        Include projects with no activity
+                    </label>
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button class="btn btn-link" onclick="App.resetProjectHealthFilters(); return false;">Reset</button>
+                </div>
+            </div>
+        `;
+
+        const statsMarkup = `
+            <div class="stats-grid analytics-stats">
+                <div class="stat-card">
+                    <h4>Total Projects</h4>
+                    <div class="stat-value">${summary.total}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>High Risk</h4>
+                    <div class="stat-value text-danger">${summary.highRisk}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Medium Risk</h4>
+                    <div class="stat-value text-warning">${summary.mediumRisk}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>No Activity</h4>
+                    <div class="stat-value">${summary.noActivity}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Average Days Since Activity</h4>
+                    <div class="stat-value">${summary.averageDays}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Projects Requiring Attention</h4>
+                    <div class="stat-value">${summary.attentionCount}</div>
+                </div>
+            </div>
+        `;
+
+        const listMarkup = projects.length ? `
+            <div class="project-health-grid">
+                ${projects.map(project => {
+                    const riskLabel = project.risk === 'no-activity'
+                        ? 'No Activity'
+                        : project.risk === 'high'
+                            ? `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`
+                            : `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`;
+                    const lastActivityText = project.activityCount
+                        ? `Last activity ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'} ago (${UI.formatDate(project.lastActivityDate)})`
+                        : 'No activity recorded yet';
+                    const sfdcMarkup = project.sfdcMissing
+                        ? `<p class="project-health-warning">SFDC link missing</p>
+                            <button class="btn btn-sm btn-primary" onclick="App.promptProjectSfdcLink('${project.accountId}', '${project.projectId}')">Update SFDC Link</button>`
+                        : `<p class="project-health-link"><a href="${project.sfdcLink}" target="_blank" rel="noopener">View SFDC Record</a></p>`;
+                    return `
+                        <div class="project-health-card risk-${project.risk}">
+                            <div class="project-health-header">
+                                <h4>${project.projectName || 'Unnamed Project'}</h4>
+                                <span class="risk-badge risk-${project.risk}">${riskLabel}</span>
+                            </div>
+                            <p class="project-health-account">${project.accountName}</p>
+                            <p class="project-health-meta">Industry: ${project.industry}</p>
+                            <p class="project-health-meta">Owner: ${project.salesRep || 'Unassigned'}</p>
+                            <p class="project-health-meta">Status: ${project.status || 'Active'}</p>
+                            <p class="project-health-meta">Activities logged: ${project.activityCount}</p>
+                            <p class="project-health-meta">${lastActivityText}</p>
+                            ${sfdcMarkup}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        ` : `<p class="text-muted">No projects match the current filters.</p>`;
+
+        return `
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Filters</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${filtersMarkup}
+                </div>
+            </div>
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Project Risk Snapshot</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${statsMarkup}
+                </div>
+            </div>
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Projects Requiring Attention (${projects.length})</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${listMarkup}
+                </div>
+            </div>
+        `;
+    },
+
+    syncProjectHealthControls() {
+        const thresholdValue = String(this.projectHealthFilters.threshold);
+        const statusValue = this.projectHealthFilters.status || 'all';
+        const includeChecked = this.projectHealthFilters.includeNoActivity !== false;
+
+        const controls = [
+            { id: 'projectHealthThreshold', type: 'select', value: thresholdValue },
+            { id: 'projectHealthStatus', type: 'select', value: statusValue },
+            { id: 'projectHealthInclude', type: 'checkbox', value: includeChecked },
+            { id: 'cardProjectHealthThreshold', type: 'select', value: thresholdValue },
+            { id: 'cardProjectHealthStatus', type: 'select', value: statusValue },
+            { id: 'cardProjectHealthInclude', type: 'checkbox', value: includeChecked }
+        ];
+
+        controls.forEach(control => {
+            const element = document.getElementById(control.id);
+            if (!element) return;
+            if (control.type === 'select') {
+                element.value = control.value;
+            } else if (control.type === 'checkbox') {
+                element.checked = control.value;
+            }
+        });
+    },
+
+    handleProjectHealthFilterChange(key, value, variant = 'standard') {
+        this.projectHealthFilters[key] = key === 'threshold' ? Number(value) : value;
+        this.loadProjectHealthView();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardProjectHealthView();
+        }
+    },
+
+    toggleProjectHealthInclude(checked, variant = 'standard') {
+        this.projectHealthFilters.includeNoActivity = !!checked;
+        this.loadProjectHealthView();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardProjectHealthView();
+        }
+    },
+
+    resetProjectHealthFilters() {
+        this.projectHealthFilters = {
+            threshold: 60,
+            status: 'all',
+            includeNoActivity: true
+        };
+        this.loadProjectHealthView();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardProjectHealthView();
+        }
+    },
+
+    loadProjectHealthView() {
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardProjectHealthView();
+            return;
+        }
+
+        const container = document.getElementById('projectHealthContent');
+        if (!container) {
+            console.error('projectHealthContent container not found');
+            return;
+        }
+
+        const projects = this.computeProjectHealthData();
+        const { projects: filteredProjects, summary } = this.getFilteredProjectHealthProjects(projects);
+        const backLink = `
+            <div class="view-header-utility">
+                <button class="btn btn-link view-back-link" onclick="App.switchView('dashboard')">← Back to Dashboard</button>
+            </div>
+        `;
+        container.innerHTML = `
+            ${backLink}
+            ${this.buildProjectHealthMarkup(filteredProjects, summary, 'standard')}
+        `;
+        this.syncProjectHealthControls();
+    },
+
+    loadCardProjectHealthView() {
+        const view = document.getElementById('projectHealthView');
+        const container = document.getElementById('projectHealthContent');
+        if (!container) {
+            console.error('projectHealthContent container not found');
+            return;
+        }
+
+        const projects = this.computeProjectHealthData();
+        const { projects: filteredProjects, summary } = this.getFilteredProjectHealthProjects(projects);
+        if (view && !view.querySelector('.back-to-home')) {
+            const backLink = document.createElement('a');
+            backLink.href = '#';
+            backLink.className = 'back-to-home';
+            backLink.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            `;
+            backLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                App.navigateToCardView('dashboard');
+            });
+            view.insertBefore(backLink, view.firstChild);
+        }
+        container.innerHTML = this.buildProjectHealthMarkup(filteredProjects, summary, 'card');
+        this.syncProjectHealthControls();
+    },
+
+    computeSfdcComplianceData() {
+        const projects = this.computeProjectHealthData();
+        return projects.map(project => {
+            const link = (project.sfdcLink || '').trim();
+            const hasLink = !!link;
+            const isValid = hasLink && /^https?:\/\//i.test(link);
+            return {
+                ...project,
+                sfdcLink: link,
+                hasLink,
+                isValid,
+                compliant: hasLink && isValid
+            };
+        });
+    },
+
+    getFilteredSfdcProjects(projects) {
+        const industryFilter = (this.sfdcFilters.industry || '').toLowerCase();
+        const accountFilter = (this.sfdcFilters.account || '').toLowerCase();
+        const ownerFilter = (this.sfdcFilters.owner || '').toLowerCase();
+        const showAll = !!this.sfdcFilters.showAll;
+
+        const filtered = projects.filter(project => {
+            if (!showAll && project.compliant) return false;
+            if (industryFilter && (project.industry || '').toLowerCase() !== industryFilter) return false;
+            if (accountFilter && (project.accountName || '').toLowerCase() !== accountFilter) return false;
+            if (ownerFilter && (project.salesRep || '').toLowerCase() !== ownerFilter) return false;
+            return true;
+        });
+
+        const summary = {
+            total: projects.length,
+            missing: projects.filter(project => !project.hasLink).length,
+            invalid: projects.filter(project => project.hasLink && !project.isValid).length,
+            compliant: projects.filter(project => project.compliant).length,
+            attentionCount: filtered.length
+        };
+
+        return { projects: filtered, summary };
+    },
+
+    buildSfdcComplianceMarkup(filteredProjects, summary, variant = 'standard', allProjects = []) {
+        const prefix = variant === 'card' ? 'card' : '';
+        const wrapperClass = variant === 'card' ? 'content-card' : 'card';
+        const headerClass = variant === 'card' ? 'content-card-header' : 'card-header';
+        const bodyClass = variant === 'card' ? 'card-body' : 'card-body';
+
+        const industries = Array.from(new Set(allProjects.map(project => project.industry))).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const accounts = Array.from(new Set(allProjects.map(project => project.accountName))).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const owners = Array.from(new Set(allProjects.map(project => project.salesRep))).filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+        const filtersMarkup = `
+            <div class="analytics-filter-bar">
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select id="${prefix ? `${prefix}SfdcIndustryFilter` : 'sfdcIndustryFilter'}" class="form-control" onchange="App.handleSfdcFilterChange('industry', this.value, '${variant}')">
+                        <option value="">All Industries</option>
+                        ${industries.map(industry => `<option value="${industry}">${industry}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Account</label>
+                    <select id="${prefix ? `${prefix}SfdcAccountFilter` : 'sfdcAccountFilter'}" class="form-control" onchange="App.handleSfdcFilterChange('account', this.value, '${variant}')">
+                        <option value="">All Accounts</option>
+                        ${accounts.map(account => `<option value="${account}">${account}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Owner</label>
+                    <select id="${prefix ? `${prefix}SfdcOwnerFilter` : 'sfdcOwnerFilter'}" class="form-control" onchange="App.handleSfdcFilterChange('owner', this.value, '${variant}')">
+                        <option value="">All Owners</option>
+                        ${owners.map(owner => `<option value="${owner}">${owner}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="${prefix ? `${prefix}SfdcShowAll` : 'sfdcShowAll'}" onchange="App.toggleSfdcShowAll(this.checked, '${variant}')">
+                        Include compliant projects
+                    </label>
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button class="btn btn-link" onclick="App.resetSfdcFilters(); return false;">Reset</button>
+                </div>
+            </div>
+        `;
+
+        const statsMarkup = `
+            <div class="stats-grid analytics-stats">
+                <div class="stat-card">
+                    <h4>Total Projects</h4>
+                    <div class="stat-value">${summary.total}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Missing Link</h4>
+                    <div class="stat-value text-danger">${summary.missing}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Invalid Link</h4>
+                    <div class="stat-value text-warning">${summary.invalid}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Compliant</h4>
+                    <div class="stat-value text-success">${summary.compliant}</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Requires Update</h4>
+                    <div class="stat-value">${summary.attentionCount}</div>
+                </div>
+            </div>
+        `;
+
+        const listMarkup = filteredProjects.length ? (() => {
+            const rows = filteredProjects.map(project => {
+                let statusLabel = 'Missing';
+                let statusClass = 'missing';
+                if (project.hasLink && !project.isValid) {
+                    statusLabel = 'Invalid';
+                    statusClass = 'invalid';
+                } else if (project.compliant) {
+                    statusLabel = 'Compliant';
+                    statusClass = 'compliant';
+                }
+                const lastActivityText = project.activityCount
+                    ? `Last activity ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'} ago (${UI.formatDate(project.lastActivityDate)})`
+                    : 'No activity recorded yet';
+                const inputId = `${prefix ? `${prefix}_` : ''}sfdcInput_${project.projectId}`;
+                const currentLinkMarkup = project.sfdcLink
+                    ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open</a>`
+                    : '<span class="text-muted">Not set</span>';
+                return `
+                    <tr class="status-${statusClass}">
+                        <td>${project.accountName}</td>
+                        <td>${project.projectName || 'Unnamed Project'}</td>
+                        <td>${project.salesRep || 'Unassigned'}</td>
+                        <td><span class="sfdc-status-badge ${statusClass}">${statusLabel}</span></td>
+                        <td>${lastActivityText}</td>
+                        <td>
+                            <input type="text" id="${inputId}" class="form-control sfdc-link-input" value="${project.sfdcLink || ''}" placeholder="https://example.com/...">
+                            <div class="sfdc-current-link">${currentLinkMarkup}</div>
+                        </td>
+                        <td>
+                            <div class="table-actions">
+                                <button class="btn btn-sm btn-primary" onclick="App.updateSfdcLinkFromInput('${project.accountId}', '${project.projectId}', '${inputId}')">Save</button>
+                                <button class="btn btn-sm btn-link" onclick="App.promptProjectSfdcLink('${project.accountId}', '${project.projectId}')">Use Prompt</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            return `
+                <div class="sfdc-compliance-table-wrap">
+                    <table class="table sfdc-compliance-table">
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th>Project</th>
+                                <th>Owner</th>
+                                <th>Status</th>
+                                <th>Last Activity</th>
+                                <th>SFDC Link</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        })() : `<p class="text-muted">All projects are compliant with the selected filters.</p>`;
+
+        return `
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Filters</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${filtersMarkup}
+                </div>
+            </div>
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Compliance Overview</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${statsMarkup}
+                </div>
+            </div>
+            <div class="${wrapperClass}">
+                <div class="${headerClass}">
+                    <h3>Projects Requiring Attention (${filteredProjects.length})</h3>
+                </div>
+                <div class="${bodyClass}">
+                    ${listMarkup}
+                </div>
+            </div>
+        `;
+    },
+
+    syncSfdcControls() {
+        const industryValue = this.sfdcFilters.industry || '';
+        const accountValue = this.sfdcFilters.account || '';
+        const ownerValue = this.sfdcFilters.owner || '';
+        const showAll = !!this.sfdcFilters.showAll;
+
+        const controls = [
+            { id: 'sfdcIndustryFilter', type: 'select', value: industryValue },
+            { id: 'sfdcAccountFilter', type: 'select', value: accountValue },
+            { id: 'sfdcOwnerFilter', type: 'select', value: ownerValue },
+            { id: 'sfdcShowAll', type: 'checkbox', value: showAll },
+            { id: 'cardSfdcIndustryFilter', type: 'select', value: industryValue },
+            { id: 'cardSfdcAccountFilter', type: 'select', value: accountValue },
+            { id: 'cardSfdcOwnerFilter', type: 'select', value: ownerValue },
+            { id: 'cardSfdcShowAll', type: 'checkbox', value: showAll }
+        ];
+
+        controls.forEach(control => {
+            const element = document.getElementById(control.id);
+            if (!element) return;
+            if (control.type === 'select') {
+                element.value = control.value;
+            } else if (control.type === 'checkbox') {
+                element.checked = control.value;
+            }
+        });
+    },
+
+    handleSfdcFilterChange(key, value, variant = 'standard') {
+        this.sfdcFilters[key] = value;
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardSfdcComplianceView();
+        }
+    },
+
+    toggleSfdcShowAll(checked, variant = 'standard') {
+        this.sfdcFilters.showAll = !!checked;
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardSfdcComplianceView();
+        }
+    },
+
+    resetSfdcFilters() {
+        this.sfdcFilters = {
+            industry: '',
+            account: '',
+            owner: '',
+            showAll: false
+        };
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardSfdcComplianceView();
+        }
+    },
+
+    loadSfdcComplianceView() {
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardSfdcComplianceView();
+            return;
+        }
+
+        const container = document.getElementById('sfdcComplianceContent');
+        if (!container) {
+            console.error('sfdcComplianceContent container not found');
+            return;
+        }
+
+        const projects = this.computeSfdcComplianceData();
+        const { projects: filteredProjects, summary } = this.getFilteredSfdcProjects(projects);
+        const backLink = `
+            <div class="view-header-utility">
+                <button class="btn btn-link view-back-link" onclick="App.switchView('dashboard')">← Back to Dashboard</button>
+            </div>
+        `;
+        container.innerHTML = `
+            ${backLink}
+            ${this.buildSfdcComplianceMarkup(filteredProjects, summary, 'standard', projects)}
+        `;
+        this.syncSfdcControls();
+    },
+
+    loadCardSfdcComplianceView() {
+        const view = document.getElementById('sfdcComplianceView');
+        const container = document.getElementById('sfdcComplianceContent');
+        if (!container) {
+            console.error('sfdcComplianceContent container not found');
+            return;
+        }
+
+        const projects = this.computeSfdcComplianceData();
+        const { projects: filteredProjects, summary } = this.getFilteredSfdcProjects(projects);
+        if (view && !view.querySelector('.back-to-home')) {
+            const backLink = document.createElement('a');
+            backLink.href = '#';
+            backLink.className = 'back-to-home';
+            backLink.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Home
+            `;
+            backLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                App.navigateToCardView('dashboard');
+            });
+            view.insertBefore(backLink, view.firstChild);
+        }
+        container.innerHTML = this.buildSfdcComplianceMarkup(filteredProjects, summary, 'card', projects);
+        this.syncSfdcControls();
+    },
+
+    initAnalyticsCharts({ variant = 'standard', analytics, month }) {
+        if (!analytics) return;
+        const prefix = variant === 'card' ? 'card' : 'reports';
+        const wrapper = document.getElementById(`${prefix}AnalyticsWrapper`);
+        if (!wrapper) return;
+
+        if (typeof Chart === 'undefined') {
+            if (!wrapper.querySelector('.chart-library-warning')) {
+                const warning = document.createElement('p');
+                warning.className = 'text-muted chart-library-warning';
+                warning.textContent = 'Charts unavailable: analytics library not loaded.';
+                wrapper.appendChild(warning);
+            }
+            return;
+        }
+
+        this.destroyAnalyticsCharts(prefix);
+
+        this.setAnalyticsLoading(prefix, true);
+        const palette = this.getPalette();
+        const extendedPalette = this.getPalette(true);
+        const summaryMap = {};
+        (analytics.userSummaries || []).forEach(summary => {
+            summaryMap[summary.userId] = summary;
+        });
+
+        const industryEntries = Object.entries(analytics.industryCounts || {}).sort((a, b) => b[1] - a[1]);
+        const industryLimit = this.CHART_CONSTANTS.industryLimit;
+        const limitedIndustryEntries = industryEntries.slice(0, industryLimit);
+        const industryLabelsForProducts = limitedIndustryEntries.map(([name]) => name);
+        const otherIndustryTotal = industryEntries.slice(industryLimit).reduce((sum, [, count]) => sum + count, 0);
+        const industriesForActivity = [...industryLabelsForProducts];
+        const industryCountsForChart = limitedIndustryEntries.map(([, count]) => count);
+        if (otherIndustryTotal > 0) {
+            industriesForActivity.push('Other');
+            industryCountsForChart.push(otherIndustryTotal);
+        }
+
+        const context = {
+            prefix,
+            analytics,
+            month,
+            palette,
+            extendedPalette,
+            summaryMap,
+            targetValue: Number(analytics.targetValue || 0),
+            industryLabelsForProducts,
+            industriesForActivity,
+            industryCountsForChart
+        };
+
+        this.renderTargetChart(context);
+        this.renderActivityMixChart(context);
+        this.renderUserStackedChart(context);
+        this.renderProductsChart(context);
+        this.renderIndustryActivityChart(context);
+        this.renderWinLossTrendChart(context);
+        this.renderChannelOutcomeChart(context);
+        this.renderPocFunnelChart(context);
+
+        this.setAnalyticsLoading(prefix, false);
+    },
+
+    renderTargetChart(context) {
+        const { prefix, analytics, palette, summaryMap, targetValue } = context;
+        const canvas = document.getElementById(`${prefix}TargetChart`);
+        if (!canvas) return;
+
+        const presalesUsers = analytics.presalesUsers || [];
+        const orderedSummaries = presalesUsers.map(user => ({
+            userName: user.userName,
+            total: summaryMap[user.userId]?.total || 0
+        })).filter(entry => entry.userName);
+
+        if (!orderedSummaries.length) {
+            this.renderChartEmptyState(canvas, 'Add presales users to track team targets.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: orderedSummaries.map(item => item.userName),
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Actual Activities',
+                        data: orderedSummaries.map(item => item.total),
+                        backgroundColor: palette[0],
+                        borderRadius: 6
+                    },
+                    {
+                        type: 'line',
+                        label: `Target (${targetValue})`,
+                        data: orderedSummaries.map(() => targetValue),
+                        borderColor: '#F56565',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.2,
+                        pointBackgroundColor: '#F56565'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-target`] = chart;
+    },
+
+    renderActivityMixChart(context) {
+        const { prefix, analytics, palette } = context;
+        const canvas = document.getElementById(`${prefix}ActivityPieChart`);
+        if (!canvas) return;
+
+        const activityEntries = Object.entries(analytics.activityTypeCounts || {});
+        const totalActivities = activityEntries.reduce((acc, [, count]) => acc + count, 0);
+        if (!totalActivities) {
+            this.renderChartEmptyState(canvas, 'No activities recorded for this month.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const labels = activityEntries.map(([type]) => UI.getActivityTypeLabel(type));
+        const data = activityEntries.map(([, count]) => count);
+        const colors = labels.map((_, idx) => palette[idx % palette.length]);
+
+        const chart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data,
+                    backgroundColor: colors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: context => `${context.label}: ${context.raw}`
+                        }
+                    }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-pie`] = chart;
+    },
+
+    renderUserStackedChart(context) {
+        const { prefix, analytics, palette } = context;
+        const canvas = document.getElementById(`${prefix}UserStackedChart`);
+        if (!canvas) return;
+
+        const activeUsers = (analytics.userSummaries || []).filter(summary => summary.total > 0);
+        if (!activeUsers.length) {
+            this.renderChartEmptyState(canvas, 'No user activity logged this month.');
+            return;
+        }
+
+        const userLimit = this.CHART_CONSTANTS.userLimit;
+        const sortedUsers = [...activeUsers].sort((a, b) => b.total - a.total).slice(0, userLimit);
+        const overflowUsers = activeUsers.slice(userLimit);
+        if (overflowUsers.length) {
+            const aggregatedTypes = {};
+            const aggregatedTotal = overflowUsers.reduce((sum, summary) => {
+                Object.entries(summary.types || {}).forEach(([type, count]) => {
+                    aggregatedTypes[type] = (aggregatedTypes[type] || 0) + count;
+                });
+                return sum + summary.total;
+            }, 0);
+            if (aggregatedTotal > 0) {
+                sortedUsers.push({
+                    userName: 'Other Users',
+                    total: aggregatedTotal,
+                    types: aggregatedTypes
+                });
+            }
+        }
+
+        const typeSet = new Set();
+        sortedUsers.forEach(summary => Object.keys(summary.types || {}).forEach(type => typeSet.add(type)));
+        const typeKeys = Array.from(typeSet);
+        if (!typeKeys.length) {
+            this.renderChartEmptyState(canvas, 'No activity type data available.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const labels = sortedUsers.map(summary => summary.userName);
+        const datasets = typeKeys.map((type, index) => ({
+            label: UI.getActivityTypeLabel(type),
+            data: sortedUsers.map(summary => summary.types?.[type] || 0),
+            backgroundColor: palette[index % palette.length],
+            stack: 'activity'
+        }));
+
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    x: { stacked: true },
+                    y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-stacked`] = chart;
+    },
+
+    renderProductsChart(context) {
+        const { prefix, analytics, extendedPalette, industryLabelsForProducts } = context;
+        const canvas = document.getElementById(`${prefix}IndustryProductChart`);
+        if (!canvas) return;
+
+        const productEntries = Object.entries(analytics.productTotals || {}).sort((a, b) => b[1] - a[1]);
+        const topProducts = productEntries.slice(0, 5).map(([name]) => name);
+
+        if (!industryLabelsForProducts.length || !topProducts.length) {
+            this.renderChartEmptyState(canvas, 'No product discussions recorded this month.');
+            return;
+        }
+
+        const datasets = topProducts.map((product, index) => ({
+            label: product,
+            data: industryLabelsForProducts.map(industry => (analytics.industryProductCounts?.[industry]?.[product] || 0)),
+            backgroundColor: extendedPalette[index % extendedPalette.length],
+            stack: 'product'
+        }));
+
+        if (productEntries.length > topProducts.length) {
+            const othersData = industryLabelsForProducts.map(industry => {
+                const industryProducts = analytics.industryProductCounts?.[industry] || {};
+                const total = Object.values(industryProducts).reduce((sum, count) => sum + count, 0);
+                const topSum = topProducts.reduce((sum, product) => sum + (industryProducts[product] || 0), 0);
+                return Math.max(total - topSum, 0);
+            });
+            if (othersData.some(value => value > 0)) {
+                datasets.push({
+                    label: 'Other Products',
+                    data: othersData,
+                    backgroundColor: '#CBD5E0',
+                    stack: 'product'
+                });
+            }
+        }
+
+        const combinedTotal = datasets.reduce((sum, dataset) => sum + dataset.data.reduce((a, b) => a + b, 0), 0);
+        if (!combinedTotal) {
+            this.renderChartEmptyState(canvas, 'No product discussions recorded this month.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: { labels: industryLabelsForProducts, datasets },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+                    y: { stacked: true }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-products`] = chart;
+    },
+
+    renderIndustryActivityChart(context) {
+        const { prefix, industriesForActivity, industryCountsForChart, palette } = context;
+        const canvas = document.getElementById(`${prefix}IndustryActivityChart`);
+        if (!canvas) return;
+
+        if (!industriesForActivity.length) {
+            this.renderChartEmptyState(canvas, 'No industry-level activity recorded this month.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: industriesForActivity,
+                datasets: [{
+                    label: 'Activities',
+                    data: industryCountsForChart,
+                    backgroundColor: industriesForActivity.map((_, idx) => palette[idx % palette.length]),
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-industry`] = chart;
+    },
+
+    renderWinLossTrendChart(context) {
+        const { prefix } = context;
+        const canvas = document.getElementById(`${prefix}WinLossTrendChart`);
+        if (!canvas) return;
+
+        const trendData = DataManager.getWinLossTrend(6);
+        if (!trendData.length) {
+            this.renderChartEmptyState(canvas, 'No win/loss updates recorded in recent months.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const labels = trendData.map(item => UI.formatMonth(item.month));
+        const chart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Wins',
+                        data: trendData.map(item => item.won),
+                        borderColor: '#38A169',
+                        backgroundColor: 'rgba(56, 161, 105, 0.2)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'Losses',
+                        data: trendData.map(item => item.lost),
+                        borderColor: '#E53E3E',
+                        backgroundColor: 'rgba(229, 62, 62, 0.2)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-trend`] = chart;
+    },
+
+    renderChannelOutcomeChart(context) {
+        const { prefix, analytics, palette } = context;
+        const canvas = document.getElementById(`${prefix}ChannelOutcomeChart`);
+        if (!canvas) return;
+
+        const channelStats = DataManager.getChannelOutcomeStats(analytics.month);
+        const channelEntries = Object.entries(channelStats).map(([channel, counts]) => ({
+            channel,
+            total: (counts.won || 0) + (counts.lost || 0),
+            won: counts.won || 0,
+            lost: counts.lost || 0
+        })).sort((a, b) => b.total - a.total);
+
+        if (!channelEntries.length) {
+            this.renderChartEmptyState(canvas, 'No channel data available for the selected month.');
+            return;
+        }
+
+        const channelLimit = this.CHART_CONSTANTS.channelLimit;
+        const limitedChannels = channelEntries.slice(0, channelLimit);
+        const overflow = channelEntries.slice(channelLimit);
+        if (overflow.length) {
+            const aggregated = overflow.reduce((acc, entry) => ({
+                channel: 'Other Channels',
+                won: acc.won + entry.won,
+                lost: acc.lost + entry.lost,
+                total: acc.total + entry.total
+            }), { channel: 'Other Channels', won: 0, lost: 0, total: 0 });
+            if (aggregated.total > 0) {
+                limitedChannels.push(aggregated);
+            }
+        }
+
+        this.prepareChartCanvas(canvas);
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: limitedChannels.map(item => item.channel),
+                datasets: [
+                    {
+                        label: 'Wins',
+                        data: limitedChannels.map(item => item.won),
+                        backgroundColor: palette[2]
+                    },
+                    {
+                        label: 'Losses',
+                        data: limitedChannels.map(item => item.lost),
+                        backgroundColor: '#F56565'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-channels`] = chart;
+    },
+
+    renderPocFunnelChart(context) {
+        const { prefix, analytics } = context;
+        const canvas = document.getElementById(`${prefix}PocFunnelChart`);
+        if (!canvas) return;
+
+        const pocStats = DataManager.getPocFunnelStats(analytics.month);
+        const funnelEntries = Object.entries(pocStats.types || {}).map(([accessType, stats]) => ({
+            accessType,
+            requests: stats.requests || 0,
+            wins: stats.wins || 0,
+            losses: stats.losses || 0
+        })).filter(entry => entry.requests || entry.wins || entry.losses);
+
+        if (!funnelEntries.length) {
+            this.renderChartEmptyState(canvas, 'No POC activity recorded for the selected month.');
+            return;
+        }
+
+        this.prepareChartCanvas(canvas);
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: funnelEntries.map(entry => entry.accessType),
+                datasets: [
+                    {
+                        label: 'Requests',
+                        data: funnelEntries.map(entry => entry.requests),
+                        backgroundColor: '#3182CE'
+                    },
+                    {
+                        label: 'Wins',
+                        data: funnelEntries.map(entry => entry.wins),
+                        backgroundColor: '#38A169'
+                    },
+                    {
+                        label: 'Losses',
+                        data: funnelEntries.map(entry => entry.losses),
+                        backgroundColor: '#E53E3E'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+        this.analyticsCharts[`${prefix}-poc`] = chart;
+    },
+
+    destroyAnalyticsCharts(prefix) {
+        Object.keys(this.analyticsCharts).forEach(key => {
+            if (!prefix || key.startsWith(prefix)) {
+                this.analyticsCharts[key].destroy();
+                delete this.analyticsCharts[key];
+            }
+        });
+    },
+
+    prepareChartCanvas(canvas) {
+        if (!canvas) return;
+        canvas.style.display = 'block';
+        const card = canvas.closest('.chart-card');
+        if (card) {
+            card.querySelectorAll('.chart-empty').forEach(el => el.remove());
+        }
+    },
+
+    renderChartEmptyState(canvas, message) {
+        if (!canvas) return;
+        const card = canvas.closest('.chart-card');
+        if (!card) return;
+        canvas.style.display = 'none';
+        if (!card.querySelector('.chart-empty')) {
+            const note = document.createElement('p');
+            note.className = 'chart-empty text-muted';
+            note.innerHTML = `${message}<br><button class="btn btn-link btn-sm" style="padding-left: 0;" onclick="Activities.openActivityModal()">Log Activity</button>`;
+            card.appendChild(note);
+        }
+    },
+
+    getPalette(extended = false) {
+        return extended ? this.CHART_CONSTANTS.extendedPalette : this.CHART_CONSTANTS.palette;
+    },
+
+    setAnalyticsLoading(prefix, isLoading) {
+        const loader = document.getElementById(`${prefix}AnalyticsLoading`);
+        if (!loader) return;
+        loader.classList.toggle('hidden', !isLoading);
+    },
+
+    // Load accounts view
+    loadAccountsView() {
+        // Check if card interface is active
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardAccountsView();
+            return;
+        }
+        
+        try {
+            const accounts = DataManager.getAccounts();
+            const container = document.getElementById('accountsContent');
+            if (!container) {
+                console.error('accountsContent container not found');
+                return;
+            }
+
+            if (accounts.length === 0) {
+                container.innerHTML = UI.emptyState('No accounts found');
+                return;
+            }
+
+            let html = '';
+            accounts.forEach(account => {
+                const projectCount = account.projects?.length || 0;
+                const activityCount = this.getAccountActivityCount(account.id);
+                html += `
+                    <div class="card">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>${account.name}</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>
+                                <button class="btn btn-info btn-sm" onclick="App.showMergeAccountModal('${account.id}')" title="Merge Account">🔀</button>
+                                <button class="btn btn-danger btn-sm" onclick="App.showDeleteAccountModal('${account.id}')" title="Delete Account">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Industry:</strong> ${account.industry || 'N/A'}</p>
+                            <p><strong>Sales Rep:</strong> ${account.salesRep || 'N/A'}</p>
+                            <p><strong>Projects:</strong> ${projectCount}</p>
+                            <p><strong>Activities:</strong> ${activityCount}</p>
+                        </div>
+                        ${this.buildAccountProjectsMarkup(account, 'classic')}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading accounts view:', error);
+            const container = document.getElementById('accountsContent');
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading accounts');
+            }
+        }
+    },
+
+    // Search accounts
+    searchAccounts() {
+        const query = document.getElementById('accountSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('#accountsContent .card');
+        
+        cards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            card.style.display = text.includes(query) ? '' : 'none';
+        });
+    },
+    
+    // Get activity count for account
+    getAccountActivityCount(accountId) {
+        const activities = DataManager.getAllActivities();
+        return activities.filter(a => a.accountId === accountId).length;
+    },
+    
+    buildAccountProjectsMarkup(account, variant = 'classic') {
+        const projects = Array.isArray(account.projects) ? account.projects : [];
+        if (!projects.length) return '';
+
+        const wrapperClass = variant === 'card' ? 'account-projects account-projects-card' : 'account-projects';
+        const rows = projects.map(project => {
+            const status = project.status ? project.status.charAt(0).toUpperCase() + project.status.slice(1) : 'Active';
+            const sfdcMarkup = project.sfdcLink
+                ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>`
+                : '<span class="text-muted">Not set</span>';
+            return `
+                <div class="account-project-row">
+                    <div class="account-project-info">
+                        <div class="account-project-name">${project.name}</div>
+                        <div class="account-project-meta">
+                            <span class="account-project-status">${status}</span>
+                            <span>SFDC: ${sfdcMarkup}</span>
+                        </div>
+                    </div>
+                    <div class="account-project-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.promptProjectSfdcLink('${account.id}', '${project.id}')">Update SFDC</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="${wrapperClass}">
+                <h4 class="account-projects-title">Projects</h4>
+                ${rows}
+            </div>
+        `;
+    },
+
+    // Edit account
+    editAccount(accountId) {
+        const account = DataManager.getAccountById(accountId);
+        if (!account) {
+            UI.showNotification('Account not found', 'error');
+            return;
+        }
+        
+        const name = prompt('Enter new account name:', account.name);
+        if (!name || name.trim() === '') return;
+        
+        const industry = prompt('Enter industry:', account.industry || '');
+        if (industry === null) return;
+        
+        // Get sales rep
+        const salesReps = DataManager.getGlobalSalesReps();
+        const currentSalesRep = salesReps.find(r => r.name === account.salesRep);
+        let salesRepEmail = currentSalesRep ? currentSalesRep.email : '';
+        
+        if (salesReps.length > 0) {
+            const salesRepOptions = salesReps.map(r => `${r.name} (${r.email})`).join('\n');
+            const selectedIndex = prompt(`Select sales rep (enter number):\n${salesReps.map((r, i) => `${i + 1}. ${r.name} (${r.email})`).join('\n')}\n0. None`);
+            if (selectedIndex !== null) {
+                const index = parseInt(selectedIndex) - 1;
+                if (index >= 0 && index < salesReps.length) {
+                    salesRepEmail = salesReps[index].email;
+                } else if (selectedIndex === '0') {
+                    salesRepEmail = '';
+                }
+            }
+        }
+        
+        const selectedSalesRep = salesReps.find(r => r.email === salesRepEmail);
+        const salesRepName = selectedSalesRep ? selectedSalesRep.name : '';
+        
+        // Update account
+        const accounts = DataManager.getAccounts();
+        const accountIndex = accounts.findIndex(a => a.id === accountId);
+        if (accountIndex !== -1) {
+            accounts[accountIndex].name = name.trim();
+            accounts[accountIndex].industry = industry.trim();
+            accounts[accountIndex].salesRep = salesRepName;
+            accounts[accountIndex].updatedAt = new Date().toISOString();
+            DataManager.saveAccounts(accounts);
+            
+            UI.showNotification('Account updated successfully', 'success');
+            this.loadAccountsView();
+        }
+    },
+    
+    // Show merge account modal
+    showMergeAccountModal(accountId) {
+        const account = DataManager.getAccountById(accountId);
+        if (!account) {
+            UI.showNotification('Account not found', 'error');
+            return;
+        }
+        
+        const accounts = DataManager.getAccounts().filter(a => a.id !== accountId);
+        if (accounts.length === 0) {
+            UI.showNotification('No other accounts to merge with', 'error');
+            return;
+        }
+        
+        const options = accounts.map((a, i) => `${i + 1}. ${a.name} (${a.industry || 'N/A'})`).join('\n');
+        const selected = prompt(`Select account to merge "${account.name}" into:\n${options}\n\nEnter number or cancel:`);
+        if (!selected) return;
+        
+        const index = parseInt(selected) - 1;
+        if (index < 0 || index >= accounts.length) {
+            UI.showNotification('Invalid selection', 'error');
+            return;
+        }
+        
+        const targetAccount = accounts[index];
+        this.mergeAccounts(accountId, targetAccount.id);
+    },
+    
+    // Merge accounts
+    mergeAccounts(sourceAccountId, targetAccountId) {
+        const sourceAccount = DataManager.getAccountById(sourceAccountId);
+        const targetAccount = DataManager.getAccountById(targetAccountId);
+        
+        if (!sourceAccount || !targetAccount) {
+            UI.showNotification('One or both accounts not found', 'error');
+            return;
+        }
+        
+        // Check for conflicts
+        const conflicts = [];
+        if (sourceAccount.salesRep !== targetAccount.salesRep) {
+            conflicts.push({
+                field: 'Sales Rep',
+                source: sourceAccount.salesRep || 'None',
+                target: targetAccount.salesRep || 'None'
+            });
+        }
+        if (sourceAccount.industry !== targetAccount.industry) {
+            conflicts.push({
+                field: 'Industry',
+                source: sourceAccount.industry || 'None',
+                target: targetAccount.industry || 'None'
+            });
+        }
+        
+        // Show conflicts and get user choices
+        let finalSalesRep = targetAccount.salesRep;
+        let finalIndustry = targetAccount.industry;
+        
+        if (conflicts.length > 0) {
+            let conflictMsg = 'Conflicts detected:\n\n';
+            conflicts.forEach(c => {
+                conflictMsg += `${c.field}:\n  Source: ${c.source}\n  Target: ${c.target}\n\n`;
+            });
+            conflictMsg += 'Enter "1" to use Source values, "2" to use Target values, or "3" to cancel:';
+            
+            const choice = prompt(conflictMsg);
+            if (choice === '3' || choice === null) return;
+            
+            if (choice === '1') {
+                finalSalesRep = sourceAccount.salesRep;
+                finalIndustry = sourceAccount.industry;
+            }
+        }
+        
+        // Merge projects
+        const mergedProjects = [...(targetAccount.projects || [])];
+        (sourceAccount.projects || []).forEach(project => {
+            // Check for duplicate project names
+            const existing = mergedProjects.find(p => p.name === project.name);
+            if (!existing) {
+                mergedProjects.push(project);
+            } else {
+                // Merge project activities
+                if (project.activities) {
+                    if (!existing.activities) existing.activities = [];
+                    existing.activities.push(...project.activities);
+                }
+            }
+        });
+        
+        // Update target account
+        const accounts = DataManager.getAccounts();
+        const targetIndex = accounts.findIndex(a => a.id === targetAccountId);
+        if (targetIndex !== -1) {
+            accounts[targetIndex].salesRep = finalSalesRep;
+            accounts[targetIndex].industry = finalIndustry;
+            accounts[targetIndex].projects = mergedProjects;
+            accounts[targetIndex].updatedAt = new Date().toISOString();
+            
+            // Update all activities to point to target account
+            const activities = DataManager.getAllActivities();
+            activities.forEach(activity => {
+                if (activity.accountId === sourceAccountId) {
+                    activity.accountId = targetAccountId;
+                    activity.accountName = targetAccount.name;
+                }
+            });
+            DataManager.saveActivities(activities);
+            
+            // Delete source account
+            DataManager.deleteAccount(sourceAccountId);
+            
+            DataManager.saveAccounts(accounts);
+            
+            UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${targetAccount.name}"`, 'success');
+            this.loadAccountsView();
+        }
+    },
+    
+    // Show delete account modal
+    showDeleteAccountModal(accountId) {
+        const account = DataManager.getAccountById(accountId);
+        if (!account) {
+            UI.showNotification('Account not found', 'error');
+            return;
+        }
+        
+        const projectCount = account.projects?.length || 0;
+        const activityCount = this.getAccountActivityCount(accountId);
+        
+        let message = `Are you sure you want to delete "${account.name}"?\n\n`;
+        message += `This will delete:\n`;
+        message += `- ${projectCount} project(s)\n`;
+        message += `- ${activityCount} activity/activities\n\n`;
+        message += `This action cannot be undone!\n\n`;
+        message += `Enter "DELETE" to confirm:`;
+        
+        const confirmation = prompt(message);
+        if (confirmation !== 'DELETE') {
+            return;
+        }
+        
+        // Check for activities with different sales reps
+        const activities = DataManager.getAllActivities().filter(a => a.accountId === accountId);
+        const uniqueSalesReps = [...new Set(activities.map(a => a.salesRep).filter(Boolean))];
+        
+        if (uniqueSalesReps.length > 1) {
+            const salesRepMsg = `Warning: Activities have different sales reps:\n${uniqueSalesReps.join(', ')}\n\n`;
+            const salesRepMsg2 = `Do you want to reassign activities to another account before deletion?\n\n`;
+            const salesRepMsg3 = `Enter account name to reassign, or "DELETE" to proceed with deletion:`;
+            const reassign = prompt(salesRepMsg + salesRepMsg2 + salesRepMsg3);
+            
+            if (reassign && reassign !== 'DELETE') {
+                const targetAccount = DataManager.getAccounts().find(a => a.name.toLowerCase() === reassign.toLowerCase());
+                if (targetAccount) {
+                    // Reassign activities
+                    activities.forEach(activity => {
+                        activity.accountId = targetAccount.id;
+                        activity.accountName = targetAccount.name;
+                    });
+                    DataManager.saveActivities(activities);
+                    UI.showNotification(`Activities reassigned to "${targetAccount.name}"`, 'success');
+                } else {
+                    UI.showNotification('Account not found. Deletion cancelled.', 'error');
+                    return;
+                }
+            }
+        }
+        
+        // Delete account (this will also delete projects and activities)
+        DataManager.deleteAccount(accountId);
+        
+        UI.showNotification('Account deleted successfully', 'success');
+        this.loadAccountsView();
+    },
+
+    // Load settings view
+    // Switch report tabs
+    switchReportTab(tab) {
+        // If card interface, navigate to reports view first
+        if (InterfaceManager.getCurrentInterface() === 'card' && this.currentView !== 'reports') {
+            this.navigateToCardView('reports');
+            setTimeout(() => this.switchReportTab(tab), 200);
+            return;
+        }
+        const reportsView = document.getElementById('reportsView');
+        if (!reportsView) return;
+        const analyticsOnly = typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly();
+
+        const tabContents = reportsView.querySelectorAll('.tab-content');
+        const tabButtons = reportsView.querySelectorAll('.tab-btn');
+        tabContents.forEach(content => content.classList.add('hidden'));
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+
+        const normalizedTab = analyticsOnly ? 'reports' : (tab === 'management' ? 'management' : 'reports');
+
+        tabButtons.forEach(btn => {
+            const isManagement = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('management');
+            if (analyticsOnly && isManagement) {
+                btn.classList.add('hidden');
+            } else {
+                btn.classList.remove('hidden');
+            }
+        });
+
+        if (normalizedTab === 'reports') {
+            const content = document.getElementById('reportReportsTab');
+            const btn = reportsView.querySelector('.tab-btn[onclick*="reports"]');
+            if (content) content.classList.remove('hidden');
+            if (btn) btn.classList.add('active');
+            this.loadReports();
+        } else {
+            const content = document.getElementById('reportManagementTab');
+            const btn = reportsView.querySelector('.tab-btn[onclick*="management"]');
+            if (content) content.classList.remove('hidden');
+            if (btn) btn.classList.add('active');
+            this.loadActivityManagement();
+        }
+    },
+
+    // Load activity management
+    loadActivityManagement() {
+        try {
+            const activities = DataManager.getAllActivities();
+            
+            // Populate filters
+            this.populateReportFilters(activities);
+            
+            // Filter and display
+            this.filterReportActivities(activities);
+        } catch (error) {
+            console.error('Error loading activity management:', error);
+            const container = document.getElementById('reportManagementContent');
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading activity management');
+            }
+        }
+    },
+
+    // Populate report filters
+    populateReportFilters(activities) {
+        const users = DataManager.getUsers();
+        const regions = DataManager.getRegions();
+        
+        // User filter
+        const userFilter = document.getElementById('reportUserFilter');
+        if (userFilter) {
+            let html = '<option value="">All Users</option>';
+            users.forEach(user => {
+                html += `<option value="${user.id}">${user.username}</option>`;
+            });
+            userFilter.innerHTML = html;
+        }
+        
+        // Region filter
+        const regionFilter = document.getElementById('reportRegionFilter');
+        if (regionFilter) {
+            let html = '<option value="">All Regions</option>';
+            regions.forEach(region => {
+                html += `<option value="${region}">${region}</option>`;
+            });
+            regionFilter.innerHTML = html;
+        }
+        
+        // Activity type filter
+        const activityFilter = document.getElementById('reportActivityTypeFilter');
+        if (activityFilter) {
+            const types = [...new Set(activities.map(a => a.type))];
+            let html = '<option value="">All Activity Types</option>';
+            types.forEach(type => {
+                html += `<option value="${type}">${UI.getActivityTypeLabel(type)}</option>`;
+            });
+            activityFilter.innerHTML = html;
+        }
+    },
+
+    // Filter report activities
+    filterReportActivities(activities = null) {
+        if (!activities) {
+            activities = DataManager.getAllActivities();
+        }
+        
+        const userId = document.getElementById('reportUserFilter')?.value;
+        const region = document.getElementById('reportRegionFilter')?.value;
+        const activityType = document.getElementById('reportActivityTypeFilter')?.value;
+        
+        let filtered = activities;
+        
+        if (userId) {
+            filtered = filtered.filter(a => a.userId === userId);
+        }
+        
+        if (region) {
+            filtered = filtered.filter(a => a.region === region || a.salesRepRegion === region);
+        }
+        
+        if (activityType) {
+            filtered = filtered.filter(a => a.type === activityType);
+        }
+        
+        // Display filtered activities
+        const container = document.getElementById('reportManagementContent');
+        if (!container) return;
+        
+        if (filtered.length === 0) {
+            container.innerHTML = UI.emptyState('No activities found');
+            return;
+        }
+        
+        // Group by month
+        const activitiesByMonth = {};
+        filtered.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+        
+        let html = '';
+        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+            html += `
+                <div class="card">
+                    <div class="card-header">
+                        <h3>${DataManager.formatMonth(month)}</h3>
+                    </div>
+                    <div class="card-body">
+            `;
+            
+            activitiesByMonth[month].forEach(activity => {
+                if (activity.isInternal) {
+                    // Internal activities: Simple format "Internal - Activity Name"
+                    const activityName = activity.activityName || UI.getActivityTypeLabel(activity.type);
+                    html += `
+                        <div class="activity-item">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <strong>Internal - ${activityName}</strong>
+                                </div>
+                                <div>
+                                    ${activity.userId === Auth.getCurrentUser()?.id ? `
+                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}')">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}')">Delete</button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // External activities: Full format
+                    html += `
+                        <div class="activity-item">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                                        ${activity.accountName || ''} ${activity.projectName ? '→ ' + activity.projectName : ''}
+                                    </div>
+                                    <strong>${UI.getActivityTypeLabel(activity.type)}</strong>
+                                    <span class="activity-badge customer">Customer</span>
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                                        ${UI.formatDate(activity.date || activity.createdAt)} • ${activity.userName || 'Unknown'} • ${UI.getActivitySummary(activity) || 'No details'}
+                                    </div>
+                                </div>
+                                <div>
+                                    ${activity.userId === Auth.getCurrentUser()?.id ? `
+                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}')">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}')">Delete</button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    },
+
+    renderActivitiesList(containerId = 'activitiesContent') {
+        try {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error('Activities container not found:', containerId);
+                return;
+            }
+
+            const allActivities = DataManager.getAllActivities();
+            if (containerId === 'activitiesContent') {
+                this.populateActivityFilterControls();
+            }
+            const applyFilters = containerId === 'activitiesContent';
+            const activities = applyFilters ? this.applyActivityFilters(allActivities) : allActivities;
+
+        let duplicatesBanner = '';
+        if (applyFilters) {
+            const existingDuplicates = this.getExistingDuplicateActivities(allActivities);
+            const importDuplicates = this.pendingDuplicateAlerts || [];
+            const combinedDuplicates = [...existingDuplicates, ...importDuplicates];
+            if (combinedDuplicates.length) {
+                const displayItems = combinedDuplicates.slice(0, 5).map(entry => {
+                    const dateText = entry.date ? UI.formatDate(entry.date) : 'Unknown date';
+                    const typeLabel = entry.activityType ? UI.getActivityTypeLabel(entry.activityType) : 'Activity';
+                    const sourceLabel = entry.source === 'import' ? 'Import' : 'Existing';
+                    return `
+                        <li>
+                            <span class="duplicate-source">${sourceLabel}</span>
+                            <strong>${entry.accountName}</strong> → ${entry.projectName}
+                            <span class="text-muted">(${typeLabel} on ${dateText})</span>
+                            <span class="duplicate-count">×${entry.count}</span>
+                        </li>
+                    `;
+                }).join('');
+                duplicatesBanner = `
+                    <div class="duplicate-banner">
+                        <div class="duplicate-banner-header">
+                            <strong>${combinedDuplicates.length} potential duplicate activity group${combinedDuplicates.length === 1 ? '' : 's'} detected</strong>
+                            <span class="text-muted">Resolve duplicates to maintain accurate stats.</span>
+                        </div>
+                        <ul class="duplicate-list">
+                            ${displayItems}
+                        </ul>
+                        <p class="duplicate-note text-muted">Duplicates are identified by matching account, project, date, and activity type.</p>
+                    </div>
+                `;
+            }
+        }
+
+            if (activities.length === 0) {
+                container.innerHTML = UI.emptyState(applyFilters ? 'No activities match the current filters.' : 'No activities found');
+                return;
+            }
+
+            const activitiesByMonth = {};
+            activities.forEach(activity => {
+                const date = activity.date || activity.createdAt;
+                const month = date ? date.substring(0, 7) : 'Unknown';
+                if (!activitiesByMonth[month]) {
+                    activitiesByMonth[month] = [];
+                }
+                activitiesByMonth[month].push(activity);
+            });
+
+            let html = duplicatesBanner || '';
+            Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+                html += `
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>${DataManager.formatMonth(month)}</h3>
+                        </div>
+                        <div class="card-body">
+                `;
+
+                activitiesByMonth[month].forEach(activity => {
+                    const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                    const activitySummary = activity.isInternal
+                        ? (activity.activityName || UI.getActivityTypeLabel(activity.type) || 'Internal Activity')
+                        : UI.getActivitySummary(activity) || 'No details provided';
+
+                    html += `
+                        <div class="activity-item ${activity.isInternal ? 'activity-internal' : 'activity-external'}">
+                            <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <strong>${UI.getActivityTypeLabel(activity.type)}</strong>
+                                        <span class="activity-badge ${activity.isInternal ? 'internal' : 'customer'}">
+                                            ${activity.isInternal ? 'Internal' : 'Customer'}
+                                        </span>
+                                    </div>
+                                    ${!activity.isInternal ? `
+                                        <div class="text-muted" style="margin-top: 0.5rem; font-size: 0.875rem;">
+                                            ${activity.accountName || 'N/A'} ${activity.projectName ? '→ ' + activity.projectName : ''}
+                                        </div>
+                                    ` : ''}
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                                        ${UI.formatDate(activity.date || activity.createdAt)} • ${activity.userName || 'Unknown'}
+                                    </div>
+                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
+                                        ${activitySummary}
+                                    </div>
+                                </div>
+                                ${isOwner ? `
+                                    <div class="activity-actions">
+                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}', ${activity.isInternal})">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}', ${activity.isInternal})">Delete</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading activities view:', error);
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = UI.emptyState('Error loading activities');
+            }
+        }
+    },
+
+    // Load user regions (legacy - kept for compatibility)
+    loadUserRegions() {
+        try {
+            const currentUser = Auth.getCurrentUser();
+            if (!currentUser) {
+                console.error('No current user for loadUserRegions');
+                return;
+            }
+
+            const allRegions = DataManager.getRegions();
+            const userRegions = currentUser.regions || [];
+            const container = document.getElementById('userRegionsList');
+            if (!container) {
+                console.error('userRegionsList container not found');
+                return;
+            }
+
+            console.log('Loading regions. All:', allRegions.length, 'User:', userRegions.length);
+
+            if (allRegions.length === 0) {
+                container.innerHTML = '<p class="text-muted">No regions available</p>';
+                return;
+            }
+
+            let html = '';
+            allRegions.forEach(region => {
+                const checked = userRegions.includes(region) ? 'checked' : '';
+                html += `
+                    <div class="settings-item">
+                        <input type="checkbox" id="region_${region}" ${checked} value="${region}">
+                        <label for="region_${region}">${region}</label>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading user regions:', error);
+        }
+    },
+
+    // Save user regions
+    saveUserRegions() {
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return;
+
+        const checkboxes = document.querySelectorAll('#userRegionsList input[type="checkbox"]:checked');
+        const regions = Array.from(checkboxes).map(cb => cb.value);
+
+        DataManager.updateUser(currentUser.id, { regions });
+        Auth.currentUser.regions = regions;
+        UI.showNotification('Regions saved successfully', 'success');
+    },
+
+    // Load user sales reps
+    loadUserSalesReps() {
+        try {
+            const currentUser = Auth.getCurrentUser();
+            if (!currentUser) {
+                console.error('No current user for loadUserSalesReps');
+                return;
+            }
+
+            const salesReps = currentUser.salesReps || [];
+            const container = document.getElementById('salesRepsList');
+            if (!container) {
+                console.error('salesRepsList container not found');
+                return;
+            }
+
+            console.log('Loading sales reps:', salesReps.length);
+
+            if (salesReps.length === 0) {
+                container.innerHTML = '<p class="text-muted">No sales reps added</p>';
+                return;
+            }
+
+            let html = '';
+            salesReps.forEach(rep => {
+                html += `
+                    <div class="settings-item">
+                        <span>${rep}</span>
+                        <button class="btn btn-sm btn-danger" onclick="App.removeSalesRep('${rep}')">Remove</button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Error loading user sales reps:', error);
+        }
+    },
+
+    // Add sales rep
+    addSalesRep() {
+        const input = document.getElementById('newSalesRep');
+        const rep = input.value.trim();
+        
+        if (!rep) {
+            UI.showNotification('Please enter a sales rep name', 'error');
+            return;
+        }
+
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return;
+
+        const salesReps = currentUser.salesReps || [];
+        if (salesReps.includes(rep)) {
+            UI.showNotification('Sales rep already exists', 'error');
+            return;
+        }
+
+        salesReps.push(rep);
+        DataManager.updateUser(currentUser.id, { salesReps });
+        Auth.currentUser.salesReps = salesReps;
+        
+        input.value = '';
+        UI.showNotification('Sales rep added successfully', 'success');
+        this.loadUserSalesReps();
+    },
+
+    // Remove sales rep
+    removeSalesRep(rep) {
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return;
+
+        const salesReps = (currentUser.salesReps || []).filter(r => r !== rep);
+        DataManager.updateUser(currentUser.id, { salesReps });
+        Auth.currentUser.salesReps = salesReps;
+        
+        UI.showNotification('Sales rep removed successfully', 'success');
+        this.loadUserSalesReps();
+    },
+
+    // Open win/loss modal
+    openWinLossModal(accountId, projectId) {
+        this.createWinLossModal();
+        
+        const accounts = DataManager.getAccounts();
+        const account = accounts.find(a => a.id === accountId);
+        const project = account?.projects?.find(p => p.id === projectId);
+        
+        if (!project) {
+            UI.showNotification('Project not found', 'error');
+            return;
+        }
+        
+        const accountSalesRep = DataManager.getGlobalSalesRepByName(account?.salesRep || '');
+        const existingWinLoss = project.winLossData || {};
+        const defaultCurrency = existingWinLoss.currency || accountSalesRep?.currency || 'INR';
+        const defaultFx = existingWinLoss.fxToInr !== undefined && existingWinLoss.fxToInr !== null ? Number(existingWinLoss.fxToInr) : (accountSalesRep && accountSalesRep.fxToInr ? Number(accountSalesRep.fxToInr) : null);
+
+        document.getElementById('winLossAccountId').value = accountId;
+        document.getElementById('winLossProjectId').value = projectId;
+        document.getElementById('winLossStatus').value = project.status || 'active';
+        const sfdcInput = document.getElementById('winLossSfdcLink');
+        const reasonInput = document.getElementById('winLossReason');
+        const competitorInput = document.getElementById('competitorAnalysis');
+        const mrrInput = document.getElementById('winLossMRR');
+        const accountTypeSelect = document.getElementById('accountType');
+        const otdInput = document.getElementById('winLossOtd');
+        const currencySelect = document.getElementById('winLossCurrency');
+        
+        if (project.winLossData) {
+            if (reasonInput) reasonInput.value = project.winLossData.reason || '';
+            if (competitorInput) competitorInput.value = project.winLossData.competitors || '';
+            if (mrrInput) mrrInput.value = project.winLossData.mrr ?? '';
+            if (accountTypeSelect) accountTypeSelect.value = project.winLossData.accountType || 'existing';
+            if (otdInput) otdInput.value = project.winLossData.otd || '';
+            if (sfdcInput) {
+                sfdcInput.value = project.sfdcLink || '';
+            }
+        } else {
+            if (reasonInput) reasonInput.value = '';
+            if (competitorInput) competitorInput.value = '';
+            if (mrrInput) mrrInput.value = '';
+            if (accountTypeSelect) accountTypeSelect.value = 'existing';
+            if (otdInput) otdInput.value = '';
+            if (sfdcInput) sfdcInput.value = project.sfdcLink || '';
+        }
+
+        if (mrrInput) {
+            mrrInput.dataset.currency = defaultCurrency || 'INR';
+            if (!Number.isNaN(defaultFx) && defaultFx) {
+                mrrInput.dataset.fx = String(defaultFx);
+            } else {
+                delete mrrInput.dataset.fx;
+            }
+            if (!this.winLossMrrInputHandler) {
+                this.winLossMrrInputHandler = () => this.updateWinLossMrrHelper();
+            }
+            mrrInput.removeEventListener('input', this.winLossMrrInputHandler);
+            mrrInput.addEventListener('input', this.winLossMrrInputHandler);
+        }
+        if (currencySelect) {
+            currencySelect.value = defaultCurrency || 'INR';
+            this.handleWinLossCurrencyChange(currencySelect.value);
+        }
+
+        this.toggleWinLossFields();
+        this.updateWinLossMrrHelper();
+        
+        UI.showModal('winLossModal');
+    },
+    
+    // Create Win/Loss modal
+    createWinLossModal() {
+        const container = document.getElementById('modalsContainer');
+        const modalId = 'winLossModal';
+        
+        if (document.getElementById(modalId)) return;
+        
+        const modalHTML = `
+            <div id="${modalId}" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Update Project Status</h2>
+                        <button class="modal-close" onclick="UI.hideModal('${modalId}')">&times;</button>
+                    </div>
+                    <form id="winLossForm" onsubmit="App.saveWinLoss(event)">
+                        <input type="hidden" id="winLossProjectId">
+                        <input type="hidden" id="winLossAccountId">
+                        <div class="form-group">
+                            <label class="form-label required">Project Status</label>
+                            <select class="form-control" id="winLossStatus" required onchange="App.toggleWinLossFields()">
+                                <option value="">Select Status</option>
+                                <option value="active">Active</option>
+                                <option value="won">Won</option>
+                                <option value="lost">Lost</option>
+                            </select>
+                        </div>
+                        <div id="winLossFields" class="d-none">
+                            <div class="form-group">
+                                <label class="form-label required">SFDC Link</label>
+                                <input type="url" class="form-control" id="winLossSfdcLink" placeholder="https://..." data-winloss-required="true" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Reason for Win/Loss</label>
+                                <textarea class="form-control" id="winLossReason" rows="3" placeholder="Explain the reason..." data-winloss-required="true" required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Competitor Analysis</label>
+                                <input type="text" class="form-control" id="competitorAnalysis" placeholder="Which competitors were involved?">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Currency</label>
+                                <select class="form-control" id="winLossCurrency" data-winloss-required="true" required onchange="App.handleWinLossCurrencyChange(this.value)">
+                                    <option value="INR">INR (₹)</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                    <option value="GBP">GBP (£)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required" id="winLossMrrLabel">MRR (Monthly Recurring Revenue)</label>
+                                <input type="number" class="form-control" id="winLossMRR" min="0" step="100" placeholder="Enter amount" data-winloss-required="true" required>
+                                <small class="text-muted" id="winLossMrrHelper"></small>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Account Type</label>
+                                <select class="form-control" id="accountType">
+                                    <option value="existing">Existing Account</option>
+                                    <option value="new">New Account</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">OTD / Delivery Notes</label>
+                                <textarea class="form-control" id="winLossOtd" rows="2" placeholder="Implementation commitments, next steps, delivery dates, etc."></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" onclick="UI.hideModal('${modalId}')">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Status</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', modalHTML);
+    },
+    
+    // Toggle Win/Loss fields
+    toggleWinLossFields() {
+        const status = document.getElementById('winLossStatus').value;
+        const fields = document.getElementById('winLossFields');
+        if (!fields) return;
+
+        const requiresDetail = status === 'won' || status === 'lost';
+        const requiredInputs = fields.querySelectorAll('[data-winloss-required]');
+
+        if (requiresDetail) {
+            fields.classList.remove('d-none');
+            requiredInputs.forEach(input => input.setAttribute('required', 'required'));
+        } else {
+            fields.classList.add('d-none');
+            requiredInputs.forEach(input => input.removeAttribute('required'));
+        }
+        this.updateWinLossMrrHelper();
+    },
+    
+    // Save Win/Loss
+    saveWinLoss(event) {
+        event.preventDefault();
+        
+        const accountId = document.getElementById('winLossAccountId').value;
+        const projectId = document.getElementById('winLossProjectId').value;
+        const status = document.getElementById('winLossStatus').value;
+        const sfdcInput = document.getElementById('winLossSfdcLink');
+        const sfdcLinkValue = sfdcInput ? sfdcInput.value.trim() : '';
+        const mrrInput = document.getElementById('winLossMRR');
+        const otdInput = document.getElementById('winLossOtd');
+        
+        const accounts = DataManager.getAccounts();
+        const account = accounts.find(a => a.id === accountId);
+        const project = account?.projects?.find(p => p.id === projectId);
+        
+        if (!project) {
+            UI.showNotification('Project not found', 'error');
+            return;
+        }
+        
+        project.status = status;
+        
+        if (status === 'won' || status === 'lost') {
+            if (!sfdcLinkValue) {
+                UI.showNotification('Please provide an SFDC link before completing win/loss updates.', 'error');
+                return;
+            }
+            if (!/^https?:\/\//i.test(sfdcLinkValue)) {
+                UI.showNotification('Enter a valid SFDC link (http/https).', 'error');
+                return;
+            }
+            const mrrRaw = mrrInput ? mrrInput.value.trim() : '';
+            const mrrValue = Number(mrrRaw);
+            if (!Number.isFinite(mrrValue)) {
+                UI.showNotification('Enter a numeric value for MRR.', 'error');
+                return;
+            }
+            const currency = mrrInput?.dataset?.currency || 'INR';
+            const fxValue = parseFloat(mrrInput?.dataset?.fx || '');
+            const fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
+            const mrrRounded = Number(mrrValue.toFixed(2));
+            const mrrInInr = currency === 'INR' ? mrrRounded : (fxToInr ? Number((mrrRounded * fxToInr).toFixed(2)) : null);
+
+            project.sfdcLink = sfdcLinkValue;
+            project.winLossData = {
+                reason: document.getElementById('winLossReason').value,
+                competitors: document.getElementById('competitorAnalysis').value,
+                mrr: mrrRounded,
+                accountType: document.getElementById('accountType').value,
+                currency,
+                fxToInr,
+                mrrInInr,
+                otd: otdInput ? otdInput.value : '',
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            delete project.winLossData;
+            if (sfdcInput && sfdcLinkValue) {
+                if (!/^https?:\/\//i.test(sfdcLinkValue)) {
+                    UI.showNotification('Enter a valid SFDC link (http/https).', 'error');
+                    return;
+                }
+                project.sfdcLink = sfdcLinkValue;
+            }
+        }
+        
+        DataManager.saveAccounts(accounts);
+        
+        UI.hideModal('winLossModal');
+        UI.showNotification('Project status updated!', 'success');
+        this.loadWinLossView();
+    },
+
+    // Edit activity (own activities only)
+    editActivity(activityId, isInternal) {
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return;
+
+        // Find activity
+        let activity;
+        if (isInternal) {
+            const activities = DataManager.getInternalActivities();
+            activity = activities.find(a => a.id === activityId);
+        } else {
+            const activities = DataManager.getActivities();
+            activity = activities.find(a => a.id === activityId);
+        }
+
+        if (!activity) {
+            UI.showNotification('Activity not found', 'error');
+            return;
+        }
+
+        // Check if user owns this activity
+        if (activity.userId !== currentUser.id) {
+            UI.showNotification('You can only edit your own activities', 'error');
+            return;
+        }
+
+        if (typeof Activities !== 'undefined' && Activities.openActivityModal) {
+            Activities.openActivityModal({
+                mode: 'edit',
+                activity,
+                isInternal: !!isInternal
+            });
+        } else {
+            UI.showNotification('Activity editor not available', 'error');
+        }
+    },
+
+    // Delete activity (own activities only)
+    deleteActivity(activityId, isInternal) {
+        if (!confirm('Are you sure you want to delete this activity?')) return;
+
+        const currentUser = Auth.getCurrentUser();
+        if (!currentUser) return;
+
+        // Find activity
+        let activity;
+        if (isInternal) {
+            const activities = DataManager.getInternalActivities();
+            activity = activities.find(a => a.id === activityId);
+        } else {
+            const activities = DataManager.getActivities();
+            activity = activities.find(a => a.id === activityId);
+        }
+
+        if (!activity) {
+            UI.showNotification('Activity not found', 'error');
+            return;
+        }
+
+        // Check if user owns this activity
+        if (activity.userId !== currentUser.id) {
+            UI.showNotification('You can only delete your own activities', 'error');
+            return;
+        }
+
+        // Delete activity
+        if (isInternal) {
+            DataManager.deleteInternalActivity(activityId);
+        } else {
+            DataManager.deleteActivity(activityId);
+        }
+
+        UI.showNotification('Activity deleted successfully', 'success');
+        this.loadActivitiesView();
+        this.loadDashboard();
+    },
+
+    // Expose functions globally
+    openActivityModal: () => Activities.openActivityModal()
+};
+
+// Make app globally available
+window.app = App;
+
+// Make DataManager available globally for debugging
+window.DataManager = DataManager;
+window.Auth = Auth;
+
+// Override analytics helpers with module-driven implementations
+if (typeof Analytics !== 'undefined') {
+    App.buildAnalyticsMarkup = function (analytics, options) {
+        return Analytics.buildMarkup(analytics, options);
+    };
+
+    App.initAnalyticsCharts = function ({ prefix = 'reports', analytics }) {
+        Analytics.renderCharts({ prefix, analytics });
+    };
+
+    App.destroyAnalyticsCharts = function (prefix) {
+        Analytics.destroyCharts(prefix);
+    };
+}
+
+// Utility function to reset users (for testing)
+window.resetUsers = function() {
+    localStorage.removeItem('users');
+    DataManager.ensureDefaultUsers();
+    console.log('Users reset. Current users:', DataManager.getUsers().map(u => u.username));
+    alert('Users reset! You can now login with:\n- admin / admin123\n- user / user123');
+};
+
+// Initialize on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing app...');
+    // Ensure users exist before initializing
+    DataManager.ensureDefaultUsers();
+    App.init();
+});
+
