@@ -4,19 +4,23 @@ const Admin = {
     featureFlagMetadata: {
         csvImport: {
             label: 'CSV Import',
-            description: 'Allow users to upload activities via CSV templates.'
+            description: 'Allow users to upload activities via CSV templates.',
+            dashboardKey: 'csvImport'
         },
         csvExport: {
             label: 'CSV Export',
-            description: 'Allow analytics CSV exports from the Reports view.'
+            description: 'Allow analytics CSV exports from the Reports view.',
+            dashboardKey: null
         },
         winLoss: {
             label: 'Win/Loss Tracking',
-            description: 'Enable win/loss forms for project closure analysis.'
+            description: 'Enable win/loss forms for project closure analysis.',
+            dashboardKey: 'winLoss'
         },
         adminCsvExport: {
             label: 'Admin Monthly Export',
-            description: 'Allow admins to download monthly analytics CSV snapshots.'
+            description: 'Allow admins to download monthly analytics CSV snapshots.',
+            dashboardKey: null
         }
     },
     currentFeatureFlags: {},
@@ -50,6 +54,10 @@ const Admin = {
         admin: true
     },
     currentDashboardVisibility: {},
+    controlDefinitions: [],
+    controlDraft: {},
+    controlDirty: false,
+    controlsLoading: false,
 
     getAdminHeaders() {
         const headers = {};
@@ -69,20 +77,16 @@ const Admin = {
     // Load admin panel
     loadAdminPanel() {
         try {
-            console.log('Loading admin panel...');
             this.loadUsers();
             this.loadSalesReps();
             this.loadAnalyticsSettings();
             this.loadPOCSandbox();
-            this.loadFeatureFlags();
-            this.loadDashboardVisibility();
+            this.loadControls();
             this.loadLoginLogs();
-            this.loadActivityLogs();
             const monthInput = document.getElementById('adminReportMonth');
             if (monthInput && !monthInput.value) {
                 monthInput.value = new Date().toISOString().substring(0, 7);
             }
-            console.log('Admin panel loaded');
         } catch (error) {
             console.error('Error loading admin panel:', error);
             UI.showNotification('Error loading admin panel', 'error');
@@ -1089,263 +1093,406 @@ const Admin = {
         }
     },
 
-    loadFeatureFlags(force) {
-        const container = document.getElementById('featureToggleList');
+    loadControls(force) {
+        const container = document.getElementById('featureDashboardControls');
         if (!container) return;
 
         if (!force) {
-            container.innerHTML = '<div class="text-muted">Loading feature flags…</div>';
+            container.innerHTML = '<div class="text-muted">Loading controls…</div>';
         }
 
-        fetch('/api/admin/config/feature-flags', {
-            cache: 'no-store',
-            headers: this.getAdminHeaders()
-        })
-            .then(response => {
+        this.controlsLoading = true;
+
+        Promise.all([
+            fetch('/api/admin/config/feature-flags', {
+                cache: 'no-store',
+                headers: this.getAdminHeaders()
+            }).then((response) => {
                 if (!response.ok) {
                     throw new Error(`Failed to load feature flags (${response.status})`);
                 }
                 return response.json();
-            })
-            .then(payload => {
-                this.currentFeatureFlags = payload?.featureFlags || {};
-                const defaults = payload?.defaults || this.featureFlagMetadata;
-                this.renderFeatureToggleList(this.currentFeatureFlags, defaults);
-            })
-            .catch(error => {
-                console.error('Failed to load feature flags:', error);
-                this.renderFeatureToggleList(
-                    this.currentFeatureFlags,
-                    this.featureFlagMetadata,
-                    {
-                        disabled: true,
-                        note: 'Feature flag management requires the backend service. Displayed values are read-only while offline.'
-                    }
-                );
-            });
-    },
-
-    renderFeatureToggleList(flags = {}, defaults = {}, options = {}) {
-        const container = document.getElementById('featureToggleList');
-        if (!container) return;
-
-        const descriptors = this.featureFlagMetadata;
-        const keys = Object.keys(descriptors);
-
-        if (!keys.length) {
-            container.innerHTML = '<div class="text-muted">No feature toggles available.</div>';
-            return;
-        }
-
-        const html = keys.map(flag => {
-            const meta = descriptors[flag] || {};
-            const enabled = flags[flag] !== false;
-            const disabledAttr = options.disabled ? 'disabled="true" aria-disabled="true"' : '';
-            return `
-                <label class="feature-toggle-item">
-                    <div class="feature-toggle-header">
-                        <input type="checkbox" class="feature-toggle-checkbox" data-flag="${flag}" ${enabled ? 'checked' : ''} ${disabledAttr}>
-                        <span class="feature-toggle-title">${meta.label || flag}</span>
-                    </div>
-                    <div class="feature-toggle-description">${meta.description || ''}</div>
-                </label>
-            `;
-        }).join('');
-
-        container.innerHTML = html;
-
-        if (options.note) {
-            container.insertAdjacentHTML(
-                'beforeend',
-                `<div class="text-muted" style="font-size: 0.85rem;">${options.note}</div>`
-            );
-        }
-
-        if (!options.disabled) {
-            container.querySelectorAll('.feature-toggle-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', (event) => this.handleFeatureToggleChange(event));
-            });
-        }
-    },
-
-    handleFeatureToggleChange(event) {
-        const checkbox = event.currentTarget;
-        const flag = checkbox?.dataset?.flag;
-        if (!flag) return;
-
-        const enabled = checkbox.checked;
-        this.updateFeatureFlag(flag, enabled, checkbox);
-    },
-
-    updateFeatureFlag(flag, enabled, checkbox) {
-        if (checkbox) {
-            checkbox.setAttribute('disabled', 'true');
-        }
-
-        fetch('/api/admin/config/feature-flags', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-            body: JSON.stringify({ featureFlags: { [flag]: enabled } })
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Update failed (${response.status})`);
-                }
-                return response.json();
-            })
-            .then(payload => {
-                this.currentFeatureFlags = payload?.featureFlags || this.currentFeatureFlags;
-                UI.showNotification(`Feature "${this.featureFlagMetadata[flag]?.label || flag}" ${enabled ? 'enabled' : 'disabled'}.`, 'success');
-                if (typeof App !== 'undefined' && typeof App.refreshAppConfiguration === 'function') {
-                    App.refreshAppConfiguration();
-                }
-                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
-                    Audit.log({
-                        action: 'feature.toggle',
-                        entity: 'featureFlag',
-                        entityId: flag,
-                        detail: { enabled }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Failed to update feature flag:', error);
-                UI.showNotification('Unable to update feature flag. Please try again.', 'error');
-                if (checkbox) {
-                    checkbox.checked = !enabled;
-                }
-            })
-            .finally(() => {
-                if (checkbox) {
-                    checkbox.removeAttribute('disabled');
-                }
-            });
-    },
-
-    loadDashboardVisibility(force) {
-        const container = document.getElementById('dashboardVisibilityList');
-        if (!container) return;
-
-        if (!force) {
-            container.innerHTML = '<div class="text-muted">Loading dashboard controls…</div>';
-        }
-
-        fetch('/api/admin/config/dashboard-visibility', {
-            cache: 'no-store',
-            headers: this.getAdminHeaders()
-        })
-            .then(response => {
+            }),
+            fetch('/api/admin/config/dashboard-visibility', {
+                cache: 'no-store',
+                headers: this.getAdminHeaders()
+            }).then((response) => {
                 if (!response.ok) {
                     throw new Error(`Failed to load dashboard visibility (${response.status})`);
                 }
                 return response.json();
             })
-            .then(payload => {
+        ])
+            .then(([featurePayload, dashboardPayload]) => {
+                const defaultFeatures = {};
+                Object.keys(this.featureFlagMetadata).forEach((flag) => {
+                    defaultFeatures[flag] = true;
+                });
+                this.currentFeatureFlags = {
+                    ...defaultFeatures,
+                    ...(featurePayload?.featureFlags || {})
+                };
+
                 this.currentDashboardVisibility = {
                     ...this.defaultDashboardVisibility,
-                    ...(payload?.visibility || {})
+                    ...(dashboardPayload?.visibility || {})
                 };
-                this.renderDashboardVisibility(this.currentDashboardVisibility);
+
+                this.controlDefinitions = this.buildControlDefinitions();
+                this.controlDraft = this.buildControlDraft();
+                this.renderControlMatrix();
             })
-            .catch(error => {
-                console.error('Failed to load dashboard visibility:', error);
-                const fallback = Object.keys(this.currentDashboardVisibility || {}).length
-                    ? this.currentDashboardVisibility
-                    : { ...this.defaultDashboardVisibility };
-                this.renderDashboardVisibility(
-                    fallback,
-                    {
-                        disabled: true,
-                        note: 'Dashboard visibility changes require the server. Displayed values are read-only while offline.'
-                    }
-                );
+            .catch((error) => {
+                console.error('Failed to load capability controls:', error);
+                container.innerHTML = `
+                    <div class="text-muted">Unable to load controls. Please try again once the server is reachable.</div>
+                `;
+            })
+            .finally(() => {
+                this.controlsLoading = false;
+                this.updateControlButtons();
             });
     },
 
-    renderDashboardVisibility(visibility = {}, options = {}) {
-        const container = document.getElementById('dashboardVisibilityList');
+    buildControlDefinitions() {
+        const definitions = [];
+
+        Object.keys(this.featureFlagMetadata).forEach((flag) => {
+            const meta = this.featureFlagMetadata[flag] || {};
+            definitions.push({
+                key: flag,
+                label: meta.label || flag,
+                description: meta.description || '',
+                supportsFeature: true,
+                dashboardKey: meta.dashboardKey || null
+            });
+        });
+
+        Object.keys(this.dashboardVisibilityMetadata).forEach((key) => {
+            const alreadyIncluded = definitions.some(
+                (def) => def.dashboardKey === key || def.key === key
+            );
+            if (alreadyIncluded) return;
+
+            const meta = this.dashboardVisibilityMetadata[key] || {};
+            definitions.push({
+                key: key,
+                label: meta.label || key,
+                description: meta.description || '',
+                supportsFeature: false,
+                dashboardKey: key
+            });
+        });
+
+        return definitions;
+    },
+
+    buildControlDraft() {
+        const draft = {};
+        this.controlDefinitions.forEach((def) => {
+            const featureEnabled = def.supportsFeature
+                ? this.currentFeatureFlags[def.key] !== false
+                : false;
+            const dashboardKey = def.dashboardKey;
+            const currentDashboardVisible = dashboardKey
+                ? this.currentDashboardVisibility[dashboardKey] !== false
+                : true;
+
+            draft[def.key] = {
+                feature: def.supportsFeature ? featureEnabled : undefined,
+                dashboard: def.supportsFeature
+                    ? (featureEnabled ? currentDashboardVisible : false)
+                    : currentDashboardVisible
+            };
+        });
+        return draft;
+    },
+
+    renderControlMatrix() {
+        const container = document.getElementById('featureDashboardControls');
         if (!container) return;
 
-        const descriptors = this.dashboardVisibilityMetadata;
-        const keys = Object.keys(descriptors);
-
-        if (!keys.length) {
-            container.innerHTML = '<div class="text-muted">No dashboard controls available.</div>';
+        if (!this.controlDefinitions.length) {
+            container.innerHTML = '<div class="text-muted">No configurable items available.</div>';
             return;
         }
 
-        const html = keys.map((key) => {
-            const meta = descriptors[key] || {};
-            const enabled = visibility?.[key] !== false;
-            const disabledAttr = options.disabled ? 'disabled="true" aria-disabled="true"' : '';
-            return `
-                <label class="feature-toggle-item">
-                    <div class="feature-toggle-header">
-                        <input type="checkbox" class="dashboard-visibility-checkbox" data-dashboard="${key}" ${enabled ? 'checked' : ''} ${disabledAttr}>
-                        <span class="feature-toggle-title">${meta.label || key}</span>
+        const rows = this.controlDefinitions
+            .map((def) => {
+                const state = this.controlDraft[def.key] || {};
+                const featureEnabled = def.supportsFeature ? state.feature !== false : null;
+                const dashboardEnabled = state.dashboard !== false;
+                const dashboardCheckboxDisabled =
+                    def.dashboardKey && def.supportsFeature && !featureEnabled;
+
+                return `
+                    <div class="admin-config-card" data-admin-control="${def.key}">
+                        <div class="admin-config-card-header">
+                            <h3 class="admin-config-card-title">${def.label}</h3>
+                            <span class="admin-config-card-status ${featureEnabled === null ? (dashboardEnabled ? 'status-on' : 'status-off') : featureEnabled ? 'status-on' : 'status-off'}">
+                                ${def.supportsFeature
+                                    ? featureEnabled ? 'Enabled' : 'Disabled'
+                                    : dashboardEnabled ? 'Visible' : 'Hidden'}
+                            </span>
+                        </div>
+                        <div class="admin-config-card-body">
+                            ${def.supportsFeature
+                                ? `<label class="control-toggle">
+                                        <input type="checkbox"
+                                               data-control-type="feature"
+                                               data-control-key="${def.key}"
+                                               ${featureEnabled ? 'checked' : ''}>
+                                        <span>Feature enabled</span>
+                                   </label>`
+                                : ''}
+                            ${def.dashboardKey
+                                ? `<label class="control-toggle">
+                                        <input type="checkbox"
+                                               data-control-type="dashboard"
+                                               data-control-key="${def.key}"
+                                               ${dashboardEnabled ? 'checked' : ''}
+                                               ${dashboardCheckboxDisabled ? 'disabled' : ''}>
+                                        <span>Show in navigation</span>
+                                   </label>`
+                                : ''}
+                            ${def.description
+                                ? `<p class="admin-config-card-description">${def.description}</p>`
+                                : ''}
+                        </div>
                     </div>
-                    <div class="feature-toggle-description">${meta.description || ''}</div>
-                </label>
-            `;
-        }).join('');
+                `;
+            })
+            .join('');
 
-        container.innerHTML = html;
+        container.innerHTML = `
+            <div class="admin-config-grid">
+                ${rows}
+            </div>
+            <div class="admin-config-actions">
+                <div class="admin-config-toolbar">
+                    <button id="controlsSaveBtn" class="btn btn-primary" disabled>Save changes</button>
+                    <button id="controlsResetBtn" class="btn btn-secondary" disabled>Reset</button>
+                </div>
+                <div id="controlsStatusText" class="admin-config-note"></div>
+            </div>
+        `;
 
-        if (options.note) {
-            container.insertAdjacentHTML(
-                'beforeend',
-                `<div class="text-muted" style="font-size: 0.85rem;">${options.note}</div>`
+        container
+            .querySelectorAll('input[data-control-type]')
+            .forEach((input) =>
+                input.addEventListener('change', (event) => this.handleControlToggle(event))
             );
+
+        container.querySelector('#controlsSaveBtn')?.addEventListener('click', () => this.saveControls());
+        container.querySelector('#controlsResetBtn')?.addEventListener('click', () => this.resetControls());
+
+        this.markControlsDirty();
+    },
+
+    handleControlToggle(event) {
+        const input = event.currentTarget;
+        const controlKey = input?.dataset?.controlKey;
+        const controlType = input?.dataset?.controlType;
+        if (!controlKey || !controlType) {
+            return;
         }
 
-        if (!options.disabled) {
-            container.querySelectorAll('.dashboard-visibility-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', (event) => this.handleDashboardVisibilityChange(event));
-            });
+        const definition = this.controlDefinitions.find((def) => def.key === controlKey);
+        if (!definition) {
+            return;
+        }
+
+        const draft = this.controlDraft[controlKey] || { feature: true, dashboard: true };
+        const checked = input.checked;
+
+        if (controlType === 'feature') {
+            draft.feature = checked;
+            if (definition.dashboardKey && !checked) {
+                draft.dashboard = false;
+                const dashboardInput = document.querySelector(
+                    `input[data-control-type="dashboard"][data-control-key="${controlKey}"]`
+                );
+                if (dashboardInput) {
+                    dashboardInput.checked = false;
+                    dashboardInput.setAttribute('disabled', 'true');
+                }
+            } else if (definition.dashboardKey) {
+                const dashboardInput = document.querySelector(
+                    `input[data-control-type="dashboard"][data-control-key="${controlKey}"]`
+                );
+                if (dashboardInput) {
+                    dashboardInput.removeAttribute('disabled');
+                    dashboardInput.checked = draft.dashboard !== false;
+                }
+            }
+        } else if (controlType === 'dashboard') {
+            draft.dashboard = checked;
+        }
+
+        this.controlDraft[controlKey] = draft;
+        this.markControlsDirty();
+    },
+
+    updateControlStatuses() {
+        this.controlDefinitions.forEach((def) => {
+            const card = document.querySelector(`[data-admin-control="${def.key}"]`);
+            if (!card) return;
+            const statusEl = card.querySelector('.admin-config-card-status');
+            if (!statusEl) return;
+
+            const draft = this.controlDraft[def.key] || {};
+            const featureEnabled = def.supportsFeature ? draft.feature !== false : null;
+            const dashboardEnabled = draft.dashboard !== false;
+
+            if (def.supportsFeature) {
+                statusEl.textContent = featureEnabled ? 'Enabled' : 'Disabled';
+                statusEl.classList.toggle('status-on', !!featureEnabled);
+                statusEl.classList.toggle('status-off', !featureEnabled);
+            } else {
+                statusEl.textContent = dashboardEnabled ? 'Visible' : 'Hidden';
+                statusEl.classList.toggle('status-on', dashboardEnabled);
+                statusEl.classList.toggle('status-off', !dashboardEnabled);
+            }
+        });
+    },
+
+    markControlsDirty() {
+        let dirty = false;
+
+        this.controlDefinitions.forEach((def) => {
+            const draft = this.controlDraft[def.key] || {};
+            const currentFeature = def.supportsFeature
+                ? this.currentFeatureFlags[def.key] !== false
+                : null;
+            const currentDashboardVisible = def.dashboardKey
+                ? this.currentDashboardVisibility[def.dashboardKey] !== false
+                : false;
+
+            if (def.supportsFeature && draft.feature !== currentFeature) {
+                dirty = true;
+            }
+
+            if (def.dashboardKey) {
+                const effectiveCurrent = def.supportsFeature
+                    ? (currentFeature ? currentDashboardVisible : false)
+                    : currentDashboardVisible;
+                const draftVisible = def.supportsFeature
+                    ? (draft.feature !== false ? draft.dashboard !== false : false)
+                    : draft.dashboard !== false;
+                if (draftVisible !== effectiveCurrent) {
+                    dirty = true;
+                }
+            }
+        });
+
+        this.controlDirty = dirty;
+        this.updateControlButtons();
+        this.updateControlStatuses();
+    },
+
+    updateControlButtons(message) {
+        const saveBtn = document.getElementById('controlsSaveBtn');
+        const resetBtn = document.getElementById('controlsResetBtn');
+        const statusText = document.getElementById('controlsStatusText');
+
+        if (statusText) {
+            if (message) {
+                statusText.textContent = message;
+            } else if (this.controlsLoading) {
+                statusText.textContent = 'Saving changes…';
+            } else if (this.controlDirty) {
+                statusText.textContent = 'You have unsaved changes.';
+            } else {
+                statusText.textContent = '';
+            }
+        }
+
+        if (saveBtn) {
+            saveBtn.disabled = !this.controlDirty || this.controlsLoading;
+        }
+        if (resetBtn) {
+            resetBtn.disabled = (!this.controlDirty && !this.controlsLoading);
         }
     },
 
-    handleDashboardVisibilityChange(event) {
-        const checkbox = event.currentTarget;
-        const key = checkbox?.dataset?.dashboard;
-        if (!key) return;
+    resetControls() {
+        if (this.controlsLoading) return;
+        this.controlDraft = this.buildControlDraft();
+        this.renderControlMatrix();
+        this.controlDirty = false;
+        this.updateControlButtons();
+    },
 
-        const visible = checkbox.checked;
-        checkbox.setAttribute('disabled', 'true');
+    saveControls() {
+        if (!this.controlDirty || this.controlsLoading) {
+            return;
+        }
 
-        fetch('/api/admin/config/dashboard-visibility', {
+        this.controlsLoading = true;
+        this.updateControlButtons('Saving changes…');
+
+        const featurePayload = {};
+        this.controlDefinitions.forEach((def) => {
+            if (!def.supportsFeature) return;
+            const draft = this.controlDraft[def.key] || {};
+            featurePayload[def.key] = draft.feature !== false;
+        });
+
+        const visibilityPayload = { ...this.currentDashboardVisibility };
+        this.controlDefinitions.forEach((def) => {
+            if (!def.dashboardKey) return;
+            const draft = this.controlDraft[def.key] || {};
+            const visible = def.supportsFeature
+                ? (draft.feature !== false ? draft.dashboard !== false : false)
+                : draft.dashboard !== false;
+            visibilityPayload[def.dashboardKey] = visible;
+        });
+
+        fetch('/api/admin/config/feature-flags', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-            body: JSON.stringify({ visibility: { [key]: visible } })
+            body: JSON.stringify({ featureFlags: featurePayload })
         })
-            .then(response => {
+            .then((response) => {
                 if (!response.ok) {
-                    throw new Error(`Update failed (${response.status})`);
+                    throw new Error(`Feature update failed (${response.status})`);
                 }
                 return response.json();
             })
-            .then(payload => {
-                this.currentDashboardVisibility = payload?.visibility || this.currentDashboardVisibility;
-                UI.showNotification(`Dashboard section "${this.dashboardVisibilityMetadata[key]?.label || key}" ${visible ? 'shown' : 'hidden'}.`, 'success');
+            .then((featureResult) => {
+                this.currentFeatureFlags = featureResult?.featureFlags || this.currentFeatureFlags;
+                return fetch('/api/admin/config/dashboard-visibility', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+                    body: JSON.stringify({ visibility: visibilityPayload })
+                });
+            })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error(`Dashboard update failed (${response.status})`);
+                }
+                return response.json();
+            })
+            .then((visibilityResult) => {
+                this.currentDashboardVisibility =
+                    visibilityResult?.visibility || this.currentDashboardVisibility;
+                this.controlDraft = this.buildControlDraft();
+                this.renderControlMatrix();
+                this.controlDirty = false;
+                this.updateControlButtons('Changes saved.');
+                UI.showNotification('Configuration updated.', 'success');
                 if (typeof App !== 'undefined' && typeof App.refreshAppConfiguration === 'function') {
                     App.refreshAppConfiguration();
                 }
-                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
-                    Audit.log({
-                        action: 'dashboard.toggle',
-                        entity: 'dashboardVisibility',
-                        entityId: key,
-                        detail: { visible }
-                    });
-                }
             })
-            .catch(error => {
-                console.error('Failed to update dashboard visibility:', error);
-                UI.showNotification('Unable to update dashboard visibility. Please try again.', 'error');
-                checkbox.checked = !visible;
+            .catch((error) => {
+                console.error('Failed to save controls:', error);
+                UI.showNotification('Unable to save configuration changes.', 'error');
+                this.updateControlButtons('Unable to save configuration changes.');
             })
             .finally(() => {
-                checkbox.removeAttribute('disabled');
+                this.controlsLoading = false;
+                setTimeout(() => this.updateControlButtons(), 1500);
             });
     },
 

@@ -13,7 +13,6 @@ const Auth = {
             const user = DataManager.getUserById(sessionData.userId);
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
-                    console.log('Session user requires password change, resetting session.');
                     localStorage.removeItem('currentSession');
                     return false;
                 }
@@ -46,6 +45,10 @@ const Auth = {
             
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
+                    this.reportLoginEvent('success', {
+                        username: trimmedUsername,
+                        message: 'Password change required'
+                    });
                     this.pendingPasswordChangeUser = user;
                     this.showPasswordChangePrompt(user);
                     if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
@@ -63,6 +66,10 @@ const Auth = {
                     userId: user.id,
                     loginTime: new Date().toISOString()
                 }));
+                this.reportLoginEvent('success', {
+                    username: trimmedUsername,
+                    message: 'Login successful'
+                });
                 this.showMainApp();
                 return { success: true, user, requiresPasswordChange: false };
             }
@@ -74,10 +81,18 @@ const Auth = {
             } else {
                 console.warn('Login attempt failed: user not found', trimmedUsername);
             }
+            this.reportLoginEvent('failure', {
+                username: trimmedUsername,
+                message: 'Invalid credentials'
+            });
             
             return { success: false, message: 'Invalid credentials' };
         } catch (error) {
             console.error('Login error:', error);
+            this.reportLoginEvent('failure', {
+                username: username ? String(username).trim() : '',
+                message: error.message || 'Login error'
+            });
             return { success: false, message: 'Login error: ' + error.message };
         }
     },
@@ -123,7 +138,6 @@ const Auth = {
             mainApp.classList.remove('hidden');
             this.updateUserInfo();
             this.updateNavigation();
-            console.log('Main app shown successfully');
         } catch (error) {
             console.error('Error showing main app:', error);
         }
@@ -247,6 +261,10 @@ const Auth = {
             if (typeof App !== 'undefined' && typeof App.handleSuccessfulLogin === 'function') {
                 App.handleSuccessfulLogin();
             }
+            this.reportLoginEvent('success', {
+                username: updated.username,
+                message: 'Password updated'
+            });
             UI.showNotification('Password updated. Welcome!', 'success');
             if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
                 Audit.log({
@@ -293,6 +311,29 @@ const Auth = {
     // Check if user has role
     hasRole(role) {
         return this.currentUser && this.currentUser.roles.includes(role);
+    },
+
+    reportLoginEvent(status, details = {}) {
+        try {
+            if (typeof window === 'undefined' || window.location.protocol === 'file:') {
+                return;
+            }
+
+            const payload = {
+                username: details.username || '',
+                status,
+                message: details.message || '',
+                userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
+            };
+
+            fetch('/api/admin/logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(() => {});
+        } catch (error) {
+            console.warn('Failed to report login event', error);
+        }
     },
 
     // Check if user is admin

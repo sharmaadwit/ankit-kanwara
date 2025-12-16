@@ -291,7 +291,7 @@ const App = {
 
         document.querySelectorAll('[data-dashboard]').forEach((element) => {
             const key = element.getAttribute('data-dashboard');
-            const visible = this.isDashboardVisible(key);
+            const visible = this.isDashboardVisible(key) && this.isFeatureEnabled(key);
             element.classList.toggle('dashboard-hidden', !visible);
         });
 
