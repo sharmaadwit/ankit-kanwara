@@ -32,11 +32,31 @@
         return `${API_BASE}/${suffix}`;
     };
 
+    const buildHeaders = () => {
+        const headers = {
+            'X-Admin-User': window.__REMOTE_STORAGE_USER__ || 'storage-proxy'
+        };
+        const extra = window.__REMOTE_STORAGE_HEADERS__;
+        if (extra && typeof extra === 'object') {
+            Object.keys(extra).forEach((key) => {
+                const value = extra[key];
+                if (value !== undefined && value !== null && value !== '') {
+                    headers[key] = String(value);
+                }
+            });
+        }
+        return headers;
+    };
+
     const performRequest = (method, suffix, body) => {
         const url = buildUrl(suffix);
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false);
         xhr.setRequestHeader('Accept', 'application/json');
+        const headers = buildHeaders();
+        Object.keys(headers).forEach((key) => {
+            xhr.setRequestHeader(key, headers[key]);
+        });
         if (body !== undefined) {
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.send(JSON.stringify(body));

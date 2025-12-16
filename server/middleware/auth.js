@@ -11,6 +11,11 @@ const isAdminRequest = (req) => {
 const extractApiKey = () => (process.env.STORAGE_API_KEY || '').trim();
 
 const requireStorageAuth = (req, res, next) => {
+  const sessionHeader = extractHeaderToken(req, 'x-admin-user');
+  if (sessionHeader) {
+    return next();
+  }
+
   const expectedKey = extractApiKey();
   if (!expectedKey) {
     return next();
