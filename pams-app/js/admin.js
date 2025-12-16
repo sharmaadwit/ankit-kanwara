@@ -279,13 +279,21 @@ const Admin = {
             return;
         }
 
+        const passwordInput = document.getElementById('newPassword');
         const forcePasswordChangeCheckbox = document.getElementById('forcePasswordChange');
         const forcePasswordChange = forcePasswordChangeCheckbox ? forcePasswordChangeCheckbox.checked : true;
+        const password = passwordInput?.value ? passwordInput.value.trim() : '';
+
+        if (!password) {
+            UI.showNotification('Please provide a temporary password for the user.', 'error');
+            passwordInput?.focus();
+            return;
+        }
 
         const user = {
             username: document.getElementById('newUsername').value,
             email: document.getElementById('newUserEmail').value,
-            password: document.getElementById('newPassword').value,
+            password,
             roles: roles,
             regions: [],
             salesReps: [],
