@@ -58,19 +58,19 @@ const App = {
         this.setupEventListeners();
 
         await this.loadAppConfig();
-        
-        // Check authentication
+
         if (!Auth.init()) {
-            // Not logged in - stay on login screen
-            console.log('No active session, showing login screen');
             return;
         }
 
-        // Logged in - initialize interface and load default view
-        console.log('User logged in, initializing app');
         InterfaceManager.init();
-        const defaultView = this.getInitialView();
-        this.switchView(defaultView);
+        const preferredView = this.getInitialView();
+        const targetView = this.getAccessibleView(preferredView);
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.navigateToCardView(targetView);
+        } else {
+            this.switchView(targetView);
+        }
     },
 
     // Setup event listeners
@@ -167,8 +167,13 @@ const App = {
         } catch (error) {
             console.warn('Configuration refresh after login failed.', error);
         }
-        const defaultView = this.getInitialView();
-        this.switchView(defaultView);
+        const preferredView = this.getInitialView();
+        const targetView = this.getAccessibleView(preferredView);
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.navigateToCardView(targetView);
+        } else {
+            this.switchView(targetView);
+        }
     },
 
     async loadAppConfig() {
@@ -224,6 +229,36 @@ const App = {
         return this.isFeatureEnabled(key) && this.isDashboardVisible(key);
     },
 
+    isViewAccessible(viewName) {
+        const key = this.getDashboardVisibilityKey(viewName);
+        if (!key) return true;
+        return this.isAccessible(key);
+    },
+
+    getAccessibleView(preferred) {
+        const candidateOrder = [
+            preferred,
+            'dashboard',
+            'activities',
+            'reports',
+            'accounts',
+            'winloss',
+            'projectHealth',
+            'sfdcCompliance',
+            'import',
+            'admin',
+            'adminLoginLogs',
+            'adminPoc'
+        ].filter(Boolean);
+
+        for (const view of candidateOrder) {
+            if (this.isViewAccessible(view)) {
+                return view;
+            }
+        }
+        return 'dashboard';
+    },
+
     getDashboardVisibilityKey(viewName) {
         switch (viewName) {
             case 'dashboard':
@@ -236,6 +271,10 @@ const App = {
                 return 'reports';
             case 'admin':
                 return 'admin';
+            case 'adminLoginLogs':
+                return 'adminLogin';
+            case 'adminPoc':
+                return 'adminPoc';
             default:
                 return null;
         }
@@ -408,7 +447,6 @@ const App = {
                 break;
             case 'admin':
                 if (Auth.isAdmin()) {
-                    console.log('Loading admin panel...');
                     if (InterfaceManager.getCurrentInterface() === 'card') {
                         this.loadCardAdminView();
                     } else {
@@ -417,6 +455,22 @@ const App = {
                 } else {
                     console.warn('User is not admin, cannot access admin panel');
                     UI.showNotification('You do not have admin access', 'error');
+                }
+                break;
+            case 'adminLoginLogs':
+                if (Auth.isAdmin()) {
+                    Admin.initLoginLogsView();
+                } else {
+                    UI.showNotification('You do not have admin access', 'error');
+                    this.switchView('dashboard');
+                }
+                break;
+            case 'adminPoc':
+                if (Auth.isAdmin()) {
+                    Admin.loadPOCSandbox(true);
+                } else {
+                    UI.showNotification('You do not have admin access', 'error');
+                    this.switchView('dashboard');
                 }
                 break;
         }
@@ -664,6 +718,16 @@ const App = {
                 case 'admin':
                     if (Auth.isAdmin()) {
                         this.loadCardAdminView();
+                    }
+                    break;
+                case 'adminLoginLogs':
+                    if (Auth.isAdmin()) {
+                        Admin.initLoginLogsView();
+                    }
+                    break;
+                case 'adminPoc':
+                    if (Auth.isAdmin()) {
+                        Admin.loadPOCSandbox(true);
                     }
                     break;
             }
@@ -1403,197 +1467,15 @@ const App = {
     
     // Load card-based admin view
     loadCardAdminView() {
-        const adminView = document.getElementById('adminView');
-        if (!adminView) return;
-        
-        // Build full admin layout for card interface
-        adminView.innerHTML = `
-            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
-                </svg>
-                Back to Home
-            </a>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Admin & Settings</h1>
-            </div>
-            
-            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
-                <div class="content-card">
-                    <div class="content-card-header" style="align-items: center;">
-                        <h2 class="content-card-title">System Users</h2>
-                        <button id="addUserBtnCard" class="btn btn-primary" onclick="Admin.showAddUserModal()">Add New User</button>
-                    </div>
-                    <div id="usersList" class="space-y-2"></div>
-                </div>
-                
-                <div class="content-card">
-                    <div class="content-card-header" style="align-items: center;">
-                        <h2 class="content-card-title">Sales Users</h2>
-                        <button id="addSalesRepBtnCard" class="btn btn-primary" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
-                    </div>
-                    <div id="salesRepsList" class="space-y-2"></div>
-                </div>
-            </div>
-            
-            <div class="content-card">
-                <div class="content-card-header">
-                    <h2 class="content-card-title">Interface Preference (Global)</h2>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Interface Layout</label>
-                    <select id="interfaceSelect" class="form-control" onchange="InterfaceManager.changeInterface(this.value)">
-                        <option value="card">Card Interface</option>
-                        <option value="modern">Modern Sidebar</option>
-                        <option value="compact">Compact Sidebar</option>
-                        <option value="dashboard">Dashboard First</option>
-                        <option value="minimal">Minimal Clean</option>
-                    </select>
-                    <small class="text-muted">Applies globally on next reload for every user.</small>
-                </div>
-                <div class="form-group" style="margin-top: 1.5rem;">
-                    <label class="form-label">Color Scheme</label>
-                    <select id="interfaceThemeSelect" class="form-control" onchange="InterfaceManager.changeTheme(this.value)">
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
-                        <option value="gupshup">Gupshup</option>
-                    </select>
-                    <small class="text-muted">Controls the default palette used across the app.</small>
-                </div>
-            </div>
-            
-            <div class="content-card">
-                <div class="content-card-header">
-                    <h2 class="content-card-title">Analytics Targets</h2>
-                </div>
-                <form onsubmit="Admin.savePresalesTarget(event)">
-                    <div class="form-group">
-                        <label class="form-label required">Monthly Activity Target per Presales User</label>
-                        <input type="number" class="form-control" id="cardPresalesTargetInput" min="0" step="1" required>
-                    </div>
-                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                        <button type="submit" class="btn btn-primary">Save Target</button>
-                        <span class="text-muted" id="cardPresalesTargetMeta"></span>
-                    </div>
-                </form>
-                <p class="text-muted" id="cardPresalesTargetSummary" style="margin-top: 1rem;"></p>
-            </div>
-            
-            <div class="content-card">
-                <div class="content-card-header">
-                    <h2 class="content-card-title">POC Sandbox Access Management</h2>
-                </div>
-                <div class="action-bar" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 1rem;">
-                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
-                        <option value="">All Status</option>
-                        <option value="Assigned">Assigned</option>
-                        <option value="Unassigned">Unassigned</option>
-                    </select>
-                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
-                        <option value="">All Accounts</option>
-                    </select>
-                    <input type="date" id="pocDateFrom" class="form-control" placeholder="From Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
-                    <input type="date" id="pocDateTo" class="form-control" placeholder="To Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
-                </div>
-                <div id="pocSandboxTable"></div>
-            </div>
-
-        <div class="content-card">
-            <div class="content-card-header">
-                <h2 class="content-card-title">Feature Controls</h2>
-            </div>
-            <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable capabilities globally. Changes apply after users refresh their browser.</p>
-            <div id="featureToggleList" class="feature-toggle-list"></div>
-        </div>
-
-        <div class="content-card">
-            <div class="content-card-header">
-                <h2 class="content-card-title">Dashboard Controls</h2>
-            </div>
-            <p class="text-muted" style="margin-bottom: 1rem;">Show or hide dashboard navigation entries for all users.</p>
-            <div id="dashboardVisibilityList" class="feature-toggle-list"></div>
-        </div>
-
-        <div class="content-card">
-            <div class="content-card-header" style="justify-content: space-between; align-items: center;">
-                <h2 class="content-card-title">Login Activity & Usage</h2>
-                <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
-            </div>
-            <div id="loginMetricsSummary" class="login-metrics-summary"></div>
-            <div class="login-metrics-grid">
-                <div class="login-metrics-panel">
-                    <h4>Activity (Last 14 days)</h4>
-                    <div id="loginMetricsByDate" class="metric-list"></div>
-                </div>
-                <div class="login-metrics-panel">
-                    <h4>Top Users (7 days)</h4>
-                    <div id="loginTopUsers" class="metric-list"></div>
-                </div>
-            </div>
-            <div class="table-responsive" style="margin-top: 1.5rem;">
-                <table class="table" id="loginLogsTable">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>User</th>
-                            <th>Status</th>
-                            <th>Message</th>
-                            <th>Context</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="5">
-                                <div class="text-muted" style="text-align:center;">Loading login activity...</div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="content-card">
-            <div class="content-card-header">
-                <h2 class="content-card-title">Activity Audit Log</h2>
-                <div style="display: flex; gap: 0.75rem;">
-                    <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
-                    <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
-                </div>
-            </div>
-            <div style="padding: 0;">
-                <div id="activityLogsTable">
-                    <div class="text-muted" style="padding: 1rem;">Loading activity logs…</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="content-card">
-            <div class="content-card-header">
-                <h2 class="content-card-title">Monthly Analytics Export (Admin)</h2>
-            </div>
-            <div class="form-grid" style="margin-bottom: 1rem;">
-                <div class="form-group">
-                    <label class="form-label">Select Month</label>
-                    <input type="month" id="adminReportMonth" class="form-control">
-                </div>
-            </div>
-            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
-        </div>
-        `;
-        
-        // Populate admin data after rendering
-        setTimeout(() => {
-            Admin.loadAdminPanel();
-            const interfaceSelect = document.getElementById('interfaceSelect');
-            if (interfaceSelect) {
-                interfaceSelect.value = InterfaceManager.getCurrentInterface();
-            }
-
-            const themeSelect = document.getElementById('interfaceThemeSelect');
-            if (themeSelect) {
-                themeSelect.value = InterfaceManager.getCurrentTheme();
-            }
-        }, 0);
+        Admin.loadAdminPanel();
+        const interfaceSelect = document.getElementById('interfaceSelect');
+        if (interfaceSelect) {
+            interfaceSelect.value = InterfaceManager.getCurrentInterface();
+        }
+        const themeSelect = document.getElementById('interfaceThemeSelect');
+        if (themeSelect) {
+            themeSelect.value = InterfaceManager.getCurrentTheme();
+        }
     },
 
     // Load activities view

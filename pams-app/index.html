@@ -68,6 +68,7 @@
                     </button>
                 </div>
                 <div class="header-right">
+                    <span id="currentUsernameDisplay" class="header-username hidden"></span>
                     <button id="logoutBtn" class="btn btn-secondary btn-sm">Logout</button>
                 </div>
             </div>
@@ -149,6 +150,25 @@
                             <path d="M2 12l10 5 10-5"></path>
                         </svg>
                         <span>Admin & Settings</span>
+                    </a></li>
+                    <li class="hidden" data-dashboard="adminLogin" data-admin-only="true"><a href="#" data-view="adminLoginLogs" class="sidebar-link">
+                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 2L2 7l7 5 7-5-7-5z"></path>
+                            <path d="M2 17l7 5 7-5"></path>
+                            <path d="M2 12l7 5 7-5"></path>
+                            <path d="M17 8h5v8h-5"></path>
+                            <path d="M19.5 10v4"></path>
+                        </svg>
+                        <span>Login Activity</span>
+                    </a></li>
+                    <li class="hidden" data-dashboard="adminPoc" data-admin-only="true"><a href="#" data-view="adminPoc" class="sidebar-link">
+                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3h18v4H3z"></path>
+                            <path d="M8 7v13"></path>
+                            <path d="M16 7v13"></path>
+                            <path d="M3 13h18"></path>
+                        </svg>
+                        <span>POC Sandbox</span>
                     </a></li>
                 </ul>
             </nav>
@@ -438,7 +458,10 @@
                     <div class="card mb-6">
                         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                             <h3>Login Activity & Usage</h3>
-                            <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
+                            <div style="display:flex; gap:0.75rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
+                                <button class="btn btn-outline btn-sm" onclick="App.switchView('adminLoginLogs')">Open detailed log</button>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div id="loginMetricsSummary" class="login-metrics-summary"></div>
@@ -453,24 +476,7 @@
                                 </div>
                             </div>
                             <div class="table-responsive" style="margin-top: 1.5rem;">
-                                <table class="table" id="loginLogsTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>User</th>
-                                            <th>Status</th>
-                                            <th>Message</th>
-                                            <th>Context</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td colspan="5">
-                                                <div class="text-muted" style="text-align:center;">Loading login activity...</div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                <div class="text-muted" id="loginLogCardNote">Detailed entries available in the Login Activity page.</div>
                             </div>
                         </div>
                     </div>
@@ -505,27 +511,114 @@
                         </div>
                     </div>
 
-                    <!-- POC Sandbox Access Management -->
                     <div class="card">
-                        <div class="card-header">
-                            <h3>POC Sandbox Access Management</h3>
-                        </div>
                         <div class="card-body">
-                            <div class="action-bar mb-4">
-                                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                            <h3 class="card-title" style="margin-bottom:0.5rem;">Need sandbox oversight?</h3>
+                            <p class="text-muted" style="margin-bottom:1rem;">Review sandbox allocations, update statuses, and capture POC progress from the dedicated admin workspace.</p>
+                            <button class="btn btn-outline" onclick="App.switchView('adminPoc')">Open POC Sandbox Manager</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Login Activity Detail View -->
+                <div id="adminLoginLogsView" class="view hidden">
+                    <div class="page-header">
+                        <h1 class="page-title">Login Activity</h1>
+                        <p class="page-subtitle">Review recent authentication events across the organisation.</p>
+                    </div>
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="login-metrics-grid" style="margin-bottom:1.5rem;">
+                                <div class="login-metrics-panel">
+                                    <h4>Activity (Last 14 days)</h4>
+                                    <div id="loginLogsDetailByDate" class="metric-list"></div>
+                                </div>
+                                <div class="login-metrics-panel">
+                                    <h4>Top Users (7 days)</h4>
+                                    <div id="loginLogsDetailTopUsers" class="metric-list"></div>
+                                </div>
+                            </div>
+                            <div class="admin-config-toolbar" style="justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                                <div style="display:flex; gap:0.75rem; align-items:center;">
+                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('prev')" id="loginLogsPrevBtn" disabled>&larr; Previous</button>
+                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('next')" id="loginLogsNextBtn" disabled>Next &rarr;</button>
+                                    <span id="loginLogsPageLabel" class="text-muted" style="font-size:0.875rem;"></span>
+                                </div>
+                                <div style="display:flex; gap:0.75rem;">
+                                    <button class="btn btn-outline" onclick="Admin.loadLoginLogsPage('refresh')">Refresh</button>
+                                    <button class="btn btn-primary" onclick="Admin.exportLoginLogs()">Export Current Page</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table" id="loginLogsDetailTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>User</th>
+                                            <th>Status</th>
+                                            <th>Message</th>
+                                            <th>IP Address</th>
+                                            <th>User Agent</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="6">
+                                                <div class="text-muted" style="text-align:center;">Loading login activity…</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- POC Sandbox View -->
+                <div id="adminPocView" class="view hidden">
+                    <div class="page-header">
+                        <h1 class="page-title">POC Sandbox Manager</h1>
+                        <p class="page-subtitle">Track sandbox allocations, update statuses, and maintain context for ongoing proof-of-concept work.</p>
+                    </div>
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <div class="form-grid" style="margin-bottom:1rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Status</label>
+                                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
                                         <option value="">All Status</option>
                                         <option value="Assigned">Assigned</option>
                                         <option value="Unassigned">Unassigned</option>
                                     </select>
-                                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Account</label>
+                                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
                                         <option value="">All Accounts</option>
                                     </select>
-                                    <input type="date" id="pocDateFrom" class="form-control" placeholder="From Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
-                                    <input type="date" id="pocDateTo" class="form-control" placeholder="To Date" onchange="Admin.filterPOCSandbox()" style="min-width: 150px;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">From Date</label>
+                                    <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">To Date</label>
+                                    <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
                                 </div>
                             </div>
-                            <div id="pocSandboxTable"></div>
+                            <div class="admin-config-toolbar" style="justify-content:flex-end;">
+                                <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
+                                <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body" id="pocSandboxTable">
+                            <div class="text-muted">Loading sandbox assignments…</div>
                         </div>
                     </div>
                 </div>

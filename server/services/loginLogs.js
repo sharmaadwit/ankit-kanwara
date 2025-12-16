@@ -31,11 +31,14 @@ const logLoginAttempt = async ({
   );
 };
 
-const getRecentLoginLogs = async (limit = 100) => {
+const getRecentLoginLogs = async (limit = 100, offset = 0) => {
   const pool = getPool();
   const parsedLimit = Number.isFinite(Number(limit))
     ? Math.min(Math.max(parseInt(limit, 10), 1), 500)
     : 100;
+  const parsedOffset = Number.isFinite(Number(offset))
+    ? Math.max(parseInt(offset, 10), 0)
+    : 0;
 
   const { rows } = await pool.query(
     `
@@ -49,11 +52,13 @@ const getRecentLoginLogs = async (limit = 100) => {
         created_at AS "createdAt"
       FROM login_logs
       ORDER BY created_at DESC
-      LIMIT $1;
+      LIMIT $1 OFFSET $2;
     `,
-    [parsedLimit]
+    [parsedLimit + 1, parsedOffset]
   );
-  return rows;
+  const hasMore = rows.length > parsedLimit;
+  const trimmed = hasMore ? rows.slice(0, -1) : rows;
+  return { logs: trimmed, hasMore };
 };
 
 const getUsageMetrics = async () => {

@@ -28,14 +28,16 @@ router.post('/', async (req, res) => {
 router.get('/', requireAdminAuth, async (req, res) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 150;
-    const [logs, metrics] = await Promise.all([
-      getRecentLoginLogs(limit),
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    const [{ logs, hasMore }, metrics] = await Promise.all([
+      getRecentLoginLogs(limit, offset),
       getUsageMetrics()
     ]);
 
     res.json({
       logs,
-      metrics
+      metrics,
+      hasMore
     });
   } catch (error) {
     console.error('Failed to fetch login logs', error);

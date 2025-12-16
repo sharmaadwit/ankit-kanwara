@@ -44,6 +44,14 @@ const Admin = {
         admin: {
             label: 'Admin Mode',
             description: 'Allow administrators to access the admin panel.'
+        },
+        adminLogin: {
+            label: 'Login Activity',
+            description: 'Expose the detailed login activity workspace to administrators.'
+        },
+        adminPoc: {
+            label: 'POC Sandbox',
+            description: 'Provide access to the sandbox assignment manager for admins.'
         }
     },
     defaultDashboardVisibility: {
@@ -51,13 +59,21 @@ const Admin = {
         csvImport: true,
         winLoss: true,
         reports: true,
-        admin: true
+        admin: true,
+        adminLogin: true,
+        adminPoc: true
     },
     currentDashboardVisibility: {},
     controlDefinitions: [],
     controlDraft: {},
     controlDirty: false,
     controlsLoading: false,
+    loginLogsPage: 0,
+    loginLogsLimit: 50,
+    loginLogsHasMore: false,
+    loginLogsLoading: false,
+    loginLogsCurrentRows: [],
+    pocFilteredActivities: [],
 
     getAdminHeaders() {
         const headers = {};
@@ -86,6 +102,14 @@ const Admin = {
             const monthInput = document.getElementById('adminReportMonth');
             if (monthInput && !monthInput.value) {
                 monthInput.value = new Date().toISOString().substring(0, 7);
+            }
+            const interfaceSelect = document.getElementById('interfaceSelect');
+            if (interfaceSelect) {
+                interfaceSelect.value = InterfaceManager.getCurrentInterface();
+            }
+            const themeSelect = document.getElementById('interfaceThemeSelect');
+            if (themeSelect) {
+                themeSelect.value = InterfaceManager.getCurrentTheme();
             }
         } catch (error) {
             console.error('Error loading admin panel:', error);
@@ -203,6 +227,33 @@ const Admin = {
             `;
         });
         container.innerHTML = html;
+    },
+
+    exportPocSandboxCsv() {
+        if (!Array.isArray(this.pocFilteredActivities) || !this.pocFilteredActivities.length) {
+            UI.showNotification('No sandbox records available to export.', 'info');
+            return;
+        }
+
+        const header = ['Account', 'User', 'Start Date', 'End Date', 'Environment Name', 'Status'];
+        const rows = this.pocFilteredActivities.map((activity) => [
+            activity.accountName || '',
+            activity.userName || '',
+            activity.details?.startDate || '',
+            activity.details?.endDate || '',
+            activity.details?.pocEnvironmentName || '',
+            activity.details?.assignedStatus || 'Unassigned'
+        ]);
+        const csvRows = [header, ...rows].map((line) => line.join(',')).join('\r\n');
+        const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `poc_sandbox_${new Date().toISOString().substring(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     },
 
     showAddUserModal() {
@@ -785,6 +836,8 @@ const Admin = {
                 return date <= dateTo;
             });
         }
+
+        this.pocFilteredActivities = filtered;
 
         // Display in table
         const container = document.getElementById('pocSandboxTable');
@@ -1500,9 +1553,8 @@ const Admin = {
         const summaryEl = document.getElementById('loginMetricsSummary');
         const perDayEl = document.getElementById('loginMetricsByDate');
         const topUsersEl = document.getElementById('loginTopUsers');
-        const tableBody = document.querySelector('#loginLogsTable tbody');
 
-        if (!summaryEl || !perDayEl || !topUsersEl || !tableBody) {
+        if (!summaryEl || !perDayEl || !topUsersEl) {
             return;
         }
 
@@ -1510,91 +1562,227 @@ const Admin = {
             summaryEl.textContent = 'Fetching latest activity...';
         }
 
-        fetch('/api/admin/logs?limit=200', {
+        fetch(`/api/admin/logs?limit=100&offset=0`, {
             cache: 'no-store',
             headers: this.getAdminHeaders()
         })
-            .then(response => {
+            .then((response) => {
                 if (!response.ok) {
                     throw new Error('Failed to load login logs');
                 }
                 return response.json();
             })
-            .then(payload => {
-                const metrics = payload?.metrics || {};
-                summaryEl.innerHTML = `
-                    <div class="metric-capsule">
-                        <span class="metric-label">Logins (Today)</span>
-                        <span class="metric-value">${metrics.summary?.totalToday ?? 0}</span>
-                    </div>
-                    <div class="metric-capsule">
-                        <span class="metric-label">Logins (7 days)</span>
-                        <span class="metric-value">${metrics.summary?.total7Days ?? 0}</span>
-                    </div>
-                    <div class="metric-capsule">
-                        <span class="metric-label">Unique Users (7 days)</span>
-                        <span class="metric-value">${metrics.summary?.uniqueUsers7Days ?? 0}</span>
-                    </div>
-                `;
-
-                const activityByDate = metrics.activityByDate || [];
-                perDayEl.innerHTML = activityByDate.length
-                    ? activityByDate.map(row => `<div class="metric-row"><span>${row.date}</span><span>${row.count}</span></div>`).join('')
-                    : '<div class="text-muted">No login activity recorded yet.</div>';
-
-                const topUsers = metrics.topUsers || [];
-                topUsersEl.innerHTML = topUsers.length
-                    ? topUsers.map(row => `<div class="metric-row"><span>${row.username}</span><span>${row.count}</span></div>`).join('')
-                    : '<div class="text-muted">No recent user activity.</div>';
-
-                const logs = Array.isArray(payload?.logs) ? payload.logs : [];
-                if (!logs.length) {
-                    tableBody.innerHTML = `
-                        <tr>
-                            <td colspan="5">
-                                <div class="text-muted" style="text-align:center;">No login attempts recorded yet.</div>
-                            </td>
-                        </tr>
-                    `;
-                    return;
-                }
-
-                tableBody.innerHTML = logs
-                    .map((log) => {
-                        const statusCapsule = log.status === 'success'
-                            ? '<span class="status-pill success">Success</span>'
-                            : '<span class="status-pill danger">Failure</span>';
-
-                        return `
-                            <tr>
-                                <td>${this.formatDateTime(log.createdAt)}</td>
-                                <td>${log.username || 'Unknown'}</td>
-                                <td>${statusCapsule}</td>
-                                <td>${log.message || '—'}</td>
-                                <td>
-                                    <div class="log-meta">
-                                        <div>IP: ${log.ipAddress || 'Unknown'}</div>
-                                        <div class="text-muted">${log.userAgent || ''}</div>
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
-                    })
-                    .join('');
+            .then((payload) => {
+                this.renderLoginMetrics(payload);
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error('Failed to load login logs:', error);
                 summaryEl.textContent = 'Unable to load activity summary.';
                 perDayEl.innerHTML = '<div class="text-muted">—</div>';
                 topUsersEl.innerHTML = '<div class="text-muted">—</div>';
-                tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="5">
-                            <div class="text-muted" style="text-align:center;">Unable to load login logs.</div>
-                        </td>
-                    </tr>
-                `;
             });
+    },
+
+    renderLoginMetrics(payload = {}) {
+        const metrics = payload?.metrics || {};
+        const summaryEl = document.getElementById('loginMetricsSummary');
+        const perDayTargets = [
+            document.getElementById('loginMetricsByDate'),
+            document.getElementById('loginLogsDetailByDate')
+        ];
+        const topUserTargets = [
+            document.getElementById('loginTopUsers'),
+            document.getElementById('loginLogsDetailTopUsers')
+        ];
+
+        if (summaryEl) {
+            summaryEl.innerHTML = `
+                <div class="metric-capsule">
+                    <div class="metric-label">Logins today</div>
+                    <div class="metric-value">${metrics.summary?.totalToday ?? 0}</div>
+                </div>
+                <div class="metric-capsule">
+                    <div class="metric-label">Last 7 days</div>
+                    <div class="metric-value">${metrics.summary?.total7Days ?? 0}</div>
+                </div>
+                <div class="metric-capsule">
+                    <div class="metric-label">Unique users</div>
+                    <div class="metric-value">${metrics.summary?.uniqueUsers7Days ?? 0}</div>
+                </div>
+            `;
+        }
+
+        const perDay = Array.isArray(metrics.activityByDate) ? metrics.activityByDate : [];
+        perDayTargets.forEach((target) => {
+            if (!target) return;
+            target.innerHTML = perDay.length
+                ? perDay.map(row => `<div class="metric-row"><span>${row.date}</span><span>${row.count}</span></div>`).join('')
+                : '<div class="text-muted">No login activity recorded yet.</div>';
+        });
+
+        const topUsers = Array.isArray(metrics.topUsers) ? metrics.topUsers : [];
+        topUserTargets.forEach((target) => {
+            if (!target) return;
+            target.innerHTML = topUsers.length
+                ? topUsers.map(row => `<div class="metric-row"><span>${row.username}</span><span>${row.count}</span></div>`).join('')
+                : '<div class="text-muted">No recent user activity.</div>';
+        });
+    },
+
+    updateLoginLogsPagination() {
+        const prevBtn = document.getElementById('loginLogsPrevBtn');
+        const nextBtn = document.getElementById('loginLogsNextBtn');
+        const label = document.getElementById('loginLogsPageLabel');
+
+        if (prevBtn) {
+            prevBtn.disabled = this.loginLogsLoading || this.loginLogsPage === 0;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = this.loginLogsLoading || !this.loginLogsHasMore;
+        }
+        if (label) {
+            const start = this.loginLogsPage * this.loginLogsLimit + 1;
+            const end = start + this.loginLogsCurrentRows.length - 1;
+            label.textContent = this.loginLogsCurrentRows.length
+                ? `Showing ${start} – ${end}`
+                : 'No entries to display';
+        }
+    },
+
+    loadLoginLogsPage(action = 'refresh') {
+        if (this.loginLogsLoading) {
+            return;
+        }
+
+        if (action === 'prev' && this.loginLogsPage === 0) {
+            return;
+        }
+
+        if (action === 'next' && !this.loginLogsHasMore) {
+            return;
+        }
+
+        if (action === 'prev') {
+            this.loginLogsPage = Math.max(this.loginLogsPage - 1, 0);
+        } else if (action === 'next') {
+            this.loginLogsPage += 1;
+        } else if (action === 'refresh') {
+            // keep current page
+        } else if (action === 'reset') {
+            this.loginLogsPage = 0;
+        }
+
+        const tableBody = document.querySelector('#loginLogsDetailTable tbody');
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6">
+                        <div class="text-muted" style="text-align:center;">Loading login activity…</div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        this.loginLogsLoading = true;
+        this.updateLoginLogsPagination();
+
+        const offset = this.loginLogsPage * this.loginLogsLimit;
+        fetch(`/api/admin/logs?limit=${this.loginLogsLimit}&offset=${offset}`, {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error('Failed to load login logs');
+                }
+                return response.json();
+            })
+            .then((payload) => {
+                this.renderLoginMetrics(payload);
+                const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+                this.loginLogsCurrentRows = logs;
+                this.loginLogsHasMore = Boolean(payload?.hasMore);
+
+                if (tableBody) {
+                    if (!logs.length) {
+                        tableBody.innerHTML = `
+                            <tr>
+                                <td colspan="6">
+                                    <div class="text-muted" style="text-align:center;">No login attempts recorded.</div>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        tableBody.innerHTML = logs
+                            .map(log => {
+                                const statusCapsule = log.status === 'success'
+                                    ? '<span class="status-pill success">Success</span>'
+                                    : '<span class="status-pill danger">Failure</span>';
+                                return `
+                                    <tr>
+                                        <td>${this.formatDateTime(log.createdAt)}</td>
+                                        <td>${log.username || 'Unknown'}</td>
+                                        <td>${statusCapsule}</td>
+                                        <td>${log.message || '—'}</td>
+                                        <td>${log.ipAddress || 'Unknown'}</td>
+                                        <td>${log.userAgent || ''}</td>
+                                    </tr>
+                                `;
+                            })
+                            .join('');
+                    }
+                }
+            })
+            .catch((error) => {
+                console.error('Failed to load login logs page:', error);
+                if (tableBody) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6">
+                                <div class="text-muted" style="text-align:center;">Unable to load login logs.</div>
+                            </td>
+                        </tr>
+                    `;
+                }
+            })
+            .finally(() => {
+                this.loginLogsLoading = false;
+                this.updateLoginLogsPagination();
+            });
+    },
+
+    exportLoginLogs() {
+        if (!Array.isArray(this.loginLogsCurrentRows) || !this.loginLogsCurrentRows.length) {
+            UI.showNotification('No login entries available to export.', 'info');
+            return;
+        }
+        const header = ['Timestamp', 'User', 'Status', 'Message', 'IP Address', 'User Agent'];
+        const rows = this.loginLogsCurrentRows.map((log) => [
+            this.formatDateTime(log.createdAt),
+            log.username || 'Unknown',
+            log.status || '',
+            (log.message || '').replace(/,/g, ';'),
+            log.ipAddress || '',
+            (log.userAgent || '').replace(/,/g, ';')
+        ]);
+        const csvRows = [header, ...rows].map((line) => line.join(',')).join('\r\n');
+        const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `login_logs_page_${this.loginLogsPage + 1}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
+
+    initLoginLogsView() {
+        this.loginLogsPage = 0;
+        this.loginLogsHasMore = false;
+        this.loginLogsCurrentRows = [];
+        this.updateLoginLogsPagination();
+        this.loadLoginLogsPage('reset');
     },
 
     formatDateTime(value) {

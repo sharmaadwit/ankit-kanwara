@@ -313,6 +313,12 @@ body {
     gap: 1rem;
 }
 
+.header-username {
+    color: var(--white);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
 .user-info {
     display: flex;
     align-items: center;

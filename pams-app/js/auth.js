@@ -121,6 +121,7 @@ const Auth = {
         if (passwordInput) {
             passwordInput.value = '';
         }
+        this.updateUserInfo();
     },
 
     // Show main app
@@ -281,9 +282,19 @@ const Auth = {
 
     // Update user info in header
     updateUserInfo() {
-        // User info removed from header - only logout button remains
-        // This function kept for compatibility but does nothing
-        return;
+        try {
+            const display = document.getElementById('currentUsernameDisplay');
+            if (!display) return;
+            if (this.currentUser && this.currentUser.username) {
+                display.textContent = this.currentUser.username;
+                display.classList.remove('hidden');
+            } else {
+                display.textContent = '';
+                display.classList.add('hidden');
+            }
+        } catch (error) {
+            console.warn('Unable to update header username', error);
+        }
     },
 
     // Update navigation based on roles
@@ -295,6 +306,9 @@ const Auth = {
             const isAdmin = this.currentUser.roles.includes('Admin');
             adminNav.classList.toggle('hidden', !isAdmin);
         }
+        document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
+            el.classList.toggle('hidden', !this.isAdmin());
+        });
 
         const analyticsOnly = this.isAnalyticsOnly();
         document.querySelectorAll('.sidebar-link').forEach(link => {
