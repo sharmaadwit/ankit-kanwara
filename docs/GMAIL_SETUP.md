@@ -59,3 +59,5 @@ GMAIL_SENDER=alerts@yourdomain.com
 - Audit the Gmail account regularly; it will appear as the sender for all automated notifications.
 
 
+
+

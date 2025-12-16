@@ -1471,9 +1471,17 @@ const Activities = {
             }
         }
 
-        const activityName = document.getElementById('internalActivityName')?.value?.trim() || '';
+        const activityNameInput = document.getElementById('internalActivityName');
+        const activityName = activityNameInput?.value?.trim() || '';
         const topic = document.getElementById('internalTopic')?.value?.trim() || '';
         const description = document.getElementById('internalDescription')?.value?.trim() || '';
+
+        UI.clearFieldError(activityNameInput);
+        if (!activityName) {
+            UI.setFieldError(activityNameInput, 'Activity name is required.');
+            UI.showNotification('Please enter an activity name.', 'error');
+            return;
+        }
 
         const payload = {
             userId: currentUser.id,
@@ -1527,6 +1535,11 @@ const Activities = {
         const salesRepSelect = document.getElementById('salesRepSelect');
         const industryEl = document.getElementById('industry');
         const projectIdEl = document.getElementById('selectedProjectId');
+        const newAccountNameInput = document.getElementById('newAccountName');
+        const newProjectNameInput = document.getElementById('newProjectName');
+        UI.clearFieldError(newAccountNameInput);
+        UI.clearFieldError(newProjectNameInput);
+        UI.clearFieldError(salesRepSelect);
         
         if (!accountIdEl || !salesRepSelect || !industryEl) {
             UI.showNotification('Please fill in all required account fields', 'error');
@@ -1553,6 +1566,7 @@ const Activities = {
         }
         
         if (accountId === 'new' && !accountName.trim()) {
+            UI.setFieldError(newAccountNameInput, 'Account name is required.');
             UI.showNotification('Please enter an account name', 'error');
             return;
         }
@@ -1563,6 +1577,7 @@ const Activities = {
         }
         
         if (projectId === 'new' && !projectName.trim()) {
+            UI.setFieldError(newProjectNameInput, 'Project name is required.');
             UI.showNotification('Please enter a project name', 'error');
             return;
         }
@@ -1572,6 +1587,7 @@ const Activities = {
         const salesRep = selectedOption ? selectedOption.getAttribute('data-name') || selectedOption.text : '';
         
         if (!salesRep || !salesRepSelect.value) {
+            UI.setFieldError(salesRepSelect, 'Select a sales rep');
             UI.showNotification('Please select a sales rep', 'error');
             return;
         }

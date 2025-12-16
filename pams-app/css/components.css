@@ -337,6 +337,17 @@
     box-shadow: 0 0 0 3px rgba(107, 70, 193, 0.1);
 }
 
+.field-error {
+    border-color: var(--danger) !important;
+    box-shadow: 0 0 0 2px rgba(229, 62, 62, 0.15);
+}
+
+.form-error-message {
+    color: var(--danger);
+    font-size: 0.75rem;
+    margin-top: 0.375rem;
+}
+
 select.form-control {
     cursor: pointer;
 }

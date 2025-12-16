@@ -50,14 +50,6 @@ const Admin = {
         admin: true
     },
     currentDashboardVisibility: {},
-    notificationSettings: {
-        recipients: [],
-        events: {
-            featureToggle: false,
-            csvFailure: false,
-            loginAnomaly: false
-        }
-    },
 
     getAdminHeaders() {
         const headers = {};
@@ -86,7 +78,6 @@ const Admin = {
             this.loadDashboardVisibility();
             this.loadLoginLogs();
             this.loadActivityLogs();
-            this.loadNotificationSettings();
             const monthInput = document.getElementById('adminReportMonth');
             if (monthInput && !monthInput.value) {
                 monthInput.value = new Date().toISOString().substring(0, 7);
@@ -186,6 +177,9 @@ const Admin = {
             const statusBadge = user.isActive !== false
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
+            const passwordBadge = user.forcePasswordChange
+                ? '<span class="badge badge-warning">Password reset pending</span>'
+                : '';
             html += `
                 <div class="admin-user-item">
                     <div class="admin-user-info">
@@ -194,6 +188,7 @@ const Admin = {
                         <div class="admin-user-roles">
                             ${user.roles.map(role => `<span class="badge">${role}</span>`).join('')}
                             ${statusBadge}
+                            ${passwordBadge}
                         </div>
                     </div>
                     <div class="admin-user-actions">
@@ -254,6 +249,12 @@ const Admin = {
                                 </div>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="forcePasswordChange" checked>
+                                <span>Require password change on first login</span>
+                            </label>
+                        </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" onclick="UI.hideModal('${modalId}')">Cancel</button>
                             <button type="submit" class="btn btn-primary">Add User</button>
@@ -278,6 +279,9 @@ const Admin = {
             return;
         }
 
+        const forcePasswordChangeCheckbox = document.getElementById('forcePasswordChange');
+        const forcePasswordChange = forcePasswordChangeCheckbox ? forcePasswordChangeCheckbox.checked : true;
+
         const user = {
             username: document.getElementById('newUsername').value,
             email: document.getElementById('newUserEmail').value,
@@ -285,7 +289,8 @@ const Admin = {
             roles: roles,
             regions: [],
             salesReps: [],
-            isActive: true
+            isActive: true,
+            forcePasswordChange: forcePasswordChange
         };
 
         // Check if username already exists
@@ -360,6 +365,12 @@ const Admin = {
                         </div>
                         <div class="form-group">
                             <label class="checkbox-label">
+                                <input type="checkbox" id="editForcePasswordChange" ${user.forcePasswordChange ? 'checked' : ''}>
+                                <span>Require password change on next login</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
                                 <input type="checkbox" id="editUserActive" ${user.isActive !== false ? 'checked' : ''}>
                                 <span>Active</span>
                             </label>
@@ -381,6 +392,7 @@ const Admin = {
         const email = document.getElementById('editUserEmail').value.trim();
         const password = document.getElementById('editUserPassword').value;
         const isActive = document.getElementById('editUserActive').checked;
+        const forcePasswordChange = document.getElementById('editForcePasswordChange')?.checked ?? false;
         const roles = Array.from(document.querySelectorAll('.edit-role-checkbox:checked')).map(cb => cb.value);
 
         if (!email) {
@@ -395,7 +407,8 @@ const Admin = {
         const updates = {
             email,
             roles,
-            isActive
+            isActive,
+            forcePasswordChange
         };
         if (password && password.trim().length > 0) {
             updates.password = password.trim();
@@ -1471,119 +1484,6 @@ const Admin = {
                 detail: { rowCount: rows.length }
             });
         }
-    },
-
-    loadNotificationSettings(force) {
-        const form = document.getElementById('notificationSettingsForm');
-        if (!form) return;
-
-        const recipientsInput = document.getElementById('notificationRecipients');
-        if (recipientsInput && !force) {
-            recipientsInput.value = '';
-            recipientsInput.placeholder = 'Loading notification settings…';
-        }
-
-        fetch('/api/admin/config/notifications', {
-            cache: 'no-store',
-            headers: this.getAdminHeaders()
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to load notification settings');
-                }
-                return response.json();
-            })
-            .then(payload => {
-                this.notificationSettings = payload?.settings || this.notificationSettings;
-                this.renderNotificationSettings();
-            })
-            .catch(error => {
-                console.error('Failed to load notification settings:', error);
-                if (recipientsInput) {
-                    recipientsInput.placeholder = 'Unable to load settings.';
-                }
-            });
-    },
-
-    renderNotificationSettings() {
-        const settings = this.notificationSettings || {};
-        const recipientsInput = document.getElementById('notificationRecipients');
-        const flagToggle = document.getElementById('notifyFeatureToggle');
-        const csvToggle = document.getElementById('notifyCsvFailure');
-        const loginToggle = document.getElementById('notifyLoginAnomaly');
-        const form = document.getElementById('notificationSettingsForm');
-
-        if (recipientsInput) {
-            recipientsInput.placeholder = 'person@example.com';
-            recipientsInput.value = (settings.recipients || []).join('\n');
-        }
-        if (flagToggle) {
-            flagToggle.checked = Boolean(settings.events?.featureToggle);
-        }
-        if (csvToggle) {
-            csvToggle.checked = Boolean(settings.events?.csvFailure);
-        }
-        if (loginToggle) {
-            loginToggle.checked = Boolean(settings.events?.loginAnomaly);
-        }
-        if (form && !form.dataset.bound) {
-            form.addEventListener('submit', (event) => this.saveNotificationSettings(event));
-            form.dataset.bound = 'true';
-        }
-    },
-
-    saveNotificationSettings(event) {
-        event.preventDefault();
-        const recipientsInput = document.getElementById('notificationRecipients');
-        const flagToggle = document.getElementById('notifyFeatureToggle');
-        const csvToggle = document.getElementById('notifyCsvFailure');
-        const loginToggle = document.getElementById('notifyLoginAnomaly');
-
-        const recipients = recipientsInput && recipientsInput.value
-            ? recipientsInput.value
-                .split(/[\n,;]/)
-                .map(item => item.trim())
-                .filter(Boolean)
-            : [];
-
-        const settings = {
-            recipients,
-            events: {
-                featureToggle: flagToggle ? flagToggle.checked : false,
-                csvFailure: csvToggle ? csvToggle.checked : false,
-                loginAnomaly: loginToggle ? loginToggle.checked : false
-            }
-        };
-
-        fetch('/api/admin/config/notifications', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-            body: JSON.stringify({ settings })
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to update notification settings');
-                }
-                return response.json();
-            })
-            .then(payload => {
-                this.notificationSettings = payload?.settings || settings;
-                UI.showNotification('Notification preferences saved.', 'success');
-                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
-                    Audit.log({
-                        action: 'notification.update',
-                        entity: 'emailNotifications',
-                        detail: {
-                            recipientCount: this.notificationSettings.recipients.length,
-                            events: this.notificationSettings.events
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Failed to update notification settings:', error);
-                UI.showNotification('Unable to save notification settings.', 'error');
-            });
     },
 
     loadActivityLogs(force) {

@@ -32,8 +32,10 @@ const DataManager = {
                         roles: ['Admin', 'Presales User', 'Analytics Access'],
                         regions: ['India South', 'India North'],
                         salesReps: ['John Doe', 'Jane Smith'],
-                        isActive: true,
-                        createdAt: new Date().toISOString()
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                    forcePasswordChange: false,
+                    passwordUpdatedAt: new Date().toISOString()
                     },
                     {
                         id: this.generateId(),
@@ -43,8 +45,10 @@ const DataManager = {
                         roles: ['Presales User'],
                         regions: ['India South'],
                         salesReps: ['John Doe'],
-                        isActive: true,
-                        createdAt: new Date().toISOString()
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                    forcePasswordChange: false,
+                    passwordUpdatedAt: new Date().toISOString()
                     }
                 ];
                 this.saveUsers(defaultUsers);
@@ -144,7 +148,9 @@ const DataManager = {
                     regions: ['India South', 'India North'],
                     salesReps: ['John Doe', 'Jane Smith'],
                     isActive: true,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    forcePasswordChange: false,
+                    passwordUpdatedAt: new Date().toISOString()
                 },
                 {
                     id: this.generateId(),
@@ -155,7 +161,9 @@ const DataManager = {
                     regions: ['India South'],
                     salesReps: ['John Doe'],
                     isActive: true,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date().toISOString(),
+                    forcePasswordChange: false,
+                    passwordUpdatedAt: new Date().toISOString()
                 }
             ];
             this.saveUsers(defaultUsers);
@@ -182,6 +190,8 @@ const DataManager = {
         user.id = this.generateId();
         user.createdAt = new Date().toISOString();
         user.isActive = user.isActive !== undefined ? user.isActive : true;
+        user.forcePasswordChange = user.forcePasswordChange === true;
+        user.passwordUpdatedAt = user.forcePasswordChange ? null : new Date().toISOString();
         users.push(user);
         this.saveUsers(users);
         return user;
@@ -191,7 +201,20 @@ const DataManager = {
         const users = this.getUsers();
         const index = users.findIndex(u => u.id === userId);
         if (index !== -1) {
-            users[index] = { ...users[index], ...updates, updatedAt: new Date().toISOString() };
+            const merged = { ...users[index], ...updates };
+            if (updates.forcePasswordChange !== undefined) {
+                merged.forcePasswordChange = updates.forcePasswordChange === true;
+                if (merged.forcePasswordChange) {
+                    merged.passwordUpdatedAt = null;
+                }
+            }
+            if (updates.password) {
+                if (!merged.forcePasswordChange) {
+                    merged.passwordUpdatedAt = new Date().toISOString();
+                }
+            }
+            merged.updatedAt = new Date().toISOString();
+            users[index] = merged;
             this.saveUsers(users);
             return users[index];
         }

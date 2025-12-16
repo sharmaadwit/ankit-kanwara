@@ -1,7 +1,43 @@
 const { getPool } = require('../db');
 
+const RETENTION_DAYS = 14;
+const CLEANUP_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
+
+let lastCleanupAt = 0;
+
 const sanitizeText = (value) =>
   value === undefined || value === null ? null : String(value).trim() || null;
+
+const parseDetail = (raw) => {
+  if (!raw) {
+    return {};
+  }
+  if (typeof raw === 'object') {
+    return raw;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return {};
+  }
+};
+
+const enforceRetention = async (pool) => {
+  const now = Date.now();
+  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) {
+    return;
+  }
+
+  try {
+    await pool.query(
+      `DELETE FROM activity_logs WHERE created_at < NOW() - $1::interval;`,
+      [`${RETENTION_DAYS} days`]
+    );
+    lastCleanupAt = now;
+  } catch (error) {
+    console.warn('activity_log_retention_failed', error.message);
+  }
+};
 
 const logActivity = async ({
   username,
@@ -12,6 +48,7 @@ const logActivity = async ({
   ipAddress
 }) => {
   const pool = getPool();
+  await enforceRetention(pool);
   await pool.query(
     `
       INSERT INTO activity_logs (username, action, entity, entity_id, detail, ip_address)
@@ -46,15 +83,16 @@ const getActivityLogs = async ({ limit = 200 }) => {
         ip_address AS "ipAddress",
         created_at AS "createdAt"
       FROM activity_logs
+      WHERE created_at >= NOW() - $2::interval
       ORDER BY created_at DESC
       LIMIT $1;
     `,
-    [parsedLimit]
+    [parsedLimit, `${RETENTION_DAYS} days`]
   );
 
   return rows.map((row) => ({
     ...row,
-    detail: row.detail || {}
+    detail: parseDetail(row.detail)
   }));
 };
 
@@ -62,5 +100,3 @@ module.exports = {
   logActivity,
   getActivityLogs
 };
-
-

@@ -184,6 +184,30 @@ body {
     margin-top: 2rem;
 }
 
+.login-banner {
+    margin-top: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: 0.75rem;
+    color: var(--gray-700);
+    font-size: 0.9rem;
+}
+
+.login-banner strong {
+    display: block;
+    color: var(--primary-color);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.login-helper {
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    text-align: center;
+}
+
 .login-demo {
     text-align: center;
     font-size: 0.75rem;

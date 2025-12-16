@@ -84,14 +84,24 @@ const App = {
                 const password = document.getElementById('password').value;
                 const result = Auth.login(username, password);
                 if (result.success) {
-                    // After successful login, Auth.login() already called showMainApp()
-                    // Now just initialize interface and load dashboard
-                    InterfaceManager.init();
-                    const defaultView = this.getInitialView();
-                    this.switchView(defaultView);
+                    if (result.requiresPasswordChange) {
+                        UI.showNotification('Please update your password to continue.', 'info');
+                        return;
+                    }
+                    this.handleSuccessfulLogin();
                 } else {
                     UI.showNotification(result.message || 'Invalid credentials', 'error');
                 }
+            });
+        }
+
+        const passwordResetForm = document.getElementById('passwordResetForm');
+        if (passwordResetForm) {
+            passwordResetForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newPassword = document.getElementById('newPassword')?.value || '';
+                const confirmPassword = document.getElementById('confirmPassword')?.value || '';
+                Auth.submitForcedPasswordChange(newPassword, confirmPassword);
             });
         }
 
@@ -138,6 +148,17 @@ const App = {
         });
     },
 
+    async handleSuccessfulLogin() {
+        InterfaceManager.init();
+        try {
+            await this.refreshAppConfiguration();
+        } catch (error) {
+            console.warn('Configuration refresh after login failed.', error);
+        }
+        const defaultView = this.getInitialView();
+        this.switchView(defaultView);
+    },
+
     async loadAppConfig() {
         try {
             const response = await fetch('/api/config', { cache: 'no-store' });
@@ -176,10 +197,14 @@ const App = {
 
     isFeatureEnabled(flag) {
         if (!flag) return true;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        if (isAdmin) return true;
         return this.featureFlags[flag] !== false;
     },
     isDashboardVisible(key) {
         if (!key) return true;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        if (isAdmin) return true;
         return this.dashboardVisibility[key] !== false;
     },
 
@@ -418,6 +443,7 @@ const App = {
         
         // Get stats
         const accounts = DataManager.getAccounts();
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         let totalProjects = 0;
         let customerActivities = 0;
         const internalActivities = DataManager.getInternalActivities();
@@ -636,6 +662,7 @@ const App = {
     updateStats() {
         try {
             const accounts = DataManager.getAccounts();
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
             const activities = DataManager.getAllActivities();
             const internalActivities = DataManager.getInternalActivities();
 
@@ -1029,6 +1056,15 @@ const App = {
             accounts.forEach(account => {
                 const projectCount = account.projects?.length || 0;
                 const activityCount = this.getAccountActivityCount(account.id);
+                const actionButtons = [
+                    `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>`
+                ];
+                if (isAdmin) {
+                    actionButtons.push(
+                        `<button class="btn btn-sm btn-info" onclick="event.stopPropagation(); App.showMergeAccountModal('${account.id}')" style="flex: 1;">Merge</button>`,
+                        `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.showDeleteAccountModal('${account.id}')" style="flex: 1;">Delete</button>`
+                    );
+                }
                 html += `
                     <div class="account-card">
                         <div class="account-card-header">
@@ -1050,9 +1086,7 @@ const App = {
                             </div>
                         </div>
                         <div class="account-card-actions">
-                            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>
-                            <button class="btn btn-sm btn-info" onclick="event.stopPropagation(); App.showMergeAccountModal('${account.id}')" style="flex: 1;">Merge</button>
-                            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.showDeleteAccountModal('${account.id}')" style="flex: 1;">Delete</button>
+                            ${actionButtons.join('')}
                         </div>
                         ${this.buildAccountProjectsMarkup(account, 'card')}
                     </div>
@@ -1466,36 +1500,6 @@ const App = {
             </div>
             <p class="text-muted" style="margin-bottom: 1rem;">Show or hide dashboard navigation entries for all users.</p>
             <div id="dashboardVisibilityList" class="feature-toggle-list"></div>
-        </div>
-
-        <div class="content-card">
-            <div class="content-card-header">
-                <h2 class="content-card-title">Email Notifications</h2>
-            </div>
-            <form id="notificationSettingsForm" class="form-grid">
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label class="form-label">Notification Recipients</label>
-                    <textarea id="notificationRecipients" class="form-control" rows="4" placeholder="person@example.com"></textarea>
-                    <small class="text-muted">Add one email per line. Messages use the configured Gmail account.</small>
-                </div>
-                <div class="form-group" style="grid-column: 1 / -1;">
-                    <label class="form-label">Notify On</label>
-                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                        <label>
-                            <input type="checkbox" id="notifyFeatureToggle"> Feature flag changes
-                        </label>
-                        <label>
-                            <input type="checkbox" id="notifyCsvFailure"> CSV import failures
-                        </label>
-                        <label>
-                            <input type="checkbox" id="notifyLoginAnomaly"> Login anomaly alerts
-                        </label>
-                    </div>
-                </div>
-                <div style="grid-column: 1 / -1;">
-                    <button type="submit" class="btn btn-primary">Save Notification Settings</button>
-                </div>
-            </form>
         </div>
 
         <div class="content-card">
@@ -3458,14 +3462,21 @@ const App = {
             accounts.forEach(account => {
                 const projectCount = account.projects?.length || 0;
                 const activityCount = this.getAccountActivityCount(account.id);
+                const actionButtons = [
+                    `<button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>`
+                ];
+                if (isAdmin) {
+                    actionButtons.push(
+                        `<button class="btn btn-info btn-sm" onclick="App.showMergeAccountModal('${account.id}')" title="Merge Account">🔀</button>`,
+                        `<button class="btn btn-danger btn-sm" onclick="App.showDeleteAccountModal('${account.id}')" title="Delete Account">🗑️</button>`
+                    );
+                }
                 html += `
                     <div class="card">
                         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                             <h3>${account.name}</h3>
                             <div style="display: flex; gap: 0.5rem;">
-                                <button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>
-                                <button class="btn btn-info btn-sm" onclick="App.showMergeAccountModal('${account.id}')" title="Merge Account">🔀</button>
-                                <button class="btn btn-danger btn-sm" onclick="App.showDeleteAccountModal('${account.id}')" title="Delete Account">🗑️</button>
+                                ${actionButtons.join('')}
                             </div>
                         </div>
                         <div class="card-body">
@@ -3492,11 +3503,12 @@ const App = {
     // Search accounts
     searchAccounts() {
         const query = document.getElementById('accountSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#accountsContent .card');
+        const classicCards = document.querySelectorAll('#accountsContent .card');
+        const cardInterfaceCards = document.querySelectorAll('#accountsView .account-card');
         
-        cards.forEach(card => {
+        [...classicCards, ...cardInterfaceCards].forEach(card => {
             const text = card.textContent.toLowerCase();
-            card.style.display = text.includes(query) ? '' : 'none';
+            card.style.display = !query || text.includes(query) ? '' : 'none';
         });
     },
     
@@ -3592,6 +3604,10 @@ const App = {
     
     // Show merge account modal
     showMergeAccountModal(accountId) {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only administrators can merge accounts.', 'error');
+            return;
+        }
         const account = DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
@@ -3620,6 +3636,10 @@ const App = {
     
     // Merge accounts
     mergeAccounts(sourceAccountId, targetAccountId) {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only administrators can merge accounts.', 'error');
+            return;
+        }
         const sourceAccount = DataManager.getAccountById(sourceAccountId);
         const targetAccount = DataManager.getAccountById(targetAccountId);
         
@@ -3712,6 +3732,10 @@ const App = {
     
     // Show delete account modal
     showDeleteAccountModal(accountId) {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only administrators can delete accounts.', 'error');
+            return;
+        }
         const account = DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
@@ -4422,6 +4446,8 @@ const App = {
         const sfdcLinkValue = sfdcInput ? sfdcInput.value.trim() : '';
         const mrrInput = document.getElementById('winLossMRR');
         const otdInput = document.getElementById('winLossOtd');
+        UI.clearFieldError(sfdcInput);
+        UI.clearFieldError(mrrInput);
         
         const accounts = DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
@@ -4436,16 +4462,19 @@ const App = {
         
         if (status === 'won' || status === 'lost') {
             if (!sfdcLinkValue) {
+                UI.setFieldError(sfdcInput, 'SFDC link is required for won/lost projects.');
                 UI.showNotification('Please provide an SFDC link before completing win/loss updates.', 'error');
                 return;
             }
             if (!/^https?:\/\//i.test(sfdcLinkValue)) {
+                UI.setFieldError(sfdcInput, 'Enter a valid SFDC link including http(s)://');
                 UI.showNotification('Enter a valid SFDC link (http/https).', 'error');
                 return;
             }
             const mrrRaw = mrrInput ? mrrInput.value.trim() : '';
             const mrrValue = Number(mrrRaw);
-            if (!Number.isFinite(mrrValue)) {
+            if (!Number.isFinite(mrrValue) || mrrValue < 0) {
+                UI.setFieldError(mrrInput, 'Enter a positive numeric value for MRR.');
                 UI.showNotification('Enter a numeric value for MRR.', 'error');
                 return;
             }
@@ -4471,6 +4500,7 @@ const App = {
             delete project.winLossData;
             if (sfdcInput && sfdcLinkValue) {
                 if (!/^https?:\/\//i.test(sfdcLinkValue)) {
+                    UI.setFieldError(sfdcInput, 'Enter a valid SFDC link including http(s)://');
                     UI.showNotification('Enter a valid SFDC link (http/https).', 'error');
                     return;
                 }

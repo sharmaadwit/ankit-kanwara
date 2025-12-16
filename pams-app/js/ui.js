@@ -60,6 +60,50 @@ const UI = {
         }
     },
 
+    setFieldError(element, message) {
+        if (!element) return;
+        this.clearFieldError(element);
+        element.classList.add('field-error');
+        element.setAttribute('aria-invalid', 'true');
+
+        const container = element.closest('.form-group') || element.parentElement;
+        if (container) {
+            const error = document.createElement('div');
+            error.className = 'form-error-message';
+            if (element.id) {
+                error.dataset.errorFor = element.id;
+            }
+            error.textContent = message;
+            container.appendChild(error);
+        }
+
+        const clearHandler = () => {
+            this.clearFieldError(element);
+        };
+
+        element.addEventListener('input', clearHandler, { once: true });
+        element.addEventListener('change', clearHandler, { once: true });
+        element.addEventListener('blur', clearHandler, { once: true });
+    },
+
+    clearFieldError(element) {
+        if (!element) return;
+        element.classList.remove('field-error');
+        element.removeAttribute('aria-invalid');
+
+        const container = element.closest('.form-group') || element.parentElement;
+        if (container) {
+            if (element.id) {
+                container
+                    .querySelectorAll(`.form-error-message[data-error-for="${element.id}"]`)
+                    .forEach((node) => node.remove());
+            } else {
+                const sibling = container.querySelector('.form-error-message');
+                if (sibling) sibling.remove();
+            }
+        }
+    },
+
     // Format date
     formatDate(dateString) {
         return DataManager.formatDate(dateString);
