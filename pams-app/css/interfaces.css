@@ -189,6 +189,11 @@
     color: var(--card-icon-color);
 }
 
+.nav-card.clickable .nav-card-title,
+.nav-card.non-clickable .nav-card-title {
+    color: var(--card-title-color);
+}
+
 .nav-card.clickable .nav-card-subtitle,
 .nav-card.non-clickable .nav-card-subtitle {
     color: var(--card-subtitle-color);
@@ -204,18 +209,22 @@
     font-size: 1.25rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
+    color: var(--card-title-color);
 }
 
 .nav-card-subtitle {
     font-size: 0.875rem;
+    color: var(--card-subtitle-color);
 }
 
-.nav-card.clickable .nav-card-subtitle {
-    color: rgba(255, 255, 255, 0.9);
+.nav-card.clickable:hover .nav-card-title,
+.nav-card.non-clickable:hover .nav-card-title {
+    color: var(--card-title-color);
 }
 
-.nav-card.non-clickable .nav-card-subtitle {
-    color: var(--gray-600);
+.nav-card.clickable:hover .nav-card-subtitle,
+.nav-card.non-clickable:hover .nav-card-subtitle {
+    color: var(--card-subtitle-color);
 }
 
 /* Dashboard Stats Cards */
@@ -490,19 +499,5 @@
 
 .card-grid.minimal-nav {
     gap: 1.5rem;
-}
-
-.nav-card.clickable .nav-card-title,
-.nav-card.non-clickable .nav-card-title,
-.content-card .content-card-title,
-.account-card .account-card-name,
-.account-card .account-card-stat-value,
-.activity-card .activity-card-type,
-.month-stat-card .month-stat-value {
-    background: var(--brand-gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    color: transparent;
 }
 

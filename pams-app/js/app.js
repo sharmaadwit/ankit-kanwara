@@ -36,11 +36,28 @@ const App = {
         showAll: false
     },
     winLossMrrInputHandler: null,
+    defaultFeatureFlags: {
+        csvImport: true,
+        csvExport: true,
+        winLoss: true,
+        adminCsvExport: true
+    },
+    featureFlags: {},
+    defaultDashboardVisibility: {
+        dashboard: true,
+        csvImport: true,
+        winLoss: true,
+        reports: true,
+        admin: true
+    },
+    dashboardVisibility: {},
 
     // Initialize application
-    init() {
+    async init() {
         // Always setup event listeners (needed for login form)
         this.setupEventListeners();
+
+        await this.loadAppConfig();
         
         // Check authentication
         if (!Auth.init()) {
@@ -121,6 +138,137 @@ const App = {
         });
     },
 
+    async loadAppConfig() {
+        try {
+            const response = await fetch('/api/config', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Config request failed: ${response.status}`);
+            }
+            const payload = await response.json();
+            this.setAppConfiguration(payload || {});
+        } catch (error) {
+            console.warn('Unable to load app config, falling back to defaults.', error);
+            this.setAppConfiguration({});
+        }
+    },
+
+    setAppConfiguration(config = {}) {
+        this.featureFlags = {
+            ...this.defaultFeatureFlags,
+            ...(config.featureFlags || {})
+        };
+        this.dashboardVisibility = {
+            ...this.defaultDashboardVisibility,
+            ...(config.dashboardVisibility || {})
+        };
+        this.applyAppConfiguration();
+    },
+
+    async refreshAppConfiguration() {
+        await this.loadAppConfig();
+        if (!this.isAccessible('csvImport') && this.currentView === 'import') {
+            this.switchView('dashboard');
+        }
+        if (!this.isAccessible('winLoss') && this.currentView === 'winloss') {
+            this.switchView('dashboard');
+        }
+    },
+
+    isFeatureEnabled(flag) {
+        if (!flag) return true;
+        return this.featureFlags[flag] !== false;
+    },
+    isDashboardVisible(key) {
+        if (!key) return true;
+        return this.dashboardVisibility[key] !== false;
+    },
+
+    isAccessible(key) {
+        return this.isFeatureEnabled(key) && this.isDashboardVisible(key);
+    },
+
+    getDashboardVisibilityKey(viewName) {
+        switch (viewName) {
+            case 'dashboard':
+                return 'dashboard';
+            case 'import':
+                return 'csvImport';
+            case 'winloss':
+                return 'winLoss';
+            case 'reports':
+                return 'reports';
+            case 'admin':
+                return 'admin';
+            default:
+                return null;
+        }
+    },
+
+    getAccessMessage(key, type = 'feature') {
+        const messages = {
+            csvImport: {
+                feature: 'CSV import is currently disabled by the administrator.',
+                visibility: 'CSV import has been hidden by the administrator.'
+            },
+            winLoss: {
+                feature: 'Win/Loss tracking is currently disabled by the administrator.',
+                visibility: 'Win/Loss tracking has been hidden by the administrator.'
+            },
+            reports: {
+                feature: 'Reports are currently disabled by the administrator.',
+                visibility: 'Reports have been hidden by the administrator.'
+            },
+            admin: {
+                feature: 'Admin mode is currently disabled.',
+                visibility: 'Admin mode has been hidden by the administrator.'
+            },
+            dashboard: {
+                feature: 'Dashboard access is disabled.',
+                visibility: 'Dashboard access has been hidden.'
+            }
+        };
+
+        return messages[key]?.[type] || 'This section is currently unavailable.';
+    },
+
+    applyAppConfiguration() {
+        document.querySelectorAll('[data-feature]').forEach((element) => {
+            const flagKey = element.getAttribute('data-feature');
+            const mode = element.getAttribute('data-feature-mode') || 'hide';
+            const enabled = this.isFeatureEnabled(flagKey);
+
+            if (mode === 'disable') {
+                if (enabled) {
+                    element.classList.remove('feature-disabled');
+                    element.removeAttribute('disabled');
+                    element.setAttribute('aria-disabled', 'false');
+                } else {
+                    element.classList.add('feature-disabled');
+                    element.setAttribute('disabled', 'true');
+                    element.setAttribute('aria-disabled', 'true');
+                }
+            } else {
+                element.classList.toggle('feature-hidden', !enabled);
+            }
+        });
+
+        document.querySelectorAll('[data-dashboard]').forEach((element) => {
+            const key = element.getAttribute('data-dashboard');
+            const visible = this.isDashboardVisible(key);
+            element.classList.toggle('dashboard-hidden', !visible);
+        });
+
+        if (typeof BulkImport !== 'undefined' && typeof BulkImport.evaluateFeatureAvailability === 'function') {
+            BulkImport.evaluateFeatureAvailability();
+        }
+        const currentViewKey = this.getDashboardVisibilityKey(this.currentView);
+        if (currentViewKey && !this.isAccessible(currentViewKey)) {
+            if (currentViewKey !== 'dashboard') {
+                this.switchView('dashboard');
+            }
+        }
+    },
+
     isValidView(viewName) {
         if (!viewName || typeof viewName !== 'string') return false;
         return !!document.getElementById(`${viewName}View`);
@@ -148,6 +296,18 @@ const App = {
         if (!this.isValidView(viewName)) {
             console.warn('Attempted to load unknown view:', viewName);
             return;
+        }
+
+        const accessKey = this.getDashboardVisibilityKey(viewName);
+        if (accessKey) {
+            if (!this.isFeatureEnabled(accessKey)) {
+                UI.showNotification(this.getAccessMessage(accessKey, 'feature'), 'info');
+                return;
+            }
+            if (!this.isDashboardVisible(accessKey)) {
+                UI.showNotification(this.getAccessMessage(accessKey, 'visibility'), 'info');
+                return;
+            }
         }
 
         if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
@@ -316,7 +476,7 @@ const App = {
                     <div class="nav-card-subtitle">View and manage activities</div>
                 </div>
                 
-                <div class="nav-card clickable winloss" onclick="App.navigateToCardView('winloss')">
+                <div class="nav-card clickable winloss" data-feature="winLoss" data-dashboard="winLoss" onclick="App.navigateToCardView('winloss')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -327,7 +487,7 @@ const App = {
                     <div class="nav-card-subtitle">Track project wins and losses</div>
                 </div>
                 
-                <div class="nav-card clickable reports" onclick="App.navigateToCardView('reports')">
+                <div class="nav-card clickable reports" data-dashboard="reports" onclick="App.navigateToCardView('reports')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="20" x2="18" y2="10"></line>
@@ -352,7 +512,7 @@ const App = {
                     <div class="nav-card-subtitle">Manage accounts and projects</div>
                 </div>
                 
-                <div class="nav-card clickable import" onclick="App.navigateToCardView('import')">
+                <div class="nav-card clickable import" data-feature="csvImport" data-dashboard="csvImport" onclick="App.navigateToCardView('import')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
@@ -391,7 +551,7 @@ const App = {
         // Add Admin card if user is admin
         if (Auth.isAdmin()) {
             html += `
-                <div class="nav-card clickable admin" onclick="App.navigateToCardView('admin')">
+                <div class="nav-card clickable admin" data-dashboard="admin" onclick="App.navigateToCardView('admin')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="3"></circle>
@@ -411,6 +571,18 @@ const App = {
     
     // Navigate to card view (for card interface)
     navigateToCardView(viewName) {
+        const accessKey = this.getDashboardVisibilityKey(viewName);
+        if (accessKey) {
+            if (!this.isFeatureEnabled(accessKey)) {
+                UI.showNotification(this.getAccessMessage(accessKey, 'feature'), 'info');
+                return;
+            }
+            if (!this.isDashboardVisible(accessKey)) {
+                UI.showNotification(this.getAccessMessage(accessKey, 'visibility'), 'info');
+                return;
+            }
+        }
+
         if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
             console.warn('Analytics-only user restricted to reports view. Redirecting.');
             viewName = 'reports';
@@ -748,7 +920,7 @@ const App = {
                             <strong>SFDC:</strong> ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>` : 'Not set'}
                         </p>
                         <div style="margin-top: 1rem;">
-                            <button class="btn btn-sm btn-primary" onclick="App.openWinLossModal('${account.id}', '${project.id}')">
+                            <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${account.id}', '${project.id}')">
                                 ${project.status ? 'Update Status' : 'Set Win/Loss'}
                             </button>
                         </div>
@@ -1279,6 +1451,118 @@ const App = {
                 </div>
                 <div id="pocSandboxTable"></div>
             </div>
+
+        <div class="content-card">
+            <div class="content-card-header">
+                <h2 class="content-card-title">Feature Controls</h2>
+            </div>
+            <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable capabilities globally. Changes apply after users refresh their browser.</p>
+            <div id="featureToggleList" class="feature-toggle-list"></div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-header">
+                <h2 class="content-card-title">Dashboard Controls</h2>
+            </div>
+            <p class="text-muted" style="margin-bottom: 1rem;">Show or hide dashboard navigation entries for all users.</p>
+            <div id="dashboardVisibilityList" class="feature-toggle-list"></div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-header">
+                <h2 class="content-card-title">Email Notifications</h2>
+            </div>
+            <form id="notificationSettingsForm" class="form-grid">
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label class="form-label">Notification Recipients</label>
+                    <textarea id="notificationRecipients" class="form-control" rows="4" placeholder="person@example.com"></textarea>
+                    <small class="text-muted">Add one email per line. Messages use the configured Gmail account.</small>
+                </div>
+                <div class="form-group" style="grid-column: 1 / -1;">
+                    <label class="form-label">Notify On</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <label>
+                            <input type="checkbox" id="notifyFeatureToggle"> Feature flag changes
+                        </label>
+                        <label>
+                            <input type="checkbox" id="notifyCsvFailure"> CSV import failures
+                        </label>
+                        <label>
+                            <input type="checkbox" id="notifyLoginAnomaly"> Login anomaly alerts
+                        </label>
+                    </div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <button type="submit" class="btn btn-primary">Save Notification Settings</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-header" style="justify-content: space-between; align-items: center;">
+                <h2 class="content-card-title">Login Activity & Usage</h2>
+                <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
+            </div>
+            <div id="loginMetricsSummary" class="login-metrics-summary"></div>
+            <div class="login-metrics-grid">
+                <div class="login-metrics-panel">
+                    <h4>Activity (Last 14 days)</h4>
+                    <div id="loginMetricsByDate" class="metric-list"></div>
+                </div>
+                <div class="login-metrics-panel">
+                    <h4>Top Users (7 days)</h4>
+                    <div id="loginTopUsers" class="metric-list"></div>
+                </div>
+            </div>
+            <div class="table-responsive" style="margin-top: 1.5rem;">
+                <table class="table" id="loginLogsTable">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Status</th>
+                            <th>Message</th>
+                            <th>Context</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="5">
+                                <div class="text-muted" style="text-align:center;">Loading login activity...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-header">
+                <h2 class="content-card-title">Activity Audit Log</h2>
+                <div style="display: flex; gap: 0.75rem;">
+                    <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
+                    <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
+                </div>
+            </div>
+            <div style="padding: 0;">
+                <div id="activityLogsTable">
+                    <div class="text-muted" style="padding: 1rem;">Loading activity logs…</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-card">
+            <div class="content-card-header">
+                <h2 class="content-card-title">Monthly Analytics Export (Admin)</h2>
+            </div>
+            <div class="form-grid" style="margin-bottom: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Select Month</label>
+                    <input type="month" id="adminReportMonth" class="form-control">
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
+        </div>
         `;
         
         // Populate admin data after rendering
@@ -1368,7 +1652,7 @@ const App = {
                             </p>
                         </div>
                         <div class="win-loss-actions">
-                            <button class="btn btn-sm btn-primary" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
+                            <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
                                 Update Status
                             </button>
                         </div>
@@ -1389,6 +1673,7 @@ const App = {
     loadImportView() {
         if (typeof BulkImport !== 'undefined') {
             BulkImport.reset();
+            BulkImport.evaluateFeatureAvailability();
         }
 
         const importView = document.getElementById('importView');
@@ -1479,6 +1764,16 @@ const App = {
 
     exportReportsCsv() {
         try {
+            if (!this.isFeatureEnabled('csvExport')) {
+                UI.showNotification('CSV export is currently disabled by the administrator.', 'info');
+                return;
+            }
+
+            if (!this.isDashboardVisible('reports')) {
+                UI.showNotification(this.getAccessMessage('reports', 'visibility'), 'info');
+                return;
+            }
+
             const monthInput = document.getElementById('reportMonth') || document.getElementById('cardReportMonth');
             const fallbackMonth = new Date().toISOString().substring(0, 7);
             const selectedMonth = monthInput && monthInput.value ? monthInput.value : (this.latestAnalytics.standardMonth || fallbackMonth);
@@ -1492,49 +1787,7 @@ const App = {
                 return;
             }
 
-            const rows = [];
-
-            rows.push(['Summary']);
-            rows.push(['Month', DataManager.formatMonth(analytics.month)]);
-            rows.push(['Total Activities', analytics.totalActivities]);
-            rows.push(['Internal Activities', analytics.internalActivities]);
-            rows.push(['External Activities', analytics.externalActivities]);
-            rows.push(['Presales Users', analytics.totalPresalesUsers]);
-            rows.push(['Target per Presales User', analytics.targetValue]);
-            rows.push(['Team Target', analytics.teamTarget]);
-            rows.push([]);
-
-            rows.push(['User Activity Breakdown']);
-            rows.push(['User', 'Total', 'External', 'Internal']);
-            (analytics.userSummaries || []).forEach(summary => {
-                rows.push([
-                    summary.userName || 'Unknown',
-                    summary.total || 0,
-                    summary.external || 0,
-                    summary.internal || 0
-                ]);
-            });
-            rows.push([]);
-
-            rows.push(['Activity Types']);
-            rows.push(['Type', 'Count']);
-            Object.entries(analytics.activityTypeCounts || {}).forEach(([type, count]) => {
-                rows.push([type, count]);
-            });
-            rows.push([]);
-
-            rows.push(['Industries']);
-            rows.push(['Industry', 'Count']);
-            Object.entries(analytics.industryCounts || {}).forEach(([industry, count]) => {
-                rows.push([industry, count]);
-            });
-            rows.push([]);
-
-            rows.push(['Products Discussed']);
-            rows.push(['Product', 'Count']);
-            Object.entries(analytics.productTotals || {}).forEach(([product, count]) => {
-                rows.push([product, count]);
-            });
+            const rows = this.buildReportsCsvRows(analytics);
 
             const filename = `pams_reports_${selectedMonth}.csv`;
             this.downloadCsv(filename, rows);
@@ -1543,6 +1796,56 @@ const App = {
             console.error('Error exporting reports:', error);
             UI.showNotification('Unable to export reports.', 'error');
         }
+    },
+
+    buildReportsCsvRows(analytics) {
+        if (!analytics) return [];
+
+        const rows = [];
+
+        rows.push(['Summary']);
+        rows.push(['Month', DataManager.formatMonth(analytics.month)]);
+        rows.push(['Total Activities', analytics.totalActivities]);
+        rows.push(['Internal Activities', analytics.internalActivities]);
+        rows.push(['External Activities', analytics.externalActivities]);
+        rows.push(['Presales Users', analytics.totalPresalesUsers]);
+        rows.push(['Target per Presales User', analytics.targetValue]);
+        rows.push(['Team Target', analytics.teamTarget]);
+        rows.push([]);
+
+        rows.push(['User Activity Breakdown']);
+        rows.push(['User', 'Total', 'External', 'Internal']);
+        (analytics.userSummaries || []).forEach(summary => {
+            rows.push([
+                summary.userName || 'Unknown',
+                summary.total || 0,
+                summary.external || 0,
+                summary.internal || 0
+            ]);
+        });
+        rows.push([]);
+
+        rows.push(['Activity Types']);
+        rows.push(['Type', 'Count']);
+        Object.entries(analytics.activityTypeCounts || {}).forEach(([type, count]) => {
+            rows.push([type, count]);
+        });
+        rows.push([]);
+
+        rows.push(['Industries']);
+        rows.push(['Industry', 'Count']);
+        Object.entries(analytics.industryCounts || {}).forEach(([industry, count]) => {
+            rows.push([industry, count]);
+        });
+        rows.push([]);
+
+        rows.push(['Products Discussed']);
+        rows.push(['Product', 'Count']);
+        Object.entries(analytics.productTotals || {}).forEach(([product, count]) => {
+            rows.push([product, count]);
+        });
+
+        return rows;
     },
 
     handleCardReportMonthChange(value) {
@@ -3936,6 +4239,14 @@ const App = {
 
     // Open win/loss modal
     openWinLossModal(accountId, projectId) {
+        if (!this.isFeatureEnabled('winLoss')) {
+            UI.showNotification(this.getAccessMessage('winLoss', 'feature'), 'info');
+            return;
+        }
+        if (!this.isDashboardVisible('winLoss')) {
+            UI.showNotification(this.getAccessMessage('winLoss', 'visibility'), 'info');
+            return;
+        }
         this.createWinLossModal();
         
         const accounts = DataManager.getAccounts();
@@ -4290,6 +4601,8 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, initializing app...');
     // Ensure users exist before initializing
     DataManager.ensureDefaultUsers();
-    App.init();
+    App.init().catch(error => {
+        console.error('Failed to initialise application', error);
+    });
 });
 

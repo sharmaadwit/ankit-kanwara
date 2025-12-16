@@ -1,6 +1,79 @@
 // Admin Module
 
 const Admin = {
+    featureFlagMetadata: {
+        csvImport: {
+            label: 'CSV Import',
+            description: 'Allow users to upload activities via CSV templates.'
+        },
+        csvExport: {
+            label: 'CSV Export',
+            description: 'Allow analytics CSV exports from the Reports view.'
+        },
+        winLoss: {
+            label: 'Win/Loss Tracking',
+            description: 'Enable win/loss forms for project closure analysis.'
+        },
+        adminCsvExport: {
+            label: 'Admin Monthly Export',
+            description: 'Allow admins to download monthly analytics CSV snapshots.'
+        }
+    },
+    currentFeatureFlags: {},
+    dashboardVisibilityMetadata: {
+        dashboard: {
+            label: 'Dashboard',
+            description: 'Show the dashboard overview to all users.'
+        },
+        csvImport: {
+            label: 'Import CSV',
+            description: 'Display the import option on the dashboard and sidebar.'
+        },
+        winLoss: {
+            label: 'Win/Loss',
+            description: 'Display Win/Loss dashboards and navigation entries.'
+        },
+        reports: {
+            label: 'Reports',
+            description: 'Show reports navigation and analytics views.'
+        },
+        admin: {
+            label: 'Admin Mode',
+            description: 'Allow administrators to access the admin panel.'
+        }
+    },
+    defaultDashboardVisibility: {
+        dashboard: true,
+        csvImport: true,
+        winLoss: true,
+        reports: true,
+        admin: true
+    },
+    currentDashboardVisibility: {},
+    notificationSettings: {
+        recipients: [],
+        events: {
+            featureToggle: false,
+            csvFailure: false,
+            loginAnomaly: false
+        }
+    },
+
+    getAdminHeaders() {
+        const headers = {};
+        try {
+            if (typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function') {
+                const user = Auth.getCurrentUser();
+                if (user && user.username) {
+                    headers['x-admin-user'] = user.username;
+                }
+            }
+        } catch (error) {
+            console.warn('Unable to attach admin headers', error);
+        }
+        return headers;
+    },
+
     // Load admin panel
     loadAdminPanel() {
         try {
@@ -9,6 +82,15 @@ const Admin = {
             this.loadSalesReps();
             this.loadAnalyticsSettings();
             this.loadPOCSandbox();
+            this.loadFeatureFlags();
+            this.loadDashboardVisibility();
+            this.loadLoginLogs();
+            this.loadActivityLogs();
+            this.loadNotificationSettings();
+            const monthInput = document.getElementById('adminReportMonth');
+            if (monthInput && !monthInput.value) {
+                monthInput.value = new Date().toISOString().substring(0, 7);
+            }
             console.log('Admin panel loaded');
         } catch (error) {
             console.error('Error loading admin panel:', error);
@@ -983,6 +1065,654 @@ const Admin = {
                 html += `<option value="${type}">${UI.getActivityTypeLabel(type)}</option>`;
             });
             activityFilter.innerHTML = html;
+        }
+    },
+
+    loadFeatureFlags(force) {
+        const container = document.getElementById('featureToggleList');
+        if (!container) return;
+
+        if (!force) {
+            container.innerHTML = '<div class="text-muted">Loading feature flags…</div>';
+        }
+
+        fetch('/api/admin/config/feature-flags', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load feature flags (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.currentFeatureFlags = payload?.featureFlags || {};
+                const defaults = payload?.defaults || this.featureFlagMetadata;
+                this.renderFeatureToggleList(this.currentFeatureFlags, defaults);
+            })
+            .catch(error => {
+                console.error('Failed to load feature flags:', error);
+                this.renderFeatureToggleList(
+                    this.currentFeatureFlags,
+                    this.featureFlagMetadata,
+                    {
+                        disabled: true,
+                        note: 'Feature flag management requires the backend service. Displayed values are read-only while offline.'
+                    }
+                );
+            });
+    },
+
+    renderFeatureToggleList(flags = {}, defaults = {}, options = {}) {
+        const container = document.getElementById('featureToggleList');
+        if (!container) return;
+
+        const descriptors = this.featureFlagMetadata;
+        const keys = Object.keys(descriptors);
+
+        if (!keys.length) {
+            container.innerHTML = '<div class="text-muted">No feature toggles available.</div>';
+            return;
+        }
+
+        const html = keys.map(flag => {
+            const meta = descriptors[flag] || {};
+            const enabled = flags[flag] !== false;
+            const disabledAttr = options.disabled ? 'disabled="true" aria-disabled="true"' : '';
+            return `
+                <label class="feature-toggle-item">
+                    <div class="feature-toggle-header">
+                        <input type="checkbox" class="feature-toggle-checkbox" data-flag="${flag}" ${enabled ? 'checked' : ''} ${disabledAttr}>
+                        <span class="feature-toggle-title">${meta.label || flag}</span>
+                    </div>
+                    <div class="feature-toggle-description">${meta.description || ''}</div>
+                </label>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        if (options.note) {
+            container.insertAdjacentHTML(
+                'beforeend',
+                `<div class="text-muted" style="font-size: 0.85rem;">${options.note}</div>`
+            );
+        }
+
+        if (!options.disabled) {
+            container.querySelectorAll('.feature-toggle-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (event) => this.handleFeatureToggleChange(event));
+            });
+        }
+    },
+
+    handleFeatureToggleChange(event) {
+        const checkbox = event.currentTarget;
+        const flag = checkbox?.dataset?.flag;
+        if (!flag) return;
+
+        const enabled = checkbox.checked;
+        this.updateFeatureFlag(flag, enabled, checkbox);
+    },
+
+    updateFeatureFlag(flag, enabled, checkbox) {
+        if (checkbox) {
+            checkbox.setAttribute('disabled', 'true');
+        }
+
+        fetch('/api/admin/config/feature-flags', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+            body: JSON.stringify({ featureFlags: { [flag]: enabled } })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Update failed (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.currentFeatureFlags = payload?.featureFlags || this.currentFeatureFlags;
+                UI.showNotification(`Feature "${this.featureFlagMetadata[flag]?.label || flag}" ${enabled ? 'enabled' : 'disabled'}.`, 'success');
+                if (typeof App !== 'undefined' && typeof App.refreshAppConfiguration === 'function') {
+                    App.refreshAppConfiguration();
+                }
+                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                    Audit.log({
+                        action: 'feature.toggle',
+                        entity: 'featureFlag',
+                        entityId: flag,
+                        detail: { enabled }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to update feature flag:', error);
+                UI.showNotification('Unable to update feature flag. Please try again.', 'error');
+                if (checkbox) {
+                    checkbox.checked = !enabled;
+                }
+            })
+            .finally(() => {
+                if (checkbox) {
+                    checkbox.removeAttribute('disabled');
+                }
+            });
+    },
+
+    loadDashboardVisibility(force) {
+        const container = document.getElementById('dashboardVisibilityList');
+        if (!container) return;
+
+        if (!force) {
+            container.innerHTML = '<div class="text-muted">Loading dashboard controls…</div>';
+        }
+
+        fetch('/api/admin/config/dashboard-visibility', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load dashboard visibility (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.currentDashboardVisibility = {
+                    ...this.defaultDashboardVisibility,
+                    ...(payload?.visibility || {})
+                };
+                this.renderDashboardVisibility(this.currentDashboardVisibility);
+            })
+            .catch(error => {
+                console.error('Failed to load dashboard visibility:', error);
+                const fallback = Object.keys(this.currentDashboardVisibility || {}).length
+                    ? this.currentDashboardVisibility
+                    : { ...this.defaultDashboardVisibility };
+                this.renderDashboardVisibility(
+                    fallback,
+                    {
+                        disabled: true,
+                        note: 'Dashboard visibility changes require the server. Displayed values are read-only while offline.'
+                    }
+                );
+            });
+    },
+
+    renderDashboardVisibility(visibility = {}, options = {}) {
+        const container = document.getElementById('dashboardVisibilityList');
+        if (!container) return;
+
+        const descriptors = this.dashboardVisibilityMetadata;
+        const keys = Object.keys(descriptors);
+
+        if (!keys.length) {
+            container.innerHTML = '<div class="text-muted">No dashboard controls available.</div>';
+            return;
+        }
+
+        const html = keys.map((key) => {
+            const meta = descriptors[key] || {};
+            const enabled = visibility?.[key] !== false;
+            const disabledAttr = options.disabled ? 'disabled="true" aria-disabled="true"' : '';
+            return `
+                <label class="feature-toggle-item">
+                    <div class="feature-toggle-header">
+                        <input type="checkbox" class="dashboard-visibility-checkbox" data-dashboard="${key}" ${enabled ? 'checked' : ''} ${disabledAttr}>
+                        <span class="feature-toggle-title">${meta.label || key}</span>
+                    </div>
+                    <div class="feature-toggle-description">${meta.description || ''}</div>
+                </label>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+        if (options.note) {
+            container.insertAdjacentHTML(
+                'beforeend',
+                `<div class="text-muted" style="font-size: 0.85rem;">${options.note}</div>`
+            );
+        }
+
+        if (!options.disabled) {
+            container.querySelectorAll('.dashboard-visibility-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', (event) => this.handleDashboardVisibilityChange(event));
+            });
+        }
+    },
+
+    handleDashboardVisibilityChange(event) {
+        const checkbox = event.currentTarget;
+        const key = checkbox?.dataset?.dashboard;
+        if (!key) return;
+
+        const visible = checkbox.checked;
+        checkbox.setAttribute('disabled', 'true');
+
+        fetch('/api/admin/config/dashboard-visibility', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+            body: JSON.stringify({ visibility: { [key]: visible } })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Update failed (${response.status})`);
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.currentDashboardVisibility = payload?.visibility || this.currentDashboardVisibility;
+                UI.showNotification(`Dashboard section "${this.dashboardVisibilityMetadata[key]?.label || key}" ${visible ? 'shown' : 'hidden'}.`, 'success');
+                if (typeof App !== 'undefined' && typeof App.refreshAppConfiguration === 'function') {
+                    App.refreshAppConfiguration();
+                }
+                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                    Audit.log({
+                        action: 'dashboard.toggle',
+                        entity: 'dashboardVisibility',
+                        entityId: key,
+                        detail: { visible }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to update dashboard visibility:', error);
+                UI.showNotification('Unable to update dashboard visibility. Please try again.', 'error');
+                checkbox.checked = !visible;
+            })
+            .finally(() => {
+                checkbox.removeAttribute('disabled');
+            });
+    },
+
+    loadLoginLogs(force) {
+        const summaryEl = document.getElementById('loginMetricsSummary');
+        const perDayEl = document.getElementById('loginMetricsByDate');
+        const topUsersEl = document.getElementById('loginTopUsers');
+        const tableBody = document.querySelector('#loginLogsTable tbody');
+
+        if (!summaryEl || !perDayEl || !topUsersEl || !tableBody) {
+            return;
+        }
+
+        if (!force) {
+            summaryEl.textContent = 'Fetching latest activity...';
+        }
+
+        fetch('/api/admin/logs?limit=200', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load login logs');
+                }
+                return response.json();
+            })
+            .then(payload => {
+                const metrics = payload?.metrics || {};
+                summaryEl.innerHTML = `
+                    <div class="metric-capsule">
+                        <span class="metric-label">Logins (Today)</span>
+                        <span class="metric-value">${metrics.summary?.totalToday ?? 0}</span>
+                    </div>
+                    <div class="metric-capsule">
+                        <span class="metric-label">Logins (7 days)</span>
+                        <span class="metric-value">${metrics.summary?.total7Days ?? 0}</span>
+                    </div>
+                    <div class="metric-capsule">
+                        <span class="metric-label">Unique Users (7 days)</span>
+                        <span class="metric-value">${metrics.summary?.uniqueUsers7Days ?? 0}</span>
+                    </div>
+                `;
+
+                const activityByDate = metrics.activityByDate || [];
+                perDayEl.innerHTML = activityByDate.length
+                    ? activityByDate.map(row => `<div class="metric-row"><span>${row.date}</span><span>${row.count}</span></div>`).join('')
+                    : '<div class="text-muted">No login activity recorded yet.</div>';
+
+                const topUsers = metrics.topUsers || [];
+                topUsersEl.innerHTML = topUsers.length
+                    ? topUsers.map(row => `<div class="metric-row"><span>${row.username}</span><span>${row.count}</span></div>`).join('')
+                    : '<div class="text-muted">No recent user activity.</div>';
+
+                const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+                if (!logs.length) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="5">
+                                <div class="text-muted" style="text-align:center;">No login attempts recorded yet.</div>
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tableBody.innerHTML = logs
+                    .map((log) => {
+                        const statusCapsule = log.status === 'success'
+                            ? '<span class="status-pill success">Success</span>'
+                            : '<span class="status-pill danger">Failure</span>';
+
+                        return `
+                            <tr>
+                                <td>${this.formatDateTime(log.createdAt)}</td>
+                                <td>${log.username || 'Unknown'}</td>
+                                <td>${statusCapsule}</td>
+                                <td>${log.message || '—'}</td>
+                                <td>
+                                    <div class="log-meta">
+                                        <div>IP: ${log.ipAddress || 'Unknown'}</div>
+                                        <div class="text-muted">${log.userAgent || ''}</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    })
+                    .join('');
+            })
+            .catch(error => {
+                console.error('Failed to load login logs:', error);
+                summaryEl.textContent = 'Unable to load activity summary.';
+                perDayEl.innerHTML = '<div class="text-muted">—</div>';
+                topUsersEl.innerHTML = '<div class="text-muted">—</div>';
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5">
+                            <div class="text-muted" style="text-align:center;">Unable to load login logs.</div>
+                        </td>
+                    </tr>
+                `;
+            });
+    },
+
+    formatDateTime(value) {
+        if (!value) return 'Unknown';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+
+    exportMonthlyCsv() {
+        if (typeof App !== 'undefined' && !App.isFeatureEnabled('adminCsvExport')) {
+            UI.showNotification('Admin CSV export is currently disabled.', 'info');
+            return;
+        }
+
+        const monthInput = document.getElementById('adminReportMonth');
+        const selectedMonth = monthInput && monthInput.value
+            ? monthInput.value
+            : new Date().toISOString().substring(0, 7);
+
+        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, App.reportFilters || {});
+        if (!analytics) {
+            UI.showNotification('No analytics data available for the selected month.', 'error');
+            return;
+        }
+
+        const rows = App.buildReportsCsvRows(analytics);
+        const filename = `pams_reports_${selectedMonth}_admin.csv`;
+        App.downloadCsv(filename, rows);
+        UI.showNotification('Monthly analytics CSV downloaded.', 'success');
+        if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+            Audit.log({
+                action: 'report.export',
+                entity: 'monthlyAnalytics',
+                entityId: selectedMonth,
+                detail: { rowCount: rows.length }
+            });
+        }
+    },
+
+    loadNotificationSettings(force) {
+        const form = document.getElementById('notificationSettingsForm');
+        if (!form) return;
+
+        const recipientsInput = document.getElementById('notificationRecipients');
+        if (recipientsInput && !force) {
+            recipientsInput.value = '';
+            recipientsInput.placeholder = 'Loading notification settings…';
+        }
+
+        fetch('/api/admin/config/notifications', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load notification settings');
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.notificationSettings = payload?.settings || this.notificationSettings;
+                this.renderNotificationSettings();
+            })
+            .catch(error => {
+                console.error('Failed to load notification settings:', error);
+                if (recipientsInput) {
+                    recipientsInput.placeholder = 'Unable to load settings.';
+                }
+            });
+    },
+
+    renderNotificationSettings() {
+        const settings = this.notificationSettings || {};
+        const recipientsInput = document.getElementById('notificationRecipients');
+        const flagToggle = document.getElementById('notifyFeatureToggle');
+        const csvToggle = document.getElementById('notifyCsvFailure');
+        const loginToggle = document.getElementById('notifyLoginAnomaly');
+        const form = document.getElementById('notificationSettingsForm');
+
+        if (recipientsInput) {
+            recipientsInput.placeholder = 'person@example.com';
+            recipientsInput.value = (settings.recipients || []).join('\n');
+        }
+        if (flagToggle) {
+            flagToggle.checked = Boolean(settings.events?.featureToggle);
+        }
+        if (csvToggle) {
+            csvToggle.checked = Boolean(settings.events?.csvFailure);
+        }
+        if (loginToggle) {
+            loginToggle.checked = Boolean(settings.events?.loginAnomaly);
+        }
+        if (form && !form.dataset.bound) {
+            form.addEventListener('submit', (event) => this.saveNotificationSettings(event));
+            form.dataset.bound = 'true';
+        }
+    },
+
+    saveNotificationSettings(event) {
+        event.preventDefault();
+        const recipientsInput = document.getElementById('notificationRecipients');
+        const flagToggle = document.getElementById('notifyFeatureToggle');
+        const csvToggle = document.getElementById('notifyCsvFailure');
+        const loginToggle = document.getElementById('notifyLoginAnomaly');
+
+        const recipients = recipientsInput && recipientsInput.value
+            ? recipientsInput.value
+                .split(/[\n,;]/)
+                .map(item => item.trim())
+                .filter(Boolean)
+            : [];
+
+        const settings = {
+            recipients,
+            events: {
+                featureToggle: flagToggle ? flagToggle.checked : false,
+                csvFailure: csvToggle ? csvToggle.checked : false,
+                loginAnomaly: loginToggle ? loginToggle.checked : false
+            }
+        };
+
+        fetch('/api/admin/config/notifications', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+            body: JSON.stringify({ settings })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to update notification settings');
+                }
+                return response.json();
+            })
+            .then(payload => {
+                this.notificationSettings = payload?.settings || settings;
+                UI.showNotification('Notification preferences saved.', 'success');
+                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                    Audit.log({
+                        action: 'notification.update',
+                        entity: 'emailNotifications',
+                        detail: {
+                            recipientCount: this.notificationSettings.recipients.length,
+                            events: this.notificationSettings.events
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to update notification settings:', error);
+                UI.showNotification('Unable to save notification settings.', 'error');
+            });
+    },
+
+    loadActivityLogs(force) {
+        const container = document.getElementById('activityLogsTable');
+        if (!container) return;
+
+        if (!force) {
+            container.innerHTML = '<div class="text-muted">Loading activity logs…</div>';
+        }
+
+        fetch('/api/admin/activity?limit=200', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch activity logs');
+                }
+                return response.json();
+            })
+            .then(payload => {
+                const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+                if (!logs.length) {
+                    container.innerHTML = '<div class="text-muted">No activity records yet.</div>';
+                    return;
+                }
+
+                const rows = logs.map(log => `
+                    <tr>
+                        <td>${this.formatDateTime(log.createdAt)}</td>
+                        <td>${log.username || 'Unknown'}</td>
+                        <td>${log.action || '—'}</td>
+                        <td>${log.entity || '—'}</td>
+                        <td>${log.entityId || '—'}</td>
+                        <td><code class="log-detail">${this.formatDetail(log.detail)}</code></td>
+                    </tr>
+                `).join('');
+
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Entity</th>
+                                    <th>Entity ID</th>
+                                    <th>Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Failed to load activity logs:', error);
+                container.innerHTML = '<div class="text-muted">Unable to load activity logs.</div>';
+            });
+    },
+
+    exportActivityLogsCsv() {
+        fetch('/api/admin/activity?limit=500', {
+            cache: 'no-store',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to fetch activity logs for export');
+                }
+                return response.json();
+            })
+            .then(payload => {
+                const logs = Array.isArray(payload?.logs) ? payload.logs : [];
+                if (!logs.length) {
+                    UI.showNotification('No activity logs available to export.', 'info');
+                    return;
+                }
+
+                const header = ['Timestamp', 'User', 'Action', 'Entity', 'Entity ID', 'Detail'];
+                const rows = logs.map(log => [
+                    this.formatDateTime(log.createdAt),
+                    log.username || 'Unknown',
+                    log.action || '',
+                    log.entity || '',
+                    log.entityId || '',
+                    JSON.stringify(log.detail || {})
+                ]);
+
+                if (typeof App !== 'undefined' && typeof App.downloadCsv === 'function') {
+                    App.downloadCsv(`activity_logs_${new Date().toISOString().substring(0, 10)}.csv`, [header, ...rows]);
+                } else {
+                    const csv = rows.map(row => row.join(',')).join('\r\n');
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `activity_logs_${Date.now()}.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }
+
+                UI.showNotification('Activity logs exported.', 'success');
+                if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                    Audit.log({
+                        action: 'activity.export',
+                        entity: 'auditLogs',
+                        entityId: `range:${rows.length}`,
+                        detail: { rowCount: rows.length }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Failed to export activity logs:', error);
+                UI.showNotification('Unable to export activity logs.', 'error');
+            });
+    },
+
+    formatDetail(detail) {
+        if (!detail) return '{}';
+        try {
+            return JSON.stringify(detail, null, 0);
+        } catch (error) {
+            return '{}';
         }
     },
 

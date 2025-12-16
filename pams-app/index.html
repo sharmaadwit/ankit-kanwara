@@ -61,7 +61,7 @@
             <!-- Sidebar Navigation -->
             <nav id="sidebar" class="sidebar">
                 <ul class="sidebar-menu">
-                    <li><a href="#" data-view="dashboard" class="sidebar-link active">
+                    <li data-dashboard="dashboard"><a href="#" data-view="dashboard" class="sidebar-link active">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                             <polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -78,14 +78,14 @@
                         </svg>
                         <span>Activities</span>
                     </a></li>
-                    <li><a href="#" data-view="winloss" class="sidebar-link">
+                    <li data-feature="winLoss" data-dashboard="winLoss"><a href="#" data-view="winloss" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                             <polyline points="22 4 12 14.01 9 11.01"></polyline>
                         </svg>
                         <span>Win/Loss</span>
                     </a></li>
-                    <li><a href="#" data-view="import" class="sidebar-link">
+                    <li data-feature="csvImport" data-dashboard="csvImport"><a href="#" data-view="import" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
                             <polyline points="7 9 12 4 17 9"></polyline>
@@ -93,7 +93,7 @@
                         </svg>
                         <span>Import Activities</span>
                     </a></li>
-                    <li><a href="#" data-view="reports" class="sidebar-link">
+                    <li data-dashboard="reports"><a href="#" data-view="reports" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 3v18h18"></path>
                             <path d="M18 7v11"></path>
@@ -126,7 +126,7 @@
                         </svg>
                         <span>SFDC Compliance</span>
                     </a></li>
-                    <li id="adminNav" class="hidden"><a href="#" data-view="admin" class="sidebar-link">
+                    <li id="adminNav" class="hidden" data-dashboard="admin"><a href="#" data-view="admin" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                             <path d="M2 17l10 5 10-5"></path>
@@ -269,7 +269,7 @@
                                 <label class="form-label">Select Month</label>
                                 <input type="month" id="reportMonth" class="form-control" onchange="App.loadReports()">
                             </div>
-                            <button class="btn btn-secondary" id="reportExportBtn" onclick="App.exportReportsCsv()">Export CSV</button>
+                            <button class="btn btn-secondary" id="reportExportBtn" data-feature="csvExport" data-feature-mode="disable" onclick="App.exportReportsCsv()">Export CSV</button>
                         </div>
                         <div id="reportsContent"></div>
                     </div>
@@ -407,6 +407,132 @@
                         </div>
                     </div>
 
+                    <!-- Feature Controls -->
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3>Feature Controls</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable capabilities globally. Changes apply after users refresh their browser.</p>
+                            <div id="featureToggleList" class="feature-toggle-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dashboard Controls -->
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3>Dashboard Controls</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted" style="margin-bottom: 1rem;">Show or hide dashboard navigation entries for all users.</p>
+                            <div id="dashboardVisibilityList" class="feature-toggle-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Email Notifications -->
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3>Email Notifications</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="notificationSettingsForm" class="form-grid">
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label class="form-label">Notification Recipients</label>
+                                    <textarea id="notificationRecipients" class="form-control" rows="4" placeholder="person@example.com"></textarea>
+                                    <small class="text-muted">Add one email per line. Messages use the configured Gmail account.</small>
+                                </div>
+                                <div class="form-group" style="grid-column: 1 / -1;">
+                                    <label class="form-label">Notify On</label>
+                                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                        <label>
+                                            <input type="checkbox" id="notifyFeatureToggle"> Feature flag changes
+                                        </label>
+                                        <label>
+                                            <input type="checkbox" id="notifyCsvFailure"> CSV import failures
+                                        </label>
+                                        <label>
+                                            <input type="checkbox" id="notifyLoginAnomaly"> Login anomaly alerts
+                                        </label>
+                                    </div>
+                                </div>
+                                <div style="grid-column: 1 / -1;">
+                                    <button type="submit" class="btn btn-primary">Save Notification Settings</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Login Activity & Usage -->
+                    <div class="card mb-6">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Login Activity & Usage</h3>
+                            <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="loginMetricsSummary" class="login-metrics-summary"></div>
+                            <div class="login-metrics-grid">
+                                <div class="login-metrics-panel">
+                                    <h4>Activity (Last 14 days)</h4>
+                                    <div id="loginMetricsByDate" class="metric-list"></div>
+                                </div>
+                                <div class="login-metrics-panel">
+                                    <h4>Top Users (7 days)</h4>
+                                    <div id="loginTopUsers" class="metric-list"></div>
+                                </div>
+                            </div>
+                            <div class="table-responsive" style="margin-top: 1.5rem;">
+                                <table class="table" id="loginLogsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>User</th>
+                                            <th>Status</th>
+                                            <th>Message</th>
+                                            <th>Context</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td colspan="5">
+                                                <div class="text-muted" style="text-align:center;">Loading login activity...</div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Audit Log -->
+                    <div class="card mb-6">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Activity Audit Log</h3>
+                            <div style="display: flex; gap: 0.75rem;">
+                                <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
+                                <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
+                            </div>
+                        </div>
+                        <div class="card-body" id="activityLogsTable">
+                            <div class="text-muted">Loading activity logs…</div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly Analytics Export -->
+                    <div class="card mb-6" data-feature="adminCsvExport">
+                        <div class="card-header">
+                            <h3>Monthly Analytics Export (Admin)</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Select Month</label>
+                                    <input type="month" id="adminReportMonth" class="form-control">
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
+                        </div>
+                    </div>
+
                     <!-- POC Sandbox Access Management -->
                     <div class="card">
                         <div class="card-header">
@@ -433,17 +559,20 @@
                 </div>
 
                 <!-- Import Activities View -->
-                <div id="importView" class="view hidden">
+                <div id="importView" class="view hidden" data-feature="csvImport">
                     <div class="page-header">
                         <h1 class="page-title">Bulk Import Activities</h1>
                         <p class="page-subtitle">Download a template, upload activities, preview the results, and commit the import.</p>
+                    </div>
+                    <div id="csvImportDisabledBanner" class="feature-disabled-banner hidden">
+                        CSV import is currently disabled by the administrator. Please check back later.
                     </div>
 
                     <div class="card">
                         <div class="card-header">
                             <h3>Templates & Guidance</h3>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" data-csv-import-section>
                             <p style="margin-bottom: 1rem;">Start by downloading one of the templates. Populate the required columns and then upload your CSV file.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
                                 <button class="btn btn-secondary" onclick="BulkImport.downloadTemplate('external')">Download External Activity Template</button>
@@ -463,7 +592,7 @@
                         <div class="card-header">
                             <h3>Upload CSV</h3>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" data-csv-import-section>
                             <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                                 <input type="file" id="importFileInput" accept=".csv" class="form-control" style="max-width: 320px;">
                                 <button class="btn btn-primary" id="importDryRunBtn" disabled>Run Dry-Run</button>
@@ -483,7 +612,7 @@
                                 <button class="btn btn-primary btn-sm" id="importConfirmBtn">Commit Valid Rows</button>
                             </div>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" data-csv-import-section>
                             <div id="importSummary" style="margin-bottom: 1rem;"></div>
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
                                 <div class="text-muted" style="font-size: 0.85rem;">
@@ -529,7 +658,7 @@
                         <div class="card-header">
                             <h3>Import Summary</h3>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body" data-csv-import-section>
                             <div id="importCommitSummary"></div>
                         </div>
                     </div>
@@ -543,6 +672,7 @@
 
     <!-- Scripts -->
     <script src="js/remoteStorage.js"></script>
+    <script src="js/audit.js"></script>
     <script src="js/data.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/ui.js"></script>

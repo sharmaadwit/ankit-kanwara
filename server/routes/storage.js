@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 
 const { getPool } = require('../db');
-const { requireStorageAuth } = require('../middleware/auth');
-
-router.use(requireStorageAuth);
 
 const listKeys = async () => {
   const { rows } = await getPool().query(

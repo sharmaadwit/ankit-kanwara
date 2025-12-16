@@ -5,7 +5,18 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 
 const storageRouter = require('./routes/storage');
+const adminLogsRouter = require('./routes/adminLogs');
+const adminConfigRouter = require('./routes/adminConfig');
+const activityLogsRouter = require('./routes/activityLogs');
 const logger = require('./logger');
+const { getFeatureFlags } = require('./services/featureFlags');
+const {
+  getDashboardVisibility
+} = require('./services/dashboardVisibility');
+const {
+  requireStorageAuth,
+  requireAdminAuth
+} = require('./middleware/auth');
 
 const loadEnvironment = () => {
   const envPath = path.resolve(process.cwd(), '.env');
@@ -110,22 +121,39 @@ const createApp = (options = {}) => {
     next();
   });
 
-  app.use('/api/storage', storageRouter);
+  app.use('/api/storage', requireStorageAuth, storageRouter);
+  app.use('/api/admin/logs', adminLogsRouter);
+  app.use('/api/admin/config', requireAdminAuth, adminConfigRouter);
+  app.use('/api/admin/activity', activityLogsRouter);
 
   app.get('/api/health', async (req, res) => {
     res.json({ status: 'ok' });
   });
 
-  app.get('/api/config', (req, res) => {
+  app.get('/api/config', async (req, res) => {
     const hostname = req.hostname || '';
     const isLocalHost =
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
-    res.json({
-      remoteStorage:
-        forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0)
-    });
+    try {
+      const featureFlags = await getFeatureFlags();
+      const dashboardVisibility = await getDashboardVisibility();
+      res.json({
+        remoteStorage:
+          forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+        featureFlags,
+        dashboardVisibility
+      });
+    } catch (error) {
+      logger.error('config_fetch_failed', { message: error.message });
+      res.json({
+        remoteStorage:
+          forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+        featureFlags: {},
+        dashboardVisibility: {}
+      });
+    }
   });
 
   if (!options.disableStatic) {

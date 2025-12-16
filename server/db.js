@@ -1,5 +1,4 @@
 const { Pool } = require('pg');
-const logger = require('./logger');
 
 let pool;
 
@@ -78,7 +77,7 @@ const createPool = () => {
 
   connectionString = appendSslMode(connectionString, useSsl);
 
-  const createdPool = new Pool({
+  return new Pool({
     connectionString,
     ssl: useSsl
       ? {
@@ -89,20 +88,6 @@ const createPool = () => {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000
   });
-
-  createdPool.on('error', (error) => {
-    logger.error('pg_pool_error', {
-      message: error.message,
-      stack: error.stack
-    });
-  });
-
-  logger.info('pg_pool_created', {
-    sslEnabled: useSsl,
-    maxConnections: parseInt(process.env.PGPOOL_MAX || '10', 10)
-  });
-
-  return createdPool;
 };
 
 const getPool = () => {
@@ -121,6 +106,41 @@ const initDb = async () => {
         value TEXT NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS login_logs (
+        id SERIAL PRIMARY KEY,
+        username TEXT,
+        status TEXT NOT NULL,
+        message TEXT,
+        user_agent TEXT,
+        ip_address TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_login_logs_created_at
+      ON login_logs (created_at DESC);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        username TEXT,
+        action TEXT NOT NULL,
+        entity TEXT,
+        entity_id TEXT,
+        detail JSONB,
+        ip_address TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at
+      ON activity_logs (created_at DESC);
     `);
   } finally {
     client.release();

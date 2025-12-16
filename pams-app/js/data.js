@@ -1,6 +1,21 @@
 // Data Management Module - localStorage operations
 
 const DataManager = {
+    recordAudit(action, entity, entityId, detail = {}) {
+        try {
+            if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                Audit.log({
+                    action,
+                    entity,
+                    entityId,
+                    detail
+                });
+            }
+        } catch (error) {
+            console.warn('Audit logging skipped:', error);
+        }
+    },
+
     // Initialize default data
     initialize() {
         try {
@@ -284,6 +299,11 @@ const DataManager = {
         salesRep.isActive = salesRep.isActive !== undefined ? salesRep.isActive : true;
         salesReps.push(salesRep);
         this.saveGlobalSalesReps(salesReps);
+        this.recordAudit('salesRep.create', 'salesRep', salesRep.id, {
+            name: salesRep.name,
+            email: salesRep.email,
+            region: salesRep.region
+        });
         return salesRep;
     },
 
@@ -302,6 +322,7 @@ const DataManager = {
             merged.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
             salesReps[index] = merged;
             this.saveGlobalSalesReps(salesReps);
+            this.recordAudit('salesRep.update', 'salesRep', salesRepId, updates);
             return merged;
         }
         return null;
@@ -310,6 +331,7 @@ const DataManager = {
     deleteGlobalSalesRep(salesRepId) {
         const salesReps = this.getGlobalSalesReps().filter(r => r.id !== salesRepId);
         this.saveGlobalSalesReps(salesReps);
+        this.recordAudit('salesRep.delete', 'salesRep', salesRepId);
     },
 
     // Get unique sales rep names from activities (for promotion)
@@ -351,6 +373,10 @@ const DataManager = {
         account.createdAt = new Date().toISOString();
         accounts.push(account);
         this.saveAccounts(accounts);
+        this.recordAudit('account.create', 'account', account.id, {
+            name: account.name,
+            industry: account.industry || ''
+        });
         return account;
     },
 
@@ -360,6 +386,7 @@ const DataManager = {
         if (index !== -1) {
             accounts[index] = { ...accounts[index], ...updates, updatedAt: new Date().toISOString() };
             this.saveAccounts(accounts);
+            this.recordAudit('account.update', 'account', accountId, updates);
             return accounts[index];
         }
         return null;
@@ -374,6 +401,9 @@ const DataManager = {
         // Delete account (projects are nested, so they'll be deleted too)
         const accounts = this.getAccounts().filter(a => a.id !== accountId);
         this.saveAccounts(accounts);
+        this.recordAudit('account.delete', 'account', accountId, {
+            removedActivities: activities.length - filteredActivities.length
+        });
     },
 
     // Project Management
@@ -388,6 +418,11 @@ const DataManager = {
             project.createdAt = new Date().toISOString();
             account.projects.push(project);
             this.saveAccounts(accounts);
+            this.recordAudit('project.create', 'project', project.id, {
+                accountId,
+                name: project.name,
+                status: project.status
+            });
             return project;
         }
         return null;
@@ -401,6 +436,10 @@ const DataManager = {
             if (project) {
                 Object.assign(project, updates, { updatedAt: new Date().toISOString() });
                 this.saveAccounts(accounts);
+                this.recordAudit('project.update', 'project', projectId, {
+                    accountId,
+                    ...updates
+                });
                 return project;
             }
         }
@@ -424,6 +463,12 @@ const DataManager = {
         activity.updatedAt = new Date().toISOString();
         activities.push(activity);
         this.saveActivities(activities);
+        this.recordAudit('activity.create', 'activity', activity.id, {
+            accountId: activity.accountId || null,
+            projectId: activity.projectId || null,
+            type: activity.type || '',
+            category: activity.isInternal ? 'internal' : 'external'
+        });
         return activity;
     },
 
@@ -433,6 +478,7 @@ const DataManager = {
         if (index !== -1) {
             activities[index] = { ...activities[index], ...updates, updatedAt: new Date().toISOString() };
             this.saveActivities(activities);
+            this.recordAudit('activity.update', 'activity', activityId, updates);
             return activities[index];
         }
         return null;
@@ -441,6 +487,7 @@ const DataManager = {
     deleteActivity(activityId) {
         const activities = this.getActivities().filter(a => a.id !== activityId);
         this.saveActivities(activities);
+        this.recordAudit('activity.delete', 'activity', activityId);
     },
 
     // Internal Activities
@@ -460,6 +507,10 @@ const DataManager = {
         activity.updatedAt = new Date().toISOString();
         activities.push(activity);
         this.saveInternalActivities(activities);
+        this.recordAudit('activity.create', 'internalActivity', activity.id, {
+            type: activity.type || '',
+            name: activity.activityName || ''
+        });
         return activity;
     },
 
@@ -469,6 +520,7 @@ const DataManager = {
         if (index !== -1) {
             activities[index] = { ...activities[index], ...updates, updatedAt: new Date().toISOString() };
             this.saveInternalActivities(activities);
+            this.recordAudit('activity.update', 'internalActivity', activityId, updates);
             return activities[index];
         }
         return null;
@@ -477,6 +529,7 @@ const DataManager = {
     deleteInternalActivity(activityId) {
         const activities = this.getInternalActivities().filter(a => a.id !== activityId);
         this.saveInternalActivities(activities);
+        this.recordAudit('activity.delete', 'internalActivity', activityId);
     },
 
     // Presales analytics target management

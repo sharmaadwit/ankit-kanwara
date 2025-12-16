@@ -1,5 +1,6 @@
 // Bulk Import Module
 const BulkImport = {
+    isEnabled: true,
     state: {
         file: null,
         rows: [],
@@ -15,6 +16,7 @@ const BulkImport = {
         this.cacheDom();
         this.bindEvents();
         this.reset();
+        this.evaluateFeatureAvailability();
     },
 
     cacheDom() {
@@ -88,6 +90,37 @@ const BulkImport = {
         if (typeof App !== 'undefined' && App.clearPendingDuplicateAlerts) {
             App.clearPendingDuplicateAlerts();
         }
+    },
+
+    evaluateFeatureAvailability() {
+        let allowed = true;
+        if (typeof App !== 'undefined') {
+            if (typeof App.isAccessible === 'function') {
+                allowed = App.isAccessible('csvImport');
+            } else if (typeof App.isFeatureEnabled === 'function') {
+                allowed = App.isFeatureEnabled('csvImport');
+            }
+        }
+        this.isEnabled = allowed;
+
+        const banner = document.getElementById('csvImportDisabledBanner');
+        if (banner) {
+            banner.classList.toggle('hidden', allowed);
+        }
+
+        const sections = document.querySelectorAll('[data-csv-import-section]');
+        sections.forEach(section => {
+            section.classList.toggle('feature-disabled', !allowed);
+        });
+
+        if (this.fileInput) this.fileInput.disabled = !allowed;
+        if (this.dryRunBtn) this.dryRunBtn.disabled = !allowed || !this.state.file;
+        if (this.confirmBtn) this.confirmBtn.disabled = !allowed || !this.state.parsedRows?.length;
+        if (this.downloadErrorsBtn) this.downloadErrorsBtn.disabled = !allowed;
+    },
+
+    notifyFeatureDisabled() {
+        UI.showNotification('CSV import is currently unavailable.', 'info');
     },
 
     toCsv(rows = []) {
@@ -316,6 +349,13 @@ const BulkImport = {
     },
 
     handleFileSelection(file) {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            if (this.fileInput) {
+                this.fileInput.value = '';
+            }
+            return;
+        }
         this.reset();
         if (!file) {
             return;
@@ -333,6 +373,10 @@ const BulkImport = {
     },
 
     runDryRun() {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            return;
+        }
         if (!this.state.file) return;
 
         const reader = new FileReader();
@@ -923,6 +967,10 @@ const BulkImport = {
     },
 
     commitImport() {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            return;
+        }
         const readyRows = this.state.parsedRows.filter(row => row.status === 'ready');
         if (!readyRows.length) {
             UI.showNotification('No rows ready for import.', 'error');
