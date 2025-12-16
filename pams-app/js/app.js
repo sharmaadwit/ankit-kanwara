@@ -149,6 +149,18 @@ const App = {
     },
 
     async handleSuccessfulLogin() {
+        const currentUser =
+            typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                ? Auth.getCurrentUser()
+                : null;
+
+        if (currentUser && currentUser.username) {
+            window.__REMOTE_STORAGE_USER__ = currentUser.username;
+            window.__REMOTE_STORAGE_HEADERS__ = {
+                'X-Admin-User': currentUser.username
+            };
+        }
+
         InterfaceManager.init();
         try {
             await this.refreshAppConfiguration();
