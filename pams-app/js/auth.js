@@ -34,10 +34,6 @@ const Auth = {
             DataManager.ensureDefaultUsers();
             
             const users = DataManager.getUsers();
-            console.log('Users found:', users.length);
-            console.log('All usernames:', users.map(u => u.username));
-            console.log('Looking for user:', username);
-            console.log('Password entered:', password ? '***' : 'empty');
             
             // Trim username and password to avoid whitespace issues
             const trimmedUsername = username.trim();
@@ -45,16 +41,11 @@ const Auth = {
             
             const user = users.find(u => {
                 const match = u.username === trimmedUsername && u.password === trimmedPassword;
-                if (match) {
-                    console.log('Found matching user:', u.username, 'Active:', u.isActive);
-                }
                 return match;
             });
             
             if (user && user.isActive) {
-                console.log('User found and active:', user.username);
                 if (user.forcePasswordChange) {
-                    console.log('User requires password change before access.');
                     this.pendingPasswordChangeUser = user;
                     this.showPasswordChangePrompt(user);
                     if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
@@ -79,9 +70,9 @@ const Auth = {
             // Debug: show what we're comparing
             const foundUser = users.find(u => u.username === trimmedUsername);
             if (foundUser) {
-                console.log('User exists but password mismatch. Expected:', foundUser.password, 'Got:', trimmedPassword);
+                console.warn('Login attempt failed: password mismatch for user', trimmedUsername);
             } else {
-                console.log('User not found in database');
+                console.warn('Login attempt failed: user not found', trimmedUsername);
             }
             
             return { success: false, message: 'Invalid credentials' };

@@ -22,7 +22,6 @@ const DataManager = {
             // Initialize users if none exist
             const existingUsers = this.getUsers();
             if (!existingUsers.length) {
-                console.log('Initializing default users...');
                 const defaultUsers = [
                     {
                         id: this.generateId(),
@@ -52,9 +51,6 @@ const DataManager = {
                     }
                 ];
                 this.saveUsers(defaultUsers);
-                console.log('Default users created:', defaultUsers.length);
-            } else {
-                console.log('Users already exist:', existingUsers.length);
             }
 
         // Initialize industries if none exist
@@ -137,7 +133,6 @@ const DataManager = {
     ensureDefaultUsers() {
         const users = this.getUsers();
         if (users.length === 0) {
-            console.log('Creating default users...');
             const defaultUsers = [
                 {
                     id: this.generateId(),
@@ -167,8 +162,6 @@ const DataManager = {
                 }
             ];
             this.saveUsers(defaultUsers);
-            console.log('Default users created:', defaultUsers.length);
-            return defaultUsers;
         }
         return users;
     },
