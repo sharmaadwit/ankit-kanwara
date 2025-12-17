@@ -17,6 +17,9 @@ const {
   requireStorageAuth,
   requireAdminAuth
 } = require('./middleware/auth');
+const {
+  requestContextMiddleware
+} = require('./middleware/requestContext');
 
 const loadEnvironment = () => {
   const envPath = path.resolve(process.cwd(), '.env');
@@ -38,6 +41,7 @@ const createApp = (options = {}) => {
   const forceRemoteStorage =
     String(process.env.FORCE_REMOTE_STORAGE || '').toLowerCase() === 'true';
 
+  app.use(requestContextMiddleware);
   const explicitOrigins = (process.env.CORS_ALLOW_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())

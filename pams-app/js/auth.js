@@ -4,24 +4,100 @@ const Auth = {
     currentUser: null,
     pendingPasswordChangeUser: null,
 
+    getSessionStore() {
+        try {
+            if (typeof window === 'undefined') return null;
+            if (window.__BROWSER_LOCAL_STORAGE__) {
+                return window.__BROWSER_LOCAL_STORAGE__;
+            }
+            if (!window.__REMOTE_STORAGE_ENABLED__ && window.localStorage) {
+                return window.localStorage;
+            }
+            if (window.sessionStorage) {
+                return window.sessionStorage;
+            }
+            if (window.localStorage) {
+                return window.localStorage;
+            }
+            return null;
+        } catch (error) {
+            console.warn('Session storage unavailable', error);
+            return null;
+        }
+    },
+
+    readSession() {
+        const store = this.getSessionStore();
+        if (!store) return null;
+        try {
+            const raw = store.getItem('currentSession');
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch (error) {
+            try {
+                store.removeItem('currentSession');
+            } catch (cleanupError) {
+                console.warn('Unable to clear corrupt session token', cleanupError);
+            }
+            console.warn('Failed to read session token', error);
+            return null;
+        }
+    },
+
+    writeSession(payload) {
+        const store = this.getSessionStore();
+        if (!store) return;
+        try {
+            store.setItem('currentSession', JSON.stringify(payload));
+        } catch (error) {
+            console.warn('Failed to persist session token', error);
+        }
+    },
+
+    clearSession() {
+        const store = this.getSessionStore();
+        if (store) {
+            try {
+                store.removeItem('currentSession');
+            } catch (error) {
+                console.warn('Unable to clear session token', error);
+            }
+        }
+        this.clearRemoteSessionArtifact();
+    },
+
+    clearRemoteSessionArtifact() {
+        try {
+            if (
+                typeof window === 'undefined' ||
+                !window.__REMOTE_STORAGE_ENABLED__ ||
+                !window.__BROWSER_LOCAL_STORAGE__
+            ) {
+                return;
+            }
+            window.localStorage.removeItem('currentSession');
+        } catch (error) {
+            console.warn('Unable to clear shared session token', error);
+        }
+    },
+
     // Initialize authentication
     init() {
         // Check for existing session
-        const session = localStorage.getItem('currentSession');
-        if (session) {
-            const sessionData = JSON.parse(session);
+        this.clearRemoteSessionArtifact();
+        const sessionData = this.readSession();
+        if (sessionData && sessionData.userId) {
             const user = DataManager.getUserById(sessionData.userId);
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
-                    localStorage.removeItem('currentSession');
+                    this.clearSession();
                     return false;
                 }
                 this.currentUser = user;
                 this.showMainApp();
                 return true;
-            } else {
-                localStorage.removeItem('currentSession');
             }
+            this.clearSession();
         }
         return false;
     },
@@ -62,10 +138,10 @@ const Auth = {
                 }
                 this.pendingPasswordChangeUser = null;
                 this.currentUser = user;
-                localStorage.setItem('currentSession', JSON.stringify({
+                this.writeSession({
                     userId: user.id,
                     loginTime: new Date().toISOString()
-                }));
+                });
                 this.reportLoginEvent('success', {
                     username: trimmedUsername,
                     message: 'Login successful'
@@ -101,7 +177,7 @@ const Auth = {
     logout() {
         this.currentUser = null;
         this.pendingPasswordChangeUser = null;
-        localStorage.removeItem('currentSession');
+        this.clearSession();
         this.showLoginScreen();
     },
 
@@ -253,10 +329,10 @@ const Auth = {
 
             this.pendingPasswordChangeUser = null;
             this.currentUser = updated;
-            localStorage.setItem('currentSession', JSON.stringify({
+            this.writeSession({
                 userId: updated.id,
                 loginTime: new Date().toISOString()
-            }));
+            });
             this.resetLoginForms();
             this.showMainApp();
             if (typeof App !== 'undefined' && typeof App.handleSuccessfulLogin === 'function') {

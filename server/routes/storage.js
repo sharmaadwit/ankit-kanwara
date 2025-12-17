@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { getPool } = require('../db');
+const logger = require('../logger');
 
 const listKeys = async () => {
   const { rows } = await getPool().query(
@@ -46,7 +47,10 @@ router.get('/', async (req, res) => {
     const keys = await listKeys();
     res.json({ keys });
   } catch (error) {
-    console.error('Failed to list storage keys', error);
+    logger.error('storage_list_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to list keys' });
   }
 });
@@ -60,7 +64,11 @@ router.get('/:key', async (req, res) => {
     }
     res.json({ key: req.params.key, value });
   } catch (error) {
-    console.error('Failed to read storage key', error);
+    logger.error('storage_read_failed', {
+      message: error.message,
+      transactionId: req.transactionId,
+      key: req.params.key
+    });
     res.status(500).json({ message: 'Failed to read key' });
   }
 });
@@ -79,7 +87,11 @@ router.put('/:key', async (req, res) => {
     await setValue(req.params.key, serializedValue);
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to save storage key', error);
+    logger.error('storage_write_failed', {
+      message: error.message,
+      transactionId: req.transactionId,
+      key: req.params.key
+    });
     res.status(500).json({ message: 'Failed to save key' });
   }
 });
@@ -89,7 +101,11 @@ router.delete('/:key', async (req, res) => {
     await deleteValue(req.params.key);
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to remove storage key', error);
+    logger.error('storage_delete_failed', {
+      message: error.message,
+      transactionId: req.transactionId,
+      key: req.params.key
+    });
     res.status(500).json({ message: 'Failed to remove key' });
   }
 });
@@ -99,7 +115,10 @@ router.delete('/', async (req, res) => {
     await clearAll();
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to clear storage', error);
+    logger.error('storage_clear_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to clear storage' });
   }
 });

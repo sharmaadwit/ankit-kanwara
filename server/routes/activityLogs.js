@@ -6,6 +6,7 @@ const {
   getActivityLogs
 } = require('../services/activityLogs');
 const { requireAdminAuth } = require('../middleware/auth');
+const logger = require('../logger');
 
 router.post('/', async (req, res) => {
   try {
@@ -16,11 +17,15 @@ router.post('/', async (req, res) => {
       entity,
       entityId,
       detail,
-      ipAddress: req.ip
+      ipAddress: req.ip,
+      transactionId: req.transactionId
     });
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to record activity log', error);
+    logger.error('activity_log_write_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to record activity log' });
   }
 });
@@ -31,7 +36,10 @@ router.get('/', requireAdminAuth, async (req, res) => {
     const logs = await getActivityLogs({ limit });
     res.json({ logs });
   } catch (error) {
-    console.error('Failed to fetch activity logs', error);
+    logger.error('activity_log_fetch_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to fetch activity logs' });
   }
 });

@@ -4,19 +4,24 @@ const logger = require('../logger');
 const STORAGE_KEY = 'dashboardVisibility';
 
 const defaultVisibility = {
+  dashboard: true,
   csvImport: true,
   winLoss: true,
   reports: true,
-  dashboard: true,
-  admin: true
+  admin: true,
+  activities: true,
+  accounts: true,
+  projectHealth: true,
+  sfdcCompliance: true,
+  logActivity: true,
+  adminLogin: true,
+  adminPoc: true
 };
 
 const normalizeVisibility = (input = {}) => {
   const normalized = { ...defaultVisibility };
-  Object.keys(defaultVisibility).forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(input, key)) {
-      normalized[key] = Boolean(input[key]);
-    }
+  Object.keys(input).forEach((key) => {
+    normalized[key] = Boolean(input[key]);
   });
   return normalized;
 };

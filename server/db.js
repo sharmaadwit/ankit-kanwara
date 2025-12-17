@@ -121,6 +121,11 @@ const initDb = async () => {
     `);
 
     await client.query(`
+      ALTER TABLE login_logs
+      ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+    `);
+
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_login_logs_created_at
       ON login_logs (created_at DESC);
     `);
@@ -136,6 +141,11 @@ const initDb = async () => {
         ip_address TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE activity_logs
+      ADD COLUMN IF NOT EXISTS transaction_id TEXT;
     `);
 
     await client.query(`

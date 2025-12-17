@@ -48,7 +48,14 @@ const App = {
         csvImport: true,
         winLoss: true,
         reports: true,
-        admin: true
+        admin: true,
+        activities: true,
+        accounts: true,
+        projectHealth: true,
+        sfdcCompliance: true,
+        logActivity: true,
+        adminLogin: true,
+        adminPoc: true
     },
     dashboardVisibility: {},
 
@@ -210,6 +217,18 @@ const App = {
         if (!this.isAccessible('winLoss') && this.currentView === 'winloss') {
             this.switchView('dashboard');
         }
+        if (!this.isAccessible('activities') && this.currentView === 'activities') {
+            this.switchView('dashboard');
+        }
+        if (!this.isAccessible('accounts') && this.currentView === 'accounts') {
+            this.switchView('dashboard');
+        }
+        if (!this.isAccessible('projectHealth') && this.currentView === 'projectHealth') {
+            this.switchView('dashboard');
+        }
+        if (!this.isAccessible('sfdcCompliance') && this.currentView === 'sfdcCompliance') {
+            this.switchView('dashboard');
+        }
     },
 
     isFeatureEnabled(flag) {
@@ -269,6 +288,14 @@ const App = {
                 return 'winLoss';
             case 'reports':
                 return 'reports';
+            case 'activities':
+                return 'activities';
+            case 'accounts':
+                return 'accounts';
+            case 'projectHealth':
+                return 'projectHealth';
+            case 'sfdcCompliance':
+                return 'sfdcCompliance';
             case 'admin':
                 return 'admin';
             case 'adminLoginLogs':
@@ -301,6 +328,22 @@ const App = {
             dashboard: {
                 feature: 'Dashboard access is disabled.',
                 visibility: 'Dashboard access has been hidden.'
+            },
+            activities: {
+                feature: 'Activities workspace is currently disabled.',
+                visibility: 'Activities workspace has been hidden by the administrator.'
+            },
+            accounts: {
+                feature: 'Accounts view is currently disabled.',
+                visibility: 'Accounts view has been hidden by the administrator.'
+            },
+            projectHealth: {
+                feature: 'Project health tools are currently disabled.',
+                visibility: 'Project health tools have been hidden by the administrator.'
+            },
+            sfdcCompliance: {
+                feature: 'SFDC compliance tools are currently disabled.',
+                visibility: 'SFDC compliance view has been hidden by the administrator.'
             }
         };
 
@@ -543,7 +586,7 @@ const App = {
             <!-- Navigation Cards (3-column layout) -->
             <div class="card-grid minimal-nav">
                 <!-- Log Activity - First Card -->
-                <div class="nav-card clickable log-activity" onclick="Activities.openActivityModal()">
+                <div class="nav-card clickable log-activity" data-dashboard="logActivity" onclick="Activities.openActivityModal()">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -554,7 +597,7 @@ const App = {
                     <div class="nav-card-subtitle">Create a new activity</div>
                 </div>
                 
-                <div class="nav-card clickable activities" onclick="App.navigateToCardView('activities')">
+                <div class="nav-card clickable activities" data-dashboard="activities" onclick="App.navigateToCardView('activities')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -591,7 +634,7 @@ const App = {
                     <div class="nav-card-subtitle">Activity reports and analytics</div>
                 </div>
                 
-                <div class="nav-card clickable accounts" onclick="App.navigateToCardView('accounts')">
+                <div class="nav-card clickable accounts" data-dashboard="accounts" onclick="App.navigateToCardView('accounts')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
@@ -616,7 +659,7 @@ const App = {
                     <div class="nav-card-subtitle">Bulk upload activities</div>
                 </div>
                 
-                <div class="nav-card clickable project-health" onclick="App.navigateToCardView('projectHealth')">
+                <div class="nav-card clickable project-health" data-dashboard="projectHealth" onclick="App.navigateToCardView('projectHealth')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 3v18h18"></path>
@@ -628,7 +671,7 @@ const App = {
                     <div class="nav-card-subtitle">Aging projects & follow-ups</div>
                 </div>
                 
-                <div class="nav-card clickable compliance" onclick="App.navigateToCardView('sfdcCompliance')">
+                <div class="nav-card clickable compliance" data-dashboard="sfdcCompliance" onclick="App.navigateToCardView('sfdcCompliance')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 11l3 3L22 4"></path>
@@ -659,6 +702,7 @@ const App = {
         html += `</div>`;
         
         dashboardView.innerHTML = html;
+        this.applyAppConfiguration();
     },
     
     // Navigate to card view (for card interface)

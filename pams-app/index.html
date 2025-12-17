@@ -14,9 +14,6 @@
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
-            <div class="login-logo">
-                <img src="img/gupshup-logo.svg" alt="gupshup.ai logo">
-            </div>
             <p class="login-subtitle" id="loginSubtitle">Presales Activity Management System</p>
             <form id="loginForm" class="login-form">
                 <div class="form-group">
@@ -63,9 +60,6 @@
                             <path d="M3 12h18M3 6h18M3 18h18"/>
                         </svg>
                     </button>
-                    <button class="brand-button" onclick="App.switchView('dashboard')" title="Go to Dashboard">
-                        <img src="img/gupshup-logo.svg" alt="gupshup.ai logo" class="brand-logo">
-                    </button>
                 </div>
                 <div class="header-right">
                     <span id="currentUsernameDisplay" class="header-username hidden"></span>
@@ -85,7 +79,7 @@
                         </svg>
                         <span>Dashboard</span>
                     </a></li>
-                    <li><a href="#" data-view="activities" class="sidebar-link">
+                    <li data-dashboard="activities"><a href="#" data-view="activities" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
@@ -119,7 +113,7 @@
                         </svg>
                         <span>Reports</span>
                     </a></li>
-                    <li><a href="#" data-view="accounts" class="sidebar-link">
+                    <li data-dashboard="accounts"><a href="#" data-view="accounts" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                             <circle cx="9" cy="7" r="4"></circle>
@@ -128,7 +122,7 @@
                         </svg>
                         <span>Accounts</span>
                     </a></li>
-                    <li><a href="#" data-view="projectHealth" class="sidebar-link">
+                    <li data-dashboard="projectHealth"><a href="#" data-view="projectHealth" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 3v18h18"></path>
                             <polyline points="18 17 13 12 10 15 6 11"></polyline>
@@ -136,7 +130,7 @@
                         </svg>
                         <span>Project Health</span>
                     </a></li>
-                    <li><a href="#" data-view="sfdcCompliance" class="sidebar-link">
+                    <li data-dashboard="sfdcCompliance"><a href="#" data-view="sfdcCompliance" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M9 11l3 3L22 4"></path>
                             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
@@ -559,6 +553,7 @@
                                         <tr>
                                             <th>Time</th>
                                             <th>User</th>
+                                            <th>Transaction ID</th>
                                             <th>Status</th>
                                             <th>Message</th>
                                             <th>IP Address</th>
@@ -567,7 +562,7 @@
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td colspan="6">
+                                            <td colspan="7">
                                                 <div class="text-muted" style="text-align:center;">Loading login activity…</div>
                                             </td>
                                         </tr>

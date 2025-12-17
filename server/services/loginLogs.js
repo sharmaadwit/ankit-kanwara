@@ -1,4 +1,5 @@
 const { getPool } = require('../db');
+const { getTransactionId } = require('../middleware/requestContext');
 
 const VALID_STATUSES = new Set(['success', 'failure']);
 
@@ -13,15 +14,20 @@ const logLoginAttempt = async ({
   status,
   message,
   userAgent,
-  ipAddress
+  ipAddress,
+  transactionId
 }) => {
   const pool = getPool();
   await pool.query(
     `
-      INSERT INTO login_logs (username, status, message, user_agent, ip_address)
-      VALUES ($1, $2, $3, $4, $5);
+      INSERT INTO login_logs (transaction_id, username, status, message, user_agent, ip_address)
+      VALUES ($1, $2, $3, $4, $5, $6);
     `,
     [
+      (() => {
+        const id = transactionId || getTransactionId() || null;
+        return id ? String(id).trim() || null : null;
+      })(),
       username ? String(username).trim() : null,
       normalizeStatus(status),
       message ? String(message).trim() : null,
@@ -44,6 +50,7 @@ const getRecentLoginLogs = async (limit = 100, offset = 0) => {
     `
       SELECT
         id,
+        transaction_id AS "transactionId",
         COALESCE(NULLIF(username, ''), 'Unknown') AS username,
         status,
         message,

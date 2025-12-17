@@ -45,6 +45,26 @@ const Admin = {
             label: 'Admin Mode',
             description: 'Allow administrators to access the admin panel.'
         },
+        activities: {
+            label: 'All Activities',
+            description: 'Expose the activities workspace in navigation and dashboard cards.'
+        },
+        accounts: {
+            label: 'Accounts',
+            description: 'Allow users to access the accounts view and dashboard card.'
+        },
+        projectHealth: {
+            label: 'Project Health',
+            description: 'Show the project health tools in navigation and dashboard.'
+        },
+        sfdcCompliance: {
+            label: 'SFDC Compliance',
+            description: 'Show the SFDC compliance dashboards and navigation.'
+        },
+        logActivity: {
+            label: 'Log Activity Shortcut',
+            description: 'Display the quick log activity card on the dashboard.'
+        },
         adminLogin: {
             label: 'Login Activity',
             description: 'Expose the detailed login activity workspace to administrators.'
@@ -60,6 +80,11 @@ const Admin = {
         winLoss: true,
         reports: true,
         admin: true,
+        activities: true,
+        accounts: true,
+        projectHealth: true,
+        sfdcCompliance: true,
+        logActivity: true,
         adminLogin: true,
         adminPoc: true
     },
@@ -1245,17 +1270,14 @@ const Admin = {
         this.controlDefinitions.forEach((def) => {
             const featureEnabled = def.supportsFeature
                 ? this.currentFeatureFlags[def.key] !== false
-                : false;
-            const dashboardKey = def.dashboardKey;
-            const currentDashboardVisible = dashboardKey
-                ? this.currentDashboardVisibility[dashboardKey] !== false
                 : true;
+            const dashboardVisible = def.dashboardKey
+                ? this.currentDashboardVisibility[def.dashboardKey] !== false
+                : true;
+            const value = def.supportsFeature ? (featureEnabled && dashboardVisible) : dashboardVisible;
 
             draft[def.key] = {
-                feature: def.supportsFeature ? featureEnabled : undefined,
-                dashboard: def.supportsFeature
-                    ? (featureEnabled ? currentDashboardVisible : false)
-                    : currentDashboardVisible
+                value: value
             };
         });
         return draft;
@@ -1273,41 +1295,29 @@ const Admin = {
         const rows = this.controlDefinitions
             .map((def) => {
                 const state = this.controlDraft[def.key] || {};
-                const featureEnabled = def.supportsFeature ? state.feature !== false : null;
-                const dashboardEnabled = state.dashboard !== false;
-                const dashboardCheckboxDisabled =
-                    def.dashboardKey && def.supportsFeature && !featureEnabled;
+                const isOn = state.value !== false;
+                const statusClass = isOn ? 'status-on' : 'status-off';
+                const statusLabel = def.supportsFeature
+                    ? (isOn ? 'Enabled' : 'Disabled')
+                    : (isOn ? 'Visible' : 'Hidden');
+                const toggleLabel = def.supportsFeature ? 'Enable feature & card' : 'Show to users';
 
                 return `
                     <div class="admin-config-card" data-admin-control="${def.key}">
                         <div class="admin-config-card-header">
                             <h3 class="admin-config-card-title">${def.label}</h3>
-                            <span class="admin-config-card-status ${featureEnabled === null ? (dashboardEnabled ? 'status-on' : 'status-off') : featureEnabled ? 'status-on' : 'status-off'}">
-                                ${def.supportsFeature
-                                    ? featureEnabled ? 'Enabled' : 'Disabled'
-                                    : dashboardEnabled ? 'Visible' : 'Hidden'}
+                            <span class="admin-config-card-status ${statusClass}">
+                                ${statusLabel}
                             </span>
                         </div>
                         <div class="admin-config-card-body">
-                            ${def.supportsFeature
-                                ? `<label class="control-toggle">
-                                        <input type="checkbox"
-                                               data-control-type="feature"
-                                               data-control-key="${def.key}"
-                                               ${featureEnabled ? 'checked' : ''}>
-                                        <span>Feature enabled</span>
-                                   </label>`
-                                : ''}
-                            ${def.dashboardKey
-                                ? `<label class="control-toggle">
-                                        <input type="checkbox"
-                                               data-control-type="dashboard"
-                                               data-control-key="${def.key}"
-                                               ${dashboardEnabled ? 'checked' : ''}
-                                               ${dashboardCheckboxDisabled ? 'disabled' : ''}>
-                                        <span>Show in navigation</span>
-                                   </label>`
-                                : ''}
+                            <label class="control-toggle">
+                                <input type="checkbox"
+                                       data-control-type="${def.supportsFeature ? 'feature' : 'dashboard'}"
+                                       data-control-key="${def.key}"
+                                       ${isOn ? 'checked' : ''}>
+                                <span>${toggleLabel}</span>
+                            </label>
                             ${def.description
                                 ? `<p class="admin-config-card-description">${def.description}</p>`
                                 : ''}
@@ -1345,8 +1355,7 @@ const Admin = {
     handleControlToggle(event) {
         const input = event.currentTarget;
         const controlKey = input?.dataset?.controlKey;
-        const controlType = input?.dataset?.controlType;
-        if (!controlKey || !controlType) {
+        if (!controlKey) {
             return;
         }
 
@@ -1355,33 +1364,8 @@ const Admin = {
             return;
         }
 
-        const draft = this.controlDraft[controlKey] || { feature: true, dashboard: true };
-        const checked = input.checked;
-
-        if (controlType === 'feature') {
-            draft.feature = checked;
-            if (definition.dashboardKey && !checked) {
-                draft.dashboard = false;
-                const dashboardInput = document.querySelector(
-                    `input[data-control-type="dashboard"][data-control-key="${controlKey}"]`
-                );
-                if (dashboardInput) {
-                    dashboardInput.checked = false;
-                    dashboardInput.setAttribute('disabled', 'true');
-                }
-            } else if (definition.dashboardKey) {
-                const dashboardInput = document.querySelector(
-                    `input[data-control-type="dashboard"][data-control-key="${controlKey}"]`
-                );
-                if (dashboardInput) {
-                    dashboardInput.removeAttribute('disabled');
-                    dashboardInput.checked = draft.dashboard !== false;
-                }
-            }
-        } else if (controlType === 'dashboard') {
-            draft.dashboard = checked;
-        }
-
+        const draft = this.controlDraft[controlKey] || {};
+        draft.value = input.checked;
         this.controlDraft[controlKey] = draft;
         this.markControlsDirty();
     },
@@ -1394,18 +1378,10 @@ const Admin = {
             if (!statusEl) return;
 
             const draft = this.controlDraft[def.key] || {};
-            const featureEnabled = def.supportsFeature ? draft.feature !== false : null;
-            const dashboardEnabled = draft.dashboard !== false;
-
-            if (def.supportsFeature) {
-                statusEl.textContent = featureEnabled ? 'Enabled' : 'Disabled';
-                statusEl.classList.toggle('status-on', !!featureEnabled);
-                statusEl.classList.toggle('status-off', !featureEnabled);
-            } else {
-                statusEl.textContent = dashboardEnabled ? 'Visible' : 'Hidden';
-                statusEl.classList.toggle('status-on', dashboardEnabled);
-                statusEl.classList.toggle('status-off', !dashboardEnabled);
-            }
+            const isOn = draft.value !== false;
+            statusEl.textContent = def.supportsFeature ? (isOn ? 'Enabled' : 'Disabled') : (isOn ? 'Visible' : 'Hidden');
+            statusEl.classList.toggle('status-on', isOn);
+            statusEl.classList.toggle('status-off', !isOn);
         });
     },
 
@@ -1413,28 +1389,19 @@ const Admin = {
         let dirty = false;
 
         this.controlDefinitions.forEach((def) => {
-            const draft = this.controlDraft[def.key] || {};
+            const draftValue = (this.controlDraft[def.key] || {}).value !== false;
             const currentFeature = def.supportsFeature
                 ? this.currentFeatureFlags[def.key] !== false
-                : null;
+                : true;
             const currentDashboardVisible = def.dashboardKey
                 ? this.currentDashboardVisibility[def.dashboardKey] !== false
-                : false;
+                : true;
+            const currentValue = def.supportsFeature
+                ? (currentFeature && currentDashboardVisible)
+                : currentDashboardVisible;
 
-            if (def.supportsFeature && draft.feature !== currentFeature) {
+            if (draftValue !== currentValue) {
                 dirty = true;
-            }
-
-            if (def.dashboardKey) {
-                const effectiveCurrent = def.supportsFeature
-                    ? (currentFeature ? currentDashboardVisible : false)
-                    : currentDashboardVisible;
-                const draftVisible = def.supportsFeature
-                    ? (draft.feature !== false ? draft.dashboard !== false : false)
-                    : draft.dashboard !== false;
-                if (draftVisible !== effectiveCurrent) {
-                    dirty = true;
-                }
             }
         });
 
@@ -1488,16 +1455,14 @@ const Admin = {
         this.controlDefinitions.forEach((def) => {
             if (!def.supportsFeature) return;
             const draft = this.controlDraft[def.key] || {};
-            featurePayload[def.key] = draft.feature !== false;
+            featurePayload[def.key] = draft.value !== false;
         });
 
         const visibilityPayload = { ...this.currentDashboardVisibility };
         this.controlDefinitions.forEach((def) => {
             if (!def.dashboardKey) return;
             const draft = this.controlDraft[def.key] || {};
-            const visible = def.supportsFeature
-                ? (draft.feature !== false ? draft.dashboard !== false : false)
-                : draft.dashboard !== false;
+            const visible = draft.value !== false;
             visibilityPayload[def.dashboardKey] = visible;
         });
 
@@ -1676,7 +1641,7 @@ const Admin = {
         if (tableBody) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="6">
+                    <td colspan="7">
                         <div class="text-muted" style="text-align:center;">Loading login activity…</div>
                     </td>
                 </tr>
@@ -1707,7 +1672,7 @@ const Admin = {
                     if (!logs.length) {
                         tableBody.innerHTML = `
                             <tr>
-                                <td colspan="6">
+                                <td colspan="7">
                                     <div class="text-muted" style="text-align:center;">No login attempts recorded.</div>
                                 </td>
                             </tr>
@@ -1722,6 +1687,7 @@ const Admin = {
                                     <tr>
                                         <td>${this.formatDateTime(log.createdAt)}</td>
                                         <td>${log.username || 'Unknown'}</td>
+                                        <td>${log.transactionId || '—'}</td>
                                         <td>${statusCapsule}</td>
                                         <td>${log.message || '—'}</td>
                                         <td>${log.ipAddress || 'Unknown'}</td>
@@ -1738,7 +1704,7 @@ const Admin = {
                 if (tableBody) {
                     tableBody.innerHTML = `
                         <tr>
-                            <td colspan="6">
+                            <td colspan="7">
                                 <div class="text-muted" style="text-align:center;">Unable to load login logs.</div>
                             </td>
                         </tr>
@@ -1756,10 +1722,11 @@ const Admin = {
             UI.showNotification('No login entries available to export.', 'info');
             return;
         }
-        const header = ['Timestamp', 'User', 'Status', 'Message', 'IP Address', 'User Agent'];
+        const header = ['Timestamp', 'User', 'Transaction ID', 'Status', 'Message', 'IP Address', 'User Agent'];
         const rows = this.loginLogsCurrentRows.map((log) => [
             this.formatDateTime(log.createdAt),
             log.username || 'Unknown',
+            log.transactionId || '',
             log.status || '',
             (log.message || '').replace(/,/g, ';'),
             log.ipAddress || '',
@@ -1861,6 +1828,7 @@ const Admin = {
                         <td>${log.action || '—'}</td>
                         <td>${log.entity || '—'}</td>
                         <td>${log.entityId || '—'}</td>
+                        <td>${log.transactionId || '—'}</td>
                         <td><code class="log-detail">${this.formatDetail(log.detail)}</code></td>
                     </tr>
                 `).join('');
@@ -1875,6 +1843,7 @@ const Admin = {
                                     <th>Action</th>
                                     <th>Entity</th>
                                     <th>Entity ID</th>
+                                    <th>Transaction ID</th>
                                     <th>Detail</th>
                                 </tr>
                             </thead>
@@ -1909,13 +1878,14 @@ const Admin = {
                     return;
                 }
 
-                const header = ['Timestamp', 'User', 'Action', 'Entity', 'Entity ID', 'Detail'];
+                const header = ['Timestamp', 'User', 'Action', 'Entity', 'Entity ID', 'Transaction ID', 'Detail'];
                 const rows = logs.map(log => [
                     this.formatDateTime(log.createdAt),
                     log.username || 'Unknown',
                     log.action || '',
                     log.entity || '',
                     log.entityId || '',
+                    log.transactionId || '',
                     JSON.stringify(log.detail || {})
                 ]);
 

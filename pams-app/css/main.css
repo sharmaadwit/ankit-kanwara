@@ -277,25 +277,6 @@ body {
     margin-top: 0.2rem;
 }
 
-.brand-button {
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-}
-
-.brand-button:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.8);
-    outline-offset: 4px;
-}
-
-.brand-logo {
-    height: 48px;
-    width: auto;
-}
-
 .login-logo {
     display: flex;
     justify-content: center;

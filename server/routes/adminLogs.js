@@ -7,6 +7,7 @@ const {
   getUsageMetrics
 } = require('../services/loginLogs');
 const { requireAdminAuth } = require('../middleware/auth');
+const logger = require('../logger');
 
 router.post('/', async (req, res) => {
   try {
@@ -16,11 +17,15 @@ router.post('/', async (req, res) => {
       status,
       message,
       userAgent,
-      ipAddress: req.ip
+      ipAddress: req.ip,
+      transactionId: req.transactionId
     });
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to record login attempt', error);
+    logger.error('login_log_write_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to record login attempt' });
   }
 });
@@ -40,7 +45,10 @@ router.get('/', requireAdminAuth, async (req, res) => {
       hasMore
     });
   } catch (error) {
-    console.error('Failed to fetch login logs', error);
+    logger.error('login_log_fetch_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
     res.status(500).json({ message: 'Failed to fetch login logs' });
   }
 });
