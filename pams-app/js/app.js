@@ -2726,7 +2726,7 @@ const App = {
                             </div>
                             <p class="project-health-account">${project.accountName}</p>
                             <p class="project-health-meta">Industry: ${project.industry}</p>
-                            <p class="project-health-meta">Owner: ${project.salesRep || 'Unassigned'}</p>
+                            <p class="project-health-meta">Owner: ${project.primaryOwnerName || 'Unassigned'}</p>
                             <p class="project-health-meta">Status: ${project.status || 'Active'}</p>
                             <p class="project-health-meta">Activities logged: ${project.activityCount}</p>
                             <p class="project-health-meta">${lastActivityText}</p>
