@@ -73,7 +73,8 @@ const DataManager = {
         }
 
         // Initialize global sales reps if none exist
-        if (!this.getGlobalSalesReps().length) {
+        const existingSalesReps = this.getGlobalSalesReps();
+        if (!existingSalesReps.length) {
             const defaultSalesReps = [
                 {
                     id: this.generateId(),
@@ -93,6 +94,34 @@ const DataManager = {
                 }
             ];
             this.saveGlobalSalesReps(defaultSalesReps);
+        }
+
+        // Ensure core sales reps exist
+        const ensuredSalesReps = [...this.getGlobalSalesReps()];
+        const requiredSalesReps = [
+            { name: 'Bittu George', email: 'bittu.george@gupshup.io' },
+            { name: 'Hemanth R Swamy', email: 'hemanth.swamy@gupshup.io' },
+            { name: 'Mohd Abbas Murtaza', email: 'mohd.abbas@gupshup.io' },
+            { name: 'Gaurav Tomar', email: 'gaurav.tomar@gupshup.io' },
+            { name: 'Mohyeldein Elbaroudy', email: 'mohyeldein.elbaroudy@gupshup.io' },
+            { name: 'Nayeem Mohammed', email: 'nayeem.mohammed@gupshup.io' }
+        ];
+        let salesRepListUpdated = false;
+        requiredSalesReps.forEach(rep => {
+            if (!ensuredSalesReps.some(existing => (existing.email || '').toLowerCase() === rep.email.toLowerCase())) {
+                ensuredSalesReps.push({
+                    id: this.generateId(),
+                    name: rep.name,
+                    email: rep.email,
+                    region: 'India South',
+                    isActive: true,
+                    createdAt: new Date().toISOString()
+                });
+                salesRepListUpdated = true;
+            }
+        });
+        if (salesRepListUpdated) {
+            this.saveGlobalSalesReps(ensuredSalesReps);
         }
         
         // Initialize industries and regions as empty arrays (will be managed inline in forms)

@@ -21,7 +21,11 @@ const App = {
         search: '',
         industry: '',
         channel: '',
-        timeframe: 'all'
+        timeframe: 'all',
+        owner: 'all'
+    },
+    winLossFilters: {
+        owner: 'all'
     },
     pendingDuplicateAlerts: [],
     projectHealthFilters: {
@@ -32,7 +36,7 @@ const App = {
     sfdcFilters: {
         industry: '',
         account: '',
-        owner: '',
+        owner: 'all',
         showAll: false
     },
     winLossMrrInputHandler: null,
@@ -167,6 +171,12 @@ const App = {
                 'X-Admin-User': currentUser.username
             };
         }
+
+        const defaultActivityOwner = this.getDefaultActivityOwnerFilter();
+        this.activityFilters.owner = defaultActivityOwner;
+        const defaultRecordOwner = this.getDefaultRecordOwnerFilter();
+        this.winLossFilters.owner = defaultRecordOwner;
+        this.sfdcFilters.owner = defaultRecordOwner;
 
         InterfaceManager.init();
         try {
@@ -553,6 +563,7 @@ const App = {
         // Get stats
         const accounts = DataManager.getAccounts();
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         let totalProjects = 0;
         let customerActivities = 0;
         const internalActivities = DataManager.getInternalActivities();
@@ -888,6 +899,10 @@ const App = {
         if (!activitiesView) return;
         
         const activities = this.applyActivityFilters(DataManager.getAllActivities());
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         
         // Group by month
         const activitiesByMonth = {};
@@ -934,6 +949,12 @@ const App = {
                         <option value="all">All Time</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Owner</label>
+                    <select id="cardActivityFilterOwner" class="form-control" onchange="App.handleActivityFiltersChange('card')">
+                        <option value="all">All Activities</option>
+                    </select>
+                </div>
                 <div class="form-group" style="align-self: flex-end;">
                     <button class="btn btn-link" onclick="App.resetActivityFilters(); return false;">Reset</button>
                 </div>
@@ -954,7 +975,10 @@ const App = {
                 `;
                 
                 activitiesByMonth[month].forEach(activity => {
-                    const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                const isOwner = currentUser
+                    ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
+                    : false;
+                    const canManage = isOwner || isAdmin;
                     html += `
                         <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
                             <div class="activity-card-header">
@@ -973,7 +997,7 @@ const App = {
                                 ${UI.formatDate(activity.date || activity.createdAt)}<br>
                                 By: ${activity.userName || 'Unknown'}
                             </div>
-                            ${isOwner ? `
+                            ${canManage ? `
                                 <div class="activity-card-actions">
                                     <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
                                     <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
@@ -995,23 +1019,33 @@ const App = {
     loadCardWinLossView() {
         const winlossView = document.getElementById('winlossView');
         if (!winlossView) return;
-        
-        const accounts = DataManager.getAccounts();
-        let wonProjects = 0;
-        let lostProjects = 0;
-        let activeProjects = 0;
-        const projectsList = [];
-        
-        accounts.forEach(account => {
-            account.projects?.forEach(project => {
-                if (project.status === 'won') wonProjects++;
-                else if (project.status === 'lost') lostProjects++;
-                else activeProjects++;
-                
-                projectsList.push({ account, project });
-            });
+
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        if (!this.winLossFilters.owner) {
+            this.winLossFilters.owner = this.getDefaultRecordOwnerFilter();
+        }
+        const ownerFilterRaw = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
+        const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
+
+        let projects = this.getWinLossProjectsDataset();
+        projects = projects.filter(project => {
+            const ownerIds = project.ownerIds || [];
+            if (ownerFilterValue !== 'all') {
+                return ownerIds.includes(ownerFilterValue);
+            }
+            if (!isAdmin && currentUser?.id) {
+                return ownerIds.includes(currentUser.id);
+            }
+            return true;
         });
-        
+
+        const wonProjects = projects.filter(project => project.status === 'won').length;
+        const lostProjects = projects.filter(project => project.status === 'lost').length;
+        const activeProjects = projects.filter(project => project.status !== 'won' && project.status !== 'lost').length;
+
         let html = `
             <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1019,8 +1053,14 @@ const App = {
                 </svg>
                 Back to Home
             </a>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Win/Loss Tracking</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900); margin: 0;">Win/Loss Tracking</h1>
+                <div class="form-group" style="min-width: 200px; margin: 0;">
+                    <label class="form-label" style="color: var(--gray-600); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Owner</label>
+                    <select id="cardWinlossOwnerFilter" class="form-control" onchange="App.handleWinLossOwnerChange(this.value, 'card')">
+                        <option value="all">All Projects</option>
+                    </select>
+                </div>
             </div>
             
             <!-- Stats Cards -->
@@ -1039,18 +1079,22 @@ const App = {
                 </div>
             </div>
         `;
-        
-        if (projectsList.length === 0) {
-            html += `<div class="content-card">${UI.emptyState('No projects found')}</div>`;
+
+        if (!projects.length) {
+            html += `<div class="content-card">${UI.emptyState('No projects match the current filters.')}</div>`;
         } else {
-            projectsList.forEach(({ account, project }) => {
+            const currentUserId = currentUser?.id;
+            projects.forEach(project => {
                 const statusColor = project.status === 'won' ? '#48BB78' : project.status === 'lost' ? '#F56565' : '#4299E1';
+                const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
+                const canManage = isAdmin || (currentUserId && (project.ownerIds || []).includes(currentUserId));
                 html += `
                     <div class="content-card">
                         <div class="content-card-header">
                             <div>
                                 <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">${project.name}</h3>
-                                <div style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.25rem;">${account.name}</div>
+                                <div style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.25rem;">${project.accountName}</div>
+                                <div style="color: var(--gray-500); font-size: 0.75rem; margin-top: 0.25rem;">Owner: ${ownerLabel}</div>
                             </div>
                             <span style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">
                                 ${project.status || 'active'}
@@ -1067,16 +1111,21 @@ const App = {
                             <strong>SFDC:</strong> ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>` : 'Not set'}
                         </p>
                         <div style="margin-top: 1rem;">
-                            <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${account.id}', '${project.id}')">
-                                ${project.status ? 'Update Status' : 'Set Win/Loss'}
-                            </button>
+                            ${canManage ? `
+                                <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
+                                    ${project.status ? 'Update Status' : 'Set Win/Loss'}
+                                </button>
+                            ` : `
+                                <span class="text-muted" style="font-size: 0.8rem;">View only</span>
+                            `}
                         </div>
                     </div>
                 `;
             });
         }
-        
+
         winlossView.innerHTML = html;
+        this.populateWinLossOwnerFilter();
     },
 
     promptProjectSfdcLink(accountId, projectId) {
@@ -1176,15 +1225,13 @@ const App = {
             accounts.forEach(account => {
                 const projectCount = account.projects?.length || 0;
                 const activityCount = this.getAccountActivityCount(account.id);
-                const actionButtons = [
-                    `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>`
-                ];
-                if (isAdmin) {
-                    actionButtons.push(
+                const actionButtons = isAdmin
+                    ? [
+                        `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>`,
                         `<button class="btn btn-sm btn-info" onclick="event.stopPropagation(); App.showMergeAccountModal('${account.id}')" style="flex: 1;">Merge</button>`,
                         `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.showDeleteAccountModal('${account.id}')" style="flex: 1;">Delete</button>`
-                    );
-                }
+                    ]
+                    : [];
                 html += `
                     <div class="account-card">
                         <div class="account-card-header">
@@ -1205,9 +1252,11 @@ const App = {
                                 <div class="account-card-stat-value">${activityCount}</div>
                             </div>
                         </div>
-                        <div class="account-card-actions">
-                            ${actionButtons.join('')}
-                        </div>
+                        ${actionButtons.length ? `
+                            <div class="account-card-actions">
+                                ${actionButtons.join('')}
+                            </div>
+                        ` : ''}
                         ${this.buildAccountProjectsMarkup(account, 'card')}
                     </div>
                 `;
@@ -1531,6 +1580,99 @@ const App = {
         this.renderActivitiesList('activitiesContent');
     },
 
+    getWinLossProjectsDataset() {
+        const accounts = DataManager.getAccounts();
+        const ownerMap = this.getProjectOwnerMap();
+        const users = DataManager.getUsers();
+        const userLookup = new Map(users.map(user => [user.id, user]));
+
+        const projects = [];
+        accounts.forEach(account => {
+            (account.projects || []).forEach(project => {
+                const ownerIdsSet = new Set(ownerMap.get(project.id) || []);
+                if (project.createdBy) {
+                    ownerIdsSet.add(project.createdBy);
+                }
+                if (account.createdBy) {
+                    ownerIdsSet.add(account.createdBy);
+                }
+                const ownerIds = Array.from(ownerIdsSet);
+                const ownerNames = ownerIds
+                    .map(id => userLookup.get(id)?.username)
+                    .filter(Boolean);
+                projects.push({
+                    ...project,
+                    accountId: account.id,
+                    accountName: account.name,
+                    ownerIds,
+                    ownerNames,
+                    primaryOwnerName: ownerNames[0] || account.salesRep || 'Unassigned'
+                });
+            });
+        });
+
+        return projects;
+    },
+
+    populateWinLossOwnerFilter() {
+        const selectIds = ['winlossOwnerFilter', 'cardWinlossOwnerFilter'];
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const users = this.getActiveUsers();
+
+        selectIds.forEach(id => {
+            const select = document.getElementById(id);
+            if (!select) return;
+
+            const options = [];
+            if (isAdmin) {
+                options.push({ value: 'all', label: 'All projects' });
+            }
+            if (currentUser?.id) {
+                options.push({ value: currentUser.id, label: 'My projects' });
+            }
+            if (isAdmin) {
+                users.forEach(user => {
+                    options.push({ value: user.id, label: user.username });
+                });
+            }
+
+            const uniqueOptions = [];
+            const seen = new Set();
+            options.forEach(option => {
+                if (!option.value || seen.has(option.value)) return;
+                seen.add(option.value);
+                uniqueOptions.push(option);
+            });
+
+            select.innerHTML = uniqueOptions
+                .map(option => `<option value="${option.value}">${option.label}</option>`)
+                .join('');
+
+            const desiredValue = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
+            if (select.querySelector(`option[value="${desiredValue}"]`)) {
+                select.value = desiredValue;
+            } else if (currentUser?.id && select.querySelector(`option[value="${currentUser.id}"]`)) {
+                select.value = currentUser.id;
+                this.winLossFilters.owner = currentUser.id;
+            } else if (select.options.length) {
+                select.value = select.options[0].value;
+                this.winLossFilters.owner = select.value;
+            }
+        });
+    },
+
+    handleWinLossOwnerChange(value = '', variant = 'standard') {
+        const selectedValue = value || this.getDefaultRecordOwnerFilter();
+        this.winLossFilters.owner = selectedValue;
+        this.loadWinLossView();
+        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+            this.loadCardWinLossView();
+        }
+    },
+
     // Load win/loss view
     loadWinLossView() {
         // Check if card interface is active
@@ -1540,39 +1682,52 @@ const App = {
         }
         
         try {
-            const accounts = DataManager.getAccounts();
             const container = document.getElementById('winlossContent');
             if (!container) {
                 console.error('winlossContent container not found');
                 return;
             }
+            if (!this.winLossFilters.owner) {
+                this.winLossFilters.owner = this.getDefaultRecordOwnerFilter();
+            }
 
-            let allProjects = [];
-            accounts.forEach(account => {
-                account.projects?.forEach(project => {
-                    allProjects.push({
-                        ...project,
-                        accountName: account.name,
-                        accountId: account.id
-                    });
-                });
+            const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                ? Auth.getCurrentUser()
+                : null;
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+            const ownerFilterRaw = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
+            const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
+
+            let visibleProjects = this.getWinLossProjectsDataset();
+            visibleProjects = visibleProjects.filter(project => {
+                const ownerIds = project.ownerIds || [];
+                if (ownerFilterValue !== 'all') {
+                    return ownerIds.includes(ownerFilterValue);
+                }
+                if (!isAdmin && currentUser?.id) {
+                    return ownerIds.includes(currentUser.id);
+                }
+                return true;
             });
 
-            const wins = allProjects.filter(p => p.status === 'won').length;
-            const losses = allProjects.filter(p => p.status === 'lost').length;
-            const active = allProjects.filter(p => p.status === 'active').length;
+            const wins = visibleProjects.filter(p => p.status === 'won').length;
+            const losses = visibleProjects.filter(p => p.status === 'lost').length;
+            const active = visibleProjects.filter(p => p.status !== 'won' && p.status !== 'lost').length;
 
-            document.getElementById('totalWins').textContent = `${wins} Wins`;
-            document.getElementById('totalLosses').textContent = `${losses} Losses`;
-            document.getElementById('totalActive').textContent = `${active} Active`;
+            const winsBadge = document.getElementById('totalWins');
+            const lossesBadge = document.getElementById('totalLosses');
+            const activeBadge = document.getElementById('totalActive');
+            if (winsBadge) winsBadge.textContent = `${wins} Wins`;
+            if (lossesBadge) lossesBadge.textContent = `${losses} Losses`;
+            if (activeBadge) activeBadge.textContent = `${active} Active`;
 
-            if (allProjects.length === 0) {
-                container.innerHTML = UI.emptyState('No projects found');
+            if (visibleProjects.length === 0) {
+                container.innerHTML = UI.emptyState('No projects match the current filters.');
                 return;
             }
 
             let html = '';
-            allProjects.forEach(project => {
+            visibleProjects.forEach(project => {
                 const statusClass = project.status === 'won' ? 'won' : 
                                   project.status === 'lost' ? 'lost' : 'pending';
                 const winLossDetails = project.winLossData ? `
@@ -1582,27 +1737,37 @@ const App = {
                                     ${project.winLossData.otd ? `<p><strong>OTD:</strong> ${project.winLossData.otd}</p>` : ''}
                                 </div>
                 ` : '';
+                const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
+                const canManage = isAdmin || (currentUser?.id && (project.ownerIds || []).includes(currentUser.id));
                 
                 html += `
                     <div class="project-card ${statusClass}">
                         <div class="project-info">
                             <h4>${project.name}</h4>
                             <p class="text-muted">${project.accountName}</p>
+                            <p class="text-muted" style="margin-top: 0.5rem;">
+                                <strong>Owner:</strong> ${ownerLabel}
+                            </p>
                             ${winLossDetails}
                             <p class="text-muted" style="margin-top: 0.5rem;">
                                 <strong>SFDC:</strong> ${project.sfdcLink ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>` : 'Not set'}
                             </p>
                         </div>
                         <div class="win-loss-actions">
-                            <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
-                                Update Status
-                            </button>
+                            ${canManage ? `
+                                <button class="btn btn-sm btn-primary" data-feature="winLoss" onclick="App.openWinLossModal('${project.accountId}', '${project.id}')">
+                                    Update Status
+                                </button>
+                            ` : `
+                                <span class="text-muted" style="font-size: 0.8rem;">View only</span>
+                            `}
                         </div>
                     </div>
                 `;
             });
 
             container.innerHTML = html;
+            this.populateWinLossOwnerFilter();
         } catch (error) {
             console.error('Error loading win/loss view:', error);
             const container = document.getElementById('winlossContent');
@@ -1897,6 +2062,84 @@ const App = {
         return Array.from(channelsSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
     },
 
+    getActiveUsers() {
+        try {
+            const users = DataManager.getUsers();
+            return users
+                .filter(user => user && user.isActive !== false)
+                .sort((a, b) => (a.username || '').localeCompare(b.username || ''));
+        } catch (error) {
+            console.warn('Unable to load users for owner filters:', error);
+            return [];
+        }
+    },
+
+    getDefaultActivityOwnerFilter() {
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        if (isAdmin) {
+            return 'all';
+        }
+        return currentUser?.id || 'mine';
+    },
+
+    getDefaultRecordOwnerFilter() {
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        if (isAdmin) {
+            return 'all';
+        }
+        return currentUser?.id || 'mine';
+    },
+
+    resolveOwnerFilterValue(filterValue, currentUser) {
+        if (!filterValue || filterValue === 'all') {
+            return 'all';
+        }
+        if (filterValue === 'mine') {
+            return currentUser?.id || '';
+        }
+        return filterValue;
+    },
+
+    getProjectOwnerMap() {
+        const ownerMap = new Map();
+        try {
+            const accounts = DataManager.getAccounts();
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    if (!project?.id) return;
+                    if (!ownerMap.has(project.id)) {
+                        ownerMap.set(project.id, new Set());
+                    }
+                    const owners = ownerMap.get(project.id);
+                    if (project.createdBy) {
+                        owners.add(project.createdBy);
+                    }
+                    if (account.createdBy) {
+                        owners.add(account.createdBy);
+                    }
+                });
+            });
+
+            const activities = DataManager.getAllActivities();
+            activities.forEach(activity => {
+                if (!activity?.projectId || !activity?.userId) return;
+                if (!ownerMap.has(activity.projectId)) {
+                    ownerMap.set(activity.projectId, new Set());
+                }
+                ownerMap.get(activity.projectId).add(activity.userId);
+            });
+        } catch (error) {
+            console.warn('Unable to compute project owner map:', error);
+        }
+        return ownerMap;
+    },
+
     populateActivityFilterControls() {
         const channels = this.getAvailableChannels();
         const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
@@ -1909,8 +2152,8 @@ const App = {
         ];
 
         const variants = [
-            { prefix: '', searchId: 'activitySearch', channelId: 'activityFilterChannel', industryId: 'activityFilterIndustry', timeframeId: 'activityFilterTimeframe' },
-            { prefix: 'card', searchId: 'cardActivitySearch', channelId: 'cardActivityFilterChannel', industryId: 'cardActivityFilterIndustry', timeframeId: 'cardActivityFilterTimeframe' }
+            { prefix: '', searchId: 'activitySearch', channelId: 'activityFilterChannel', industryId: 'activityFilterIndustry', timeframeId: 'activityFilterTimeframe', ownerId: 'activityFilterOwner' },
+            { prefix: 'card', searchId: 'cardActivitySearch', channelId: 'cardActivityFilterChannel', industryId: 'cardActivityFilterIndustry', timeframeId: 'cardActivityFilterTimeframe', ownerId: 'cardActivityFilterOwner' }
         ];
 
         variants.forEach(variant => {
@@ -1945,6 +2188,57 @@ const App = {
             if (searchInput && searchInput.value !== this.activityFilters.search) {
                 searchInput.value = this.activityFilters.search;
             }
+
+            const ownerSelect = document.getElementById(variant.ownerId);
+            if (ownerSelect) {
+                const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+                const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                    ? Auth.getCurrentUser()
+                    : null;
+                const users = this.getActiveUsers();
+                const options = [];
+
+                if (currentUser) {
+                    const currentUserValue = currentUser.id || 'mine';
+                    options.push({ value: currentUserValue, label: 'My activities' });
+                }
+
+                if (isAdmin) {
+                    options.unshift({ value: 'all', label: 'All activities' });
+                } else {
+                    options.push({ value: 'all', label: 'All team activities' });
+                }
+
+                if (isAdmin) {
+                    users.forEach(user => {
+                        options.push({ value: user.id, label: user.username });
+                    });
+                }
+
+                const uniqueOptions = [];
+                const seenValues = new Set();
+                options.forEach(option => {
+                    if (!option?.value) return;
+                    if (seenValues.has(option.value)) return;
+                    seenValues.add(option.value);
+                    uniqueOptions.push(option);
+                });
+
+                ownerSelect.innerHTML = uniqueOptions
+                    .map(option => `<option value="${option.value}">${option.label}</option>`)
+                    .join('');
+
+                const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
+                if (ownerSelect.querySelector(`option[value="${desiredValue}"]`)) {
+                    ownerSelect.value = desiredValue;
+                } else if (currentUser?.id && ownerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
+                    ownerSelect.value = currentUser.id;
+                    this.activityFilters.owner = currentUser.id;
+                } else if (ownerSelect.querySelector('option[value="all"]')) {
+                    ownerSelect.value = 'all';
+                    this.activityFilters.owner = 'all';
+                }
+            }
         });
     },
 
@@ -1954,6 +2248,12 @@ const App = {
         const industryFilter = (filters.industry || '').toLowerCase();
         const channelFilter = (filters.channel || '').toLowerCase();
         const timeframe = filters.timeframe || 'all';
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const ownerFilterRaw = filters.owner || this.getDefaultActivityOwnerFilter();
+        const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
         const channelMap = {};
         const accounts = DataManager.getAccounts();
         accounts.forEach(account => {
@@ -2014,6 +2314,17 @@ const App = {
                 if (!haystack.includes(searchTerm)) return false;
             }
 
+            if (ownerFilterValue !== 'all') {
+                const targetOwnerId = ownerFilterValue === 'mine' ? currentUser?.id : ownerFilterValue;
+                if (!targetOwnerId || activity.userId !== targetOwnerId) {
+                    return false;
+                }
+            } else if (!isAdmin && currentUser?.id && ownerFilterRaw === 'mine') {
+                if (activity.userId !== currentUser.id) {
+                    return false;
+                }
+            }
+
             return true;
         });
     },
@@ -2030,12 +2341,18 @@ const App = {
         const channelId = variant === 'card' ? 'cardActivityFilterChannel' : 'activityFilterChannel';
         const industryId = variant === 'card' ? 'cardActivityFilterIndustry' : 'activityFilterIndustry';
         const timeframeId = variant === 'card' ? 'cardActivityFilterTimeframe' : 'activityFilterTimeframe';
+        const ownerId = variant === 'card' ? 'cardActivityFilterOwner' : 'activityFilterOwner';
         const channelSelect = document.getElementById(channelId);
         const industrySelect = document.getElementById(industryId);
         const timeframeSelect = document.getElementById(timeframeId);
+        const ownerSelect = document.getElementById(ownerId);
         this.activityFilters.channel = channelSelect ? channelSelect.value : '';
         this.activityFilters.industry = industrySelect ? industrySelect.value : '';
         this.activityFilters.timeframe = timeframeSelect ? timeframeSelect.value || 'all' : 'all';
+        if (ownerSelect) {
+            const selectedOwner = ownerSelect.value;
+            this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
+        }
         this.renderActivitiesList();
         if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
             this.loadCardActivitiesView();
@@ -2047,7 +2364,8 @@ const App = {
             search: '',
             industry: '',
             channel: '',
-            timeframe: 'all'
+            timeframe: 'all',
+            owner: this.getDefaultActivityOwnerFilter()
         };
         const searchInput = document.getElementById('activitySearch');
         if (searchInput) searchInput.value = '';
@@ -2191,6 +2509,9 @@ const App = {
     computeProjectHealthData() {
         const accounts = DataManager.getAccounts();
         const activities = DataManager.getAllActivities();
+        const users = DataManager.getUsers();
+        const userLookup = new Map(users.map(user => [user.id, user]));
+        const ownerMap = this.getProjectOwnerMap();
         const projectActivityMap = {};
         const dayMs = 1000 * 60 * 60 * 24;
 
@@ -2219,6 +2540,23 @@ const App = {
                 const daysSinceCreation = createdDate ? Math.round((now - createdDate) / dayMs) : null;
                 const sfdcLink = project.sfdcLink || '';
                 const sfdcMissing = !sfdcLink || !/^https?:\/\//i.test(sfdcLink.trim());
+                const ownerIdsSet = new Set(ownerMap.get(project.id) || []);
+                if (project.createdBy) {
+                    ownerIdsSet.add(project.createdBy);
+                }
+                if (account.createdBy) {
+                    ownerIdsSet.add(account.createdBy);
+                }
+                const ownerIds = Array.from(ownerIdsSet);
+                const ownerNames = ownerIds
+                    .map(id => userLookup.get(id)?.username)
+                    .filter(Boolean);
+                const primaryOwnerId = project.createdBy || ownerIds[0] || account.createdBy || null;
+                const primaryOwnerName =
+                    (primaryOwnerId && userLookup.get(primaryOwnerId)?.username) ||
+                    ownerNames[0] ||
+                    account.salesRep ||
+                    'Unassigned';
 
                 projects.push({
                     accountId: account.id,
@@ -2234,7 +2572,11 @@ const App = {
                     createdAt: createdString,
                     daysSinceCreation,
                     sfdcLink: sfdcLink.trim(),
-                    sfdcMissing
+                    sfdcMissing,
+                    ownerIds,
+                    ownerNames,
+                    primaryOwnerId,
+                    primaryOwnerName
                 });
             });
         });
@@ -2435,6 +2777,9 @@ const App = {
             if (!element) return;
             if (control.type === 'select') {
                 element.value = control.value;
+                if (element.value !== control.value && element.options.length) {
+                    element.value = element.options[0].value;
+                }
             } else if (control.type === 'checkbox') {
                 element.checked = control.value;
             }
@@ -2544,14 +2889,24 @@ const App = {
     getFilteredSfdcProjects(projects) {
         const industryFilter = (this.sfdcFilters.industry || '').toLowerCase();
         const accountFilter = (this.sfdcFilters.account || '').toLowerCase();
-        const ownerFilter = (this.sfdcFilters.owner || '').toLowerCase();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const ownerFilterRaw = this.sfdcFilters.owner || this.getDefaultRecordOwnerFilter();
+        const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
         const showAll = !!this.sfdcFilters.showAll;
 
         const filtered = projects.filter(project => {
             if (!showAll && project.compliant) return false;
             if (industryFilter && (project.industry || '').toLowerCase() !== industryFilter) return false;
             if (accountFilter && (project.accountName || '').toLowerCase() !== accountFilter) return false;
-            if (ownerFilter && (project.salesRep || '').toLowerCase() !== ownerFilter) return false;
+            const ownerIds = project.ownerIds || [];
+            if (ownerFilterValue !== 'all') {
+                if (!ownerIds.includes(ownerFilterValue)) return false;
+            } else if (!isAdmin && currentUser?.id) {
+                if (!ownerIds.includes(currentUser.id)) return false;
+            }
             return true;
         });
 
@@ -2574,7 +2929,40 @@ const App = {
 
         const industries = Array.from(new Set(allProjects.map(project => project.industry))).filter(Boolean).sort((a, b) => a.localeCompare(b));
         const accounts = Array.from(new Set(allProjects.map(project => project.accountName))).filter(Boolean).sort((a, b) => a.localeCompare(b));
-        const owners = Array.from(new Set(allProjects.map(project => project.salesRep))).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const ownerEntries = new Map();
+        allProjects.forEach(project => {
+            const ownerIds = project.ownerIds || [];
+            const ownerNames = project.ownerNames || [];
+            ownerIds.forEach((ownerId, index) => {
+                if (!ownerId) return;
+                if (!ownerEntries.has(ownerId)) {
+                    ownerEntries.set(ownerId, ownerNames[index] || project.primaryOwnerName || 'Unassigned');
+                }
+            });
+        });
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const ownerOptions = [];
+        if (isAdmin) {
+            ownerOptions.push({ value: 'all', label: 'All owners' });
+            const sortedOwners = Array.from(ownerEntries.entries())
+                .sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+            sortedOwners.forEach(([id, name]) => {
+                ownerOptions.push({ value: id, label: name || 'Unassigned' });
+            });
+        } else if (currentUser?.id) {
+            ownerOptions.push({ value: currentUser.id, label: 'My projects' });
+        }
+        const ownerSelectMarkup = ownerOptions.length ? `
+                <div class="form-group">
+                    <label class="form-label">Owner</label>
+                    <select id="${prefix ? `${prefix}SfdcOwnerFilter` : 'sfdcOwnerFilter'}" class="form-control" onchange="App.handleSfdcFilterChange('owner', this.value, '${variant}')">
+                        ${ownerOptions.map(option => `<option value="${option.value}">${option.label}</option>`).join('')}
+                    </select>
+                </div>
+        ` : '';
 
         const filtersMarkup = `
             <div class="analytics-filter-bar">
@@ -2592,13 +2980,7 @@ const App = {
                         ${accounts.map(account => `<option value="${account}">${account}</option>`).join('')}
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Owner</label>
-                    <select id="${prefix ? `${prefix}SfdcOwnerFilter` : 'sfdcOwnerFilter'}" class="form-control" onchange="App.handleSfdcFilterChange('owner', this.value, '${variant}')">
-                        <option value="">All Owners</option>
-                        ${owners.map(owner => `<option value="${owner}">${owner}</option>`).join('')}
-                    </select>
-                </div>
+                ${ownerSelectMarkup}
                 <div class="form-group checkbox-group">
                     <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
                         <input type="checkbox" id="${prefix ? `${prefix}SfdcShowAll` : 'sfdcShowAll'}" onchange="App.toggleSfdcShowAll(this.checked, '${variant}')">
@@ -2658,7 +3040,7 @@ const App = {
                     <tr class="status-${statusClass}">
                         <td>${project.accountName}</td>
                         <td>${project.projectName || 'Unnamed Project'}</td>
-                        <td>${project.salesRep || 'Unassigned'}</td>
+                        <td>${project.primaryOwnerName || 'Unassigned'}</td>
                         <td><span class="sfdc-status-badge ${statusClass}">${statusLabel}</span></td>
                         <td>${lastActivityText}</td>
                         <td>
@@ -2753,7 +3135,11 @@ const App = {
     },
 
     handleSfdcFilterChange(key, value, variant = 'standard') {
-        this.sfdcFilters[key] = value;
+        if (key === 'owner' && !value) {
+            this.sfdcFilters.owner = this.getDefaultRecordOwnerFilter();
+        } else {
+            this.sfdcFilters[key] = value;
+        }
         this.loadSfdcComplianceView();
         if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
             this.loadCardSfdcComplianceView();
@@ -2772,7 +3158,7 @@ const App = {
         this.sfdcFilters = {
             industry: '',
             account: '',
-            owner: '',
+            owner: this.getDefaultRecordOwnerFilter(),
             showAll: false
         };
         this.loadSfdcComplianceView();
@@ -2785,6 +3171,10 @@ const App = {
         if (InterfaceManager.getCurrentInterface() === 'card') {
             this.loadCardSfdcComplianceView();
             return;
+        }
+
+        if (!this.sfdcFilters.owner) {
+            this.sfdcFilters.owner = this.getDefaultRecordOwnerFilter();
         }
 
         const container = document.getElementById('sfdcComplianceContent');
@@ -2813,6 +3203,10 @@ const App = {
         if (!container) {
             console.error('sfdcComplianceContent container not found');
             return;
+        }
+
+        if (!this.sfdcFilters.owner) {
+            this.sfdcFilters.owner = this.getDefaultRecordOwnerFilter();
         }
 
         const projects = this.computeSfdcComplianceData();
@@ -3387,22 +3781,22 @@ const App = {
             accounts.forEach(account => {
                 const projectCount = account.projects?.length || 0;
                 const activityCount = this.getAccountActivityCount(account.id);
-                const actionButtons = [
-                    `<button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>`
-                ];
-                if (isAdmin) {
-                    actionButtons.push(
+                const actionButtons = isAdmin
+                    ? [
+                        `<button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>`,
                         `<button class="btn btn-info btn-sm" onclick="App.showMergeAccountModal('${account.id}')" title="Merge Account">🔀</button>`,
                         `<button class="btn btn-danger btn-sm" onclick="App.showDeleteAccountModal('${account.id}')" title="Delete Account">🗑️</button>`
-                    );
-                }
+                    ]
+                    : [];
                 html += `
                     <div class="card">
                         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                             <h3>${account.name}</h3>
-                            <div style="display: flex; gap: 0.5rem;">
-                                ${actionButtons.join('')}
-                            </div>
+                            ${actionButtons.length ? `
+                                <div style="display: flex; gap: 0.5rem;">
+                                    ${actionButtons.join('')}
+                                </div>
+                            ` : ''}
                         </div>
                         <div class="card-body">
                             <p><strong>Industry:</strong> ${account.industry || 'N/A'}</p>
@@ -3448,11 +3842,21 @@ const App = {
         if (!projects.length) return '';
 
         const wrapperClass = variant === 'card' ? 'account-projects account-projects-card' : 'account-projects';
+        const ownerMap = this.getProjectOwnerMap();
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+            ? Auth.getCurrentUser()
+            : null;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         const rows = projects.map(project => {
             const status = project.status ? project.status.charAt(0).toUpperCase() + project.status.slice(1) : 'Active';
             const sfdcMarkup = project.sfdcLink
                 ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>`
                 : '<span class="text-muted">Not set</span>';
+            const ownerIds = Array.from(ownerMap.get(project.id) || new Set());
+            if (project.createdBy && !ownerIds.includes(project.createdBy)) {
+                ownerIds.push(project.createdBy);
+            }
+            const canManageProject = isAdmin || (currentUser?.id && ownerIds.includes(currentUser.id));
             return `
                 <div class="account-project-row">
                     <div class="account-project-info">
@@ -3462,9 +3866,11 @@ const App = {
                             <span>SFDC: ${sfdcMarkup}</span>
                         </div>
                     </div>
-                    <div class="account-project-actions">
-                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.promptProjectSfdcLink('${account.id}', '${project.id}')">Update SFDC</button>
-                    </div>
+                    ${canManageProject ? `
+                        <div class="account-project-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.promptProjectSfdcLink('${account.id}', '${project.id}')">Update SFDC</button>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }).join('');
@@ -3479,6 +3885,10 @@ const App = {
 
     // Edit account
     editAccount(accountId) {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only administrators can edit accounts.', 'error');
+            return;
+        }
         const account = DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
@@ -3934,6 +4344,10 @@ const App = {
             }
 
             const allActivities = DataManager.getAllActivities();
+            const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                ? Auth.getCurrentUser()
+                : null;
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
             if (containerId === 'activitiesContent') {
                 this.populateActivityFilterControls();
             }
@@ -4000,7 +4414,10 @@ const App = {
                 `;
 
                 activitiesByMonth[month].forEach(activity => {
-                    const isOwner = activity.userId === Auth.getCurrentUser()?.id;
+                    const isOwner = currentUser
+                        ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
+                        : false;
+                    const canManage = isOwner || isAdmin;
                     const activitySummary = activity.isInternal
                         ? (activity.activityName || UI.getActivityTypeLabel(activity.type) || 'Internal Activity')
                         : UI.getActivitySummary(activity) || 'No details provided';
@@ -4027,7 +4444,7 @@ const App = {
                                         ${activitySummary}
                                     </div>
                                 </div>
-                                ${isOwner ? `
+                                ${canManage ? `
                                     <div class="activity-actions">
                                         <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}', ${activity.isInternal})">Edit</button>
                                         <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}', ${activity.isInternal})">Delete</button>
@@ -4455,13 +4872,17 @@ const App = {
             activity = activities.find(a => a.id === activityId);
         }
 
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+
         if (!activity) {
             UI.showNotification('Activity not found', 'error');
             return;
         }
 
+        const isOwner = activity.userId === currentUser.id || activity.createdBy === currentUser.id;
+
         // Check if user owns this activity
-        if (activity.userId !== currentUser.id) {
+        if (!isAdmin && !isOwner) {
             UI.showNotification('You can only edit your own activities', 'error');
             return;
         }
@@ -4494,13 +4915,17 @@ const App = {
             activity = activities.find(a => a.id === activityId);
         }
 
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+
         if (!activity) {
             UI.showNotification('Activity not found', 'error');
             return;
         }
 
+        const isOwner = activity.userId === currentUser.id || activity.createdBy === currentUser.id;
+
         // Check if user owns this activity
-        if (activity.userId !== currentUser.id) {
+        if (!isAdmin && !isOwner) {
             UI.showNotification('You can only delete your own activities', 'error');
             return;
         }

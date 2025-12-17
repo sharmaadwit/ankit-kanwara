@@ -255,6 +255,9 @@
                             <select id="activityFilterTimeframe" class="form-control" onchange="App.handleActivityFiltersChange()">
                                 <option value="all">All Time</option>
                             </select>
+                            <select id="activityFilterOwner" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                <option value="all">All Activities</option>
+                            </select>
                             <button class="btn btn-link" onclick="App.resetActivityFilters(); return false;">Reset</button>
                         </div>
                     </div>
@@ -272,6 +275,11 @@
                     <div class="action-bar">
                         <div class="search-bar">
                             <input type="text" class="form-control" placeholder="Search projects..." id="winlossSearch" onkeyup="App.filterWinLoss()">
+                        </div>
+                        <div class="filter-group">
+                            <select id="winlossOwnerFilter" class="form-control" onchange="App.handleWinLossOwnerChange(this.value)">
+                                <option value="all">All Projects</option>
+                            </select>
                         </div>
                         <div class="stats-display">
                             <span class="badge badge-success" id="totalWins">0 Wins</span>
