@@ -60,6 +60,10 @@
                             <path d="M3 12h18M3 6h18M3 18h18"/>
                         </svg>
                     </button>
+                    <button class="app-home-button" onclick="App.switchView('dashboard')" title="Presales Activity Management System">
+                        <span class="app-home-acronym">PAMS</span>
+                        <span class="app-home-title">Presales Activity Management System</span>
+                    </button>
                 </div>
                 <div class="header-right">
                     <span id="currentUsernameDisplay" class="header-username hidden"></span>
@@ -435,6 +439,14 @@
                             </form>
                             <p class="text-muted" id="presalesTargetSummary" style="margin-top: 1rem;"></p>
                         </div>
+                    </div>
+
+                    <!-- Project Health Settings -->
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3>Project Health Filters</h3>
+                        </div>
+                        <div class="card-body" id="projectHealthAdminControls"></div>
                     </div>
 
                     <!-- Capabilities & Visibility -->

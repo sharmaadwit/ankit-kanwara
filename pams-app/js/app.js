@@ -2303,40 +2303,32 @@ const App = {
     },
 
     buildProjectHealthMarkup(projects, summary, variant = 'standard') {
-        const prefix = variant === 'card' ? 'card' : '';
         const wrapperClass = variant === 'card' ? 'content-card' : 'card';
         const headerClass = variant === 'card' ? 'content-card-header' : 'card-header';
         const bodyClass = variant === 'card' ? 'card-body' : 'card-body';
-        const filtersMarkup = `
-            <div class="analytics-filter-bar">
-                <div class="form-group">
-                    <label class="form-label">Inactivity Threshold</label>
-                    <select id="${prefix ? `${prefix}ProjectHealthThreshold` : 'projectHealthThreshold'}" class="form-control" onchange="App.handleProjectHealthFilterChange('threshold', this.value, '${variant}')">
-                        <option value="30">30 days</option>
-                        <option value="45">45 days</option>
-                        <option value="60">60 days</option>
-                        <option value="90">90 days</option>
-                        <option value="120">120 days</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Risk Level</label>
-                    <select id="${prefix ? `${prefix}ProjectHealthStatus` : 'projectHealthStatus'}" class="form-control" onchange="App.handleProjectHealthFilterChange('status', this.value, '${variant}')">
-                        <option value="all">High & Medium Risk</option>
-                        <option value="high">High Risk Only</option>
-                        <option value="medium">Medium Risk Only</option>
-                        <option value="no-activity">No Activity</option>
-                    </select>
-                </div>
-                <div class="form-group checkbox-group">
-                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <input type="checkbox" id="${prefix ? `${prefix}ProjectHealthInclude` : 'projectHealthInclude'}" onchange="App.toggleProjectHealthInclude(this.checked, '${variant}')">
-                        Include projects with no activity
-                    </label>
-                </div>
-                <div class="form-group" style="align-self: flex-end;">
-                    <button class="btn btn-link" onclick="App.resetProjectHealthFilters(); return false;">Reset</button>
-                </div>
+        const activeFilters = this.projectHealthFilters || {
+            threshold: 60,
+            status: 'all',
+            includeNoActivity: true
+        };
+        const statusLabel = (() => {
+            switch (activeFilters.status) {
+                case 'high':
+                    return 'High risk only';
+                case 'medium':
+                    return 'Medium risk only';
+                case 'no-activity':
+                    return 'Projects with no activity';
+                default:
+                    return 'High & Medium risk';
+            }
+        })();
+        const filtersSummaryMarkup = `
+            <div class="project-health-filter-summary">
+                <p><strong>Current threshold:</strong> ${activeFilters.threshold} days</p>
+                <p><strong>Risk focus:</strong> ${statusLabel}</p>
+                <p><strong>Include projects with no activity:</strong> ${activeFilters.includeNoActivity !== false ? 'Yes' : 'No'}</p>
+                <p class="text-muted" style="margin-top: 0.5rem;">Adjust these settings under <strong>Admin &amp; Settings → Project Health Filters</strong>.</p>
             </div>
         `;
 
@@ -2406,18 +2398,11 @@ const App = {
         return `
             <div class="${wrapperClass}">
                 <div class="${headerClass}">
-                    <h3>Filters</h3>
-                </div>
-                <div class="${bodyClass}">
-                    ${filtersMarkup}
-                </div>
-            </div>
-            <div class="${wrapperClass}">
-                <div class="${headerClass}">
                     <h3>Project Risk Snapshot</h3>
                 </div>
                 <div class="${bodyClass}">
                     ${statsMarkup}
+                    ${filtersSummaryMarkup}
                 </div>
             </div>
             <div class="${wrapperClass}">
@@ -3390,6 +3375,8 @@ const App = {
                 console.error('accountsContent container not found');
                 return;
             }
+
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
 
             if (accounts.length === 0) {
                 container.innerHTML = UI.emptyState('No accounts found');

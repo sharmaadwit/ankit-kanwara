@@ -121,6 +121,7 @@ const Admin = {
             this.loadUsers();
             this.loadSalesReps();
             this.loadAnalyticsSettings();
+            this.renderProjectHealthSettings();
             this.loadPOCSandbox();
             this.loadControls();
             this.loadLoginLogs();
@@ -182,6 +183,79 @@ const Admin = {
         summaryElements.forEach(el => {
             if (el) el.textContent = summaryText;
         });
+    },
+
+    renderProjectHealthSettings() {
+        const container = document.getElementById('projectHealthAdminControls');
+        if (!container || typeof App === 'undefined') {
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Inactivity Threshold</label>
+                    <select id="projectHealthThreshold" class="form-control">
+                        <option value="30">30 days</option>
+                        <option value="45">45 days</option>
+                        <option value="60">60 days</option>
+                        <option value="90">90 days</option>
+                        <option value="120">120 days</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Risk Focus</label>
+                    <select id="projectHealthStatus" class="form-control">
+                        <option value="all">High & Medium Risk</option>
+                        <option value="high">High Risk Only</option>
+                        <option value="medium">Medium Risk Only</option>
+                        <option value="no-activity">No Activity</option>
+                    </select>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label class="form-label" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="projectHealthInclude">
+                        Include projects with no activity
+                    </label>
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button class="btn btn-link" id="projectHealthResetBtn">Reset to defaults</button>
+                </div>
+            </div>
+        `;
+
+        const thresholdSelect = container.querySelector('#projectHealthThreshold');
+        const statusSelect = container.querySelector('#projectHealthStatus');
+        const includeToggle = container.querySelector('#projectHealthInclude');
+        const resetBtn = container.querySelector('#projectHealthResetBtn');
+
+        if (thresholdSelect) {
+            thresholdSelect.addEventListener('change', (event) => {
+                App.handleProjectHealthFilterChange('threshold', event.target.value, 'admin');
+                App.syncProjectHealthControls();
+            });
+        }
+        if (statusSelect) {
+            statusSelect.addEventListener('change', (event) => {
+                App.handleProjectHealthFilterChange('status', event.target.value, 'admin');
+                App.syncProjectHealthControls();
+            });
+        }
+        if (includeToggle) {
+            includeToggle.addEventListener('change', (event) => {
+                App.toggleProjectHealthInclude(event.target.checked, 'admin');
+                App.syncProjectHealthControls();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                App.resetProjectHealthFilters();
+                App.syncProjectHealthControls();
+            });
+        }
+
+        App.syncProjectHealthControls();
     },
 
     savePresalesTarget(event) {

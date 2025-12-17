@@ -294,6 +294,54 @@ body {
     gap: 1rem;
 }
 
+.app-home-button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    margin-left: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    transition: background 0.2s ease;
+    text-align: left;
+}
+
+.app-home-button:hover,
+.app-home-button:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.app-home-button:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.8);
+    outline-offset: 2px;
+}
+
+.app-home-acronym {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.08em;
+}
+
+.app-home-title {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.2;
+}
+
+@media (max-width: 1024px) {
+    .app-home-button {
+        padding: 0.25rem;
+    }
+
+    .app-home-title {
+        display: none;
+    }
+}
+
 .header-username {
     color: var(--white);
     font-size: 0.9rem;

@@ -299,6 +299,19 @@
     box-shadow: 0 10px 24px var(--card-shadow-hover);
 }
 
+.project-health-filter-summary {
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    background: var(--gray-50);
+    color: var(--gray-700);
+    line-height: 1.5;
+}
+
+.project-health-filter-summary p {
+    margin: 0.25rem 0;
+}
+
 .content-card-header {
     display: flex;
     justify-content: space-between;
