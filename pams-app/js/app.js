@@ -800,7 +800,6 @@ const App = {
             });
 
             const stats = {
-                totalAccounts: accounts.length,
                 totalProjects,
                 totalActivities: activities.length,
                 customerActivities,
@@ -815,7 +814,6 @@ const App = {
                 if (el) el.textContent = value;
             };
 
-            setTextContent('totalAccountsStat', stats.totalAccounts);
             setTextContent('totalProjectsStat', stats.totalProjects);
             setTextContent('totalActivitiesStat', stats.totalActivities);
             setTextContent('customerActivitiesStat', stats.customerActivities);

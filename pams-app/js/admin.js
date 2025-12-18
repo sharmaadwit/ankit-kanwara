@@ -104,6 +104,9 @@ const Admin = {
         search: ''
     },
     salesRepSearchDebounce: null,
+    salesRepFiltersInitialized: false,
+    loadedSections: new Set(),
+    activeSection: null,
 
     getAdminHeaders() {
         const headers = {};
@@ -123,18 +126,10 @@ const Admin = {
     // Load admin panel
     loadAdminPanel() {
         try {
-            this.loadUsers();
-            this.initSalesRepFilters();
-            this.loadSalesReps();
-            this.loadAnalyticsSettings();
-            this.renderProjectHealthSettings();
-            this.loadPOCSandbox();
-            this.loadControls();
-            this.loadLoginLogs();
-            const monthInput = document.getElementById('adminReportMonth');
-            if (monthInput && !monthInput.value) {
-                monthInput.value = new Date().toISOString().substring(0, 7);
-            }
+            this.loadedSections = new Set();
+            this.activeSection = null;
+            this.setupSectionNavigation();
+
             const interfaceSelect = document.getElementById('interfaceSelect');
             if (interfaceSelect) {
                 interfaceSelect.value = InterfaceManager.getCurrentInterface();
@@ -143,10 +138,91 @@ const Admin = {
             if (themeSelect) {
                 themeSelect.value = InterfaceManager.getCurrentTheme();
             }
+            const monthInput = document.getElementById('adminReportMonth');
+            if (monthInput && !monthInput.value) {
+                monthInput.value = new Date().toISOString().substring(0, 7);
+            }
+
+            const firstSectionButton = document.querySelector('#adminSectionsNav [data-admin-nav]');
+            if (firstSectionButton) {
+                this.openSection(firstSectionButton.dataset.adminNav);
+            }
         } catch (error) {
             console.error('Error loading admin panel:', error);
             UI.showNotification('Error loading admin panel', 'error');
         }
+    },
+
+    setupSectionNavigation() {
+        const nav = document.getElementById('adminSectionsNav');
+        if (!nav) return;
+
+        nav.querySelectorAll('[data-admin-nav]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const section = button.dataset.adminNav;
+                if (section) {
+                    this.openSection(section);
+                }
+            });
+        });
+    },
+
+    openSection(sectionId) {
+        if (!sectionId || this.activeSection === sectionId) {
+            return;
+        }
+
+        const sections = document.querySelectorAll('[data-admin-section]');
+        sections.forEach((section) => {
+            const matches = section.dataset.adminSection === sectionId;
+            section.classList.toggle('hidden', !matches);
+            if (matches) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+
+        this.markActiveSectionButton(sectionId);
+        this.ensureSectionLoaded(sectionId);
+        this.activeSection = sectionId;
+    },
+
+    markActiveSectionButton(sectionId) {
+        const nav = document.getElementById('adminSectionsNav');
+        if (!nav) return;
+
+        nav.querySelectorAll('[data-admin-nav]').forEach((button) => {
+            const isActive = button.dataset.adminNav === sectionId;
+            button.classList.toggle('active', isActive);
+        });
+    },
+
+    ensureSectionLoaded(sectionId) {
+        if (this.loadedSections.has(sectionId)) {
+            return;
+        }
+
+        const loaders = this.getSectionLoaders();
+        const loader = loaders[sectionId];
+        if (typeof loader === 'function') {
+            loader.call(this);
+        }
+        this.loadedSections.add(sectionId);
+    },
+
+    getSectionLoaders() {
+        return {
+            users: () => this.loadUsers(),
+            sales: () => this.loadSalesReps(),
+            interface: () => {},
+            analytics: () => this.loadAnalyticsSettings(),
+            projectHealth: () => this.renderProjectHealthSettings(),
+            features: () => this.loadControls(),
+            login: () => this.loadLoginLogs(),
+            audit: () => this.loadActivityLogs(),
+            monthly: () => {},
+            reports: () => {},
+            poc: () => {}
+        };
     },
 
     loadAnalyticsSettings() {
@@ -607,6 +683,16 @@ const Admin = {
         const searchInput = document.getElementById('salesRepFilterSearch');
         const resetBtn = document.getElementById('salesRepResetFilters');
 
+        if (this.salesRepFiltersInitialized) {
+            if (regionSelect) {
+                this.populateSalesRepRegionOptions(regionSelect);
+            }
+            if (searchInput) {
+                searchInput.value = this.salesRepFilters.search || '';
+            }
+            return;
+        }
+
         if (regionSelect) {
             this.populateSalesRepRegionOptions(regionSelect);
             regionSelect.addEventListener('change', (event) => {
@@ -647,6 +733,8 @@ const Admin = {
                 this.loadSalesReps();
             });
         }
+
+        this.salesRepFiltersInitialized = true;
     },
 
     populateSalesRepRegionOptions(selectEl) {
@@ -675,6 +763,19 @@ const Admin = {
     },
 
     loadSalesReps() {
+        if (!this.salesRepFiltersInitialized) {
+            this.initSalesRepFilters();
+        } else {
+            const regionSelect = document.getElementById('salesRepFilterRegion');
+            if (regionSelect) {
+                this.populateSalesRepRegionOptions(regionSelect);
+            }
+            const searchInput = document.getElementById('salesRepFilterSearch');
+            if (searchInput) {
+                searchInput.value = this.salesRepFilters.search || '';
+            }
+        }
+
         const salesReps = DataManager.getGlobalSalesReps();
         const container = document.getElementById('salesRepsList');
         const summaryEl = document.getElementById('salesRepsSummary');
@@ -1506,32 +1607,23 @@ const Admin = {
         const rows = this.controlDefinitions
             .map((def) => {
                 const state = this.controlDraft[def.key] || {};
-                const isOn = state.value !== false;
-                const statusClass = isOn ? 'status-on' : 'status-off';
-                const statusLabel = def.supportsFeature
-                    ? (isOn ? 'Enabled' : 'Disabled')
-                    : (isOn ? 'Visible' : 'Hidden');
-                const toggleLabel = def.supportsFeature ? 'Enable feature & card' : 'Show to users';
-
+                const isEnabled = state.value !== false;
                 return `
-                    <div class="admin-config-card" data-admin-control="${def.key}">
-                        <div class="admin-config-card-header">
-                            <h3 class="admin-config-card-title">${def.label}</h3>
-                            <span class="admin-config-card-status ${statusClass}">
-                                ${statusLabel}
-                            </span>
+                    <div class="feature-flag-row" data-admin-control="${def.key}">
+                        <div class="feature-flag-info">
+                            <div class="feature-flag-name">${def.label}</div>
+                            ${def.description ? `<div class="feature-flag-description">${def.description}</div>` : ''}
                         </div>
-                        <div class="admin-config-card-body">
-                            <label class="control-toggle">
-                                <input type="checkbox"
-                                       data-control-type="${def.supportsFeature ? 'feature' : 'dashboard'}"
-                                       data-control-key="${def.key}"
-                                       ${isOn ? 'checked' : ''}>
-                                <span>${toggleLabel}</span>
-                            </label>
-                            ${def.description
-                                ? `<p class="admin-config-card-description">${def.description}</p>`
-                                : ''}
+                        <div class="feature-flag-controls">
+                            <span class="feature-flag-status ${isEnabled ? 'status-on' : 'status-off'}">
+                                ${isEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                            <select class="form-control feature-flag-select"
+                                    data-control-type="${def.supportsFeature ? 'feature' : 'dashboard'}"
+                                    data-control-key="${def.key}">
+                                <option value="enabled" ${isEnabled ? 'selected' : ''}>Enable</option>
+                                <option value="disabled" ${!isEnabled ? 'selected' : ''}>Disable</option>
+                            </select>
                         </div>
                     </div>
                 `;
@@ -1539,7 +1631,7 @@ const Admin = {
             .join('');
 
         container.innerHTML = `
-            <div class="admin-config-grid">
+            <div class="feature-flag-list">
                 ${rows}
             </div>
             <div class="admin-config-actions">
@@ -1552,9 +1644,9 @@ const Admin = {
         `;
 
         container
-            .querySelectorAll('input[data-control-type]')
-            .forEach((input) =>
-                input.addEventListener('change', (event) => this.handleControlToggle(event))
+            .querySelectorAll('select.feature-flag-select')
+            .forEach((select) =>
+                select.addEventListener('change', (event) => this.handleControlSelectChange(event))
             );
 
         container.querySelector('#controlsSaveBtn')?.addEventListener('click', () => this.saveControls());
@@ -1563,9 +1655,9 @@ const Admin = {
         this.markControlsDirty();
     },
 
-    handleControlToggle(event) {
-        const input = event.currentTarget;
-        const controlKey = input?.dataset?.controlKey;
+    handleControlSelectChange(event) {
+        const select = event.currentTarget;
+        const controlKey = select?.dataset?.controlKey;
         if (!controlKey) {
             return;
         }
@@ -1576,7 +1668,7 @@ const Admin = {
         }
 
         const draft = this.controlDraft[controlKey] || {};
-        draft.value = input.checked;
+        draft.value = select.value !== 'disabled';
         this.controlDraft[controlKey] = draft;
         this.markControlsDirty();
     },
@@ -1585,14 +1677,21 @@ const Admin = {
         this.controlDefinitions.forEach((def) => {
             const card = document.querySelector(`[data-admin-control="${def.key}"]`);
             if (!card) return;
-            const statusEl = card.querySelector('.admin-config-card-status');
-            if (!statusEl) return;
+            const statusEl = card.querySelector('.feature-flag-status');
+            const selectEl = card.querySelector('.feature-flag-select');
 
             const draft = this.controlDraft[def.key] || {};
             const isOn = draft.value !== false;
-            statusEl.textContent = def.supportsFeature ? (isOn ? 'Enabled' : 'Disabled') : (isOn ? 'Visible' : 'Hidden');
-            statusEl.classList.toggle('status-on', isOn);
-            statusEl.classList.toggle('status-off', !isOn);
+
+            if (statusEl) {
+                statusEl.textContent = isOn ? 'Enabled' : 'Disabled';
+                statusEl.classList.toggle('status-on', isOn);
+                statusEl.classList.toggle('status-off', !isOn);
+            }
+
+            if (selectEl) {
+                selectEl.value = isOn ? 'enabled' : 'disabled';
+            }
         });
     },
 

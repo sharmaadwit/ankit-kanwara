@@ -183,10 +183,6 @@
                     <!-- Statistics Grid -->
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <h4>Total Accounts</h4>
-                            <div class="stat-value" id="totalAccountsStat">0</div>
-                        </div>
-                        <div class="stat-card">
                             <h4>Total Projects</h4>
                             <div class="stat-value" id="totalProjectsStat">0</div>
                         </div>
@@ -373,177 +369,225 @@
                 <div id="adminView" class="view hidden">
                     <div class="page-header">
                         <h1 class="page-title">Admin & Settings</h1>
-                        <p class="page-subtitle">Manage users, sales reps, industries, regions, and system settings</p>
+                        <p class="page-subtitle">Choose a module below to manage platform configuration without endless scrolling.</p>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="admin-sections-help text-muted">Select a module to open its tools. Only the chosen module loads, keeping the page fast.</div>
+
+                    <div class="admin-sections-nav" id="adminSectionsNav">
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="users">System Users</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="sales">Sales Users</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="interface">Interface Settings</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="analytics">Analytics Targets</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="projectHealth">Project Health Filters</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="features">Feature Flags</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="login">Login Activity</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="audit">Activity Audit Log</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="monthly">Monthly Export</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="poc">POC Sandbox</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="reports">Reports</button>
+                    </div>
+
+                    <div id="adminSectionsContainer">
                         <!-- System Users -->
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>System Users</h3>
-                            </div>
-                            <div class="card-body">
-                                <button id="addUserBtn" class="btn btn-primary mb-4" onclick="Admin.showAddUserModal()">Add New User</button>
-                                <div id="usersList" class="space-y-2"></div>
+                        <div class="admin-section hidden" data-admin-section="users">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>System Users</h3>
+                                </div>
+                                <div class="card-body">
+                                    <button id="addUserBtn" class="btn btn-primary mb-4" onclick="Admin.showAddUserModal()">Add New User</button>
+                                    <div id="usersList" class="space-y-2"></div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Sales Users -->
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Sales Users</h3>
-                            </div>
-                            <div class="card-body">
-                            <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
-                                <div class="form-group" style="min-width: 200px;">
-                                    <label class="form-label">Region</label>
-                                    <select id="salesRepFilterRegion" class="form-control">
-                                        <option value="all">All Regions</option>
-                                    </select>
+                        <div class="admin-section hidden" data-admin-section="sales">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Sales Users</h3>
                                 </div>
-                                <div class="form-group" style="flex: 1; min-width: 200px;">
-                                    <label class="form-label">Search</label>
-                                    <input type="text" id="salesRepFilterSearch" class="form-control" placeholder="Search by name or email">
-                                </div>
-                                <button class="btn btn-secondary" id="salesRepResetFilters" style="white-space: nowrap;">Reset</button>
-                            </div>
-                            <div class="text-muted" id="salesRepsSummary" style="margin-bottom: 1rem;"></div>
-                                <button id="addSalesRepBtn" class="btn btn-primary mb-4" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
-                                <div id="salesRepsList" class="space-y-2"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Interface Settings -->
-                    <div class="card mb-6">
-                        <div class="card-header">
-                            <h3>Interface Preference (Global)</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-group">
-                                <label class="form-label">Interface Layout</label>
-                                <select id="interfaceSelect" class="form-control" onchange="InterfaceManager.changeInterface(this.value)">
-                                    <option value="card">Card Interface</option>
-                                    <option value="modern">Modern Sidebar</option>
-                                    <option value="compact">Compact Sidebar</option>
-                                    <option value="dashboard">Dashboard First</option>
-                                    <option value="minimal">Minimal Clean</option>
-                                </select>
-                                <small class="text-muted">Applies globally to all users on their next reload.</small>
-                            </div>
-                            <div class="form-group" style="margin-top: 1.5rem;">
-                                <label class="form-label">Color Scheme</label>
-                                <select id="interfaceThemeSelect" class="form-control" onchange="InterfaceManager.changeTheme(this.value)">
-                                    <option value="light">Light</option>
-                                    <option value="dark">Dark</option>
-                                    <option value="gupshup">Gupshup</option>
-                                </select>
-                                <small class="text-muted">Choose the default color palette. Users will see the change after refresh.</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Analytics Settings -->
-                    <div class="card mb-6">
-                        <div class="card-header">
-                            <h3>Analytics Targets</h3>
-                        </div>
-                        <div class="card-body">
-                            <form id="analyticsTargetForm" onsubmit="Admin.savePresalesTarget(event)">
-                                <div class="form-group">
-                                    <label class="form-label required">Monthly Activity Target per Presales User</label>
-                                    <input type="number" class="form-control" id="presalesTargetInput" min="0" step="1" required>
-                                </div>
-                                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                    <button type="submit" class="btn btn-primary">Save Target</button>
-                                    <span class="text-muted" id="presalesTargetMeta"></span>
-                                </div>
-                            </form>
-                            <p class="text-muted" id="presalesTargetSummary" style="margin-top: 1rem;"></p>
-                        </div>
-                    </div>
-
-                    <!-- Project Health Settings -->
-                    <div class="card mb-6">
-                        <div class="card-header">
-                            <h3>Project Health Filters</h3>
-                        </div>
-                        <div class="card-body" id="projectHealthAdminControls"></div>
-                    </div>
-
-                    <!-- Capabilities & Visibility -->
-                    <div class="card mb-6">
-                        <div class="card-header">
-                            <h3>Capabilities &amp; Visibility</h3>
-                        </div>
-                        <div class="card-body">
-                            <p class="text-muted" style="margin-bottom: 1rem;">Enable features and control which views appear for non-admin users. Admins always retain full access.</p>
-                            <div id="featureDashboardControls" class="admin-config-shell"></div>
-                        </div>
-                    </div>
-
-                    <!-- Login Activity & Usage -->
-                    <div class="card mb-6">
-                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3>Login Activity & Usage</h3>
-                            <div style="display:flex; gap:0.75rem;">
-                                <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
-                                <button class="btn btn-outline btn-sm" onclick="App.switchView('adminLoginLogs')">Open detailed log</button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="loginMetricsSummary" class="login-metrics-summary"></div>
-                            <div class="login-metrics-grid">
-                                <div class="login-metrics-panel">
-                                    <h4>Activity (Last 14 days)</h4>
-                                    <div id="loginMetricsByDate" class="metric-list"></div>
-                                </div>
-                                <div class="login-metrics-panel">
-                                    <h4>Top Users (7 days)</h4>
-                                    <div id="loginTopUsers" class="metric-list"></div>
+                                <div class="card-body">
+                                    <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+                                        <div class="form-group" style="min-width: 200px;">
+                                            <label class="form-label">Region</label>
+                                            <select id="salesRepFilterRegion" class="form-control">
+                                                <option value="all">All Regions</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                                            <label class="form-label">Search</label>
+                                            <input type="text" id="salesRepFilterSearch" class="form-control" placeholder="Search by name or email">
+                                        </div>
+                                        <button class="btn btn-secondary" id="salesRepResetFilters" style="white-space: nowrap;">Reset</button>
+                                    </div>
+                                    <div class="text-muted" id="salesRepsSummary" style="margin-bottom: 1rem;"></div>
+                                    <button id="addSalesRepBtn" class="btn btn-primary mb-4" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
+                                    <div id="salesRepsList" class="space-y-2"></div>
                                 </div>
                             </div>
-                            <div class="table-responsive" style="margin-top: 1.5rem;">
-                                <div class="text-muted" id="loginLogCardNote">Detailed entries available in the Login Activity page.</div>
-                            </div>
                         </div>
-                    </div>
 
-                    <!-- Activity Audit Log -->
-                    <div class="card mb-6">
-                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3>Activity Audit Log</h3>
-                            <div style="display: flex; gap: 0.75rem;">
-                                <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
-                                <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
-                            </div>
-                        </div>
-                        <div class="card-body" id="activityLogsTable">
-                            <div class="text-muted">Click &ldquo;Refresh&rdquo; to load activity audit records.</div>
-                        </div>
-                    </div>
-
-                    <!-- Monthly Analytics Export -->
-                    <div class="card mb-6" data-feature="adminCsvExport">
-                        <div class="card-header">
-                            <h3>Monthly Analytics Export (Admin)</h3>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label">Select Month</label>
-                                    <input type="month" id="adminReportMonth" class="form-control">
+                        <!-- Interface Settings -->
+                        <div class="admin-section hidden" data-admin-section="interface">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Interface Preference (Global)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label class="form-label">Interface Layout</label>
+                                        <select id="interfaceSelect" class="form-control" onchange="InterfaceManager.changeInterface(this.value)">
+                                            <option value="card">Card Interface</option>
+                                            <option value="modern">Modern Sidebar</option>
+                                            <option value="compact">Compact Sidebar</option>
+                                            <option value="dashboard">Dashboard First</option>
+                                            <option value="minimal">Minimal Clean</option>
+                                        </select>
+                                        <small class="text-muted">Applies globally to all users on their next reload.</small>
+                                    </div>
+                                    <div class="form-group" style="margin-top: 1.5rem;">
+                                        <label class="form-label">Color Scheme</label>
+                                        <select id="interfaceThemeSelect" class="form-control" onchange="InterfaceManager.changeTheme(this.value)">
+                                            <option value="light">Light</option>
+                                            <option value="dark">Dark</option>
+                                            <option value="gupshup">Gupshup</option>
+                                        </select>
+                                        <small class="text-muted">Choose the default color palette. Users will see the change after refresh.</small>
+                                    </div>
                                 </div>
                             </div>
-                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
                         </div>
-                    </div>
 
-                    <div class="card">
-                        <div class="card-body">
-                            <h3 class="card-title" style="margin-bottom:0.5rem;">Need sandbox oversight?</h3>
-                            <p class="text-muted" style="margin-bottom:1rem;">Review sandbox allocations, update statuses, and capture POC progress from the dedicated admin workspace.</p>
-                            <button class="btn btn-outline" onclick="App.switchView('adminPoc')">Open POC Sandbox Manager</button>
+                        <!-- Analytics Settings -->
+                        <div class="admin-section hidden" data-admin-section="analytics">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Analytics Targets</h3>
+                                </div>
+                                <div class="card-body">
+                                    <form id="analyticsTargetForm" onsubmit="Admin.savePresalesTarget(event)">
+                                        <div class="form-group">
+                                            <label class="form-label required">Monthly Activity Target per Presales User</label>
+                                            <input type="number" class="form-control" id="presalesTargetInput" min="0" step="1" required>
+                                        </div>
+                                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                            <button type="submit" class="btn btn-primary">Save Target</button>
+                                            <span class="text-muted" id="presalesTargetMeta"></span>
+                                        </div>
+                                    </form>
+                                    <p class="text-muted" id="presalesTargetSummary" style="margin-top: 1rem;"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Project Health Settings -->
+                        <div class="admin-section hidden" data-admin-section="projectHealth">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Project Health Filters</h3>
+                                </div>
+                                <div class="card-body" id="projectHealthAdminControls"></div>
+                            </div>
+                        </div>
+
+                        <!-- Feature Flags -->
+                        <div class="admin-section hidden" data-admin-section="features">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Feature Flags</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable features for everyone except admins. Disabling hides related navigation links and prevents access.</p>
+                                    <div id="featureDashboardControls" class="admin-config-shell"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Login Activity & Usage -->
+                        <div class="admin-section hidden" data-admin-section="login">
+                            <div class="card">
+                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3>Login Activity & Usage</h3>
+                                    <div style="display:flex; gap:0.75rem;">
+                                        <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
+                                        <button class="btn btn-outline btn-sm" onclick="App.switchView('adminLoginLogs')">Open detailed log</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="loginMetricsSummary" class="login-metrics-summary"></div>
+                                    <div class="login-metrics-grid">
+                                        <div class="login-metrics-panel">
+                                            <h4>Activity (Last 14 days)</h4>
+                                            <div id="loginMetricsByDate" class="metric-list"></div>
+                                        </div>
+                                        <div class="login-metrics-panel">
+                                            <h4>Top Users (7 days)</h4>
+                                            <div id="loginTopUsers" class="metric-list"></div>
+                                        </div>
+                                    </div>
+                                    <div class="table-responsive" style="margin-top: 1.5rem;">
+                                        <div class="text-muted" id="loginLogCardNote">Detailed entries available in the Login Activity page.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Audit Log -->
+                        <div class="admin-section hidden" data-admin-section="audit">
+                            <div class="card">
+                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3>Activity Audit Log</h3>
+                                    <div style="display: flex; gap: 0.75rem;">
+                                        <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="activityLogsTable">
+                                    <div class="text-muted">Click &ldquo;Refresh&rdquo; to load activity audit records.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Analytics Export -->
+                        <div class="admin-section hidden" data-admin-section="monthly">
+                            <div class="card" data-feature="adminCsvExport">
+                                <div class="card-header">
+                                    <h3>Monthly Analytics Export (Admin)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label">Select Month</label>
+                                            <input type="month" id="adminReportMonth" class="form-control">
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reports -->
+                        <div class="admin-section hidden" data-admin-section="reports">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h3 class="card-title" style="margin-bottom:0.5rem;">Reports</h3>
+                                    <p class="text-muted" style="margin-bottom:1rem;">Open the dedicated reports workspace to explore activity analytics, saved filters, and monthly summaries.</p>
+                                    <button class="btn btn-outline" onclick="App.navigateToCardView('reports')">Open Reports View</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- POC Sandbox Access -->
+                        <div class="admin-section hidden" data-admin-section="poc">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h3 class="card-title" style="margin-bottom:0.5rem;">POC Sandbox Manager</h3>
+                                    <p class="text-muted" style="margin-bottom:1rem;">Review sandbox allocations, update statuses, and capture POC progress from the dedicated admin workspace.</p>
+                                    <button class="btn btn-outline" onclick="App.switchView('adminPoc')">Open POC Sandbox Manager</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

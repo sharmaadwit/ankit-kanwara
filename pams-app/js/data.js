@@ -14,6 +14,41 @@ const DEFAULT_SALES_REGIONS = [
 const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
 
 const DataManager = {
+    cache: {
+        accounts: null,
+        activities: null,
+        internalActivities: null,
+        users: null,
+        globalSalesReps: null,
+        allActivities: null
+    },
+
+    resetCache() {
+        this.cache = {
+            accounts: null,
+            activities: null,
+            internalActivities: null,
+            users: null,
+            globalSalesReps: null,
+            allActivities: null
+        };
+    },
+
+    invalidateCache(...keys) {
+        if (!keys.length) {
+            this.resetCache();
+            return;
+        }
+        keys.forEach((key) => {
+            if (key === 'activities' || key === 'internalActivities') {
+                this.cache.allActivities = null;
+            }
+            if (Object.prototype.hasOwnProperty.call(this.cache, key)) {
+                this.cache[key] = null;
+            }
+        });
+    },
+
     recordAudit(action, entity, entityId, detail = {}) {
         try {
             if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
@@ -32,6 +67,7 @@ const DataManager = {
     // Initialize default data
     initialize() {
         try {
+            this.resetCache();
             // Initialize users if none exist
             const existingUsers = this.getUsers();
             if (!existingUsers.length) {
@@ -168,8 +204,12 @@ const DataManager = {
 
     // User Management
     getUsers() {
+        if (this.cache.users) {
+            return this.cache.users;
+        }
         const stored = localStorage.getItem('users');
         const users = stored ? JSON.parse(stored) : [];
+        this.cache.users = users;
         return users;
     },
     
@@ -212,6 +252,8 @@ const DataManager = {
 
     saveUsers(users) {
         localStorage.setItem('users', JSON.stringify(users));
+        this.cache.users = users;
+        this.cache.allActivities = null;
     },
 
     getUserById(id) {
@@ -312,9 +354,12 @@ const DataManager = {
     // Global Sales Reps Management (Enhanced with email and region)
     // Email is PRIMARY KEY
     getGlobalSalesReps() {
+        if (this.cache.globalSalesReps) {
+            return this.cache.globalSalesReps;
+        }
         const stored = localStorage.getItem('globalSalesReps');
         const reps = stored ? JSON.parse(stored) : [];
-        return reps.map(rep => {
+        const normalized = reps.map(rep => {
             const fxValue = Number(rep.fxToInr);
             return {
                 ...rep,
@@ -323,6 +368,8 @@ const DataManager = {
                 region: rep.region || 'India West'
             };
         });
+        this.cache.globalSalesReps = normalized;
+        return normalized;
     },
 
     getGlobalSalesRepByName(name) {
@@ -339,6 +386,8 @@ const DataManager = {
 
     saveGlobalSalesReps(salesReps) {
         localStorage.setItem('globalSalesReps', JSON.stringify(salesReps));
+        this.cache.globalSalesReps = salesReps;
+        this.cache.allActivities = null;
     },
 
     addGlobalSalesRep(salesRep) {
@@ -427,12 +476,19 @@ const DataManager = {
 
     // Account Management
     getAccounts() {
+        if (this.cache.accounts) {
+            return this.cache.accounts;
+        }
         const stored = localStorage.getItem('accounts');
-        return stored ? JSON.parse(stored) : [];
+        const accounts = stored ? JSON.parse(stored) : [];
+        this.cache.accounts = accounts;
+        return accounts;
     },
 
     saveAccounts(accounts) {
         localStorage.setItem('accounts', JSON.stringify(accounts));
+        this.cache.accounts = accounts;
+        this.cache.allActivities = null;
     },
 
     getAccountById(id) {
@@ -539,12 +595,19 @@ const DataManager = {
 
     // Activity Management
     getActivities() {
+        if (this.cache.activities) {
+            return this.cache.activities;
+        }
         const stored = localStorage.getItem('activities');
-        return stored ? JSON.parse(stored) : [];
+        const activities = stored ? JSON.parse(stored) : [];
+        this.cache.activities = activities;
+        return activities;
     },
 
     saveActivities(activities) {
         localStorage.setItem('activities', JSON.stringify(activities));
+        this.cache.activities = activities;
+        this.cache.allActivities = null;
     },
 
     addActivity(activity) {
@@ -583,12 +646,19 @@ const DataManager = {
 
     // Internal Activities
     getInternalActivities() {
+        if (this.cache.internalActivities) {
+            return this.cache.internalActivities;
+        }
         const stored = localStorage.getItem('internalActivities');
-        return stored ? JSON.parse(stored) : [];
+        const activities = stored ? JSON.parse(stored) : [];
+        this.cache.internalActivities = activities;
+        return activities;
     },
 
     saveInternalActivities(activities) {
         localStorage.setItem('internalActivities', JSON.stringify(activities));
+        this.cache.internalActivities = activities;
+        this.cache.allActivities = null;
     },
 
     addInternalActivity(activity) {
@@ -913,6 +983,10 @@ const DataManager = {
 
     // Get all activities (customer + internal) with user info
     getAllActivities() {
+        if (this.cache.allActivities) {
+            return this.cache.allActivities.map(activity => ({ ...activity }));
+        }
+
         const activities = this.getActivities();
         const internalActivities = this.getInternalActivities();
         const users = this.getUsers();
@@ -936,13 +1010,14 @@ const DataManager = {
                     user: user
                 };
             })
-        ];
-
-        return allActivities.sort((a, b) => {
+        ].sort((a, b) => {
             const dateA = new Date(a.date || a.createdAt);
             const dateB = new Date(b.date || b.createdAt);
             return dateB - dateA;
         });
+
+        this.cache.allActivities = allActivities;
+        return allActivities.map(activity => ({ ...activity }));
     },
 
     // Utility
