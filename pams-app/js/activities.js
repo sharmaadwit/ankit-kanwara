@@ -19,6 +19,7 @@ const Activities = {
     activityType: null, // 'internal' or 'external'
     allAccounts: [],
     currentProjectOptions: [],
+    currentSalesRepRegion: null,
 
     // Open unified activity modal
     openActivityModal(context = {}) {
@@ -194,13 +195,24 @@ const Activities = {
             this.prefillNewProjectForEdit(activity);
         }
 
+        const resolvedRegion = activity.salesRepRegion || this.getDefaultSalesRepRegion();
+        this.populateSalesRepRegionOptions(resolvedRegion);
+        this.populateSalesRepOptions(resolvedRegion);
+
         const salesRepSelect = document.getElementById('salesRepSelect');
         if (salesRepSelect && activity.salesRep) {
-            const targetName = activity.salesRep.toLowerCase();
-            const matchedOption = Array.from(salesRepSelect.options).find(option => {
-                const optionName = (option.getAttribute('data-name') || option.text || '').toLowerCase();
-                return optionName === targetName;
-            });
+            const desiredEmail = activity.salesRepEmail || '';
+            let matchedOption = null;
+            if (desiredEmail) {
+                matchedOption = Array.from(salesRepSelect.options).find(option => option.value === desiredEmail);
+            }
+            if (!matchedOption) {
+                const targetName = activity.salesRep.toLowerCase();
+                matchedOption = Array.from(salesRepSelect.options).find(option => {
+                    const optionName = (option.getAttribute('data-name') || option.text || '').toLowerCase();
+                    return optionName === targetName;
+                });
+            }
             if (matchedOption) {
                 salesRepSelect.value = matchedOption.value;
             }
@@ -420,12 +432,15 @@ const Activities = {
                                     </div>
                                 </div>
                                 <div class="form-group">
+                                    <label class="form-label required">Sales Region</label>
+                                    <select class="form-control" id="salesRepRegionSelect" data-was-required="true" required onchange="Activities.handleSalesRepRegionChange(this.value)">
+                                        <option value="">Select region...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
                                     <label class="form-label required">Sales Rep</label>
                                     <select class="form-control" id="salesRepSelect" data-was-required="true" required>
                                         <option value="">Select Sales Rep...</option>
-                                        ${DataManager.getGlobalSalesReps().filter(r => r.isActive).map(rep => 
-                                            `<option value="${rep.email}" data-name="${rep.name}">${rep.name}</option>`
-                                        ).join('')}
                                     </select>
                                 </div>
                             </div>
@@ -565,6 +580,90 @@ const Activities = {
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById('activityDate');
         if (dateInput) dateInput.value = today;
+
+        this.populateSalesRepRegionOptions(this.currentSalesRepRegion);
+        this.populateSalesRepOptions(this.currentSalesRepRegion);
+    },
+
+    getDefaultSalesRepRegion() {
+        if (typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
+            return 'India West';
+        }
+        const regions = DataManager.getRegions();
+        if (regions.includes('India West')) {
+            return 'India West';
+        }
+        return regions[0] || '';
+    },
+
+    populateSalesRepRegionOptions(selectedRegion = null) {
+        const regionSelect = document.getElementById('salesRepRegionSelect');
+        if (!regionSelect || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
+            return;
+        }
+
+        const regions = DataManager.getRegions();
+        const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        const defaultRegion = selectedRegion || this.currentSalesRepRegion || this.getDefaultSalesRepRegion();
+
+        let options = '<option value="">Select region...</option>';
+        uniqueRegions.forEach(region => {
+            options += `<option value="${region}">${region}</option>`;
+        });
+
+        regionSelect.innerHTML = options;
+
+        const hasDefault = defaultRegion && uniqueRegions.includes(defaultRegion);
+        if (hasDefault) {
+            regionSelect.value = defaultRegion;
+        } else if (uniqueRegions.length) {
+            regionSelect.value = uniqueRegions[0];
+        } else {
+            regionSelect.value = '';
+        }
+
+        this.currentSalesRepRegion = regionSelect.value || '';
+    },
+
+    populateSalesRepOptions(region = null) {
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        if (!salesRepSelect || typeof DataManager === 'undefined') {
+            return;
+        }
+
+        const targetRegion = region || this.currentSalesRepRegion || this.getDefaultSalesRepRegion();
+        const reps = typeof DataManager.getSalesRepsByRegion === 'function'
+            ? DataManager.getSalesRepsByRegion(targetRegion || 'all')
+            : DataManager.getGlobalSalesReps();
+
+        let options = '<option value="">Select Sales Rep...</option>';
+        if (!reps.length) {
+            options += '<option value="" disabled>No active sales users for this region</option>';
+            salesRepSelect.innerHTML = options;
+            salesRepSelect.disabled = true;
+            return;
+        }
+
+        salesRepSelect.disabled = false;
+        reps.forEach(rep => {
+            options += `<option value="${rep.email}" data-name="${rep.name}">${rep.name}</option>`;
+        });
+        salesRepSelect.innerHTML = options;
+    },
+
+    handleSalesRepRegionChange(region) {
+        this.currentSalesRepRegion = region || '';
+        this.populateSalesRepOptions(this.currentSalesRepRegion || 'all');
+        if (typeof UI !== 'undefined' && UI.clearFieldError) {
+            const regionSelect = document.getElementById('salesRepRegionSelect');
+            if (regionSelect) {
+                UI.clearFieldError(regionSelect);
+            }
+        }
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        if (salesRepSelect) {
+            salesRepSelect.value = '';
+        }
     },
 
     // Show activity fields based on type
@@ -1027,21 +1126,26 @@ const Activities = {
         // Auto-populate Sales Rep and Industry from account
         const account = DataManager.getAccountById(id);
         if (account) {
+            const accountRegion = account.salesRepRegion || this.getDefaultSalesRepRegion();
+            this.populateSalesRepRegionOptions(accountRegion);
+            this.populateSalesRepOptions(accountRegion);
+
             const salesRepSelect = document.getElementById('salesRepSelect');
             const industrySelect = document.getElementById('industry');
             
             if (salesRepSelect && account.salesRep) {
-                // Find sales rep by name in global list (account stores name, dropdown uses email as value)
-                const salesRep = DataManager.getGlobalSalesReps().find(r => r.name === account.salesRep);
-                if (salesRep) {
-                    // Find option by email (value is email)
-                    const option = Array.from(salesRepSelect.options).find(opt => opt.value === salesRep.email);
+                const resolvedEmail = account.salesRepEmail || (() => {
+                    const rep = typeof DataManager.getGlobalSalesRepByName === 'function'
+                        ? DataManager.getGlobalSalesRepByName(account.salesRep)
+                        : null;
+                    return rep?.email || '';
+                })();
+                if (resolvedEmail) {
+                    const option = Array.from(salesRepSelect.options).find(opt => opt.value === resolvedEmail);
                     if (option) {
-                        salesRepSelect.value = salesRep.email;
+                        salesRepSelect.value = resolvedEmail;
                     }
                 }
-                // Note: If sales rep not in global list, dropdown will be empty
-                // Admin should add sales rep to global list first
             }
             if (industrySelect && account.industry) {
                 industrySelect.value = account.industry;
@@ -1532,6 +1636,7 @@ const Activities = {
 
         // Get account information
         const accountIdEl = document.getElementById('selectedAccountId');
+        const salesRepRegionSelect = document.getElementById('salesRepRegionSelect');
         const salesRepSelect = document.getElementById('salesRepSelect');
         const industryEl = document.getElementById('industry');
         const projectIdEl = document.getElementById('selectedProjectId');
@@ -1539,9 +1644,10 @@ const Activities = {
         const newProjectNameInput = document.getElementById('newProjectName');
         UI.clearFieldError(newAccountNameInput);
         UI.clearFieldError(newProjectNameInput);
+        UI.clearFieldError(salesRepRegionSelect);
         UI.clearFieldError(salesRepSelect);
         
-        if (!accountIdEl || !salesRepSelect || !industryEl) {
+        if (!accountIdEl || !salesRepRegionSelect || !salesRepSelect || !industryEl) {
             UI.showNotification('Please fill in all required account fields', 'error');
             return;
         }
@@ -1583,8 +1689,16 @@ const Activities = {
         }
         
         // Handle sales rep (from dropdown only - no adding new)
+        const salesRepRegion = salesRepRegionSelect.value;
+        if (!salesRepRegion) {
+            UI.setFieldError(salesRepRegionSelect, 'Select a sales region');
+            UI.showNotification('Please select a sales region', 'error');
+            return;
+        }
+
         const selectedOption = salesRepSelect.options[salesRepSelect.selectedIndex];
         const salesRep = selectedOption ? selectedOption.getAttribute('data-name') || selectedOption.text : '';
+        const salesRepEmail = salesRepSelect.value;
         
         if (!salesRep || !salesRepSelect.value) {
             UI.setFieldError(salesRepSelect, 'Select a sales rep');
@@ -1599,15 +1713,19 @@ const Activities = {
                 name: accountName,
                 industry: industry,
                 salesRep: salesRep,
+                salesRepEmail: salesRepEmail,
+                salesRepRegion: salesRepRegion,
                 createdBy: currentUser.id
             });
             finalAccountId = newAccount.id;
         } else {
             // Update account with sales rep if changed
             const account = DataManager.getAccountById(accountId);
-            if (account && (account.salesRep !== salesRep || account.industry !== industry)) {
+            if (account && (account.salesRep !== salesRep || account.salesRepEmail !== salesRepEmail || account.salesRepRegion !== salesRepRegion || account.industry !== industry)) {
                 DataManager.updateAccount(accountId, {
                     salesRep: salesRep,
+                    salesRepEmail: salesRepEmail,
+                    salesRepRegion: salesRepRegion,
                     industry: industry
                 });
             }
@@ -1691,6 +1809,8 @@ const Activities = {
             date: date,
             type: activityType,
             salesRep: salesRep,
+            salesRepEmail: salesRepEmail,
+            salesRepRegion: salesRepRegion,
             industry: industry,
             details: {},
             isInternal: false
@@ -1752,6 +1872,8 @@ const Activities = {
                 projectId: activity.projectId,
                 projectName: activity.projectName,
                 salesRep: activity.salesRep,
+                salesRepEmail: activity.salesRepEmail,
+                salesRepRegion: activity.salesRepRegion,
                 industry: activity.industry,
                 details: activity.details,
                 isInternal: false
@@ -2008,6 +2130,7 @@ const Activities = {
         this.selectedUseCases = [];
         this.selectedChannels = [];
         this.selectedProjectProducts = [];
+        this.currentSalesRepRegion = this.getDefaultSalesRepRegion();
         
         const form = document.getElementById('activityForm');
         if (form) form.reset();

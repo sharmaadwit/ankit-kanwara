@@ -1,5 +1,18 @@
 // Data Management Module - localStorage operations
 
+const DEFAULT_SALES_REGIONS = [
+    'India West',
+    'India South',
+    'India North',
+    'SEA',
+    'Africa & Europe',
+    'ROW',
+    'MENA',
+    'LATAM'
+];
+
+const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
+
 const DataManager = {
     recordAudit(action, entity, entityId, detail = {}) {
         try {
@@ -65,11 +78,9 @@ const DataManager = {
 
         // Initialize regions if none exist
         if (!this.getRegions().length) {
-            const defaultRegions = [
-                'India South', 'India North', 'India West', 'India East',
-                'MENA', 'EU', 'NA', 'SEA', 'Africa', 'APAC', 'LATAM'
-            ];
-            this.saveRegions(defaultRegions);
+            this.saveRegions([...DEFAULT_SALES_REGIONS]);
+        } else {
+            this.ensureRegionBaseline();
         }
 
         // Initialize global sales reps if none exist
@@ -80,7 +91,7 @@ const DataManager = {
                     id: this.generateId(),
                     name: 'John Doe',
                     email: 'john.doe@example.com',
-                    region: 'India South',
+                    region: 'India West',
                     isActive: true,
                     createdAt: new Date().toISOString()
                 },
@@ -88,7 +99,7 @@ const DataManager = {
                     id: this.generateId(),
                     name: 'Jane Smith',
                     email: 'jane.smith@example.com',
-                    region: 'India North',
+                    region: 'India West',
                     isActive: true,
                     createdAt: new Date().toISOString()
                 }
@@ -113,7 +124,7 @@ const DataManager = {
                     id: this.generateId(),
                     name: rep.name,
                     email: rep.email,
-                    region: 'India South',
+                    region: 'India West',
                     isActive: true,
                     createdAt: new Date().toISOString()
                 });
@@ -129,7 +140,7 @@ const DataManager = {
             this.saveIndustries(['BFSI', 'IT & Software', 'Retail & eCommerce', 'Telecom', 'Healthcare', 'Media & Entertainment', 'Travel & Hospitality', 'Automotive', 'Government', 'Education']);
         }
         if (!localStorage.getItem('regions')) {
-            this.saveRegions(['India South', 'India North', 'India West', 'India East', 'MENA', 'EU', 'NA', 'SEA', 'Africa', 'APAC', 'LATAM']);
+            this.saveRegions([...DEFAULT_SALES_REGIONS]);
         }
 
         // Initialize other data structures
@@ -146,6 +157,10 @@ const DataManager = {
         if (!localStorage.getItem('presalesActivityTarget')) {
             this.savePresalesActivityTarget(20, { updatedBy: 'System' });
         }
+
+        this.normalizeSalesRepRegions();
+        this.backfillAccountSalesRepRegions();
+        this.backfillActivitySalesRepRegions();
         } catch (error) {
             console.error('Error initializing data:', error);
         }
@@ -304,7 +319,8 @@ const DataManager = {
             return {
                 ...rep,
                 currency: rep.currency || 'INR',
-                fxToInr: Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null
+                fxToInr: Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null,
+                region: rep.region || 'India West'
             };
         });
     },
@@ -313,6 +329,12 @@ const DataManager = {
         if (!name) return null;
         const targetName = name.toLowerCase();
         return this.getGlobalSalesReps().find(rep => rep.name && rep.name.toLowerCase() === targetName) || null;
+    },
+
+    getGlobalSalesRepByEmail(email) {
+        if (!email) return null;
+        const targetEmail = email.toLowerCase();
+        return this.getGlobalSalesReps().find(rep => rep.email && rep.email.toLowerCase() === targetEmail) || null;
     },
 
     saveGlobalSalesReps(salesReps) {
@@ -342,6 +364,7 @@ const DataManager = {
         salesRep.id = this.generateId();
         salesRep.createdAt = new Date().toISOString();
         salesRep.isActive = salesRep.isActive !== undefined ? salesRep.isActive : true;
+        salesRep.region = salesRep.region || 'India West';
         salesReps.push(salesRep);
         this.saveGlobalSalesReps(salesReps);
         this.recordAudit('salesRep.create', 'salesRep', salesRep.id, {
@@ -349,6 +372,8 @@ const DataManager = {
             email: salesRep.email,
             region: salesRep.region
         });
+        this.backfillAccountSalesRepRegions();
+        this.backfillActivitySalesRepRegions();
         return salesRep;
     },
 
@@ -365,9 +390,12 @@ const DataManager = {
             merged.currency = merged.currency || 'INR';
             const fxValue = Number(merged.fxToInr);
             merged.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
+            merged.region = merged.region || 'India West';
             salesReps[index] = merged;
             this.saveGlobalSalesReps(salesReps);
             this.recordAudit('salesRep.update', 'salesRep', salesRepId, updates);
+            this.backfillAccountSalesRepRegions();
+            this.backfillActivitySalesRepRegions();
             return merged;
         }
         return null;
@@ -414,6 +442,14 @@ const DataManager = {
     addAccount(account) {
         const accounts = this.getAccounts();
         account.id = this.generateId();
+        const resolvedRep = this.resolveSalesRepMetadata({
+            name: account.salesRep || '',
+            email: account.salesRepEmail || '',
+            fallbackRegion: account.salesRepRegion
+        });
+        account.salesRep = resolvedRep.name;
+        account.salesRepEmail = resolvedRep.email;
+        account.salesRepRegion = resolvedRep.region;
         account.projects = account.projects || [];
         account.createdAt = new Date().toISOString();
         accounts.push(account);
@@ -429,7 +465,17 @@ const DataManager = {
         const accounts = this.getAccounts();
         const index = accounts.findIndex(a => a.id === accountId);
         if (index !== -1) {
-            accounts[index] = { ...accounts[index], ...updates, updatedAt: new Date().toISOString() };
+            const merged = { ...accounts[index], ...updates };
+            const resolvedRep = this.resolveSalesRepMetadata({
+                name: merged.salesRep || '',
+                email: merged.salesRepEmail || '',
+                fallbackRegion: merged.salesRepRegion
+            });
+            merged.salesRep = resolvedRep.name;
+            merged.salesRepEmail = resolvedRep.email;
+            merged.salesRepRegion = resolvedRep.region;
+            merged.updatedAt = new Date().toISOString();
+            accounts[index] = merged;
             this.saveAccounts(accounts);
             this.recordAudit('account.update', 'account', accountId, updates);
             return accounts[index];
@@ -926,6 +972,185 @@ const DataManager = {
             console.error('Error formatting month:', error);
             return monthString;
         }
+    },
+
+    ensureRegionBaseline() {
+        const current = this.getRegions();
+        const regionSet = new Set(current.map(region => region && region.trim()).filter(Boolean));
+        let mutated = false;
+
+        DEFAULT_SALES_REGIONS.forEach(region => {
+            if (!regionSet.has(region)) {
+                regionSet.add(region);
+                mutated = true;
+            }
+        });
+
+        if (mutated) {
+            this.saveRegions(Array.from(regionSet));
+        }
+    },
+
+    normalizeSalesRepRegions() {
+        const salesReps = this.getGlobalSalesReps();
+        if (!salesReps.length) return;
+
+        const alreadyMigrated = localStorage.getItem(SALES_REGION_MIGRATION_FLAG) === 'true';
+        const allowed = new Set(DEFAULT_SALES_REGIONS);
+        let mutated = false;
+
+        const normalized = salesReps.map(rep => {
+            const existingRegion = rep.region;
+            let nextRegion = existingRegion;
+
+            if (!alreadyMigrated) {
+                nextRegion = 'India West';
+            } else if (!existingRegion || !allowed.has(existingRegion)) {
+                nextRegion = 'India West';
+            }
+
+            if (nextRegion !== existingRegion) {
+                mutated = true;
+            }
+
+            return {
+                ...rep,
+                region: nextRegion || 'India West'
+            };
+        });
+
+        if (mutated) {
+            this.saveGlobalSalesReps(normalized);
+        }
+
+        if (!alreadyMigrated) {
+            localStorage.setItem(SALES_REGION_MIGRATION_FLAG, 'true');
+        }
+    },
+
+    backfillAccountSalesRepRegions() {
+        const accounts = this.getAccounts();
+        if (!accounts.length) return;
+
+        const salesReps = this.getGlobalSalesReps();
+        const byEmail = new Map();
+        const byName = new Map();
+
+        salesReps.forEach(rep => {
+            if (rep?.email) {
+                byEmail.set(rep.email.toLowerCase(), rep);
+            }
+            if (rep?.name) {
+                byName.set(rep.name.toLowerCase(), rep);
+            }
+        });
+
+        let mutated = false;
+        const normalized = accounts.map(account => {
+            if (!account || !account.salesRep) {
+                return account;
+            }
+
+            const currentEmail = account.salesRepEmail ? account.salesRepEmail.toLowerCase() : '';
+            let matched = currentEmail ? byEmail.get(currentEmail) : null;
+            if (!matched) {
+                matched = byName.get(account.salesRep.toLowerCase());
+            }
+
+            const resolvedRegion = matched?.region || account.salesRepRegion || 'India West';
+            const resolvedEmail = matched?.email || account.salesRepEmail || '';
+            const resolvedName = matched?.name || account.salesRep;
+
+            if (resolvedRegion !== account.salesRepRegion || resolvedEmail !== (account.salesRepEmail || '') || resolvedName !== account.salesRep) {
+                mutated = true;
+                return {
+                    ...account,
+                    salesRep: resolvedName,
+                    salesRepEmail: resolvedEmail,
+                    salesRepRegion: resolvedRegion
+                };
+            }
+
+            return account;
+        });
+
+        if (mutated) {
+            this.saveAccounts(normalized);
+        }
+    },
+
+    backfillActivitySalesRepRegions() {
+        const activities = this.getActivities();
+        if (!activities.length) return;
+
+        const salesReps = this.getGlobalSalesReps();
+        const byEmail = new Map();
+        const byName = new Map();
+
+        salesReps.forEach(rep => {
+            if (rep?.email) {
+                byEmail.set(rep.email.toLowerCase(), rep);
+            }
+            if (rep?.name) {
+                byName.set(rep.name.toLowerCase(), rep);
+            }
+        });
+
+        let mutated = false;
+        const normalized = activities.map(activity => {
+            if (!activity || !activity.salesRep) {
+                return activity;
+            }
+
+            const currentEmail = activity.salesRepEmail ? activity.salesRepEmail.toLowerCase() : '';
+            let matched = currentEmail ? byEmail.get(currentEmail) : null;
+            if (!matched) {
+                matched = byName.get(activity.salesRep.toLowerCase());
+            }
+
+            const resolvedRegion = matched?.region || activity.salesRepRegion || 'India West';
+            const resolvedEmail = matched?.email || activity.salesRepEmail || '';
+            const resolvedName = matched?.name || activity.salesRep;
+
+            if (resolvedRegion !== activity.salesRepRegion || resolvedEmail !== (activity.salesRepEmail || '') || resolvedName !== activity.salesRep) {
+                mutated = true;
+                return {
+                    ...activity,
+                    salesRep: resolvedName,
+                    salesRepEmail: resolvedEmail,
+                    salesRepRegion: resolvedRegion
+                };
+            }
+
+            return activity;
+        });
+
+        if (mutated) {
+            this.saveActivities(normalized);
+        }
+    },
+
+    resolveSalesRepMetadata({ email = '', name = '', fallbackRegion = null } = {}) {
+        const trimmedEmail = email ? email.trim().toLowerCase() : '';
+        const trimmedName = name ? name.trim().toLowerCase() : '';
+
+        let rep = null;
+        if (trimmedEmail) {
+            rep = this.getGlobalSalesRepByEmail(trimmedEmail);
+        }
+        if (!rep && trimmedName) {
+            rep = this.getGlobalSalesRepByName(trimmedName);
+        }
+
+        const resolvedName = rep?.name || name || '';
+        const resolvedEmail = rep?.email || email || '';
+        const resolvedRegion = rep?.region || fallbackRegion || 'India West';
+
+        return {
+            name: resolvedName,
+            email: resolvedEmail,
+            region: resolvedRegion
+        };
     }
 };
 

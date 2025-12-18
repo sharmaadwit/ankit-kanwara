@@ -394,6 +394,20 @@
                                 <h3>Sales Users</h3>
                             </div>
                             <div class="card-body">
+                            <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+                                <div class="form-group" style="min-width: 200px;">
+                                    <label class="form-label">Region</label>
+                                    <select id="salesRepFilterRegion" class="form-control">
+                                        <option value="all">All Regions</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 200px;">
+                                    <label class="form-label">Search</label>
+                                    <input type="text" id="salesRepFilterSearch" class="form-control" placeholder="Search by name or email">
+                                </div>
+                                <button class="btn btn-secondary" id="salesRepResetFilters" style="white-space: nowrap;">Reset</button>
+                            </div>
+                            <div class="text-muted" id="salesRepsSummary" style="margin-bottom: 1rem;"></div>
                                 <button id="addSalesRepBtn" class="btn btn-primary mb-4" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
                                 <div id="salesRepsList" class="space-y-2"></div>
                             </div>

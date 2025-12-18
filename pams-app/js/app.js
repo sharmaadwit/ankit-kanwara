@@ -643,19 +643,6 @@ const App = {
                     <div class="nav-card-subtitle">Activity reports and analytics</div>
                 </div>
                 
-                <div class="nav-card clickable accounts" data-dashboard="accounts" onclick="App.navigateToCardView('accounts')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Accounts</div>
-                    <div class="nav-card-subtitle">Manage accounts and projects</div>
-                </div>
-                
                 <div class="nav-card clickable import" data-feature="csvImport" data-dashboard="csvImport" onclick="App.navigateToCardView('import')">
                     <div class="nav-card-icon">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1203,6 +1190,10 @@ const App = {
         if (!accountsView) return;
         
         const accounts = DataManager.getAccounts();
+        const isAdmin =
+            typeof Auth !== 'undefined' &&
+            typeof Auth.isAdmin === 'function' &&
+            Auth.isAdmin();
         
         let html = `
             <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
@@ -1236,7 +1227,7 @@ const App = {
                             <div>
                                 <div class="account-card-name">${account.name}</div>
                                 <div class="account-card-meta">
-                                    ${account.industry || 'N/A'} • ${account.salesRep || 'N/A'}
+                                    ${account.industry || 'N/A'} • ${account.salesRep || 'N/A'}${account.salesRepRegion ? ` • ${account.salesRepRegion}` : ''}
                                 </div>
                             </div>
                         </div>
@@ -3048,7 +3039,6 @@ const App = {
                         <td>
                             <div class="table-actions">
                                 <button class="btn btn-sm btn-primary" onclick="App.updateSfdcLinkFromInput('${project.accountId}', '${project.projectId}', '${inputId}')">Save</button>
-                                <button class="btn btn-sm btn-link" onclick="App.promptProjectSfdcLink('${project.accountId}', '${project.projectId}')">Use Prompt</button>
                             </div>
                         </td>
                     </tr>
@@ -3799,6 +3789,7 @@ const App = {
                         <div class="card-body">
                             <p><strong>Industry:</strong> ${account.industry || 'N/A'}</p>
                             <p><strong>Sales Rep:</strong> ${account.salesRep || 'N/A'}</p>
+                            <p><strong>Region:</strong> ${account.salesRepRegion || 'N/A'}</p>
                             <p><strong>Projects:</strong> ${projectCount}</p>
                             <p><strong>Activities:</strong> ${activityCount}</p>
                         </div>
@@ -3927,6 +3918,8 @@ const App = {
             accounts[accountIndex].name = name.trim();
             accounts[accountIndex].industry = industry.trim();
             accounts[accountIndex].salesRep = salesRepName;
+            accounts[accountIndex].salesRepEmail = selectedSalesRep?.email || '';
+            accounts[accountIndex].salesRepRegion = selectedSalesRep?.region || 'India West';
             accounts[accountIndex].updatedAt = new Date().toISOString();
             DataManager.saveAccounts(accounts);
             
@@ -4039,6 +4032,11 @@ const App = {
         const targetIndex = accounts.findIndex(a => a.id === targetAccountId);
         if (targetIndex !== -1) {
             accounts[targetIndex].salesRep = finalSalesRep;
+            const finalRepRecord = typeof DataManager.getGlobalSalesReps === 'function'
+                ? DataManager.getGlobalSalesReps().find(rep => rep.name === finalSalesRep)
+                : null;
+            accounts[targetIndex].salesRepEmail = finalRepRecord?.email || accounts[targetIndex].salesRepEmail || '';
+            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || 'India West';
             accounts[targetIndex].industry = finalIndustry;
             accounts[targetIndex].projects = mergedProjects;
             accounts[targetIndex].updatedAt = new Date().toISOString();

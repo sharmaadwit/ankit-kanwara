@@ -99,6 +99,11 @@ const Admin = {
     loginLogsLoading: false,
     loginLogsCurrentRows: [],
     pocFilteredActivities: [],
+    salesRepFilters: {
+        region: 'all',
+        search: ''
+    },
+    salesRepSearchDebounce: null,
 
     getAdminHeaders() {
         const headers = {};
@@ -119,6 +124,7 @@ const Admin = {
     loadAdminPanel() {
         try {
             this.loadUsers();
+            this.initSalesRepFilters();
             this.loadSalesReps();
             this.loadAnalyticsSettings();
             this.renderProjectHealthSettings();
@@ -596,18 +602,135 @@ const Admin = {
 
 
     // Sales Rep Management
+    initSalesRepFilters() {
+        const regionSelect = document.getElementById('salesRepFilterRegion');
+        const searchInput = document.getElementById('salesRepFilterSearch');
+        const resetBtn = document.getElementById('salesRepResetFilters');
+
+        if (regionSelect) {
+            this.populateSalesRepRegionOptions(regionSelect);
+            regionSelect.addEventListener('change', (event) => {
+                this.salesRepFilters.region = event.target.value || 'all';
+                this.loadSalesReps();
+            });
+        }
+
+        if (searchInput) {
+            searchInput.value = this.salesRepFilters.search || '';
+            searchInput.addEventListener('input', (event) => {
+                const value = event.target.value || '';
+                if (this.salesRepSearchDebounce) {
+                    clearTimeout(this.salesRepSearchDebounce);
+                }
+                this.salesRepSearchDebounce = setTimeout(() => {
+                    this.salesRepFilters.search = value.trim();
+                    this.loadSalesReps();
+                }, 200);
+            });
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (this.salesRepSearchDebounce) {
+                    clearTimeout(this.salesRepSearchDebounce);
+                    this.salesRepSearchDebounce = null;
+                }
+                this.salesRepFilters = { region: 'all', search: '' };
+                if (regionSelect) {
+                    this.populateSalesRepRegionOptions(regionSelect);
+                    regionSelect.value = 'all';
+                }
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+                this.loadSalesReps();
+            });
+        }
+    },
+
+    populateSalesRepRegionOptions(selectEl) {
+        if (!selectEl || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
+            return;
+        }
+
+        const regions = DataManager.getRegions();
+        const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        const selectedValue = this.salesRepFilters.region || 'all';
+
+        let options = '<option value="all">All Regions</option>';
+        uniqueRegions.forEach(region => {
+            const value = region.replace(/"/g, '&quot;');
+            options += `<option value="${value}">${region}</option>`;
+        });
+
+        selectEl.innerHTML = options;
+
+        if (selectedValue && uniqueRegions.includes(selectedValue)) {
+            selectEl.value = selectedValue;
+        } else {
+            selectEl.value = 'all';
+            this.salesRepFilters.region = 'all';
+        }
+    },
+
     loadSalesReps() {
         const salesReps = DataManager.getGlobalSalesReps();
         const container = document.getElementById('salesRepsList');
+        const summaryEl = document.getElementById('salesRepsSummary');
         if (!container) return;
 
-        if (salesReps.length === 0) {
-            container.innerHTML = '<p class="text-muted">No sales reps found</p>';
+        const regionSelect = document.getElementById('salesRepFilterRegion');
+        if (regionSelect) {
+            this.populateSalesRepRegionOptions(regionSelect);
+        }
+
+        const { region = 'all', search = '' } = this.salesRepFilters || {};
+        const normalizedSearch = search ? search.toLowerCase() : '';
+
+        const filtered = salesReps.filter(rep => {
+            if (!rep) return false;
+
+            const repRegion = rep.region || 'India West';
+            if (region && region !== 'all' && repRegion !== region) {
+                return false;
+            }
+
+            if (normalizedSearch) {
+                const haystack = [
+                    rep.name || '',
+                    rep.email || '',
+                    repRegion,
+                    rep.currency || 'INR'
+                ].join(' ').toLowerCase();
+                return haystack.includes(normalizedSearch);
+            }
+
+            return true;
+        });
+
+        const totalCount = salesReps.length;
+        const filteredCount = filtered.length;
+        const activeCount = filtered.filter(rep => rep.isActive !== false).length;
+
+        if (summaryEl) {
+            let summary = `Showing ${filteredCount} of ${totalCount} sales users • Active: ${activeCount}`;
+            if (region && region !== 'all') {
+                summary += ` • Region: ${region}`;
+            }
+            if (normalizedSearch) {
+                summary += ` • Search: "${search}"`;
+            }
+            summaryEl.textContent = summary;
+        }
+
+        if (filteredCount === 0) {
+            container.innerHTML = '<p class="text-muted">No sales users match the current filters.</p>';
             return;
         }
 
         let html = '';
-        salesReps.forEach(rep => {
+        filtered.forEach(rep => {
             const currency = rep.currency || 'INR';
             const fxDisplay = rep.fxToInr && Number.isFinite(Number(rep.fxToInr))
                 ? Number(rep.fxToInr).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -622,7 +745,7 @@ const Admin = {
                             <span class="badge">${currency}</span>
                             ${rep.isActive ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>'}
                         </div>
-                        ${fxDisplay ? `<div class=\"text-muted\" style=\"margin-top: 0.25rem; font-size: 0.85rem;\">1 ${currency} ≈ ₹${fxDisplay}</div>` : ''}
+                        ${fxDisplay ? `<div class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">1 ${currency} ≈ ₹${fxDisplay}</div>` : ''}
                     </div>
                     <div class="admin-user-actions">
                         <button class="btn btn-sm btn-secondary" onclick="Admin.editSalesRep('${rep.id}')">Edit</button>
@@ -694,6 +817,15 @@ const Admin = {
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
         UI.showModal(modalId);
+
+        const modalRegionSelect = document.getElementById('salesRepRegion');
+        if (modalRegionSelect) {
+            const preferredRegion = this.salesRepFilters.region && this.salesRepFilters.region !== 'all'
+                ? this.salesRepFilters.region
+                : 'India West';
+            const hasPreferred = Array.from(modalRegionSelect.options).some(option => option.value === preferredRegion);
+            modalRegionSelect.value = hasPreferred ? preferredRegion : modalRegionSelect.value;
+        }
     },
 
     addSalesRep(event) {
@@ -867,6 +999,11 @@ const Admin = {
                     select.appendChild(option);
                 }
             });
+            const filterSelect = document.getElementById('salesRepFilterRegion');
+            if (filterSelect) {
+                this.populateSalesRepRegionOptions(filterSelect);
+            }
+            this.loadSalesReps();
             UI.showNotification('Region added successfully', 'success');
         }
     },
