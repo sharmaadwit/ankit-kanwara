@@ -562,9 +562,6 @@ const App = {
         
         // Get stats
         const accounts = DataManager.getAccounts();
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         let totalProjects = 0;
         let customerActivities = 0;
         const internalActivities = DataManager.getInternalActivities();
