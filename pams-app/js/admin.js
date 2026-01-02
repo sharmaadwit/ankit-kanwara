@@ -391,6 +391,9 @@ const Admin = {
             const passwordBadge = user.forcePasswordChange
                 ? '<span class="badge badge-warning">Password reset pending</span>'
                 : '';
+            const defaultRegionInfo = user.defaultRegion
+                ? `<div class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">Default region: ${user.defaultRegion}</div>`
+                : '';
             html += `
                 <div class="admin-user-item">
                     <div class="admin-user-info">
@@ -401,6 +404,7 @@ const Admin = {
                             ${statusBadge}
                             ${passwordBadge}
                         </div>
+                        ${defaultRegionInfo}
                     </div>
                     <div class="admin-user-actions">
                         <button class="btn btn-sm btn-secondary" onclick="Admin.editUser('${user.id}')">Edit</button>
@@ -441,6 +445,10 @@ const Admin = {
 
     showAddUserModal() {
         this.createAddUserModal();
+        const defaultRegionSelect = document.getElementById('newUserDefaultRegion');
+        if (defaultRegionSelect) {
+            this.populateGenericRegionSelect(defaultRegionSelect, '');
+        }
         UI.showModal('addUserModal');
     },
 
@@ -469,6 +477,10 @@ const Admin = {
                         <div class="form-group">
                             <label class="form-label required">Password</label>
                             <input type="password" class="form-control" id="newPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Default Region (optional)</label>
+                            <select class="form-control" id="newUserDefaultRegion"></select>
                         </div>
                         <div class="form-group">
                             <label class="form-label required">Roles</label>
@@ -502,6 +514,7 @@ const Admin = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
+        this.populateGenericRegionSelect(document.getElementById('newUserDefaultRegion'), '');
     },
 
     addUser(event) {
@@ -521,6 +534,8 @@ const Admin = {
         const forcePasswordChangeCheckbox = document.getElementById('forcePasswordChange');
         const forcePasswordChange = forcePasswordChangeCheckbox ? forcePasswordChangeCheckbox.checked : true;
         const password = passwordInput?.value ? passwordInput.value.trim() : '';
+        const defaultRegionSelect = document.getElementById('newUserDefaultRegion');
+        const defaultRegionValue = defaultRegionSelect ? defaultRegionSelect.value : '';
 
         if (!password) {
             UI.showNotification('Please provide a temporary password for the user.', 'error');
@@ -535,6 +550,7 @@ const Admin = {
             roles: roles,
             regions: [],
             salesReps: [],
+            defaultRegion: defaultRegionValue || '',
             isActive: true,
             forcePasswordChange: forcePasswordChange
         };
@@ -599,6 +615,10 @@ const Admin = {
                             <input type="password" class="form-control" id="editUserPassword" placeholder="New password">
                         </div>
                         <div class="form-group">
+                            <label class="form-label">Default Region (optional)</label>
+                            <select class="form-control" id="editUserDefaultRegion"></select>
+                        </div>
+                        <div class="form-group">
                             <label class="form-label required">Roles</label>
                             <div class="role-checkbox-group">
                                 ${roleOptions.map(option => `
@@ -630,6 +650,7 @@ const Admin = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
+        this.populateGenericRegionSelect(document.getElementById('editUserDefaultRegion'), user.defaultRegion || '');
     },
 
     updateUser(event, userId) {
@@ -640,6 +661,8 @@ const Admin = {
         const isActive = document.getElementById('editUserActive').checked;
         const forcePasswordChange = document.getElementById('editForcePasswordChange')?.checked ?? false;
         const roles = Array.from(document.querySelectorAll('.edit-role-checkbox:checked')).map(cb => cb.value);
+        const defaultRegionSelect = document.getElementById('editUserDefaultRegion');
+        const defaultRegion = defaultRegionSelect ? defaultRegionSelect.value : '';
 
         if (!email) {
             UI.showNotification('Email is required.', 'error');
@@ -654,7 +677,8 @@ const Admin = {
             email,
             roles,
             isActive,
-            forcePasswordChange
+            forcePasswordChange,
+            defaultRegion
         };
         if (password && password.trim().length > 0) {
             updates.password = password.trim();
@@ -662,6 +686,15 @@ const Admin = {
 
         const updated = DataManager.updateUser(userId, updates);
         if (updated) {
+            if (typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function') {
+                const current = Auth.getCurrentUser();
+                if (current?.id === userId) {
+                    Auth.currentUser = updated;
+                    if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
+                        Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+                    }
+                }
+            }
             UI.hideModal('editUserModal');
             UI.showNotification('User updated successfully', 'success');
             this.loadUsers();
@@ -1114,6 +1147,16 @@ const Admin = {
             this.populateSalesRepRegionOptions(filterSelect);
         }
 
+        const addUserDefaultSelect = document.getElementById('newUserDefaultRegion');
+        if (addUserDefaultSelect) {
+            this.populateGenericRegionSelect(addUserDefaultSelect, addUserDefaultSelect.value || '');
+        }
+
+        const editUserDefaultSelect = document.getElementById('editUserDefaultRegion');
+        if (editUserDefaultSelect) {
+            this.populateGenericRegionSelect(editUserDefaultSelect, editUserDefaultSelect.value || '');
+        }
+
         if (typeof Activities !== 'undefined') {
             if (Activities.currentSalesRepRegion && !regions.includes(Activities.currentSalesRepRegion)) {
                 Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
@@ -1126,13 +1169,49 @@ const Admin = {
             }
         }
 
+        let previousReportRegion = null;
+        const reportRegionFilter = document.getElementById('reportRegionFilter');
+        if (reportRegionFilter) {
+            previousReportRegion = reportRegionFilter.value;
+        }
+
         if (typeof App !== 'undefined') {
             if (App.currentView === 'reports' && typeof App.populateReportFilters === 'function') {
                 App.populateReportFilters(DataManager.getAllActivities());
+                const reportFilterEl = document.getElementById('reportRegionFilter');
+                if (
+                    reportFilterEl &&
+                    previousReportRegion &&
+                    Array.from(reportFilterEl.options).some(option => option.value === previousReportRegion)
+                ) {
+                    reportFilterEl.value = previousReportRegion;
+                }
             }
             if (App.currentView === 'activities' && typeof App.loadActivitiesView === 'function') {
                 App.loadActivitiesView();
             }
+        }
+    },
+
+    populateGenericRegionSelect(selectEl, selectedValue = '', { includeBlank = true, blankLabel = 'No default region' } = {}) {
+        if (!selectEl || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
+            return;
+        }
+        const regions = DataManager.getRegions();
+        const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        const requested = (selectedValue || '').trim();
+        let options = '';
+        if (includeBlank) {
+            options += `<option value="">${blankLabel}</option>`;
+        }
+        uniqueRegions.forEach(region => {
+            const safeValue = region.replace(/"/g, '&quot;');
+            const selectedAttr = region === requested ? 'selected' : '';
+            options += `<option value="${safeValue}" ${selectedAttr}>${region}</option>`;
+        });
+        selectEl.innerHTML = options;
+        if (requested && !uniqueRegions.includes(requested)) {
+            selectEl.value = '';
         }
     },
 
@@ -1150,13 +1229,17 @@ const Admin = {
         regions.forEach(region => {
             const usage = DataManager.getRegionUsage(region);
             const isDefault = DataManager.isDefaultRegion(region);
-            const totalUsage = (usage.salesReps || 0) + (usage.accounts || 0) + (usage.activities || 0);
+            const totalUsage =
+                (usage.salesReps || 0) +
+                (usage.accounts || 0) +
+                (usage.activities || 0) +
+                (usage.users || 0);
             const statusLabel = isDefault ? 'Default region' : totalUsage > 0 ? 'In use' : 'Unused';
             const encoded = encodeURIComponent(region);
             const canDelete = !isDefault && totalUsage === 0;
             const deleteButton = canDelete
                 ? `<button class="btn btn-sm btn-danger" data-region="${encoded}" onclick="Admin.handleRegionDelete(event)">Remove</button>`
-                : `<button class="btn btn-sm btn-danger" disabled title="${isDefault ? 'Default regions cannot be removed' : 'Region still in use'}">Remove</button>`;
+                : `<button class="btn btn-sm btn-danger" disabled title="${isDefault ? 'Default regions cannot be removed' : 'Region still referenced by records'}">Remove</button>`;
 
             html += `
                 <div class="admin-user-item">
@@ -1166,9 +1249,10 @@ const Admin = {
                             <span class="badge">${usage.salesReps || 0} sales users</span>
                             <span class="badge">${usage.accounts || 0} accounts</span>
                             <span class="badge">${usage.activities || 0} activities</span>
+                            <span class="badge">${usage.users || 0} system users</span>
                         </div>
                         <div class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
-                            ${statusLabel}${!canDelete && !isDefault && totalUsage > 0 ? ' • Remove linked records first' : ''}
+                            ${statusLabel}${!canDelete && !isDefault && totalUsage > 0 ? ' • Clear linked records before removal' : ''}
                         </div>
                     </div>
                     <div class="admin-user-actions">

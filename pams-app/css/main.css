@@ -148,6 +148,63 @@ body {
     color: #2F855A;
 }
 
+#appLoadingOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: radial-gradient(circle at top left, rgba(94, 52, 241, 0.15), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(208, 22, 146, 0.15), transparent 55%),
+                var(--bg-color, #F7FAFC);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+#appLoadingOverlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.app-loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 2rem 3rem;
+    background: var(--surface-color, #ffffff);
+    border-radius: 1.25rem;
+    box-shadow: 0 24px 80px rgba(94, 52, 241, 0.18);
+    text-align: center;
+}
+
+.app-loading-spinner {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 4px solid rgba(94, 52, 241, 0.2);
+    border-top-color: var(--primary-color, #5E34F1);
+    animation: app-loading-spin 0.85s linear infinite;
+}
+
+.app-loading-content p {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--card-title-color, #2D2242);
+    letter-spacing: 0.02em;
+}
+
+@keyframes app-loading-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Login Screen */
 .login-screen {
     min-height: 100vh;

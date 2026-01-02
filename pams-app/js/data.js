@@ -161,10 +161,11 @@ const DataManager = {
                         roles: ['Admin', 'Presales User', 'Analytics Access'],
                         regions: ['India South', 'India North'],
                         salesReps: ['John Doe', 'Jane Smith'],
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                    forcePasswordChange: false,
-                    passwordUpdatedAt: new Date().toISOString()
+                        defaultRegion: 'India South',
+                        isActive: true,
+                        createdAt: new Date().toISOString(),
+                        forcePasswordChange: false,
+                        passwordUpdatedAt: new Date().toISOString()
                     },
                     {
                         id: this.generateId(),
@@ -174,10 +175,11 @@ const DataManager = {
                         roles: ['Presales User'],
                         regions: ['India South'],
                         salesReps: ['John Doe'],
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                    forcePasswordChange: false,
-                    passwordUpdatedAt: new Date().toISOString()
+                        defaultRegion: 'India South',
+                        isActive: true,
+                        createdAt: new Date().toISOString(),
+                        forcePasswordChange: false,
+                        passwordUpdatedAt: new Date().toISOString()
                     }
                 ];
                 this.saveUsers(defaultUsers);
@@ -316,9 +318,21 @@ const DataManager = {
             return this.cache.users;
         }
         const stored = localStorage.getItem('users');
-        const users = stored ? JSON.parse(stored) : [];
-        this.cache.users = users;
-        return users;
+        const rawUsers = stored ? JSON.parse(stored) : [];
+        const normalized = rawUsers.map(user => {
+            const defaultRegion =
+                typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
+            const regions = Array.isArray(user.regions) ? user.regions : [];
+            const salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
+            return {
+                ...user,
+                regions,
+                salesReps,
+                defaultRegion
+            };
+        });
+        this.cache.users = normalized;
+        return normalized;
     },
     
     // Ensure default users exist (call this if needed)
@@ -334,6 +348,7 @@ const DataManager = {
                     roles: ['Admin', 'Presales User', 'POC Admin', 'Analytics Access'],
                     regions: ['India South', 'India North'],
                     salesReps: ['John Doe', 'Jane Smith'],
+                    defaultRegion: 'India South',
                     isActive: true,
                     createdAt: new Date().toISOString(),
                     forcePasswordChange: false,
@@ -347,6 +362,7 @@ const DataManager = {
                     roles: ['Presales User'],
                     regions: ['India South'],
                     salesReps: ['John Doe'],
+                    defaultRegion: 'India South',
                     isActive: true,
                     createdAt: new Date().toISOString(),
                     forcePasswordChange: false,
@@ -379,6 +395,13 @@ const DataManager = {
         user.isActive = user.isActive !== undefined ? user.isActive : true;
         user.forcePasswordChange = user.forcePasswordChange === true;
         user.passwordUpdatedAt = user.forcePasswordChange ? null : new Date().toISOString();
+        const availableRegions = this.getRegions();
+        const defaultRegion =
+            typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
+        user.defaultRegion =
+            defaultRegion && availableRegions.includes(defaultRegion) ? defaultRegion : '';
+        user.regions = Array.isArray(user.regions) ? user.regions : [];
+        user.salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
         users.push(user);
         this.saveUsers(users);
         return user;
@@ -399,6 +422,13 @@ const DataManager = {
                 if (!merged.forcePasswordChange) {
                     merged.passwordUpdatedAt = new Date().toISOString();
                 }
+            }
+            if (updates.defaultRegion !== undefined) {
+                const trimmed =
+                    typeof updates.defaultRegion === 'string' ? updates.defaultRegion.trim() : '';
+                const availableRegions = this.getRegions();
+                merged.defaultRegion =
+                    trimmed && availableRegions.includes(trimmed) ? trimmed : '';
             }
             merged.updatedAt = new Date().toISOString();
             users[index] = merged;
@@ -466,18 +496,19 @@ const DataManager = {
 
     getRegionUsage(region) {
         if (!region) {
-            return { salesReps: 0, accounts: 0, activities: 0 };
+            return { salesReps: 0, accounts: 0, activities: 0, users: 0 };
         }
         const normalized = region.trim().toLowerCase();
         if (!normalized) {
-            return { salesReps: 0, accounts: 0, activities: 0 };
+            return { salesReps: 0, accounts: 0, activities: 0, users: 0 };
         }
 
         const salesReps = this.getGlobalSalesReps().filter(rep => (rep.region || '').trim().toLowerCase() === normalized).length;
         const accounts = this.getAccounts().filter(account => (account.salesRepRegion || '').trim().toLowerCase() === normalized).length;
         const activities = this.getAllActivities().filter(activity => (activity.salesRepRegion || '').trim().toLowerCase() === normalized).length;
+        const users = this.getUsers().filter(user => (user.defaultRegion || '').trim().toLowerCase() === normalized).length;
 
-        return { salesReps, accounts, activities };
+        return { salesReps, accounts, activities, users };
     },
 
     removeRegion(region) {
@@ -496,7 +527,7 @@ const DataManager = {
         }
 
         const usage = this.getRegionUsage(trimmed);
-        if (usage.salesReps || usage.accounts || usage.activities) {
+        if (usage.salesReps || usage.accounts || usage.activities || usage.users) {
             return {
                 success: false,
                 message: `Region "${trimmed}" is still in use.`,
@@ -520,7 +551,7 @@ const DataManager = {
                 return;
             }
             const usage = this.getRegionUsage(region);
-            if (usage.salesReps || usage.accounts || usage.activities) {
+            if (usage.salesReps || usage.accounts || usage.activities || usage.users) {
                 return;
             }
             this.deleteRegion(region);

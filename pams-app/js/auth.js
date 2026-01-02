@@ -215,6 +215,9 @@ const Auth = {
             mainApp.classList.remove('hidden');
             this.updateUserInfo();
             this.updateNavigation();
+            if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
+                App.setLoading(false);
+            }
         } catch (error) {
             console.error('Error showing main app:', error);
         }
@@ -251,6 +254,9 @@ const Auth = {
         if (forceUser) forceUser.textContent = '';
         if (forceMessage) {
             forceMessage.textContent = 'please set a new password before continuing.';
+        }
+        if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
+            App.setLoading(false);
         }
     },
 
@@ -293,6 +299,9 @@ const Auth = {
                 newPasswordInput.focus();
             }
         }, 0);
+        if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
+            App.setLoading(false);
+        }
     },
 
     submitForcedPasswordChange(newPassword, confirmPassword) {

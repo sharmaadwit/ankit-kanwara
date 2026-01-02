@@ -62,25 +62,44 @@ const App = {
         adminPoc: true
     },
     dashboardVisibility: {},
+    loadingOverlay: null,
+    loadingMessageEl: null,
 
     // Initialize application
     async init() {
-        // Always setup event listeners (needed for login form)
-        this.setupEventListeners();
+        this.setupLoadingOverlay();
+        this.setLoading(true, 'Preparing workspace…');
 
-        await this.loadAppConfig();
+        try {
+            // Always setup event listeners (needed for login form)
+            this.setupEventListeners();
 
-        if (!Auth.init()) {
-            return;
-        }
+            await this.loadAppConfig();
 
-        InterfaceManager.init();
-        const preferredView = this.getInitialView();
-        const targetView = this.getAccessibleView(preferredView);
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.navigateToCardView(targetView);
-        } else {
-            this.switchView(targetView);
+            const hasSession = Auth.init();
+            if (!hasSession) {
+                this.setLoading(false);
+                return;
+            }
+
+            InterfaceManager.init();
+            if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
+                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+            }
+            const preferredView = this.getInitialView();
+            const targetView = this.getAccessibleView(preferredView);
+            if (InterfaceManager.getCurrentInterface() === 'card') {
+                this.navigateToCardView(targetView);
+            } else {
+                this.switchView(targetView);
+            }
+            this.setLoading(false);
+        } catch (error) {
+            console.error('Application initialization failed', error);
+            this.setLoading(false);
+            if (typeof UI !== 'undefined' && typeof UI.showNotification === 'function') {
+                UI.showNotification('Failed to initialise application', 'error');
+            }
         }
     },
 
@@ -93,14 +112,17 @@ const App = {
                 e.preventDefault();
                 const username = document.getElementById('username').value;
                 const password = document.getElementById('password').value;
+                this.setLoading(true, 'Signing you in…');
                 const result = Auth.login(username, password);
                 if (result.success) {
                     if (result.requiresPasswordChange) {
+                        this.setLoading(false);
                         UI.showNotification('Please update your password to continue.', 'info');
                         return;
                     }
                     this.handleSuccessfulLogin();
                 } else {
+                    this.setLoading(false);
                     UI.showNotification(result.message || 'Invalid credentials', 'error');
                 }
             });
@@ -159,37 +181,69 @@ const App = {
         });
     },
 
-    async handleSuccessfulLogin() {
-        const currentUser =
-            typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
-                ? Auth.getCurrentUser()
-                : null;
-
-        if (currentUser && currentUser.username) {
-            window.__REMOTE_STORAGE_USER__ = currentUser.username;
-            window.__REMOTE_STORAGE_HEADERS__ = {
-                'X-Admin-User': currentUser.username
-            };
+    setupLoadingOverlay() {
+        if (!this.loadingOverlay) {
+            this.loadingOverlay = document.getElementById('appLoadingOverlay');
         }
-
-        const defaultActivityOwner = this.getDefaultActivityOwnerFilter();
-        this.activityFilters.owner = defaultActivityOwner;
-        const defaultRecordOwner = this.getDefaultRecordOwnerFilter();
-        this.winLossFilters.owner = defaultRecordOwner;
-        this.sfdcFilters.owner = defaultRecordOwner;
-
-        InterfaceManager.init();
-        try {
-            await this.refreshAppConfiguration();
-        } catch (error) {
-            console.warn('Configuration refresh after login failed.', error);
+        if (!this.loadingMessageEl) {
+            this.loadingMessageEl = document.getElementById('appLoadingMessage');
         }
-        const preferredView = this.getInitialView();
-        const targetView = this.getAccessibleView(preferredView);
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.navigateToCardView(targetView);
+    },
+
+    setLoading(isLoading, message) {
+        this.setupLoadingOverlay();
+        if (message && this.loadingMessageEl) {
+            this.loadingMessageEl.textContent = message;
+        }
+        if (!this.loadingOverlay) {
+            return;
+        }
+        if (isLoading) {
+            this.loadingOverlay.classList.remove('hidden');
         } else {
-            this.switchView(targetView);
+            this.loadingOverlay.classList.add('hidden');
+        }
+    },
+
+    async handleSuccessfulLogin() {
+        this.setLoading(true, 'Loading workspace…');
+        try {
+            const currentUser =
+                typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                    ? Auth.getCurrentUser()
+                    : null;
+
+            if (currentUser && currentUser.username) {
+                window.__REMOTE_STORAGE_USER__ = currentUser.username;
+                window.__REMOTE_STORAGE_HEADERS__ = {
+                    'X-Admin-User': currentUser.username
+                };
+            }
+
+            const defaultActivityOwner = this.getDefaultActivityOwnerFilter();
+            this.activityFilters.owner = defaultActivityOwner;
+            const defaultRecordOwner = this.getDefaultRecordOwnerFilter();
+            this.winLossFilters.owner = defaultRecordOwner;
+            this.sfdcFilters.owner = defaultRecordOwner;
+
+            InterfaceManager.init();
+            try {
+                await this.refreshAppConfiguration();
+            } catch (error) {
+                console.warn('Configuration refresh after login failed.', error);
+            }
+            if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
+                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+            }
+            const preferredView = this.getInitialView();
+            const targetView = this.getAccessibleView(preferredView);
+            if (InterfaceManager.getCurrentInterface() === 'card') {
+                this.navigateToCardView(targetView);
+            } else {
+                this.switchView(targetView);
+            }
+        } finally {
+            this.setLoading(false);
         }
     },
 
