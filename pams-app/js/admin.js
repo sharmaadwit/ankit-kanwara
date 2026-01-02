@@ -214,6 +214,7 @@ const Admin = {
         return {
             users: () => this.loadUsers(),
             sales: () => this.loadSalesReps(),
+            regions: () => this.renderRegionsPanel(),
             interface: () => {},
             analytics: () => this.loadAnalyticsSettings(),
             projectHealth: () => this.renderProjectHealthSettings(),
@@ -1092,23 +1093,126 @@ const Admin = {
         if (region && region.trim()) {
             DataManager.addRegion(region.trim());
             // Refresh all region dropdowns
-            const selects = document.querySelectorAll('select[id*="Region"], select[id*="region"]');
-            selects.forEach(select => {
-                if (select && select.id !== 'reportRegionFilter' && select.id !== 'adminRegionFilter') {
-                    const option = document.createElement('option');
-                    option.value = region.trim();
-                    option.textContent = region.trim();
-                    select.appendChild(option);
-                }
-            });
-            const filterSelect = document.getElementById('salesRepFilterRegion');
-            if (filterSelect) {
-                this.populateSalesRepRegionOptions(filterSelect);
-            }
+            this.refreshRegionDropdowns();
             this.loadSalesReps();
+            if (this.loadedSections.has('regions')) {
+                this.renderRegionsPanel();
+            }
             UI.showNotification('Region added successfully', 'success');
         }
     },
+
+    refreshRegionDropdowns() {
+        const regions = DataManager.getRegions();
+
+        if (!regions.includes(this.salesRepFilters.region)) {
+            this.salesRepFilters.region = 'all';
+        }
+
+        const filterSelect = document.getElementById('salesRepFilterRegion');
+        if (filterSelect) {
+            this.populateSalesRepRegionOptions(filterSelect);
+        }
+
+        if (typeof Activities !== 'undefined') {
+            if (Activities.currentSalesRepRegion && !regions.includes(Activities.currentSalesRepRegion)) {
+                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+            }
+            if (typeof Activities.populateSalesRepRegionOptions === 'function') {
+                Activities.populateSalesRepRegionOptions(Activities.currentSalesRepRegion);
+            }
+            if (typeof Activities.populateSalesRepOptions === 'function') {
+                Activities.populateSalesRepOptions(Activities.currentSalesRepRegion);
+            }
+        }
+
+        if (typeof App !== 'undefined') {
+            if (App.currentView === 'reports' && typeof App.populateReportFilters === 'function') {
+                App.populateReportFilters(DataManager.getAllActivities());
+            }
+            if (App.currentView === 'activities' && typeof App.loadActivitiesView === 'function') {
+                App.loadActivitiesView();
+            }
+        }
+    },
+
+    renderRegionsPanel() {
+        const container = document.getElementById('regionsList');
+        if (!container) return;
+
+        const regions = DataManager.getRegions();
+        if (!regions.length) {
+            container.innerHTML = '<div class="text-muted">No regions configured yet.</div>';
+            return;
+        }
+
+        let html = '';
+        regions.forEach(region => {
+            const usage = DataManager.getRegionUsage(region);
+            const isDefault = DataManager.isDefaultRegion(region);
+            const totalUsage = (usage.salesReps || 0) + (usage.accounts || 0) + (usage.activities || 0);
+            const statusLabel = isDefault ? 'Default region' : totalUsage > 0 ? 'In use' : 'Unused';
+            const encoded = encodeURIComponent(region);
+            const canDelete = !isDefault && totalUsage === 0;
+            const deleteButton = canDelete
+                ? `<button class="btn btn-sm btn-danger" data-region="${encoded}" onclick="Admin.handleRegionDelete(event)">Remove</button>`
+                : `<button class="btn btn-sm btn-danger" disabled title="${isDefault ? 'Default regions cannot be removed' : 'Region still in use'}">Remove</button>`;
+
+            html += `
+                <div class="admin-user-item">
+                    <div class="admin-user-info">
+                        <div class="admin-user-name">${region}</div>
+                        <div class="admin-user-roles">
+                            <span class="badge">${usage.salesReps || 0} sales users</span>
+                            <span class="badge">${usage.accounts || 0} accounts</span>
+                            <span class="badge">${usage.activities || 0} activities</span>
+                        </div>
+                        <div class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
+                            ${statusLabel}${!canDelete && !isDefault && totalUsage > 0 ? ' • Remove linked records first' : ''}
+                        </div>
+                    </div>
+                    <div class="admin-user-actions">
+                        ${deleteButton}
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    },
+
+    handleRegionDelete(event) {
+        const button = event?.currentTarget;
+        if (!button) return;
+        const encoded = button.dataset?.region;
+        if (!encoded) return;
+
+        const region = decodeURIComponent(encoded);
+        const result = DataManager.removeRegion(region);
+        if (!result?.success) {
+            UI.showNotification(result?.message || 'Unable to remove region.', (result?.usage ? 'warning' : 'error'));
+            return;
+        }
+
+        UI.showNotification(`Region "${region}" removed.`, 'success');
+        this.renderRegionsPanel();
+        this.refreshRegionDropdowns();
+        this.loadSalesReps();
+    },
+
+    pruneUnusedRegions() {
+        const summary = DataManager.pruneUnusedRegions();
+        const removed = summary?.removed || [];
+        if (!removed.length) {
+            UI.showNotification('No unused regions to remove.', 'info');
+        } else {
+            UI.showNotification(`Removed ${removed.length} unused region${removed.length > 1 ? 's' : ''}: ${removed.join(', ')}`, 'success');
+        }
+        this.renderRegionsPanel();
+        this.refreshRegionDropdowns();
+        this.loadSalesReps();
+    },
+
 
     // POC Sandbox Access Management
     loadPOCSandbox() {

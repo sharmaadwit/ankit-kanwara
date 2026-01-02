@@ -90,6 +90,8 @@ const DEFAULT_SALES_REPS = [
     { name: 'Nayeem Mohammed', email: 'nayeem.mohammed@gupshup.io', region: 'MENA' }
 ];
 
+const DEFAULT_REGION_SET = new Set(DEFAULT_SALES_REGIONS);
+
 const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
 
 const DataManager = {
@@ -440,6 +442,11 @@ const DataManager = {
         return stored ? JSON.parse(stored) : [];
     },
 
+    isDefaultRegion(region) {
+        if (!region) return false;
+        return DEFAULT_REGION_SET.has(region.trim());
+    },
+
     saveRegions(regions) {
         localStorage.setItem('regions', JSON.stringify(regions));
     },
@@ -455,6 +462,77 @@ const DataManager = {
     deleteRegion(region) {
         const regions = this.getRegions().filter(r => r !== region);
         this.saveRegions(regions);
+    },
+
+    getRegionUsage(region) {
+        if (!region) {
+            return { salesReps: 0, accounts: 0, activities: 0 };
+        }
+        const normalized = region.trim().toLowerCase();
+        if (!normalized) {
+            return { salesReps: 0, accounts: 0, activities: 0 };
+        }
+
+        const salesReps = this.getGlobalSalesReps().filter(rep => (rep.region || '').trim().toLowerCase() === normalized).length;
+        const accounts = this.getAccounts().filter(account => (account.salesRepRegion || '').trim().toLowerCase() === normalized).length;
+        const activities = this.getAllActivities().filter(activity => (activity.salesRepRegion || '').trim().toLowerCase() === normalized).length;
+
+        return { salesReps, accounts, activities };
+    },
+
+    removeRegion(region) {
+        const trimmed = region && typeof region === 'string' ? region.trim() : '';
+        if (!trimmed) {
+            return { success: false, message: 'Select a region to remove.' };
+        }
+
+        if (this.isDefaultRegion(trimmed)) {
+            return { success: false, message: 'Default regions cannot be removed.' };
+        }
+
+        const regions = this.getRegions();
+        if (!regions.includes(trimmed)) {
+            return { success: false, message: `Region "${trimmed}" was not found.` };
+        }
+
+        const usage = this.getRegionUsage(trimmed);
+        if (usage.salesReps || usage.accounts || usage.activities) {
+            return {
+                success: false,
+                message: `Region "${trimmed}" is still in use.`,
+                usage
+            };
+        }
+
+        this.deleteRegion(trimmed);
+        this.ensureRegionBaseline();
+        this.recordAudit('region.delete', 'region', trimmed, usage);
+
+        return { success: true, usage };
+    },
+
+    pruneUnusedRegions() {
+        const regions = [...this.getRegions()];
+        const removed = [];
+
+        regions.forEach(region => {
+            if (this.isDefaultRegion(region)) {
+                return;
+            }
+            const usage = this.getRegionUsage(region);
+            if (usage.salesReps || usage.accounts || usage.activities) {
+                return;
+            }
+            this.deleteRegion(region);
+            this.recordAudit('region.delete', 'region', region, usage);
+            removed.push(region);
+        });
+
+        if (removed.length) {
+            this.ensureRegionBaseline();
+        }
+
+        return { removed };
     },
 
     // Global Sales Reps Management (Enhanced with email and region)
