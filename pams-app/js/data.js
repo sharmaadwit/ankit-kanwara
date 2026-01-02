@@ -1,14 +1,92 @@
 // Data Management Module - localStorage operations
 
 const DEFAULT_SALES_REGIONS = [
-    'India West',
     'India South',
+    'India West',
     'India North',
-    'SEA',
     'Africa & Europe',
-    'ROW',
+    'SEA',
     'MENA',
-    'LATAM'
+    'LATAM',
+    'ROW'
+];
+
+const DEFAULT_SALES_REPS = [
+    // India North
+    { name: 'Kaushal Menghaney', email: 'kaushal.menghaney@gupshup.io', region: 'India North' },
+    { name: 'Vikas Kumar', email: 'vikas.kumar@gupshup.io', region: 'India North' },
+    { name: 'Shubham Kumar', email: 'shubham.kumar@gupshup.io', region: 'India North' },
+    { name: 'Sanchit Aggarwal', email: 'sanchit.aggarwal@gupshup.io', region: 'India North' },
+    { name: 'Preety Sharma', email: 'preety.sharma@gupshup.io', region: 'India North' },
+    { name: 'Deepak Kumar', email: 'deepak.kumar@knowlarity.com', region: 'India North' },
+    { name: 'Narender Singh', email: 'narender.singh@knowlarity.com', region: 'India North' },
+    { name: 'Amit Malhotra', email: 'amit.malhotra@gupshup.io', region: 'India North' },
+    { name: 'Shubhanjan Chatterjee', email: 'shubhanjan.chatterjee@gupshup.io', region: 'India North' },
+    { name: 'Sakshi Dhaundiyal', email: 'sakshi.dhaundiyal@gupshup.io', region: 'India North' },
+    { name: 'Vishal Sharma', email: 'vishal.sharma@gupshup.io', region: 'India North' },
+    { name: 'Roneeta Basak', email: 'roneeta.basak@gupshup.io', region: 'India North' },
+    { name: 'Nitin Bhatia', email: 'nitin.bhatia@gupshup.io', region: 'India North' },
+    { name: 'Anshul Kumar', email: 'anshul.kumar@gupshup.io', region: 'India North' },
+    { name: 'Rahul Verma', email: 'rahul.verma@gupshup.io', region: 'India North' },
+    { name: 'Shubham Choudhary', email: 'shubham.choudhary@gupshup.io', region: 'India North' },
+    { name: 'Rajshri Pandey', email: 'rajshri.pandey@gupshup.io', region: 'India North' },
+
+    // India South
+    { name: 'Ankit Kohli', email: 'ankit.kohli@gupshup.io', region: 'India South' },
+    { name: 'Anand Abraham', email: 'anand.abraham@gupshup.io', region: 'India South' },
+    { name: 'Kiran Kumar', email: 'kiran.kumar@gupshup.io', region: 'India South' },
+    { name: 'Abhishek Phillips', email: 'abhishek.phillips@gupshup.io', region: 'India South' },
+    { name: 'Ratan Saha', email: 'ratan@gupshup.io', region: 'India South' },
+    { name: 'Rupam Nandi', email: 'rupam.nandi@gupshup.io', region: 'India South' },
+    { name: 'Punitha M', email: 'punitha.m@gupshup.io', region: 'India South' },
+    { name: 'Santosh Jigalmadi', email: 'santosh.jigalmadi@gupshup.io', region: 'India South' },
+    { name: 'Anand Kumar Singh', email: 'anand.kumar@gupshup.io', region: 'India South' },
+    { name: 'Ravindra Kulkarni', email: 'ravindra.kulkarni@gupshup.io', region: 'India South' },
+    { name: 'Sai Pranay Maharajan', email: 'saipranay.maharajan@gupshup.io', region: 'India South' },
+    { name: 'Dhananjay Kumar Singh', email: 'dhananjay.singh@knowlarity.com', region: 'India South' },
+    { name: 'Vijay Kumar', email: 'vijay@gupshup.io', region: 'India South' },
+
+    // India West
+    { name: 'Chirag Panchal', email: 'chirag.panchal@gupshup.io', region: 'India West' },
+    { name: 'Dhiren Khantwal', email: 'dhiren.khantwal@gupshup.io', region: 'India West' },
+    { name: 'Avadhesh Chaturvedi', email: 'avadhesh.chaturvedi@gupshup.io', region: 'India West' },
+    { name: 'Chandni Shetty', email: 'chandni.shetty@gupshup.io', region: 'India West' },
+    { name: 'Vishal Pansari', email: 'vishal.pansari@gupshup.io', region: 'India West' },
+    { name: 'Cyrus Carvalho', email: 'cyrus.carvalho@gupshup.io', region: 'India West' },
+    { name: 'Neerav Chib', email: 'neerav.chib@gupshup.io', region: 'India West' },
+    { name: 'Meet Nandu', email: 'meet.nandu@gupshup.io', region: 'India West' },
+    { name: 'Premsagar Chourasia', email: 'premsagar.chourasia@gupshup.io', region: 'India West' },
+    { name: 'Lakshya Mundra', email: 'lakshya.mundra@gupshup.io', region: 'India West' },
+    { name: 'Sandeep Das', email: 'sandeep.das@gupshup.io', region: 'India West' },
+    { name: 'Vijay Ghori', email: 'vijay.ghori@gupshup.io', region: 'India West' },
+    { name: 'Sujal Shah', email: 'sujal.shah@gupshup.io', region: 'India West' },
+
+    // SEA
+    { name: 'Esther Khoo', email: 'esther.khoo@gupshup.io', region: 'SEA' },
+    { name: 'Tanmay Srivastava', email: 'tanmay.srivastava@gupshup.io', region: 'SEA' },
+    { name: 'Clifton David', email: 'clifton@gupshup.io', region: 'SEA' },
+
+    // Africa & Europe
+    { name: 'Mark Kreuiter', email: 'mark.kreuiter@gupshup.io', region: 'Africa & Europe' },
+    { name: 'Idowu Adetule', email: 'idowu.adetule@gupshup.io', region: 'Africa & Europe' },
+    { name: 'Joseph Cobbinah', email: 'joseph.cobbinah@gupshup.io', region: 'Africa & Europe' },
+    { name: 'Sandra Mbachu', email: 'sandra.mbachu@gupshup.ai', region: 'Africa & Europe' },
+    { name: 'Shashi Bhushan', email: 'shashi.bhushan@gupshup.io', region: 'Africa & Europe' },
+
+    // LATAM
+    { name: 'Bruno Montoro', email: 'bruno.montoro@gupshup.io', region: 'LATAM' },
+    { name: 'Fernando Bueno', email: 'fernando.bueno@gupshup.io', region: 'LATAM' },
+    { name: 'Javier Bracho', email: 'javier.bracho@gupshup.io', region: 'LATAM' },
+    { name: 'Paulo Pinto', email: 'paulo.pinto@gupshup.io', region: 'LATAM' },
+    { name: 'Bruno Silva', email: 'bruno.silva@gupshup.io', region: 'LATAM' },
+    { name: 'Guilherme Garcia', email: 'guilherme.garcia@gupshup.io', region: 'LATAM' },
+
+    // MENA
+    { name: 'Hemanth R Swamy', email: 'hemanth.swamy@gupshup.io', region: 'MENA' },
+    { name: 'Bittu George', email: 'bittu.george@gupshup.io', region: 'MENA' },
+    { name: 'Mohd Abbas Murtaza', email: 'md.abbas@knowlarity.com', region: 'MENA' },
+    { name: 'Gaurav Tomar', email: 'gaurav.tomar@knowlarity.com', region: 'MENA' },
+    { name: 'Mukul Yadav', email: 'mukul.yadav@knowlarity.com', region: 'MENA' }
 ];
 
 const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
@@ -119,56 +197,83 @@ const DataManager = {
             this.ensureRegionBaseline();
         }
 
-        // Initialize global sales reps if none exist
-        const existingSalesReps = this.getGlobalSalesReps();
-        if (!existingSalesReps.length) {
-            const defaultSalesReps = [
-                {
-                    id: this.generateId(),
-                    name: 'John Doe',
-                    email: 'john.doe@example.com',
-                    region: 'India West',
-                    isActive: true,
-                    createdAt: new Date().toISOString()
-                },
-                {
-                    id: this.generateId(),
-                    name: 'Jane Smith',
-                    email: 'jane.smith@example.com',
-                    region: 'India West',
-                    isActive: true,
-                    createdAt: new Date().toISOString()
+        // Initialize / ensure sales rep roster
+        let salesReps = this.getGlobalSalesReps();
+        if (!salesReps.length) {
+            salesReps = DEFAULT_SALES_REPS.map(rep => ({
+                id: this.generateId(),
+                name: rep.name,
+                email: rep.email,
+                region: rep.region,
+                currency: rep.currency || 'INR',
+                fxToInr: null,
+                isActive: true,
+                createdAt: new Date().toISOString()
+            }));
+            this.saveGlobalSalesReps(salesReps);
+        } else {
+            const emailIndex = new Map();
+            salesReps.forEach((rep, index) => {
+                const emailKey = (rep.email || '').toLowerCase();
+                if (emailKey) {
+                    emailIndex.set(emailKey, index);
                 }
-            ];
-            this.saveGlobalSalesReps(defaultSalesReps);
-        }
+            });
+            let mutated = false;
 
-        // Ensure core sales reps exist
-        const ensuredSalesReps = [...this.getGlobalSalesReps()];
-        const requiredSalesReps = [
-            { name: 'Bittu George', email: 'bittu.george@gupshup.io' },
-            { name: 'Hemanth R Swamy', email: 'hemanth.swamy@gupshup.io' },
-            { name: 'Mohd Abbas Murtaza', email: 'mohd.abbas@gupshup.io' },
-            { name: 'Gaurav Tomar', email: 'gaurav.tomar@gupshup.io' },
-            { name: 'Mohyeldein Elbaroudy', email: 'mohyeldein.elbaroudy@gupshup.io' },
-            { name: 'Nayeem Mohammed', email: 'nayeem.mohammed@gupshup.io' }
-        ];
-        let salesRepListUpdated = false;
-        requiredSalesReps.forEach(rep => {
-            if (!ensuredSalesReps.some(existing => (existing.email || '').toLowerCase() === rep.email.toLowerCase())) {
-                ensuredSalesReps.push({
-                    id: this.generateId(),
-                    name: rep.name,
-                    email: rep.email,
-                    region: 'India West',
-                    isActive: true,
-                    createdAt: new Date().toISOString()
-                });
-                salesRepListUpdated = true;
+            DEFAULT_SALES_REPS.forEach(rep => {
+                const emailKey = rep.email.toLowerCase();
+                if (!emailIndex.has(emailKey)) {
+                    const newRep = {
+                        id: this.generateId(),
+                        name: rep.name,
+                        email: rep.email,
+                        region: rep.region,
+                        currency: rep.currency || 'INR',
+                        fxToInr: null,
+                        isActive: true,
+                        createdAt: new Date().toISOString()
+                    };
+                    salesReps.push(newRep);
+                    emailIndex.set(emailKey, salesReps.length - 1);
+                    mutated = true;
+                    return;
+                }
+
+                const index = emailIndex.get(emailKey);
+                const current = salesReps[index];
+                const updated = { ...current };
+                let changed = false;
+
+                if ((current.name || '').trim() !== rep.name) {
+                    updated.name = rep.name;
+                    changed = true;
+                }
+
+                if ((current.region || 'India West') !== rep.region) {
+                    updated.region = rep.region;
+                    changed = true;
+                }
+
+                if (!current.currency) {
+                    updated.currency = rep.currency || 'INR';
+                    changed = true;
+                }
+
+                if (updated.isActive === undefined) {
+                    updated.isActive = true;
+                    changed = true;
+                }
+
+                if (changed) {
+                    salesReps[index] = updated;
+                    mutated = true;
+                }
+            });
+
+            if (mutated) {
+                this.saveGlobalSalesReps(salesReps);
             }
-        });
-        if (salesRepListUpdated) {
-            this.saveGlobalSalesReps(ensuredSalesReps);
         }
         
         // Initialize industries and regions as empty arrays (will be managed inline in forms)
@@ -382,6 +487,18 @@ const DataManager = {
         if (!email) return null;
         const targetEmail = email.toLowerCase();
         return this.getGlobalSalesReps().find(rep => rep.email && rep.email.toLowerCase() === targetEmail) || null;
+    },
+
+    getSalesRepsByRegion(region = 'all', options = {}) {
+        const { includeInactive = false } = options || {};
+        const normalizedRegion = region ? region.trim() : '';
+        const reps = this.getGlobalSalesReps().filter(rep => includeInactive || rep.isActive !== false);
+        if (!normalizedRegion || normalizedRegion.toLowerCase() === 'all') {
+            return [...reps].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }
+        return reps
+            .filter(rep => (rep.region || 'India West') === normalizedRegion)
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
     saveGlobalSalesReps(salesReps) {
@@ -1050,19 +1167,37 @@ const DataManager = {
     },
 
     ensureRegionBaseline() {
-        const current = this.getRegions();
-        const regionSet = new Set(current.map(region => region && region.trim()).filter(Boolean));
-        let mutated = false;
+        const stored = this.getRegions();
+        const cleaned = [];
+        const seenStored = new Set();
+
+        stored.forEach(region => {
+            const value = region && typeof region === 'string' ? region.trim() : '';
+            if (!value || seenStored.has(value)) return;
+            seenStored.add(value);
+            cleaned.push(value);
+        });
+
+        const final = [];
+        const seenFinal = new Set();
 
         DEFAULT_SALES_REGIONS.forEach(region => {
-            if (!regionSet.has(region)) {
-                regionSet.add(region);
-                mutated = true;
+            if (!seenFinal.has(region)) {
+                final.push(region);
+                seenFinal.add(region);
             }
         });
 
-        if (mutated) {
-            this.saveRegions(Array.from(regionSet));
+        cleaned.forEach(region => {
+            if (!seenFinal.has(region)) {
+                final.push(region);
+                seenFinal.add(region);
+            }
+        });
+
+        const changed = JSON.stringify(stored) !== JSON.stringify(final);
+        if (changed) {
+            this.saveRegions(final);
         }
     },
 
