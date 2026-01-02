@@ -475,8 +475,9 @@ const Admin = {
                             <input type="email" class="form-control" id="newUserEmail" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label required">Password</label>
-                            <input type="password" class="form-control" id="newPassword" required>
+                            <label class="form-label">Temporary password</label>
+                            <input type="text" class="form-control" value="Welcome@Gupshup1" disabled>
+                            <small class="text-muted">Users will be prompted to set their own password on first login.</small>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Default Region (optional)</label>
@@ -530,23 +531,15 @@ const Admin = {
             return;
         }
 
-        const passwordInput = document.getElementById('newPassword');
         const forcePasswordChangeCheckbox = document.getElementById('forcePasswordChange');
         const forcePasswordChange = forcePasswordChangeCheckbox ? forcePasswordChangeCheckbox.checked : true;
-        const password = passwordInput?.value ? passwordInput.value.trim() : '';
         const defaultRegionSelect = document.getElementById('newUserDefaultRegion');
         const defaultRegionValue = defaultRegionSelect ? defaultRegionSelect.value : '';
-
-        if (!password) {
-            UI.showNotification('Please provide a temporary password for the user.', 'error');
-            passwordInput?.focus();
-            return;
-        }
 
         const user = {
             username: document.getElementById('newUsername').value,
             email: document.getElementById('newUserEmail').value,
-            password,
+            password: 'Welcome@Gupshup1',
             roles: roles,
             regions: [],
             salesReps: [],
