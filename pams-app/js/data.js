@@ -82,11 +82,12 @@ const DEFAULT_SALES_REPS = [
     { name: 'Guilherme Garcia', email: 'guilherme.garcia@gupshup.io', region: 'LATAM' },
 
     // MENA
-    { name: 'Hemanth R Swamy', email: 'hemanth.swamy@gupshup.io', region: 'MENA' },
     { name: 'Bittu George', email: 'bittu.george@gupshup.io', region: 'MENA' },
-    { name: 'Mohd Abbas Murtaza', email: 'md.abbas@knowlarity.com', region: 'MENA' },
-    { name: 'Gaurav Tomar', email: 'gaurav.tomar@knowlarity.com', region: 'MENA' },
-    { name: 'Mukul Yadav', email: 'mukul.yadav@knowlarity.com', region: 'MENA' }
+    { name: 'Hemanth R Swamy', email: 'hemanth.swamy@gupshup.io', region: 'MENA' },
+    { name: 'Mohd Abbas Murtaza', email: 'mohd.abbas@gupshup.io', region: 'MENA' },
+    { name: 'Gaurav Tomar', email: 'gaurav.tomar@gupshup.io', region: 'MENA' },
+    { name: 'Mohyeldein Elbaroudy', email: 'mohyeldein.elbaroudy@gupshup.io', region: 'MENA' },
+    { name: 'Nayeem Mohammed', email: 'nayeem.mohammed@gupshup.io', region: 'MENA' }
 ];
 
 const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
@@ -759,6 +760,55 @@ const DataManager = {
         const activities = this.getActivities().filter(a => a.id !== activityId);
         this.saveActivities(activities);
         this.recordAudit('activity.delete', 'activity', activityId);
+    },
+
+    clearAllActivities(options = {}) {
+        const { includeInternal = true } = options;
+
+        this.saveActivities([]);
+        if (includeInternal) {
+            this.saveInternalActivities([]);
+        } else {
+            this.cache.internalActivities = this.getInternalActivities();
+        }
+        this.cache.allActivities = null;
+
+        const accounts = this.getAccounts();
+        let accountsMutated = false;
+
+        const normalizedAccounts = accounts.map(account => {
+            if (!Array.isArray(account?.projects) || !account.projects.length) {
+                return account;
+            }
+            let projectMutated = false;
+            const updatedProjects = account.projects.map(project => {
+                if (Array.isArray(project?.activities) && project.activities.length) {
+                    projectMutated = true;
+                    return {
+                        ...project,
+                        activities: []
+                    };
+                }
+                return project;
+            });
+            if (projectMutated) {
+                accountsMutated = true;
+                return {
+                    ...account,
+                    projects: updatedProjects
+                };
+            }
+            return account;
+        });
+
+        if (accountsMutated) {
+            this.saveAccounts(normalizedAccounts);
+        }
+
+        this.recordAudit('activity.purge', 'activity', '*', {
+            includeInternal: !!includeInternal,
+            removedAccounts: accountsMutated
+        });
     },
 
     // Internal Activities

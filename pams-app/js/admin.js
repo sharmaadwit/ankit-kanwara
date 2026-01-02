@@ -107,6 +107,7 @@ const Admin = {
     salesRepFiltersInitialized: false,
     loadedSections: new Set(),
     activeSection: null,
+    clearActivitiesInProgress: false,
 
     getAdminHeaders() {
         const headers = {};
@@ -2103,6 +2104,53 @@ const Admin = {
                 entityId: selectedMonth,
                 detail: { rowCount: rows.length }
             });
+        }
+    },
+
+    promptClearAllActivities() {
+        if (this.clearActivitiesInProgress) {
+            return;
+        }
+
+        const confirmed = confirm('This will permanently delete all customer and internal activity records. This action cannot be undone. Continue?');
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            this.clearActivitiesInProgress = true;
+            DataManager.clearAllActivities({ includeInternal: true });
+            UI.showNotification('All activity records cleared successfully.', 'success');
+            this.loadActivityLogs(true);
+
+            if (typeof App !== 'undefined') {
+                if (typeof App.loadDashboard === 'function') {
+                    App.loadDashboard();
+                }
+                if (App.currentView === 'activities' && typeof App.loadActivitiesView === 'function') {
+                    App.loadActivitiesView();
+                }
+                if (App.currentView === 'reports' && typeof App.loadReports === 'function') {
+                    App.loadReports();
+                }
+                if (App.currentView === 'projectHealth' && typeof App.loadProjectHealthView === 'function') {
+                    App.loadProjectHealthView();
+                }
+                if (App.currentView === 'winloss' && typeof App.loadWinLossView === 'function') {
+                    App.loadWinLossView();
+                }
+                if (App.currentView === 'sfdcCompliance' && typeof App.loadSfdcComplianceView === 'function') {
+                    App.loadSfdcComplianceView();
+                }
+                if (App.currentView === 'accounts' && typeof App.loadAccountsView === 'function') {
+                    App.loadAccountsView();
+                }
+            }
+        } catch (error) {
+            console.error('Failed to clear activities:', error);
+            UI.showNotification('Failed to clear activities. Please try again.', 'error');
+        } finally {
+            this.clearActivitiesInProgress = false;
         }
     },
 

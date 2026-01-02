@@ -539,7 +539,8 @@
                             <div class="card">
                                 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                     <h3>Activity Audit Log</h3>
-                                    <div style="display: flex; gap: 0.75rem;">
+                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end;">
+                                        <button class="btn btn-danger btn-sm" onclick="Admin.promptClearAllActivities()">Clear All Activities</button>
                                         <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
                                         <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
                                     </div>
