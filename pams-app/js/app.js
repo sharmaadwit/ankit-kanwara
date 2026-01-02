@@ -4988,6 +4988,15 @@ const App = {
         UI.showNotification('Activity deleted successfully', 'success');
         this.loadActivitiesView();
         this.loadDashboard();
+        this.loadAccountsView();
+        this.loadWinLossView();
+        this.loadProjectHealthView();
+        this.loadSfdcComplianceView();
+        if (InterfaceManager.getCurrentInterface() === 'card') {
+            this.loadCardWinLossView();
+            this.loadCardProjectHealthView();
+            this.loadCardSfdcComplianceView();
+        }
     },
 
     // Expose functions globally
