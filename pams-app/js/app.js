@@ -1486,6 +1486,19 @@ const App = {
     
     // Load card report reports tab
     loadCardReportReportsTab(selectedMonth) {
+        const availableMonths = DataManager.getAvailableActivityMonths();
+        const fallbackMonth = new Date().toISOString().substring(0, 7);
+        const latestAvailableMonth = availableMonths.length
+            ? availableMonths[availableMonths.length - 1]
+            : fallbackMonth;
+        const earliestAvailableMonth = availableMonths.length
+            ? availableMonths[0]
+            : '';
+
+        if (!selectedMonth || (availableMonths.length && !availableMonths.includes(selectedMonth))) {
+            selectedMonth = latestAvailableMonth;
+        }
+
         const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
         this.latestAnalytics.card = analytics;
         this.latestAnalytics.cardMonth = selectedMonth;
@@ -1493,9 +1506,17 @@ const App = {
         this.latestAnalytics.standardMonth = selectedMonth;
         const actionBar = `
             <div class="action-bar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
-                <div class="form-group">
+                <div class="form-group month-picker">
                     <label class="form-label">Select Month</label>
-                    <input type="month" id="cardReportMonth" class="form-control" value="${selectedMonth}" onchange="App.handleCardReportMonthChange(this.value)">
+                    <div class="month-picker-group">
+                        <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(-1, 'card')" aria-label="Previous month">
+                            ‹
+                        </button>
+                        <input type="month" id="cardReportMonth" class="form-control" value="${selectedMonth}" min="${earliestAvailableMonth}" max="${latestAvailableMonth}" onchange="App.handleCardReportMonthChange(this.value)">
+                        <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(1, 'card')" aria-label="Next month">
+                            ›
+                        </button>
+                    </div>
                 </div>
                 <button class="btn btn-secondary" onclick="App.exportReportsCsv()">Export CSV</button>
             </div>
@@ -1917,10 +1938,37 @@ const App = {
     // Load reports
     loadReports() {
         try {
+            const availableMonths = DataManager.getAvailableActivityMonths();
+            this.availableAnalyticsMonths = availableMonths;
             const today = new Date();
-            const defaultMonth = today.toISOString().substring(0, 7);
+            const fallbackMonth = today.toISOString().substring(0, 7);
+            const latestAvailableMonth = availableMonths.length
+                ? availableMonths[availableMonths.length - 1]
+                : fallbackMonth;
+            const earliestAvailableMonth = availableMonths.length
+                ? availableMonths[0]
+                : '';
+
             const existingInput = document.getElementById('reportMonth');
-            const selectedMonth = existingInput && existingInput.value ? existingInput.value : defaultMonth;
+            let selectedMonth =
+                (existingInput && existingInput.value) ||
+                this.latestAnalytics.standardMonth ||
+                latestAvailableMonth;
+            if (availableMonths.length && !availableMonths.includes(selectedMonth)) {
+                selectedMonth = latestAvailableMonth;
+            }
+            if (!selectedMonth) {
+                selectedMonth = fallbackMonth;
+            }
+            if (existingInput) {
+                if (earliestAvailableMonth) {
+                    existingInput.min = earliestAvailableMonth;
+                }
+                if (latestAvailableMonth) {
+                    existingInput.max = latestAvailableMonth;
+                }
+                existingInput.value = selectedMonth;
+            }
 
             const container = document.getElementById('reportsContent');
             if (!container) {
@@ -1954,6 +2002,40 @@ const App = {
             if (container) {
                 container.innerHTML = UI.emptyState('Error loading reports');
             }
+        }
+    },
+
+    shiftReportMonth(step = 1, variant = 'standard') {
+        const months = DataManager.getAvailableActivityMonths();
+        if (!months.length) {
+            return;
+        }
+        const normalizedStep = Number.isFinite(step) ? step : 1;
+        const isCard = variant === 'card';
+        const inputId = isCard ? 'cardReportMonth' : 'reportMonth';
+        const input = document.getElementById(inputId);
+        const storedMonth = isCard
+            ? this.latestAnalytics.cardMonth
+            : this.latestAnalytics.standardMonth;
+        let current =
+            (input && input.value) ||
+            storedMonth ||
+            months[months.length - 1];
+        if (!months.includes(current)) {
+            current = months[months.length - 1];
+        }
+        let index = months.indexOf(current) + normalizedStep;
+        if (index < 0) index = 0;
+        if (index >= months.length) index = months.length - 1;
+        const nextMonth = months[index];
+        if (input) {
+            input.value = nextMonth;
+        }
+        if (isCard) {
+            this.handleCardReportMonthChange(nextMonth);
+        } else {
+            this.latestAnalytics.standardMonth = nextMonth;
+            this.loadReports();
         }
     },
 
@@ -2044,11 +2126,20 @@ const App = {
     },
 
     handleCardReportMonthChange(value) {
-        const selected = value || new Date().toISOString().substring(0, 7);
+        const availableMonths = DataManager.getAvailableActivityMonths();
+        const fallbackMonth = new Date().toISOString().substring(0, 7);
+        let selected = value || this.latestAnalytics.cardMonth || fallbackMonth;
+        if (availableMonths.length && !availableMonths.includes(selected)) {
+            selected = availableMonths[availableMonths.length - 1];
+        }
         this.latestAnalytics.cardMonth = selected;
         const reportsView = document.getElementById('reportsView');
         if (reportsView) {
             reportsView.dataset.currentTab = 'reports';
+        }
+        const input = document.getElementById('cardReportMonth');
+        if (input) {
+            input.value = selected;
         }
         this.loadCardReportsView();
     },

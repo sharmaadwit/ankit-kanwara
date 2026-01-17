@@ -1770,6 +1770,39 @@ const DataManager = {
         return allActivities.map(activity => ({ ...activity }));
     },
 
+    getAvailableActivityMonths(includeInternal = true) {
+        const months = new Set();
+        const addMonth = (value) => {
+            if (!value) return;
+            const month =
+                typeof value === 'string'
+                    ? value.slice(0, 7)
+                    : '';
+            if (month) {
+                months.add(month);
+            }
+        };
+
+        this.getActivities().forEach((activity) => {
+            addMonth(
+                activity.monthOfActivity ||
+                    (activity.date ? activity.date.slice(0, 7) : '')
+            );
+        });
+        if (includeInternal) {
+            this.getInternalActivities().forEach((activity) => {
+                addMonth(
+                    activity.monthOfActivity ||
+                        (activity.date ? activity.date.slice(0, 7) : '')
+                );
+            });
+        }
+
+        return Array.from(months)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+    },
+
     // Utility
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);

@@ -272,6 +272,39 @@ body {
     margin-top: 1rem;
 }
 
+
+.month-picker {
+    min-width: 220px;
+}
+
+.month-picker-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.month-picker-group .form-control {
+    min-width: 180px;
+}
+
+.month-nav {
+    padding: 0.4rem 0.65rem;
+    line-height: 1;
+}
+
+.month-picker-group .month-nav {
+    min-width: 2.25rem;
+}
+
+@media (max-width: 768px) {
+    .month-picker-group {
+        width: 100%;
+    }
+    .month-picker-group .form-control {
+        flex: 1;
+    }
+}
+
 /* Main App Layout */
 .main-app {
     display: flex;
