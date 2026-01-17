@@ -1,8 +1,22 @@
 // Authentication Module
+const ANALYTICS_ACCESS_PASSWORD = 'Gup$hup.io';
 
 const Auth = {
     currentUser: null,
     pendingPasswordChangeUser: null,
+
+    createAnalyticsGuestUser() {
+        return {
+            id: 'analytics-guest',
+            username: 'analytics-viewer',
+            roles: ['Analytics Access'],
+            regions: [],
+            salesReps: [],
+            defaultRegion: '',
+            isActive: true,
+            isAnalyticsGuest: true
+        };
+    },
 
     getSessionStore() {
         try {
@@ -86,6 +100,12 @@ const Auth = {
         // Check for existing session
         this.clearRemoteSessionArtifact();
         const sessionData = this.readSession();
+        if (sessionData && sessionData.analyticsOnly) {
+            this.pendingPasswordChangeUser = null;
+            this.currentUser = this.createAnalyticsGuestUser();
+            this.showMainApp();
+            return true;
+        }
         if (sessionData && sessionData.userId) {
             const user = DataManager.getUserById(sessionData.userId);
             if (user && user.isActive) {
@@ -173,6 +193,40 @@ const Auth = {
         }
     },
 
+    loginAnalytics(password) {
+        try {
+            const trimmedPassword = (password || '').trim();
+            if (!trimmedPassword) {
+                return { success: false, message: 'Enter the analytics access password.' };
+            }
+            if (trimmedPassword !== ANALYTICS_ACCESS_PASSWORD) {
+                this.reportLoginEvent('failure', {
+                    username: 'analytics-viewer',
+                    message: 'Invalid analytics access password'
+                });
+                return { success: false, message: 'Incorrect analytics access password.' };
+            }
+            this.pendingPasswordChangeUser = null;
+            this.currentUser = this.createAnalyticsGuestUser();
+            this.writeSession({
+                analyticsOnly: true,
+                loginTime: new Date().toISOString()
+            });
+            this.reportLoginEvent('success', {
+                username: this.currentUser.username,
+                message: 'Analytics access granted'
+            });
+            this.showMainApp();
+            return { success: true, user: this.currentUser };
+        } catch (error) {
+            console.error('Analytics access error:', error);
+            return {
+                success: false,
+                message: 'Unable to grant analytics access. Please try again.'
+            };
+        }
+    },
+
     // Logout
     logout() {
         this.currentUser = null;
@@ -233,6 +287,8 @@ const Auth = {
         const confirmPasswordInput = document.getElementById('confirmPassword');
         const forceUser = document.getElementById('forcePasswordUser');
         const forceMessage = document.getElementById('forcePasswordMessage');
+        const analyticsForm = document.getElementById('analyticsAccessForm');
+        const analyticsPasswordInput = document.getElementById('analyticsAccessPassword');
 
         if (loginForm) {
             loginForm.classList.remove('hidden');
@@ -254,6 +310,12 @@ const Auth = {
         if (forceUser) forceUser.textContent = '';
         if (forceMessage) {
             forceMessage.textContent = 'please set a new password before continuing.';
+        }
+        if (analyticsForm) {
+            analyticsForm.classList.add('hidden');
+        }
+        if (analyticsPasswordInput) {
+            analyticsPasswordInput.value = '';
         }
         if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
             App.setLoading(false);

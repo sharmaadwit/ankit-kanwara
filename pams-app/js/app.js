@@ -145,6 +145,39 @@ const App = {
             });
         }
 
+        const analyticsToggle = document.getElementById('analyticsAccessToggle');
+        const analyticsForm = document.getElementById('analyticsAccessForm');
+        const analyticsPasswordInput = document.getElementById('analyticsAccessPassword');
+        if (analyticsToggle && analyticsForm) {
+            analyticsToggle.addEventListener('click', () => {
+                analyticsForm.classList.toggle('hidden');
+                if (!analyticsForm.classList.contains('hidden')) {
+                    analyticsPasswordInput?.focus();
+                } else if (analyticsPasswordInput) {
+                    analyticsPasswordInput.value = '';
+                }
+            });
+        }
+        if (analyticsForm) {
+            analyticsForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const password = analyticsPasswordInput?.value || '';
+                this.setLoading(true, 'Preparing analytics view…');
+                const result =
+                    typeof Auth !== 'undefined' && typeof Auth.loginAnalytics === 'function'
+                        ? Auth.loginAnalytics(password)
+                        : { success: false, message: 'Analytics access is unavailable.' };
+                if (result.success) {
+                    this.handleSuccessfulLogin();
+                } else {
+                    this.setLoading(false);
+                    UI.showNotification(result.message || 'Invalid analytics password', 'error');
+                    analyticsPasswordInput?.focus();
+                    analyticsPasswordInput?.select();
+                }
+            });
+        }
+
         // Logout
         const logoutBtn = document.getElementById('logoutBtn');
         if (logoutBtn) {
