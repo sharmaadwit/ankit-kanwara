@@ -83,13 +83,6 @@ const App = {
             }
 
             InterfaceManager.init();
-            if (
-                typeof DataManager !== 'undefined' &&
-                typeof DataManager.bootstrapFromMigrationSnapshot === 'function'
-            ) {
-                this.setLoading(true, 'Loading demo dataset…');
-                await DataManager.bootstrapFromMigrationSnapshot();
-            }
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
                 Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
             }
@@ -238,13 +231,6 @@ const App = {
                 await this.refreshAppConfiguration();
             } catch (error) {
                 console.warn('Configuration refresh after login failed.', error);
-            }
-            if (
-                typeof DataManager !== 'undefined' &&
-                typeof DataManager.bootstrapFromMigrationSnapshot === 'function'
-            ) {
-                this.setLoading(true, 'Loading demo dataset…');
-                await DataManager.bootstrapFromMigrationSnapshot();
             }
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
                 Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
