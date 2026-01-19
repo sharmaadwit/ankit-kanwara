@@ -7,12 +7,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
 
 const RAILWAY_BASE_URL =
   process.env.RAILWAY_APP_URL ||
   'https://ankit-kanwara-production.up.railway.app';
-const ROOT = path.resolve(__dirname, '..', '..');
 const SNAPSHOT_PATH = path.resolve(
   __dirname,
   '..',
@@ -20,10 +18,6 @@ const SNAPSHOT_PATH = path.resolve(
   'pams-app',
   'data',
   'importedData.snapshot.json'
-);
-const ADDITIONAL_MIGRATION_CSV = path.join(
-  ROOT,
-  'pams_migration_ready_v2.csv'
 );
 const HEADERS = {
   'x-admin-user': process.env.RAILWAY_STORAGE_USER || 'migration-script'
@@ -341,177 +335,9 @@ const addActivityToProject = (project, activity) => {
   });
 };
 
-const clean = (value) => {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString();
-  }
-  if (typeof value === 'string') {
-    return value.replace(/\s+/g, ' ').trim();
-  }
-  return String(value).trim();
-};
-
-const toIsoDate = (value) => {
-  if (!value) return '';
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value.toISOString();
-  }
-  const trimmed = String(value).trim();
-  if (!trimmed) return '';
-
-  const match = /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/.exec(trimmed);
-  if (match) {
-    let part1 = parseInt(match[1], 10);
-    let part2 = parseInt(match[2], 10);
-    const year =
-      match[3].length === 2
-        ? 2000 + parseInt(match[3], 10)
-        : parseInt(match[3], 10);
-
-    let day = part1;
-    let month = part2;
-
-    if (part1 > 12 && part2 <= 12) {
-      day = part1;
-      month = part2;
-    } else if (part2 > 12 && part1 <= 12) {
-      day = part2;
-      month = part1;
-    } else if (part1 <= 12 && part2 <= 12) {
-      // Ambiguous, default to month/day ordering if first part seems like month
-      day = part2;
-      month = part1;
-    }
-
-    const candidate = new Date(Date.UTC(year, month - 1, day));
-    if (!Number.isNaN(candidate.getTime())) {
-      return candidate.toISOString();
-    }
-  }
-
-  const parsed = new Date(trimmed);
-  if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString();
-  }
-  return '';
-};
-
-const toMonthKey = (isoDate) => {
-  if (!isoDate) return '';
-  return isoDate.slice(0, 7);
-};
-
-const deriveDisplayName = (identifier) => {
-  if (!identifier) return '';
-  const localPart = identifier.includes('@')
-    ? identifier.split('@')[0]
-    : identifier;
-  return localPart
-    .split(/[._\s]+/)
-    .filter(Boolean)
-    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
-    .join(' ');
-};
-
-const loadAdditionalCsvRecords = () => {
-  if (!fs.existsSync(ADDITIONAL_MIGRATION_CSV)) {
-    return [];
-  }
-  const workbook = XLSX.readFile(ADDITIONAL_MIGRATION_CSV, {
-    cellDates: true
-  });
-  const [firstSheet] = workbook.SheetNames;
-  if (!firstSheet) {
-    return [];
-  }
-  const sheet = workbook.Sheets[firstSheet];
-  const rows = XLSX.utils.sheet_to_json(sheet, {
-    defval: '',
-    raw: false
-  });
-
-  const mapped = rows.map((row, index) => {
-    const activityCategory = clean(row['Activity Category']).toLowerCase();
-    const isInternal = activityCategory === 'internal';
-
-    const activityDate = toIsoDate(row.Date);
-    const assignedEmail = clean(row['Presales Username']).toLowerCase();
-    const assignedName =
-      deriveDisplayName(assignedEmail) || clean(row['Presales Username']);
-
-    const internalDescription = clean(row['Internal Description']);
-    const externalDescription = clean(row.Description);
-
-    const projectName = clean(
-      isInternal ? row['Internal Topic'] || row['Project Name'] : row['Project Name']
-    );
-
-    const summary = [
-      isInternal ? clean(row['Internal Activity Name']) : '',
-      externalDescription || internalDescription
-    ]
-      .filter(Boolean)
-      .join(' | ');
-
-    return {
-      id: `migration-jan-${index + 1}`,
-      source: 'pams_migration_ready_v2',
-      sheetRow: index + 2,
-      accountName: clean(row['Account Name']),
-      projectName,
-      sfdcLink: clean(row['SFDC Link']),
-      salesRep: clean(row['Sales Rep Name']),
-      salesRepOriginal: clean(row['Sales Rep Name']),
-      salesRepPlaceholder: false,
-      salesRepRegionOriginal: '',
-      salesRepRegion: '',
-      activityType: clean(row['Activity Type']) || (isInternal ? 'Internal Activity' : 'Activity'),
-      activityDate,
-      status: 'resolved',
-      requiresReview: false,
-      flags: [],
-      notes: '',
-      importNotes: [],
-      activitySummary: summary,
-      isInternalCandidate: isInternal,
-      assignedUserEmail: assignedEmail,
-      assignedUserName: assignedName,
-      assignedUserId: assignedEmail || assignedName || '',
-      accessType: '',
-      raw: {
-        activityCategory: clean(row['Activity Category']),
-        products: clean(row.Products),
-        channels: clean(row.Channels),
-        callType: clean(row['Call Type']),
-        timeSpentType: clean(row['Time Spent Type']),
-        timeSpentValue: clean(row['Time Spent Value']),
-        internalActivityName: clean(row['Internal Activity Name']),
-        internalTopic: clean(row['Internal Topic']),
-        internalDescription,
-        description: externalDescription
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: null,
-      monthOfActivity: toMonthKey(activityDate)
-    };
-  });
-
-  return mapped.filter(
-    (record) => record.monthOfActivity === '2025-01'
-  );
-};
-
 const main = async () => {
   const snapshotRaw = fs.readFileSync(SNAPSHOT_PATH, 'utf8');
   const records = JSON.parse(snapshotRaw);
-  const januaryRecords = loadAdditionalCsvRecords();
-  if (januaryRecords.length) {
-    console.log(
-      `Loaded ${januaryRecords.length} January records from ${ADDITIONAL_MIGRATION_CSV}`
-    );
-    records.push(...januaryRecords);
-  }
 
   let users = await loadKey('users');
   users = ensureDefaultUsers(users || []);
@@ -653,13 +479,7 @@ const main = async () => {
   );
 };
 
-if (require.main === module) {
-  main().catch((error) => {
-    console.error('Migration failed:', error);
-    process.exitCode = 1;
-  });
-} else {
-  module.exports = {
-    loadAdditionalCsvRecords
-  };
-}
+main().catch((error) => {
+  console.error('Migration failed:', error);
+  process.exitCode = 1;
+});

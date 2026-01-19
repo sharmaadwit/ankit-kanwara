@@ -15,7 +15,6 @@ const SOURCE_WORKBOOK = path.join(ROOT, 'pams_migration_ready.xlsx');
 const OUTPUT_SEED = path.join(ROOT, 'pams-app', 'js', 'importedData.seed.js');
 const SNAPSHOT_JSON = path.join(ROOT, 'pams-app', 'data', 'importedData.snapshot.json');
 const SNAPSHOT_JSON_LEGACY = path.join(ROOT, 'import-studio', 'importedData.snapshot.json');
-const ADDITIONAL_CSV = path.join(ROOT, 'pams_migration_ready_v2.csv');
 
 const clean = (value) => {
   if (value === null || value === undefined) return '';
@@ -37,30 +36,13 @@ const toIsoDate = (value) => {
   const trimmed = String(value).trim();
   if (!trimmed) return '';
 
-  const match = /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/.exec(trimmed);
-  if (match) {
-    let part1 = parseInt(match[1], 10);
-    let part2 = parseInt(match[2], 10);
-    const year =
-      match[3].length === 2
-        ? 2000 + parseInt(match[3], 10)
-        : parseInt(match[3], 10);
-
-    let day = part1;
-    let month = part2;
-
-    if (part1 > 12 && part2 <= 12) {
-      day = part1;
-      month = part2;
-    } else if (part2 > 12 && part1 <= 12) {
-      day = part2;
-      month = part1;
-    } else if (part1 <= 12 && part2 <= 12) {
-      day = part2;
-      month = part1;
-    }
-
-    const candidate = new Date(Date.UTC(year, month - 1, day));
+  // Handle common dd-mm-yyyy or dd/mm/yyyy formats
+  const dmyMatch = /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/.exec(trimmed);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1; // zero indexed
+    const year = dmyMatch[3].length === 2 ? 2000 + parseInt(dmyMatch[3], 10) : parseInt(dmyMatch[3], 10);
+    const candidate = new Date(Date.UTC(year, month, day));
     if (!Number.isNaN(candidate.getTime())) {
       return candidate.toISOString();
     }
@@ -176,35 +158,6 @@ const main = () => {
   console.log(`• Found ${rows.length} rows in migration export`);
 
   const records = rows.map((row, index) => buildRecord(row, index));
-  if (fs.existsSync(ADDITIONAL_CSV)) {
-    const januaryWorkbook = XLSX.readFile(ADDITIONAL_CSV, { cellDates: true });
-    const [firstSheet] = januaryWorkbook.SheetNames;
-    if (firstSheet) {
-      const januaryRows = XLSX.utils.sheet_to_json(
-        januaryWorkbook.Sheets[firstSheet],
-        {
-          defval: '',
-          raw: false
-        }
-      );
-      const januaryRecords = januaryRows
-        .map((row, index) => {
-          const record = buildRecord(row, index);
-          return {
-            ...record,
-            id: `migration-jan-${index + 1}`,
-            source: 'pams_migration_ready_v2'
-          };
-        })
-        .filter((record) => record.monthOfActivity === '2025-01');
-      if (januaryRecords.length) {
-        console.log(
-          `• Merging ${januaryRecords.length} January activities from ${ADDITIONAL_CSV}`
-        );
-        records.push(...januaryRecords);
-      }
-    }
-  }
   const version = new Date().toISOString();
 
   const jsonPayload = JSON.stringify(records, null, 2);
