@@ -1106,6 +1106,22 @@ body {
     animation: analytics-spin 1s linear infinite;
 }
 
+.analytics-section-body {
+    position: relative;
+    min-height: 320px;
+    padding: 1rem 0;
+}
+
+.analytics-section.analytics-section-full .analytics-section-body {
+    min-height: 360px;
+}
+
+.analytics-section-body canvas {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 260px;
+}
+
 @keyframes analytics-spin {
     from {
         transform: rotate(0deg);
