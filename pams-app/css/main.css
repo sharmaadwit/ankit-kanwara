@@ -939,6 +939,12 @@ body {
     color: var(--gray-500);
 }
 
+.chart-error {
+    margin-top: auto;
+    font-size: 0.875rem;
+    color: #C53030;
+}
+
 .chart-library-warning {
     margin-top: 1rem;
     font-size: 0.875rem;

@@ -4216,7 +4216,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: orderedSummaries.map(item => item.userName),
@@ -4238,8 +4238,7 @@ const App = {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-activity-report`] = chart;
+        }, `${prefix}-activity-report`);
     },
 
     renderActivityMixChart(context, mode = 'donut') {
@@ -4348,8 +4347,7 @@ const App = {
         if (this.analyticsCharts[existingKey]) {
             this.analyticsCharts[existingKey].destroy();
         }
-        const chart = new Chart(canvas, chartConfig);
-        this.analyticsCharts[existingKey] = chart;
+        this.tryRenderChart(canvas, chartConfig, existingKey);
     },
 
     renderUserStackedChart(context) {
@@ -4423,7 +4421,7 @@ const App = {
             }));
         }
 
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: { labels, datasets },
             options: {
@@ -4435,8 +4433,7 @@ const App = {
                     y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-stacked`] = chart;
+        }, `${prefix}-stacked`);
     },
 
     renderProductsChart(context) {
@@ -4483,7 +4480,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: { labels: industryLabelsForProducts, datasets },
             options: {
@@ -4496,8 +4493,7 @@ const App = {
                     y: { stacked: true }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-products`] = chart;
+        }, `${prefix}-products`);
     },
 
     renderIndustryActivityChart(context) {
@@ -4511,7 +4507,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: industriesForActivity,
@@ -4530,8 +4526,7 @@ const App = {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-industry`] = chart;
+        }, `${prefix}-industry`);
     },
 
     renderWinLossTrendChart(context) {
@@ -4548,7 +4543,7 @@ const App = {
 
         this.prepareChartCanvas(canvas);
         const labels = trendData.map(item => UI.formatMonth(item.month));
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'line',
             data: {
                 labels,
@@ -4579,8 +4574,7 @@ const App = {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-trend`] = chart;
+        }, `${prefix}-trend`);
     },
 
     renderChannelOutcomeChart(context) {
@@ -4617,7 +4611,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: limitedChannels.map(item => item.channel),
@@ -4642,8 +4636,7 @@ const App = {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-channels`] = chart;
+        }, `${prefix}-channels`);
     },
 
     renderPocFunnelChart(context) {
@@ -4665,7 +4658,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        const chart = new Chart(canvas, {
+        this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: funnelEntries.map(entry => entry.accessType),
@@ -4695,8 +4688,7 @@ const App = {
                     y: { beginAtZero: true, ticks: { precision: 0 } }
                 }
             }
-        });
-        this.analyticsCharts[`${prefix}-poc`] = chart;
+        }, `${prefix}-poc`);
     },
 
     destroyAnalyticsCharts(prefix) {
@@ -4727,6 +4719,38 @@ const App = {
             note.className = 'chart-empty text-muted';
             note.innerHTML = `${message}<br><button class="btn btn-link btn-sm" style="padding-left: 0;" onclick="Activities.openActivityModal()">Log Activity</button>`;
             card.appendChild(note);
+        }
+    },
+
+    renderChartError(canvas, errorMessage) {
+        if (!canvas) return;
+        const card = canvas.closest('.chart-card') || canvas.parentElement;
+        if (!card) return;
+        canvas.style.display = 'none';
+        const existing = card.querySelector('.chart-error');
+        const message = errorMessage || 'Unable to render analytics chart.';
+        if (existing) {
+            existing.textContent = message;
+            return;
+        }
+        const note = document.createElement('p');
+        note.className = 'chart-error text-danger';
+        note.textContent = message;
+        card.appendChild(note);
+    },
+
+    tryRenderChart(canvas, config, cacheKey) {
+        if (!canvas) return null;
+        try {
+            const chart = new Chart(canvas, config);
+            if (cacheKey) {
+                this.analyticsCharts[cacheKey] = chart;
+            }
+            return chart;
+        } catch (error) {
+            console.error('analytics_chart_render_failed', { cacheKey, message: error?.message });
+            this.renderChartError(canvas, error?.message);
+            return null;
         }
     },
 
