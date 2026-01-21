@@ -1653,12 +1653,43 @@ const DataManager = {
 
         const allActivities = this.getAllActivities();
         const monthsInPeriod = new Set();
+        const resolveActivityMonth = (activity) => {
+            const explicitMonth = typeof activity.monthOfActivity === 'string'
+                ? activity.monthOfActivity.trim()
+                : '';
+            if (explicitMonth && /^\d{4}-\d{2}$/.test(explicitMonth)) {
+                return explicitMonth;
+            }
+            const rawDate = activity.date || activity.createdAt;
+            if (typeof rawDate === 'string' && rawDate.length >= 7) {
+                return rawDate.substring(0, 7);
+            }
+            return null;
+        };
+        const resolveActivityYear = (activity, monthKey) => {
+            if (monthKey && monthKey.length >= 4) {
+                return monthKey.substring(0, 4);
+            }
+            const rawDate = activity.date || activity.createdAt;
+            if (typeof rawDate === 'string' && rawDate.length >= 4) {
+                return rawDate.substring(0, 4);
+            }
+            return null;
+        };
+
         const periodActivities = allActivities.filter(activity => {
-            const date = activity.date || activity.createdAt;
-            if (!date || typeof date !== 'string') return false;
-            const monthKey = date.substring(0, 7);
-            const yearKey = date.substring(0, 4);
-            if (isYearMode ? yearKey === referencePeriod : monthKey === referencePeriod) {
+            const monthKey = resolveActivityMonth(activity);
+            const yearKey = resolveActivityYear(activity, monthKey);
+            if (isYearMode) {
+                if (yearKey === referencePeriod) {
+                    if (monthKey) {
+                        monthsInPeriod.add(monthKey);
+                    }
+                    return true;
+                }
+                return false;
+            }
+            if (monthKey === referencePeriod) {
                 monthsInPeriod.add(monthKey);
                 return true;
             }
