@@ -16,7 +16,11 @@ const App = {
         GBP: '£'
     },
     latestAnalytics: {},
-    reportFilters: {},
+    reportFilters: {
+        industry: '',
+        channel: '',
+        region: ''
+    },
     activityFilters: {
         search: '',
         industry: '',
@@ -63,11 +67,16 @@ const App = {
     },
     dashboardVisibility: {},
     analyticsPeriodMode: 'month',
+    analyticsActiveTab: 'overview',
+    analyticsPreferences: {
+        activityMixView: {}
+    },
     savedAnalyticsTables: [],
     analyticsTableState: {
         dataset: 'regionPerformance',
         columns: [],
         rows: [],
+        sortBy: '',
         generatedAt: null,
         generatedFrom: null
     },
@@ -181,6 +190,289 @@ const App = {
                 UI.showNotification('Failed to initialise application', 'error');
             }
         }
+    },
+
+    buildAnalyticsGlobalControls({ periodType, selectedPeriod, periodOptions }) {
+        const toggleMarkup = `
+            <div class="analytics-period-toggle">
+                <button type="button"
+                        class="btn btn-sm ${periodType === 'month' ? 'btn-primary' : 'btn-outline'}"
+                        onclick="App.setAnalyticsPeriodMode('month')">
+                    Monthly
+                </button>
+                <button type="button"
+                        class="btn btn-sm ${periodType === 'year' ? 'btn-primary' : 'btn-outline'}"
+                        onclick="App.setAnalyticsPeriodMode('year')">
+                    Annual
+                </button>
+            </div>
+        `;
+
+        const periodPicker = periodType === 'year'
+            ? `
+                <select id="reportMonth"
+                        class="form-control analytics-period-input"
+                        onchange="App.handleReportPeriodInput(this.value)">
+                    ${periodOptions.map(option => `
+                        <option value="${option}" ${option === selectedPeriod ? 'selected' : ''}>${option}</option>
+                    `).join('')}
+                </select>
+            `
+            : `
+                <input type="month"
+                       id="reportMonth"
+                       class="form-control analytics-period-input"
+                       value="${selectedPeriod}"
+                       onchange="App.handleReportPeriodInput(this.value)">
+            `;
+
+        const regions = DataManager.getRegions().sort((a, b) => a.localeCompare(b));
+        const selectedRegion = this.reportFilters.region || '';
+
+        return `
+            <div class="analytics-global-controls">
+                <div class="analytics-global-left">
+                    ${toggleMarkup}
+                    ${periodPicker}
+                </div>
+                <div class="analytics-global-right">
+                    <div class="form-group">
+                        <label class="form-label">Region</label>
+                        <select id="analyticsRegionFilter"
+                                class="form-control"
+                                onchange="App.handleGlobalReportFilterChange('region', this.value)">
+                            <option value="">All Regions</option>
+                            ${regions.map(region => `
+                                <option value="${region}" ${region === selectedRegion ? 'selected' : ''}>${region}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="align-self: flex-end;">
+                        <button class="btn btn-link" onclick="App.resetGlobalAnalyticsFilters(); return false;">Reset</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    buildAnalyticsTabNav() {
+        const tabs = [
+            { key: 'overview', label: 'Overview' },
+            { key: 'products', label: 'Product Reports' },
+            { key: 'regions', label: 'Regional Reports' },
+            { key: 'table', label: 'Table Builder' }
+        ];
+        return `
+            <div class="analytics-tabs">
+                ${tabs.map(tab => `
+                    <button type="button"
+                            class="analytics-tab-btn ${this.analyticsActiveTab === tab.key ? 'active' : ''}"
+                            onclick="App.switchAnalyticsTab('${tab.key}')">
+                        ${tab.label}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    },
+
+    switchAnalyticsTab(tab) {
+        const allowed = ['overview', 'products', 'regions', 'table'];
+        this.analyticsActiveTab = allowed.includes(tab) ? tab : 'overview';
+        this.loadReports();
+    },
+
+    buildAnalyticsTabContent(tab, analytics, context = {}) {
+        const scopedContext = { ...context, prefix: context.prefix || 'reports' };
+        switch (tab) {
+            case 'products':
+                return this.buildAnalyticsProductTab(analytics, scopedContext);
+            case 'regions':
+                return this.buildAnalyticsRegionalTab(analytics, scopedContext);
+            case 'table':
+                return this.buildAnalyticsTableTab(analytics, scopedContext);
+            case 'overview':
+            default:
+                return this.buildAnalyticsOverviewTab(analytics, scopedContext);
+        }
+    },
+
+    buildAnalyticsOverviewTab(analytics, context = {}) {
+        const prefix = context.prefix || 'reports';
+        return `
+            <div id="${prefix}AnalyticsWrapper" class="analytics-wrapper">
+                <section class="analytics-section analytics-section-full">
+                    <div class="analytics-section-header">
+                        <h3>Activity Report</h3>
+                        <span class="text-muted">Per-user activity totals for the selected period.</span>
+                    </div>
+                    <div class="analytics-section-body">
+                        <canvas id="${prefix}ActivityReportChart"></canvas>
+                    </div>
+                </section>
+
+                <div class="analytics-row analytics-row-two">
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <div>
+                                <h3>Activity Mix</h3>
+                                <span class="text-muted">Activity type distribution.</span>
+                            </div>
+                            <select id="${prefix}ActivityMixView" class="analytics-chart-view">
+                                <option value="donut">Donut Chart</option>
+                                <option value="horizontal">Horizontal Bar</option>
+                                <option value="vertical">Vertical Column</option>
+                            </select>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}ActivityMixChart"></canvas>
+                        </div>
+                    </section>
+
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <h3>Win/Loss Trend</h3>
+                            <span class="text-muted">Won vs lost projects across recent periods.</span>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}WinLossTrendChart"></canvas>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="analytics-section analytics-section-full">
+                    <div class="analytics-section-header">
+                        <h3>Activities by User</h3>
+                        <span class="text-muted">Stacked view of activity types per presales user.</span>
+                    </div>
+                    <div class="analytics-section-body">
+                        <canvas id="${prefix}ActivityByUserChart"></canvas>
+                    </div>
+                </section>
+            </div>
+        `;
+    },
+
+    buildAnalyticsProductTab(analytics, context = {}) {
+        const prefix = context.prefix || 'reports';
+        const filters = this.buildAnalyticsFilterBar('standard', { showIndustry: true, showChannel: false });
+        return `
+            ${filters}
+            <div id="${prefix}AnalyticsWrapper" class="analytics-wrapper">
+                <div class="analytics-row analytics-row-two">
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <h3>Products by Industry</h3>
+                            <span class="text-muted">Top industries discussing key products.</span>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}IndustryProductChart"></canvas>
+                        </div>
+                    </section>
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <h3>POC Funnel Overview</h3>
+                            <span class="text-muted">Requests, wins, and losses by access type.</span>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}PocFunnelChart"></canvas>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        `;
+    },
+
+    buildAnalyticsRegionalTab(analytics, context = {}) {
+        const prefix = context.prefix || 'reports';
+        const filters = this.buildAnalyticsFilterBar('standard', { showIndustry: false, showChannel: true });
+        return `
+            ${filters}
+            <div id="${prefix}AnalyticsWrapper" class="analytics-wrapper">
+                <section class="analytics-section analytics-section-full">
+                    <div class="analytics-section-header">
+                        <h3>Industry Activity Volume</h3>
+                        <span class="text-muted">Top industries by activity volume.</span>
+                    </div>
+                    <div class="analytics-section-body">
+                        <canvas id="${prefix}IndustryActivityChart"></canvas>
+                    </div>
+                </section>
+                <div class="analytics-row analytics-row-two">
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <h3>Channels vs Outcomes</h3>
+                            <span class="text-muted">Won vs lost opportunities by channel.</span>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}ChannelOutcomeChart"></canvas>
+                        </div>
+                    </section>
+                    <section class="analytics-section analytics-section-tile">
+                        <div class="analytics-section-header">
+                            <h3>Win/Loss Trend</h3>
+                            <span class="text-muted">Momentum across recent months.</span>
+                        </div>
+                        <div class="analytics-section-body">
+                            <canvas id="${prefix}RegionalWinLossChart"></canvas>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        `;
+    },
+
+    buildAnalyticsTableTab(analytics, context = {}) {
+        return `
+            <div class="analytics-table-tab">
+                ${this.buildAnalyticsTableBuilderMarkup()}
+            </div>
+        `;
+    },
+
+    handleGlobalReportFilterChange(key, value) {
+        if (!['region'].includes(key)) return;
+        this.reportFilters[key] = value || '';
+        this.loadReports();
+    },
+
+    resetGlobalAnalyticsFilters() {
+        this.reportFilters.region = '';
+        this.reportFilters.industry = '';
+        this.reportFilters.channel = '';
+        this.loadReports();
+    },
+
+    initAnalyticsChartsForTab(tab, analytics, periodValue) {
+        if (tab === 'table') {
+            this.renderAnalyticsTableBuilder(analytics, {
+                periodType: this.analyticsPeriodMode === 'year' ? 'year' : 'month',
+                periodValue
+            });
+            return;
+        }
+        this.setAnalyticsLoading('reports', true);
+        this.initAnalyticsCharts({ prefix: 'reports', analytics, month: periodValue });
+        this.setAnalyticsLoading('reports', false);
+        this.setupActivityMixToggle('reports');
+    },
+
+    setupActivityMixToggle(prefix) {
+        const select = document.getElementById(`${prefix}ActivityMixView`);
+        if (!select) return;
+        if (!this.analyticsPreferences) {
+            this.analyticsPreferences = { activityMixView: {} };
+        }
+        const current = this.analyticsPreferences.activityMixView[prefix] || 'donut';
+        select.value = current;
+        select.onchange = (event) => {
+            const mode = event.target.value || 'donut';
+            this.analyticsPreferences.activityMixView[prefix] = mode;
+            this.renderActivityMixChart({
+                prefix,
+                analytics: this.latestAnalytics.standard,
+                palette: this.getPalette()
+            }, mode);
+        };
     },
 
     // Setup event listeners
@@ -647,7 +939,7 @@ const App = {
                 if (InterfaceManager.getCurrentInterface() === 'card') {
                     this.loadCardReportsView();
                 } else {
-                    this.switchReportTab('reports');
+                    this.loadReports();
                 }
                 break;
             case 'accounts':
@@ -1419,314 +1711,54 @@ const App = {
     loadCardReportsView() {
         const reportsView = document.getElementById('reportsView');
         if (!reportsView) return;
-        const analyticsOnly = typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly();
-        
-        // Store current tab in a data attribute
-        let currentTab = reportsView.dataset.currentTab || 'reports';
-        if (!['reports', 'management'].includes(currentTab)) {
-            currentTab = 'reports';
+        const availableMonths = DataManager.getAvailableActivityMonths();
+        const fallbackMonth = new Date().toISOString().substring(0, 7);
+        const monthOptions = availableMonths.length ? [...availableMonths] : [fallbackMonth];
+        let selectedMonth = this.latestAnalytics.cardMonth
+            || this.latestAnalytics.standardPeriod
+            || (monthOptions.length ? monthOptions[monthOptions.length - 1] : fallbackMonth);
+
+        if (monthOptions.length && !monthOptions.includes(selectedMonth)) {
+            selectedMonth = monthOptions[monthOptions.length - 1] || fallbackMonth;
         }
-        
-        let html = `
+        if (!selectedMonth) {
+            selectedMonth = fallbackMonth;
+        }
+        this.latestAnalytics.cardMonth = selectedMonth;
+
+        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+        this.latestAnalytics.card = analytics;
+
+        reportsView.innerHTML = `
             <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 12H5M12 19l-7-7 7-7"></path>
                 </svg>
                 Back to Home
             </a>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-                <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Reports</h1>
-            </div>
-            
-            <!-- Tabs -->
-            <div class="tabs" style="margin-bottom: 2rem;">
-                <button class="tab-btn ${currentTab === 'reports' ? 'active' : ''}" onclick="App.switchCardReportTab('reports')">Reports & Charts</button>
-                ${analyticsOnly ? '' : `<button class="tab-btn ${currentTab === 'management' ? 'active' : ''}" onclick="App.switchCardReportTab('management')">Activity Management</button>`}
-            </div>
-        `;
-        
-        // Load tab content
-        if (currentTab === 'reports') {
-            const existingMonthInput = document.getElementById('cardReportMonth');
-            const defaultMonth = new Date().toISOString().substring(0, 7);
-            const selectedMonth = existingMonthInput && existingMonthInput.value
-                ? existingMonthInput.value
-                : (this.latestAnalytics.cardMonth || defaultMonth);
-            html += this.loadCardReportReportsTab(selectedMonth);
-        } else {
-            html += this.loadCardReportManagementTab();
-        }
-        
-        reportsView.innerHTML = html;
-        reportsView.dataset.currentTab = currentTab;
-
-        if (currentTab === 'reports') {
-            const selectedMonth = this.latestAnalytics.cardMonth || new Date().toISOString().substring(0, 7);
-            const analytics = this.latestAnalytics.card || DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
-            this.setAnalyticsLoading('card', true);
-            this.initAnalyticsCharts({ prefix: 'card', analytics });
-            this.setAnalyticsLoading('card', false);
-        }
-    },
-    
-    // Switch card report tab
-    switchCardReportTab(tab) {
-        const reportsView = document.getElementById('reportsView');
-        if (!reportsView) return;
-        const normalized = tab === 'management' ? 'management' : 'reports';
-        reportsView.dataset.currentTab = normalized;
-        this.loadCardReportsView();
-    },
-    
-    // Load card report activities tab
-    loadCardReportActivitiesTab() {
-        const activities = DataManager.getAllActivities();
-        
-        if (activities.length === 0) {
-            return `<div class="content-card">${UI.emptyState('No activities found')}</div>`;
-        }
-        
-        // Group by month
-        const activitiesByMonth = {};
-        activities.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
-            if (!activitiesByMonth[month]) {
-                activitiesByMonth[month] = [];
-            }
-            activitiesByMonth[month].push(activity);
-        });
-        
-        let html = '';
-        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
-            html += `
-                <div class="content-card">
-                    <div class="content-card-header">
-                        <h2 class="content-card-title">${UI.formatMonth(month)}</h2>
-                        <span style="color: var(--gray-600); font-size: 0.875rem;">${activitiesByMonth[month].length} activities</span>
-                    </div>
-                    <div class="card-grid-4">
-            `;
-            
-            activitiesByMonth[month].forEach(activity => {
-                const isOwner = activity.userId === Auth.getCurrentUser()?.id;
-                html += `
-                    <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
-                        <div class="activity-card-header">
-                            <div>
-                                <div class="activity-card-type">${UI.getActivityTypeLabel(activity.type)}</div>
-                                <span class="activity-card-badge ${activity.isInternal ? 'internal' : 'customer'}">
-                                    ${activity.isInternal ? 'Internal' : 'Customer'}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="activity-card-info">
-                            <div><strong>Account:</strong> ${activity.accountName || 'N/A'}</div>
-                            ${activity.projectName ? `<div><strong>Project:</strong> ${activity.projectName}</div>` : ''}
-                        </div>
-                        <div class="activity-card-meta">
-                            ${UI.formatDate(activity.date || activity.createdAt)}<br>
-                            By: ${activity.userName || 'Unknown'}
-                        </div>
-                        ${isOwner ? `
-                            <div class="activity-card-actions">
-                                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
-                                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            });
-            
-            html += `</div></div>`;
-        });
-        
-        return html;
-    },
-    
-    // Load card report reports tab
-    loadCardReportReportsTab(selectedMonth) {
-        const availableMonths = DataManager.getAvailableActivityMonths();
-        const fallbackMonth = new Date().toISOString().substring(0, 7);
-        const latestAvailableMonth = availableMonths.length
-            ? availableMonths[availableMonths.length - 1]
-            : fallbackMonth;
-        const earliestAvailableMonth = availableMonths.length
-            ? availableMonths[0]
-            : '';
-
-        if (!selectedMonth || (availableMonths.length && !availableMonths.includes(selectedMonth))) {
-            selectedMonth = latestAvailableMonth;
-        }
-
-        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
-        this.latestAnalytics.card = analytics;
-        this.latestAnalytics.cardMonth = selectedMonth;
-        this.latestAnalytics.standard = analytics;
-        this.latestAnalytics.standardMonth = selectedMonth;
-        this.latestAnalytics.standardPeriod = selectedMonth;
-        const actionBar = `
-            <div class="action-bar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
-                <div class="form-group month-picker">
-                    <label class="form-label">Select Month</label>
-                    <div class="month-picker-group">
-                        <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(-1, 'card')" aria-label="Previous month">
-                            ‹
-                        </button>
-                        <input type="month" id="cardReportMonth" class="form-control" value="${selectedMonth}" min="${earliestAvailableMonth}" max="${latestAvailableMonth}" onchange="App.handleCardReportMonthChange(this.value)">
-                        <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(1, 'card')" aria-label="Next month">
-                            ›
-                        </button>
-                    </div>
-                </div>
-                <button class="btn btn-secondary" onclick="App.exportReportsCsv()">Export CSV</button>
-            </div>
-        `;
-        const filterBar = this.buildAnalyticsFilterBar('card');
-        return `
-            ${actionBar}
-            ${filterBar}
-            ${this.buildAnalyticsMarkup(analytics, {
-                variant: 'card',
-                periodType: 'month',
-                periodValue: selectedMonth
-            })}
-        `;
-    },
-    
-    // Load card report management tab
-    loadCardReportManagementTab() {
-        const activities = DataManager.getAllActivities();
-        const users = DataManager.getUsers();
-        const regions = DataManager.getRegions();
-        
-        // Get unique activity types
-        const activityTypes = [...new Set(activities.map(a => a.type))];
-        
-        let html = `
-            <div class="content-card">
-                <h2 style="margin-bottom: 1.5rem;">Filter Activities</h2>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 2rem;">
-                    <div class="form-group">
-                        <label class="form-label">User</label>
-                        <select id="cardReportUserFilter" class="form-control" onchange="App.filterCardReportActivities()">
-                            <option value="">All Users</option>
-                            ${users.map(u => `<option value="${u.id}">${u.username}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Region</label>
-                        <select id="cardReportRegionFilter" class="form-control" onchange="App.filterCardReportActivities()">
-                            <option value="">All Regions</option>
-                            ${regions.map(r => `<option value="${r}">${r}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Activity Type</label>
-                        <select id="cardReportActivityTypeFilter" class="form-control" onchange="App.filterCardReportActivities()">
-                            <option value="">All Activity Types</option>
-                            ${activityTypes.map(t => `<option value="${t}">${UI.getActivityTypeLabel(t)}</option>`).join('')}
-                        </select>
-                    </div>
+            <div class="analytics-card-controls">
+                <label class="form-label">Select Month</label>
+                <div class="month-picker-group">
+                    <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(-1, 'card')" aria-label="Previous month">
+                        ‹
+                    </button>
+                    <input type="month"
+                           id="cardReportMonth"
+                           class="form-control"
+                           value="${selectedMonth}"
+                           onchange="App.handleCardReportMonthChange(this.value)">
+                    <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(1, 'card')" aria-label="Next month">
+                        ›
+                    </button>
                 </div>
             </div>
-            
-            <div id="cardReportManagementContent"></div>
+            ${this.buildAnalyticsOverviewTab(analytics, { prefix: 'card', periodType: 'month', periodValue: selectedMonth })}
         `;
-        
-        // Load initial filtered activities
-        setTimeout(() => {
-            this.filterCardReportActivities();
-        }, 100);
-        
-        return html;
-    },
-    
-    // Filter card report activities
-    filterCardReportActivities() {
-        const activities = DataManager.getAllActivities();
-        const userId = document.getElementById('cardReportUserFilter')?.value;
-        const region = document.getElementById('cardReportRegionFilter')?.value;
-        const activityType = document.getElementById('cardReportActivityTypeFilter')?.value;
-        
-        let filtered = activities;
-        
-        if (userId) {
-            filtered = filtered.filter(a => a.userId === userId);
-        }
-        
-        if (region) {
-            filtered = filtered.filter(a => a.region === region || a.salesRepRegion === region);
-        }
-        
-        if (activityType) {
-            filtered = filtered.filter(a => a.type === activityType);
-        }
-        
-        const container = document.getElementById('cardReportManagementContent');
-        if (!container) return;
-        
-        if (filtered.length === 0) {
-            container.innerHTML = `<div class="content-card">${UI.emptyState('No activities found')}</div>`;
-            return;
-        }
-        
-        // Group by month
-        const activitiesByMonth = {};
-        filtered.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
-            if (!activitiesByMonth[month]) {
-                activitiesByMonth[month] = [];
-            }
-            activitiesByMonth[month].push(activity);
-        });
-        
-        let html = '';
-        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
-            html += `
-                <div class="content-card">
-                    <div class="content-card-header">
-                        <h2 class="content-card-title">${UI.formatMonth(month)}</h2>
-                        <span style="color: var(--gray-600); font-size: 0.875rem;">${activitiesByMonth[month].length} activities</span>
-                    </div>
-                    <div class="card-grid-4">
-            `;
-            
-            activitiesByMonth[month].forEach(activity => {
-                const isOwner = activity.userId === Auth.getCurrentUser()?.id;
-                html += `
-                    <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
-                        <div class="activity-card-header">
-                            <div>
-                                <div class="activity-card-type">${UI.getActivityTypeLabel(activity.type)}</div>
-                                <span class="activity-card-badge ${activity.isInternal ? 'internal' : 'customer'}">
-                                    ${activity.isInternal ? 'Internal' : 'Customer'}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="activity-card-info">
-                            <div><strong>Account:</strong> ${activity.accountName || 'N/A'}</div>
-                            ${activity.projectName ? `<div><strong>Project:</strong> ${activity.projectName}</div>` : ''}
-                        </div>
-                        <div class="activity-card-meta">
-                            ${UI.formatDate(activity.date || activity.createdAt)}<br>
-                            By: ${activity.userName || 'Unknown'}
-                        </div>
-                        ${isOwner ? `
-                            <div class="activity-card-actions">
-                                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Edit</button>
-                                <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.deleteActivity('${activity.id}', ${activity.isInternal})" style="flex: 1;">Delete</button>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            });
-            
-            html += `</div></div>`;
-        });
-        
-        container.innerHTML = html;
+
+        this.setAnalyticsLoading('card', true);
+        this.initAnalyticsCharts({ prefix: 'card', analytics, month: selectedMonth });
+        this.setAnalyticsLoading('card', false);
+        this.setupActivityMixToggle('card');
     },
     
     // Load card-based admin view
@@ -2010,9 +2042,7 @@ const App = {
                 : today.toISOString().substring(0, 7);
             const periodOptions = availablePeriods.length ? [...availablePeriods] : [fallbackPeriod];
 
-            const existingInput = document.getElementById('reportMonth');
             let selectedPeriod =
-                (existingInput && existingInput.value) ||
                 this.latestAnalytics.standardPeriod ||
                 (isYearMode ? this.latestAnalytics.standardYear : this.latestAnalytics.standardMonth) ||
                 (periodOptions.length ? periodOptions[periodOptions.length - 1] : fallbackPeriod);
@@ -2024,65 +2054,46 @@ const App = {
                 selectedPeriod = fallbackPeriod;
             }
 
-            if (existingInput) {
-                if (isYearMode) {
-                    existingInput.removeAttribute('min');
-                    existingInput.removeAttribute('max');
-                    existingInput.type = 'text';
-                } else {
-                    existingInput.type = 'month';
-                    const earliest = periodOptions[0];
-                    const latest = periodOptions[periodOptions.length - 1];
-                    if (earliest) {
-                        existingInput.min = earliest;
-                    }
-                    if (latest) {
-                        existingInput.max = latest;
-                    }
-                }
-                existingInput.value = selectedPeriod;
-            }
-
             const container = document.getElementById('reportsContent');
             if (!container) {
                 console.error('reportsContent container not found');
                 return;
             }
+            const reportsView = document.getElementById('reportsView');
+            if (reportsView) {
+                reportsView.dataset.currentTab = this.analyticsActiveTab;
+            }
 
-            container.innerHTML = Analytics.buildLoadingMarkup('standard');
+            const analytics = DataManager.getMonthlyAnalytics(selectedPeriod, this.reportFilters || {});
+            this.latestAnalytics.standard = analytics;
+            this.latestAnalytics.standardPeriod = selectedPeriod;
+            if (isYearMode) {
+                this.latestAnalytics.standardYear = selectedPeriod;
+            } else {
+                this.latestAnalytics.standardMonth = selectedPeriod;
+            }
 
-            requestAnimationFrame(() => {
-                const analytics = DataManager.getMonthlyAnalytics(selectedPeriod, this.reportFilters || {});
-                this.latestAnalytics.standard = analytics;
-                this.latestAnalytics.standardPeriod = selectedPeriod;
-                if (isYearMode) {
-                    this.latestAnalytics.standardYear = selectedPeriod;
-                } else {
-                    this.latestAnalytics.standardMonth = selectedPeriod;
-                }
-
-                const filterBar = this.buildAnalyticsFilterBar('standard');
-                container.innerHTML = `
-                    ${filterBar}
-                    ${this.buildAnalyticsMarkup(analytics, {
-                        variant: 'standard',
-                        periodType: isYearMode ? 'year' : 'month',
-                        periodValue: selectedPeriod,
-                        periodOptions,
-                        periodLabel: isYearMode ? selectedPeriod : selectedPeriod,
-                        allowPeriodShift: periodOptions.length > 1
-                    })}
-                    ${this.buildAnalyticsTableBuilderMarkup()}
-                `;
-
-                this.setAnalyticsLoading('reports', true);
-                this.initAnalyticsCharts({ prefix: 'reports', analytics });
-                this.setAnalyticsLoading('reports', false);
-                this.renderAnalyticsTableBuilder(analytics, {
-                    periodType: isYearMode ? 'year' : 'month',
-                    periodValue: selectedPeriod
-                });
+            const globalControls = this.buildAnalyticsGlobalControls({
+                periodType: isYearMode ? 'year' : 'month',
+                selectedPeriod,
+                periodOptions
             });
+            const tabNav = this.buildAnalyticsTabNav();
+            const tabMarkup = this.buildAnalyticsTabContent(this.analyticsActiveTab, analytics, {
+                periodType: isYearMode ? 'year' : 'month',
+                periodValue: selectedPeriod,
+                periodOptions
+            });
+
+            container.innerHTML = `
+                ${globalControls}
+                ${tabNav}
+                <div id="analyticsTabContent" class="analytics-tab-content">
+                    ${tabMarkup}
+                </div>
+            `;
+
+            this.initAnalyticsChartsForTab(this.analyticsActiveTab, analytics, selectedPeriod);
         } catch (error) {
             console.error('Error loading reports:', error);
             const container = document.getElementById('reportsContent');
@@ -2297,19 +2308,17 @@ const App = {
         this.updateWinLossMrrHelper();
     },
 
-    buildAnalyticsMarkup(analytics, options) {
-        if (typeof Analytics === 'undefined') return '';
-        return Analytics.buildMarkup(analytics, options);
-    },
-
-    buildAnalyticsFilterBar(variant = 'standard') {
+    buildAnalyticsFilterBar(variant = 'standard', options = {}) {
+        const { showIndustry = true, showChannel = true } = options;
         const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
         const channels = this.getAvailableChannels();
         const selectedIndustry = this.reportFilters.industry || '';
         const selectedChannel = this.reportFilters.channel || '';
         const handlerVariantArg = variant === 'card' ? "'card'" : "'standard'";
-        return `
-            <div class="analytics-filter-bar">
+        const segments = [];
+
+        if (showIndustry) {
+            segments.push(`
                 <div class="form-group">
                     <label class="form-label">Industry</label>
                     <select class="form-control" onchange="App.handleReportFilterChange('industry', this.value, ${handlerVariantArg})">
@@ -2319,6 +2328,11 @@ const App = {
                         `).join('')}
                     </select>
                 </div>
+            `);
+        }
+
+        if (showChannel) {
+            segments.push(`
                 <div class="form-group">
                     <label class="form-label">Channel</label>
                     <select class="form-control" onchange="App.handleReportFilterChange('channel', this.value, ${handlerVariantArg})">
@@ -2328,9 +2342,18 @@ const App = {
                         `).join('')}
                     </select>
                 </div>
-                <div class="form-group" style="align-self: flex-end;">
-                    <button class="btn btn-link" onclick="App.resetReportFilters('${variant}'); return false;">Reset Filters</button>
-                </div>
+            `);
+        }
+
+        segments.push(`
+            <div class="form-group" style="align-self: flex-end;">
+                <button class="btn btn-link" onclick="App.resetReportFilters('${variant}'); return false;">Reset Filters</button>
+            </div>
+        `);
+
+        return `
+            <div class="analytics-filter-bar">
+                ${segments.join('')}
             </div>
         `;
     },
@@ -2406,7 +2429,7 @@ const App = {
         controlsRoot.innerHTML = `
             <div class="analytics-table-control-grid">
                 <div class="form-group">
-                    <label class="form-label">Dataset</label>
+                    <label class="form-label">Primary Dimension (X Axis)</label>
                     <select id="analyticsTableDataset" class="form-control" onchange="App.handleAnalyticsTableDatasetChange(this.value)">
                         ${datasetKeys.map(key => `
                             <option value="${key}" ${key === this.analyticsTableState.dataset ? 'selected' : ''}>
@@ -2417,7 +2440,7 @@ const App = {
                     <small class="text-muted">${datasetDefinition.description || ''}</small>
                 </div>
                 <div class="form-group analytics-table-columns">
-                    <label class="form-label">Columns</label>
+                    <label class="form-label">Metrics (Y Axis)</label>
                     <div class="analytics-columns-grid">
                         ${datasetDefinition.columns.map(column => `
                             <label class="checkbox">
@@ -2464,12 +2487,18 @@ const App = {
         const filtered = existing.filter(key => validKeys.includes(key));
         if (filtered.length) {
             this.analyticsTableState.columns = filtered;
+            if (!filtered.includes(this.analyticsTableState.sortBy)) {
+                this.analyticsTableState.sortBy = filtered[0];
+            }
             return filtered;
         }
 
         const defaults = definition.columns.filter(column => column.default).map(column => column.key);
         const fallback = defaults.length ? defaults : (validKeys.length ? [validKeys[0]] : []);
         this.analyticsTableState.columns = fallback;
+        if (fallback.length) {
+            this.analyticsTableState.sortBy = fallback[0];
+        }
         return fallback;
     },
 
@@ -2478,6 +2507,7 @@ const App = {
         this.analyticsTableState.dataset = datasetKey;
         this.analyticsTableState.columns = [];
         this.analyticsTableState.rows = [];
+        this.analyticsTableState.sortBy = '';
         this.renderAnalyticsTableBuilder(this.latestAnalytics.standard || null);
     },
 
@@ -2501,6 +2531,22 @@ const App = {
             }
         }
         this.analyticsTableState.columns = Array.from(selected);
+        if (!this.analyticsTableState.columns.includes(this.analyticsTableState.sortBy)) {
+            this.analyticsTableState.sortBy = this.analyticsTableState.columns[0] || '';
+        }
+        if (this.analyticsTableState.rows && this.analyticsTableState.rows.length) {
+            this.renderAnalyticsTablePreview();
+        }
+    },
+
+    handleAnalyticsTableSortChange(columnKey) {
+        const definition = this.getAnalyticsTableDefinition(this.analyticsTableState.dataset);
+        if (!definition) return;
+        const validKeys = definition.columns.map(column => column.key);
+        if (columnKey && !validKeys.includes(columnKey)) {
+            return;
+        }
+        this.analyticsTableState.sortBy = columnKey || '';
         if (this.analyticsTableState.rows && this.analyticsTableState.rows.length) {
             this.renderAnalyticsTablePreview();
         }
@@ -4037,8 +4083,10 @@ const App = {
             industryCountsForChart
         };
 
-        this.renderTargetChart(context);
-        this.renderActivityMixChart(context);
+        this.renderActivityReportChart(context);
+        const mixMode = (this.analyticsPreferences && this.analyticsPreferences.activityMixView
+            && this.analyticsPreferences.activityMixView[prefix]) || 'donut';
+        this.renderActivityMixChart(context, mixMode);
         this.renderUserStackedChart(context);
         this.renderProductsChart(context);
         this.renderIndustryActivityChart(context);
@@ -4049,16 +4097,19 @@ const App = {
         this.setAnalyticsLoading(prefix, false);
     },
 
-    renderTargetChart(context) {
-        const { prefix, analytics, palette, summaryMap, targetValue } = context;
-        const canvas = document.getElementById(`${prefix}TargetChart`);
+    renderActivityReportChart(context) {
+        const { prefix, analytics, palette, summaryMap } = context;
+        const canvas = document.getElementById(`${prefix}ActivityReportChart`) || document.getElementById(`${prefix}TargetChart`);
         if (!canvas) return;
 
         const presalesUsers = analytics.presalesUsers || [];
-        const orderedSummaries = presalesUsers.map(user => ({
-            userName: user.userName,
-            total: summaryMap[user.userId]?.total || 0
-        })).filter(entry => entry.userName);
+        const orderedSummaries = presalesUsers
+            .map(user => ({
+                userName: user.userName,
+                total: summaryMap[user.userId]?.total || 0
+            }))
+            .filter(entry => entry.userName)
+            .sort((a, b) => b.total - a.total);
 
         if (!orderedSummaries.length) {
             this.renderChartEmptyState(canvas, 'Add presales users to track team targets.');
@@ -4073,20 +4124,10 @@ const App = {
                 datasets: [
                     {
                         type: 'bar',
-                        label: 'Actual Activities',
+                        label: 'Activities',
                         data: orderedSummaries.map(item => item.total),
                         backgroundColor: palette[0],
                         borderRadius: 6
-                    },
-                    {
-                        type: 'line',
-                        label: `Target (${targetValue})`,
-                        data: orderedSummaries.map(() => targetValue),
-                        borderColor: '#F56565',
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.2,
-                        pointBackgroundColor: '#F56565'
                     }
                 ]
             },
@@ -4099,18 +4140,22 @@ const App = {
                 }
             }
         });
-        this.analyticsCharts[`${prefix}-target`] = chart;
+        this.analyticsCharts[`${prefix}-activity-report`] = chart;
     },
 
-    renderActivityMixChart(context) {
+    renderActivityMixChart(context, mode = 'donut') {
         const { prefix, analytics, palette } = context;
-        const canvas = document.getElementById(`${prefix}ActivityPieChart`);
+        const canvas = document.getElementById(`${prefix}ActivityMixChart`) || document.getElementById(`${prefix}ActivityPieChart`);
         if (!canvas) return;
+        if (!this.analyticsPreferences) {
+            this.analyticsPreferences = { activityMixView: {} };
+        }
+        this.analyticsPreferences.activityMixView[prefix] = mode;
 
         const activityEntries = Object.entries(analytics.activityTypeCounts || {});
         const totalActivities = activityEntries.reduce((acc, [, count]) => acc + count, 0);
         if (!totalActivities) {
-            this.renderChartEmptyState(canvas, 'No activities recorded for this month.');
+            this.renderChartEmptyState(canvas, 'No activities recorded for this period.');
             return;
         }
 
@@ -4119,79 +4164,132 @@ const App = {
         const data = activityEntries.map(([, count]) => count);
         const colors = labels.map((_, idx) => palette[idx % palette.length]);
 
-        const chart = new Chart(canvas, {
-            type: 'doughnut',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: colors,
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom' },
-                    tooltip: {
-                        callbacks: {
-                            label: context => `${context.label}: ${context.raw}`
+        let chartConfig;
+        if (mode === 'horizontal') {
+            chartConfig = {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Activities',
+                        data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            };
+        } else if (mode === 'vertical') {
+            chartConfig = {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Activities',
+                        data,
+                        backgroundColor: colors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            };
+        } else {
+            chartConfig = {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{
+                        data,
+                        backgroundColor: colors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: context => `${context.label}: ${context.raw}`
+                            }
                         }
                     }
                 }
-            }
-        });
-        this.analyticsCharts[`${prefix}-pie`] = chart;
+            };
+        }
+
+        const existingKey = `${prefix}-activity-mix`;
+        if (this.analyticsCharts[existingKey]) {
+            this.analyticsCharts[existingKey].destroy();
+        }
+        const chart = new Chart(canvas, chartConfig);
+        this.analyticsCharts[existingKey] = chart;
     },
 
     renderUserStackedChart(context) {
         const { prefix, analytics, palette } = context;
-        const canvas = document.getElementById(`${prefix}UserStackedChart`);
+        const canvas = document.getElementById(`${prefix}ActivityByUserChart`) || document.getElementById(`${prefix}UserStackedChart`);
         if (!canvas) return;
 
-        const activeUsers = (analytics.userSummaries || []).filter(summary => summary.total > 0);
-        if (!activeUsers.length) {
-            this.renderChartEmptyState(canvas, 'No user activity logged this month.');
+        const presalesUsers = analytics.presalesUsers || [];
+        if (!presalesUsers.length) {
+            this.renderChartEmptyState(canvas, 'No presales users configured.');
             return;
         }
 
-        const userLimit = this.CHART_CONSTANTS.userLimit;
-        const sortedUsers = [...activeUsers].sort((a, b) => b.total - a.total).slice(0, userLimit);
-        const overflowUsers = activeUsers.slice(userLimit);
-        if (overflowUsers.length) {
-            const aggregatedTypes = {};
-            const aggregatedTotal = overflowUsers.reduce((sum, summary) => {
-                Object.entries(summary.types || {}).forEach(([type, count]) => {
-                    aggregatedTypes[type] = (aggregatedTypes[type] || 0) + count;
-                });
-                return sum + summary.total;
-            }, 0);
-            if (aggregatedTotal > 0) {
-                sortedUsers.push({
-                    userName: 'Other Users',
-                    total: aggregatedTotal,
-                    types: aggregatedTypes
-                });
-            }
-        }
+        const summaries = analytics.userSummaries || [];
+        const userSummaries = presalesUsers.map(user => {
+            const summary = summaries.find(item => item.userId === user.userId);
+            return {
+                userName: user.userName,
+                total: summary?.total || 0,
+                types: summary?.types || {}
+            };
+        });
 
+        const sortedUsers = [...userSummaries].sort((a, b) => b.total - a.total);
+
+        const labels = sortedUsers.map(summary => summary.userName);
         const typeSet = new Set();
         sortedUsers.forEach(summary => Object.keys(summary.types || {}).forEach(type => typeSet.add(type)));
         const typeKeys = Array.from(typeSet);
-        if (!typeKeys.length) {
-            this.renderChartEmptyState(canvas, 'No activity type data available.');
-            return;
-        }
 
         this.prepareChartCanvas(canvas);
-        const labels = sortedUsers.map(summary => summary.userName);
-        const datasets = typeKeys.map((type, index) => ({
-            label: UI.getActivityTypeLabel(type),
-            data: sortedUsers.map(summary => summary.types?.[type] || 0),
-            backgroundColor: palette[index % palette.length],
-            stack: 'activity'
-        }));
+        let datasets;
+        if (!typeKeys.length) {
+            datasets = [
+                {
+                    label: 'Activities',
+                    data: sortedUsers.map(summary => summary.total || 0),
+                    backgroundColor: palette[0]
+                }
+            ];
+        } else {
+            datasets = typeKeys.map((type, index) => ({
+                label: UI.getActivityTypeLabel(type),
+                data: sortedUsers.map(summary => summary.types?.[type] || 0),
+                backgroundColor: palette[index % palette.length],
+                stack: 'activity'
+            }));
+        }
 
         const chart = new Chart(canvas, {
             type: 'bar',
@@ -4218,7 +4316,7 @@ const App = {
         const topProducts = productEntries.slice(0, 5).map(([name]) => name);
 
         if (!industryLabelsForProducts.length || !topProducts.length) {
-            this.renderChartEmptyState(canvas, 'No product discussions recorded this month.');
+            this.renderChartEmptyState(canvas, 'No product discussions recorded this period.');
             return;
         }
 
@@ -4248,7 +4346,7 @@ const App = {
 
         const combinedTotal = datasets.reduce((sum, dataset) => sum + dataset.data.reduce((a, b) => a + b, 0), 0);
         if (!combinedTotal) {
-            this.renderChartEmptyState(canvas, 'No product discussions recorded this month.');
+            this.renderChartEmptyState(canvas, 'No product discussions recorded this period.');
             return;
         }
 
@@ -4276,7 +4374,7 @@ const App = {
         if (!canvas) return;
 
         if (!industriesForActivity.length) {
-            this.renderChartEmptyState(canvas, 'No industry-level activity recorded this month.');
+            this.renderChartEmptyState(canvas, 'No industry-level activity recorded this period.');
             return;
         }
 
@@ -4306,7 +4404,8 @@ const App = {
 
     renderWinLossTrendChart(context) {
         const { prefix } = context;
-        const canvas = document.getElementById(`${prefix}WinLossTrendChart`);
+        const canvas = document.getElementById(`${prefix}WinLossTrendChart`)
+            || document.getElementById(`${prefix}RegionalWinLossChart`);
         if (!canvas) return;
 
         const trendData = DataManager.getWinLossTrend(6);
@@ -4366,7 +4465,7 @@ const App = {
         })).sort((a, b) => b.total - a.total);
 
         if (!channelEntries.length) {
-            this.renderChartEmptyState(canvas, 'No channel data available for the selected month.');
+            this.renderChartEmptyState(canvas, 'No channel data available for the selected period.');
             return;
         }
 
@@ -4429,7 +4528,7 @@ const App = {
         })).filter(entry => entry.requests || entry.wins || entry.losses);
 
         if (!funnelEntries.length) {
-            this.renderChartEmptyState(canvas, 'No POC activity recorded for the selected month.');
+            this.renderChartEmptyState(canvas, 'No POC activity recorded for the selected period.');
             return;
         }
 
@@ -4887,215 +4986,6 @@ const App = {
         
         UI.showNotification('Account deleted successfully', 'success');
         this.loadAccountsView();
-    },
-
-    // Load settings view
-    // Switch report tabs
-    switchReportTab(tab) {
-        // If card interface, navigate to reports view first
-        if (InterfaceManager.getCurrentInterface() === 'card' && this.currentView !== 'reports') {
-            this.navigateToCardView('reports');
-            setTimeout(() => this.switchReportTab(tab), 200);
-            return;
-        }
-        const reportsView = document.getElementById('reportsView');
-        if (!reportsView) return;
-        const analyticsOnly = typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly();
-
-        const tabContents = reportsView.querySelectorAll('.tab-content');
-        const tabButtons = reportsView.querySelectorAll('.tab-btn');
-        tabContents.forEach(content => content.classList.add('hidden'));
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-
-        const normalizedTab = analyticsOnly ? 'reports' : (tab === 'management' ? 'management' : 'reports');
-
-        tabButtons.forEach(btn => {
-            const isManagement = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('management');
-            if (analyticsOnly && isManagement) {
-                btn.classList.add('hidden');
-            } else {
-                btn.classList.remove('hidden');
-            }
-        });
-
-        if (normalizedTab === 'reports') {
-            const content = document.getElementById('reportReportsTab');
-            const btn = reportsView.querySelector('.tab-btn[onclick*="reports"]');
-            if (content) content.classList.remove('hidden');
-            if (btn) btn.classList.add('active');
-            this.loadReports();
-        } else {
-            const content = document.getElementById('reportManagementTab');
-            const btn = reportsView.querySelector('.tab-btn[onclick*="management"]');
-            if (content) content.classList.remove('hidden');
-            if (btn) btn.classList.add('active');
-            this.loadActivityManagement();
-        }
-    },
-
-    // Load activity management
-    loadActivityManagement() {
-        try {
-            const activities = DataManager.getAllActivities();
-            
-            // Populate filters
-            this.populateReportFilters(activities);
-            
-            // Filter and display
-            this.filterReportActivities(activities);
-        } catch (error) {
-            console.error('Error loading activity management:', error);
-            const container = document.getElementById('reportManagementContent');
-            if (container) {
-                container.innerHTML = UI.emptyState('Error loading activity management');
-            }
-        }
-    },
-
-    // Populate report filters
-    populateReportFilters(activities) {
-        const users = DataManager.getUsers();
-        const regions = DataManager.getRegions();
-        
-        // User filter
-        const userFilter = document.getElementById('reportUserFilter');
-        if (userFilter) {
-            let html = '<option value="">All Users</option>';
-            users.forEach(user => {
-                html += `<option value="${user.id}">${user.username}</option>`;
-            });
-            userFilter.innerHTML = html;
-        }
-        
-        // Region filter
-        const regionFilter = document.getElementById('reportRegionFilter');
-        if (regionFilter) {
-            let html = '<option value="">All Regions</option>';
-            regions.forEach(region => {
-                html += `<option value="${region}">${region}</option>`;
-            });
-            regionFilter.innerHTML = html;
-        }
-        
-        // Activity type filter
-        const activityFilter = document.getElementById('reportActivityTypeFilter');
-        if (activityFilter) {
-            const types = [...new Set(activities.map(a => a.type))];
-            let html = '<option value="">All Activity Types</option>';
-            types.forEach(type => {
-                html += `<option value="${type}">${UI.getActivityTypeLabel(type)}</option>`;
-            });
-            activityFilter.innerHTML = html;
-        }
-    },
-
-    // Filter report activities
-    filterReportActivities(activities = null) {
-        if (!activities) {
-            activities = DataManager.getAllActivities();
-        }
-        
-        const userId = document.getElementById('reportUserFilter')?.value;
-        const region = document.getElementById('reportRegionFilter')?.value;
-        const activityType = document.getElementById('reportActivityTypeFilter')?.value;
-        
-        let filtered = activities;
-        
-        if (userId) {
-            filtered = filtered.filter(a => a.userId === userId);
-        }
-        
-        if (region) {
-            filtered = filtered.filter(a => a.region === region || a.salesRepRegion === region);
-        }
-        
-        if (activityType) {
-            filtered = filtered.filter(a => a.type === activityType);
-        }
-        
-        // Display filtered activities
-        const container = document.getElementById('reportManagementContent');
-        if (!container) return;
-        
-        if (filtered.length === 0) {
-            container.innerHTML = UI.emptyState('No activities found');
-            return;
-        }
-        
-        // Group by month
-        const activitiesByMonth = {};
-        filtered.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
-            if (!activitiesByMonth[month]) {
-                activitiesByMonth[month] = [];
-            }
-            activitiesByMonth[month].push(activity);
-        });
-        
-        let html = '';
-        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
-            html += `
-                <div class="card">
-                    <div class="card-header">
-                        <h3>${DataManager.formatMonth(month)}</h3>
-                    </div>
-                    <div class="card-body">
-            `;
-            
-            activitiesByMonth[month].forEach(activity => {
-                if (activity.isInternal) {
-                    // Internal activities: Simple format "Internal - Activity Name"
-                    const activityName = activity.activityName || UI.getActivityTypeLabel(activity.type);
-                    html += `
-                        <div class="activity-item">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div>
-                                    <strong>Internal - ${activityName}</strong>
-                                </div>
-                                <div>
-                                    ${activity.userId === Auth.getCurrentUser()?.id ? `
-                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}')">Edit</button>
-                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}')">Delete</button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    // External activities: Full format
-                    html += `
-                        <div class="activity-item">
-                            <div style="display: flex; justify-content: space-between; align-items: start;">
-                                <div>
-                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">
-                                        ${activity.accountName || ''} ${activity.projectName ? '→ ' + activity.projectName : ''}
-                                    </div>
-                                    <strong>${UI.getActivityTypeLabel(activity.type)}</strong>
-                                    <span class="activity-badge customer">Customer</span>
-                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
-                                        ${UI.formatDate(activity.date || activity.createdAt)} • ${activity.userName || 'Unknown'} • ${UI.getActivitySummary(activity) || 'No details'}
-                                    </div>
-                                </div>
-                                <div>
-                                    ${activity.userId === Auth.getCurrentUser()?.id ? `
-                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}')">Edit</button>
-                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}')">Delete</button>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
-            });
-            
-            html += `
-                    </div>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = html;
     },
 
     renderActivitiesList(containerId = 'activitiesContent') {
@@ -5729,10 +5619,6 @@ window.Auth = Auth;
 
 // Override analytics helpers with module-driven implementations
 if (typeof Analytics !== 'undefined') {
-    App.buildAnalyticsMarkup = function (analytics, options) {
-        return Analytics.buildMarkup(analytics, options);
-    };
-
     App.initAnalyticsCharts = function ({ prefix = 'reports', analytics }) {
         Analytics.renderCharts({ prefix, analytics });
     };

@@ -310,53 +310,10 @@
                 <!-- Reports View -->
                 <div id="reportsView" class="view hidden">
                     <div class="page-header">
-                        <h1 class="page-title">Reports</h1>
-                        <p class="page-subtitle">Activity management and monthly reports</p>
+                        <h1 class="page-title">Reports & Analytics</h1>
+                        <p class="page-subtitle">Explore activity trends, product insights, regional performance, and custom tables.</p>
                     </div>
-
-                    <!-- Tabs -->
-                    <div class="tabs">
-                        <button class="tab-btn active" onclick="App.switchReportTab('reports')">Reports & Charts</button>
-                        <button class="tab-btn" onclick="App.switchReportTab('management')">Activity Management</button>
-                    </div>
-
-                    <!-- Reports Tab -->
-                    <div id="reportReportsTab" class="tab-content">
-                        <div class="action-bar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-                            <div class="form-group month-picker">
-                                <label class="form-label">Select Month</label>
-                                <div class="month-picker-group">
-                                    <button type="button" class="btn btn-outline month-nav" aria-label="Previous month" onclick="App.shiftReportMonth(-1)">
-                                        ‹
-                                    </button>
-                                    <input type="month" id="reportMonth" class="form-control" onchange="App.loadReports()">
-                                    <button type="button" class="btn btn-outline month-nav" aria-label="Next month" onclick="App.shiftReportMonth(1)">
-                                        ›
-                                    </button>
-                                </div>
-                            </div>
-                            <button class="btn btn-secondary" id="reportExportBtn" data-feature="csvExport" data-feature-mode="disable" onclick="App.exportReportsCsv()">Export CSV</button>
-                        </div>
-                        <div id="reportsContent"></div>
-                    </div>
-
-                    <!-- Activity Management Tab -->
-                    <div id="reportManagementTab" class="tab-content hidden">
-                        <div class="action-bar">
-                            <div class="flex mb-4 space-x-4" style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                                <select id="reportUserFilter" class="form-control" onchange="App.filterReportActivities()" style="min-width: 150px;">
-                                    <option value="">All Users</option>
-                                </select>
-                                <select id="reportRegionFilter" class="form-control" onchange="App.filterReportActivities()" style="min-width: 150px;">
-                                    <option value="">All Regions</option>
-                                </select>
-                                <select id="reportActivityTypeFilter" class="form-control" onchange="App.filterReportActivities()" style="min-width: 150px;">
-                                    <option value="">All Activity Types</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="reportManagementContent"></div>
-                    </div>
+                    <div id="reportsContent"></div>
                 </div>
 
                 <!-- Accounts View -->

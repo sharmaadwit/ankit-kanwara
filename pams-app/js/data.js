@@ -1631,6 +1631,7 @@ const DataManager = {
 
         const users = this.getUsers();
         const presalesUsers = users.filter(user => Array.isArray(user.roles) && user.roles.includes('Presales User'));
+        const userLookup = new Map(users.map(user => [user.id, user]));
         const userMap = new Map(users.map(user => [user.id, user]));
 
         const userSummariesMap = {};
@@ -1679,6 +1680,7 @@ const DataManager = {
 
         const normalizedIndustry = (filters.industry || '').toLowerCase();
         const normalizedChannel = (filters.channel || '').toLowerCase();
+        const normalizedRegion = (filters.region || '').toLowerCase();
 
         const filteredActivities = periodActivities.filter(activity => {
             if (normalizedIndustry) {
@@ -1697,6 +1699,16 @@ const DataManager = {
                 const channels = (project?.channels || []).map(channel => (channel || '').toLowerCase());
                 const matchesChannel = channels.some(channelValue => channelValue === normalizedChannel || channelValue.includes(normalizedChannel));
                 if (!matchesChannel) return false;
+            }
+
+            if (normalizedRegion) {
+                const projectEntry = projectLookup.get(activity.projectId);
+                const account = projectEntry?.account || accountMap[activity.accountId];
+                const user = userLookup.get(activity.userId);
+                const regionValue = (this.resolveActivityRegion(activity, account, user) || '').toLowerCase();
+                if (!regionValue || regionValue !== normalizedRegion) {
+                    return false;
+                }
             }
 
             return true;
