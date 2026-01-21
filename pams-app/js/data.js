@@ -2183,11 +2183,13 @@ const DataManager = {
         try {
             const stored = localStorage.getItem(ANALYTICS_ACCESS_CONFIG_KEY);
             if (!stored) {
-                return {
+                const fallback = {
                     password: 'Gup$hup.io',
                     updatedAt: null,
                     updatedBy: null
                 };
+                this.saveAnalyticsAccessConfig(fallback);
+                return fallback;
             }
             const parsed = JSON.parse(stored);
             if (parsed && typeof parsed === 'object') {
@@ -2202,11 +2204,13 @@ const DataManager = {
         } catch (error) {
             console.warn('Failed to parse analytics access config. Using defaults.', error);
         }
-        return {
+        const fallback = {
             password: 'Gup$hup.io',
             updatedAt: null,
             updatedBy: null
         };
+        this.saveAnalyticsAccessConfig(fallback);
+        return fallback;
     },
 
     saveAnalyticsAccessConfig(config) {
@@ -2217,8 +2221,8 @@ const DataManager = {
             password: typeof config.password === 'string' && config.password.trim()
                 ? config.password.trim()
                 : 'Gup$hup.io',
-            updatedAt: config.updatedAt || new Date().toISOString(),
-            updatedBy: config.updatedBy || null
+            updatedAt: config.updatedAt !== undefined ? config.updatedAt : new Date().toISOString(),
+            updatedBy: config.updatedBy !== undefined ? config.updatedBy : null
         };
         localStorage.setItem(ANALYTICS_ACCESS_CONFIG_KEY, JSON.stringify(payload));
         return payload;
