@@ -2244,6 +2244,7 @@ const DataManager = {
         try {
             const stored = localStorage.getItem(ANALYTICS_TABLE_PRESETS_KEY);
             if (!stored) {
+                this.saveAnalyticsTablePresets([]);
                 return [];
             }
             const parsed = JSON.parse(stored);
@@ -2253,6 +2254,7 @@ const DataManager = {
         } catch (error) {
             console.warn('Failed to parse analytics table presets. Returning empty list.', error);
         }
+        this.saveAnalyticsTablePresets([]);
         return [];
     },
 
