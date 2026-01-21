@@ -2663,6 +2663,9 @@ const App = {
 
         accounts.forEach(account => {
             (account.projects || []).forEach(project => {
+                if (project?.isMigrated && (project.status || 'inactive') === 'inactive') {
+                    return;
+                }
                 const stats = projectActivityMap[project.id] || { count: 0, lastDate: null };
                 const lastDateString = stats.lastDate || project.updatedAt || null;
                 const lastDate = lastDateString ? new Date(lastDateString) : null;

@@ -93,6 +93,19 @@ const DEFAULT_SALES_REPS = [
 const DEFAULT_REGION_SET = new Set(DEFAULT_SALES_REGIONS);
 
 const SALES_REGION_MIGRATION_FLAG = 'salesRepRegionNormalized';
+const MIGRATION_CLEANUP_VERSION_KEY = 'migrationCleanupVersion';
+const MIGRATION_CLEANUP_VERSION = '2026-01-21';
+const MIGRATION_DUPLICATE_PATTERNS = [
+    { accountName: 'Daikin', type: 'sow', date: '2025-12-31' },
+    { accountName: 'Money Control', type: 'customerCall', date: '2025-12-31' },
+    { accountName: 'parse-ai', type: 'customerCall', date: '2025-12-31' },
+    { accountName: 'colmexpro', type: 'customerCall', date: '2025-12-31' },
+    { accountName: 'Solar Square', type: 'customerCall', date: '2025-12-31' }
+].map((pattern) => ({
+    ...pattern,
+    accountNameLower: pattern.accountName.toLowerCase(),
+    typeLower: pattern.type.toLowerCase()
+}));
 
 const DataManager = {
     cache: {
@@ -307,9 +320,290 @@ const DataManager = {
         this.normalizeSalesRepRegions();
         this.backfillAccountSalesRepRegions();
         this.backfillActivitySalesRepRegions();
+        this.applyMigrationCleanupIfNeeded();
         } catch (error) {
             console.error('Error initializing data:', error);
         }
+    },
+
+    applyMigrationCleanupIfNeeded() {
+        try {
+            const appliedVersion = localStorage.getItem(
+                MIGRATION_CLEANUP_VERSION_KEY
+            );
+            if (appliedVersion === MIGRATION_CLEANUP_VERSION) {
+                return;
+            }
+
+            const existingActivities = this.getActivities();
+            const {
+                records: normalizedActivities,
+                changed: activitiesChanged
+            } = this.prepareMigratedActivities(existingActivities);
+
+            if (activitiesChanged) {
+                this.saveActivities(normalizedActivities);
+            }
+
+            const existingAccounts = this.getAccounts();
+            const {
+                records: normalizedAccounts,
+                changed: accountsChanged
+            } = this.prepareMigratedAccounts(
+                existingAccounts,
+                normalizedActivities
+            );
+
+            if (accountsChanged) {
+                this.saveAccounts(normalizedAccounts);
+            }
+
+            localStorage.setItem(
+                MIGRATION_CLEANUP_VERSION_KEY,
+                MIGRATION_CLEANUP_VERSION
+            );
+            this.invalidateCache('activities', 'accounts', 'allActivities');
+        } catch (error) {
+            console.error('Migration cleanup failed:', error);
+        }
+    },
+
+    prepareMigratedActivities(activities) {
+        const seenSignatures = new Set();
+        const deduped = [];
+        let changed = false;
+
+        (Array.isArray(activities) ? activities : []).forEach((activity) => {
+            const { record, mutated } =
+                this.normalizeMigratedActivity(activity);
+            if (mutated) {
+                changed = true;
+            }
+            const signature = this.buildActivitySignature(record);
+            if (seenSignatures.has(signature)) {
+                changed = true;
+                return;
+            }
+            seenSignatures.add(signature);
+            deduped.push(record);
+        });
+
+        const patternResult = this.removePatternDuplicates(deduped);
+        if (patternResult.changed) {
+            changed = true;
+        }
+
+        return { records: patternResult.records, changed };
+    },
+
+    normalizeMigratedActivity(activity = {}) {
+        const original = activity || {};
+        const normalized = { ...original };
+        let mutated = false;
+
+        const trimField = (field) => {
+            if (typeof normalized[field] === 'string') {
+                const trimmed = normalized[field].trim();
+                if (trimmed !== normalized[field]) {
+                    normalized[field] = trimmed;
+                    mutated = true;
+                }
+            }
+        };
+
+        trimField('summary');
+        trimField('salesRep');
+        trimField('accountName');
+        trimField('userName');
+        trimField('assignedUserEmail');
+
+        const candidateDate =
+            normalized.date || normalized.createdAt || normalized.monthOfActivity;
+        if (candidateDate) {
+            const parsed = new Date(candidateDate);
+            if (!Number.isNaN(parsed.getTime())) {
+                const iso = parsed.toISOString();
+                if (iso !== normalized.date) {
+                    normalized.date = iso;
+                    mutated = true;
+                }
+                if (!normalized.createdAt) {
+                    normalized.createdAt = iso;
+                    mutated = true;
+                }
+                if (!normalized.monthOfActivity) {
+                    normalized.monthOfActivity = iso.slice(0, 7);
+                    mutated = true;
+                }
+            }
+        }
+
+        if (!normalized.monthOfActivity && normalized.date) {
+            normalized.monthOfActivity = normalized.date.slice(0, 7);
+            mutated = true;
+        }
+
+        if (!normalized.source) {
+            normalized.source = 'migration';
+            mutated = true;
+        }
+
+        if (normalized.source === 'migration' && !normalized.isMigrated) {
+            normalized.isMigrated = true;
+            mutated = true;
+        }
+
+        return {
+            record: mutated ? normalized : original,
+            mutated
+        };
+    },
+
+    buildActivitySignature(activity) {
+        const normalize = (value) =>
+            (value || '')
+                .toString()
+                .trim()
+                .toLowerCase();
+
+        const summarySnippet = normalize(activity.summary).slice(0, 280);
+        const datePart = normalize(activity.date || activity.createdAt).slice(
+            0,
+            10
+        );
+
+        return [
+            normalize(activity.accountId || activity.accountName),
+            normalize(activity.projectId || activity.projectName),
+            normalize(activity.type),
+            datePart,
+            normalize(activity.assignedUserEmail || activity.userId),
+            normalize(activity.salesRep),
+            summarySnippet
+        ].join('|');
+    },
+
+    removePatternDuplicates(records) {
+        if (!Array.isArray(records) || !records.length) {
+            return { records, changed: false };
+        }
+
+        let changed = false;
+        const working = records.map((activity) => ({ ...activity }));
+
+        MIGRATION_DUPLICATE_PATTERNS.forEach((pattern) => {
+            const matches = [];
+            working.forEach((activity, index) => {
+                if (!activity || activity.source !== 'migration') return;
+                const accountName = (activity.accountName || '').trim().toLowerCase();
+                const type = (activity.type || '').trim().toLowerCase();
+                const date = (activity.date || activity.createdAt || '').slice(0, 10);
+                if (
+                    accountName === pattern.accountNameLower &&
+                    type === pattern.typeLower &&
+                    date === pattern.date
+                ) {
+                    matches.push({ activity, index });
+                }
+            });
+
+            if (matches.length > 1) {
+                const [keep, ...rest] = matches;
+                rest.forEach(({ index }) => {
+                    working[index] = null;
+                    changed = true;
+                });
+            }
+        });
+
+        return {
+            records: working.filter(Boolean),
+            changed
+        };
+    },
+
+    prepareMigratedAccounts(accounts, activities) {
+        const manualProjectIds = new Set(
+            (Array.isArray(activities) ? activities : [])
+                .filter(
+                    (activity) =>
+                        activity &&
+                        activity.projectId &&
+                        activity.source &&
+                        activity.source !== 'migration'
+                )
+                .map((activity) => activity.projectId)
+        );
+
+        let changed = false;
+
+        const normalizedAccounts = (Array.isArray(accounts) ? accounts : []).map(
+            (account) => {
+                if (
+                    !account ||
+                    !Array.isArray(account.projects) ||
+                    !account.projects.length
+                ) {
+                    return account;
+                }
+
+                let accountMutated = false;
+                const projects = account.projects.map((project) => {
+                    if (!project) return project;
+                    const updated = { ...project };
+                    let projectMutated = false;
+
+                    const normalizedName =
+                        typeof updated.name === 'string'
+                            ? updated.name.trim()
+                            : updated.name;
+                    if (normalizedName !== updated.name) {
+                        updated.name = normalizedName;
+                        projectMutated = true;
+                    }
+
+                    const hasManual = manualProjectIds.has(updated.id);
+                    if (hasManual) {
+                        if (updated.status !== 'active') {
+                            updated.status = 'active';
+                            projectMutated = true;
+                        }
+                        if (updated.isMigrated) {
+                            delete updated.isMigrated;
+                            projectMutated = true;
+                        }
+                    } else {
+                        if (updated.status !== 'inactive') {
+                            updated.status = 'inactive';
+                            projectMutated = true;
+                        }
+                        if (!updated.isMigrated) {
+                            updated.isMigrated = true;
+                            projectMutated = true;
+                        }
+                    }
+
+                    if (projectMutated) {
+                        accountMutated = true;
+                        return updated;
+                    }
+
+                    return project;
+                });
+
+                if (accountMutated) {
+                    changed = true;
+                    return { ...account, projects };
+                }
+
+                return account;
+            }
+        );
+
+        return {
+            records: changed ? normalizedAccounts : accounts,
+            changed
+        };
     },
 
     // User Management
@@ -979,18 +1273,37 @@ const DataManager = {
 
     addActivity(activity) {
         const activities = this.getActivities();
-        activity.id = this.generateId();
-        activity.createdAt = new Date().toISOString();
-        activity.updatedAt = new Date().toISOString();
-        activities.push(activity);
+        const timestamp = new Date().toISOString();
+        const normalized = {
+            ...activity,
+            id: this.generateId(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            source: activity?.source || 'manual',
+            isMigrated: activity?.source === 'migration'
+        };
+
+        const referenceDate = normalized.date || normalized.createdAt;
+        if (referenceDate) {
+            const parsed = new Date(referenceDate);
+            if (!Number.isNaN(parsed.getTime())) {
+                const iso = parsed.toISOString();
+                normalized.date = iso;
+                if (!normalized.monthOfActivity) {
+                    normalized.monthOfActivity = iso.slice(0, 7);
+                }
+            }
+        }
+
+        activities.push(normalized);
         this.saveActivities(activities);
-        this.recordAudit('activity.create', 'activity', activity.id, {
-            accountId: activity.accountId || null,
-            projectId: activity.projectId || null,
-            type: activity.type || '',
-            category: activity.isInternal ? 'internal' : 'external'
+        this.recordAudit('activity.create', 'activity', normalized.id, {
+            accountId: normalized.accountId || null,
+            projectId: normalized.projectId || null,
+            type: normalized.type || '',
+            category: normalized.isInternal ? 'internal' : 'external'
         });
-        return activity;
+        return normalized;
     },
 
     updateActivity(activityId, updates) {

@@ -1978,6 +1978,18 @@ const Activities = {
                 } else {
                     project.activities[idx] = { ...project.activities[idx], ...payload };
                 }
+                if (activity.source && activity.source !== 'migration') {
+                    const manualTimestamp = activity.date || activity.createdAt || new Date().toISOString();
+                    if (project.status !== 'active') {
+                        project.status = 'active';
+                        mutated = true;
+                    }
+                    if (project.isMigrated) {
+                        delete project.isMigrated;
+                        mutated = true;
+                    }
+                    project.lastManualActivityAt = manualTimestamp;
+                }
                 mutated = true;
             }
         }
