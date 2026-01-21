@@ -21,6 +21,14 @@
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <p class="login-subtitle" id="loginSubtitle">Presales Activity Management System</p>
+            <div class="login-tabs">
+                <button type="button" class="login-tab active" data-tab="presales" onclick="Auth.switchLoginTab('presales')">
+                    Presales User Login
+                </button>
+                <button type="button" class="login-tab" data-tab="analytics" onclick="Auth.switchLoginTab('analytics')">
+                    Analytics Access
+                </button>
+            </div>
             <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label class="form-label">Username</label>
@@ -31,6 +39,7 @@
                     <input type="password" id="password" class="form-control" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Login</button>
+                <p class="login-helper">Use your PAMS credentials to continue.</p>
             </form>
             <div id="forcePasswordBanner" class="login-banner hidden">
                 <strong id="forcePasswordUser"></strong>
@@ -48,9 +57,15 @@
                 <button type="submit" class="btn btn-primary btn-block">Update Password</button>
                 <p class="login-helper">Tip: use at least 6 characters and avoid default passwords.</p>
             </form>
-            <p class="login-helper" style="margin-top: 1rem; font-size: 0.8rem;">
-                Enter your PAMS credentials to continue.
-            </p>
+            <form id="analyticsAccessForm" class="login-form hidden">
+                <div class="form-group">
+                    <label class="form-label">Analytics Password</label>
+                    <input type="password" id="analyticsAccessPassword" class="form-control" required autocomplete="off">
+                    <small class="text-muted">Admins can share this read-only password for analytics access.</small>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Enter Analytics</button>
+                <p class="login-helper">Default password: <span class="monospace">Gup$hup.io</span></p>
+            </form>
         </div>
     </div>
 
@@ -508,6 +523,24 @@
                                         </div>
                                     </form>
                                     <p class="text-muted" id="presalesTargetSummary" style="margin-top: 1rem;"></p>
+                                </div>
+                            </div>
+                            <div class="card" style="margin-top: 1.5rem;">
+                                <div class="card-header">
+                                    <h3>Analytics Guest Access</h3>
+                                </div>
+                                <div class="card-body">
+                                    <form id="analyticsAccessAdminForm" onsubmit="Admin.saveAnalyticsAccessPassword(event)">
+                                        <div class="form-group">
+                                            <label class="form-label required">Shared Analytics Password</label>
+                                            <input type="text" class="form-control" id="analyticsAccessPasswordInput" required>
+                                            <small class="text-muted">Provide this password to users who need read-only access to analytics.</small>
+                                        </div>
+                                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                            <button type="submit" class="btn btn-primary">Save Password</button>
+                                            <span class="text-muted" id="analyticsAccessMeta"></span>
+                                        </div>
+                                    </form>
                                 </div>
                             </div>
                         </div>

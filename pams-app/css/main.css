@@ -237,6 +237,42 @@ body {
     margin-bottom: 2rem;
 }
 
+.login-tabs {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.login-tab {
+    flex: 1 1 0;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--gray-300);
+    background: transparent;
+    color: var(--gray-600);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-tab:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.login-tab.active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 12px 28px rgba(94, 52, 241, 0.25);
+}
+
+.login-tab:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(94, 52, 241, 0.25);
+}
+
 .login-form {
     margin-top: 2rem;
 }
@@ -1491,4 +1527,84 @@ body {
 .feature-flag-select {
     min-width: 160px;
 }
+/* Analytics period & table builder */
+.analytics-period-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
 
+.analytics-period-toggle {
+    display: inline-flex;
+    gap: 0.5rem;
+}
+
+.analytics-period-toggle .btn {
+    min-width: 90px;
+}
+
+.analytics-period-note {
+    margin-top: 0.5rem;
+}
+
+.analytics-table-builder {
+    margin-top: 1.5rem;
+}
+
+.analytics-table-control-grid {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.analytics-columns-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.5rem 1rem;
+}
+
+.analytics-table-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.analytics-table-preview {
+    margin-top: 1.5rem;
+}
+
+.analytics-table-preview table {
+    min-width: 100%;
+}
+
+.analytics-table-presets {
+    margin-top: 1.5rem;
+}
+
+.analytics-presets-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.analytics-presets-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+}
+
+.analytics-presets-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.analytics-presets-list .preset-meta {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}

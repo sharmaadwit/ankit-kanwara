@@ -107,6 +107,9 @@ const MIGRATION_DUPLICATE_PATTERNS = [
     typeLower: pattern.type.toLowerCase()
 }));
 
+const ANALYTICS_ACCESS_CONFIG_KEY = 'analyticsAccessConfig';
+const ANALYTICS_TABLE_PRESETS_KEY = 'analyticsTablePresets';
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -1615,13 +1618,20 @@ const DataManager = {
         };
     },
 
-    getMonthlyAnalytics(month, filters = {}) {
-        const referenceMonth = month || new Date().toISOString().substring(0, 7);
+    getMonthlyAnalytics(period, filters = {}) {
+        const now = new Date();
+        const defaultMonth = now.toISOString().substring(0, 7);
+        const rawPeriod = typeof period === 'string' && period.trim() ? period.trim() : defaultMonth;
+        const normalizedPeriod = rawPeriod;
+        const isYearMode = normalizedPeriod.length === 4 && !normalizedPeriod.includes('-');
+        const referencePeriod = isYearMode ? normalizedPeriod : normalizedPeriod.substring(0, 7);
+
         const targetInfo = this.getPresalesActivityTarget();
         const targetValue = Number(targetInfo.value) >= 0 ? Number(targetInfo.value) : 0;
 
         const users = this.getUsers();
         const presalesUsers = users.filter(user => Array.isArray(user.roles) && user.roles.includes('Presales User'));
+        const userMap = new Map(users.map(user => [user.id, user]));
 
         const userSummariesMap = {};
         presalesUsers.forEach(user => {
@@ -1632,15 +1642,25 @@ const DataManager = {
                 total: 0,
                 internal: 0,
                 external: 0,
-                types: {}
+                types: {},
+                region: this.resolveUserRegion(user),
+                wins: 0,
+                losses: 0
             };
         });
 
         const allActivities = this.getAllActivities();
-        const monthActivities = allActivities.filter(activity => {
+        const monthsInPeriod = new Set();
+        const periodActivities = allActivities.filter(activity => {
             const date = activity.date || activity.createdAt;
             if (!date || typeof date !== 'string') return false;
-            return date.substring(0, 7) === referenceMonth;
+            const monthKey = date.substring(0, 7);
+            const yearKey = date.substring(0, 4);
+            if (isYearMode ? yearKey === referencePeriod : monthKey === referencePeriod) {
+                monthsInPeriod.add(monthKey);
+                return true;
+            }
+            return false;
         });
 
         const accounts = this.getAccounts();
@@ -1648,22 +1668,32 @@ const DataManager = {
         accounts.forEach(account => {
             accountMap[account.id] = account;
         });
+        const projectLookup = new Map();
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                if (project?.id) {
+                    projectLookup.set(project.id, { account, project });
+                }
+            });
+        });
 
         const normalizedIndustry = (filters.industry || '').toLowerCase();
         const normalizedChannel = (filters.channel || '').toLowerCase();
 
-        const filteredActivities = monthActivities.filter(activity => {
+        const filteredActivities = periodActivities.filter(activity => {
             if (normalizedIndustry) {
                 if (activity.isInternal) return false;
-                const account = accountMap[activity.accountId];
+                const projectEntry = projectLookup.get(activity.projectId);
+                const account = projectEntry?.account || accountMap[activity.accountId];
                 const industryValue = (activity.industry || account?.industry || '').toLowerCase();
                 if (!industryValue || industryValue !== normalizedIndustry) return false;
             }
 
             if (normalizedChannel) {
                 if (activity.isInternal) return false;
-                const account = accountMap[activity.accountId];
-                const project = account?.projects?.find(p => p.id === activity.projectId);
+                const projectEntry = projectLookup.get(activity.projectId);
+                const account = projectEntry?.account || accountMap[activity.accountId];
+                const project = projectEntry?.project || account?.projects?.find(p => p.id === activity.projectId);
                 const channels = (project?.channels || []).map(channel => (channel || '').toLowerCase());
                 const matchesChannel = channels.some(channelValue => channelValue === normalizedChannel || channelValue.includes(normalizedChannel));
                 if (!matchesChannel) return false;
@@ -1678,10 +1708,17 @@ const DataManager = {
         const productTotals = {};
         let internalActivitiesCount = 0;
         let externalActivitiesCount = 0;
+        let totalWonActivities = 0;
+        let totalLostActivities = 0;
+
+        const regionAggregates = new Map();
+        const projectAggregates = new Map();
+        const accountAggregates = new Map();
 
         filteredActivities.forEach(activity => {
             const userId = activity.userId || activity.user?.id || `anonymous-${activity.userName || activity.id || Math.random()}`;
             if (!userSummariesMap[userId]) {
+                const fallbackUser = userMap.get(userId);
                 userSummariesMap[userId] = {
                     userId,
                     userName: activity.userName || activity.user?.username || 'Unknown',
@@ -1689,7 +1726,10 @@ const DataManager = {
                     total: 0,
                     internal: 0,
                     external: 0,
-                    types: {}
+                    types: {},
+                    region: this.resolveUserRegion(fallbackUser) || this.resolveActivityRegion(activity, accountMap[activity.accountId], fallbackUser),
+                    wins: 0,
+                    losses: 0
                 };
             }
 
@@ -1709,12 +1749,13 @@ const DataManager = {
             activityTypeCounts[typeKey] = (activityTypeCounts[typeKey] || 0) + 1;
 
             if (!activity.isInternal) {
-                const account = accountMap[activity.accountId];
+                const projectEntry = projectLookup.get(activity.projectId);
+                const account = projectEntry?.account || accountMap[activity.accountId];
                 const industryRaw = activity.industry || account?.industry || 'Unspecified Industry';
                 const industry = industryRaw && typeof industryRaw === 'string' ? industryRaw.trim() || 'Unspecified Industry' : 'Unspecified Industry';
                 industryCounts[industry] = (industryCounts[industry] || 0) + 1;
 
-                const project = account?.projects?.find(p => p.id === activity.projectId);
+                const project = projectEntry?.project || account?.projects?.find(p => p.id === activity.projectId);
                 if (project && Array.isArray(project.productsInterested)) {
                     if (!industryProductCounts[industry]) {
                         industryProductCounts[industry] = {};
@@ -1726,19 +1767,194 @@ const DataManager = {
                     });
                 }
             }
+
+            const projectEntry = projectLookup.get(activity.projectId);
+            const account = projectEntry?.account || accountMap[activity.accountId];
+            const project = projectEntry?.project || account?.projects?.find(p => p.id === activity.projectId);
+            const user = userMap.get(userId);
+            const region = this.resolveActivityRegion(activity, account, user);
+
+            // Region aggregates
+            if (!regionAggregates.has(region)) {
+                regionAggregates.set(region, {
+                    region,
+                    totalActivities: 0,
+                    internalActivities: 0,
+                    externalActivities: 0,
+                    wins: 0,
+                    losses: 0,
+                    uniqueAccounts: new Set(),
+                    uniqueProjects: new Set()
+                });
+            }
+            const regionEntry = regionAggregates.get(region);
+            regionEntry.totalActivities += 1;
+            if (activity.isInternal) {
+                regionEntry.internalActivities += 1;
+            } else {
+                regionEntry.externalActivities += 1;
+            }
+            if (account?.id) {
+                regionEntry.uniqueAccounts.add(account.id);
+            }
+            if (project?.id) {
+                regionEntry.uniqueProjects.add(project.id);
+            }
+
+            const projectStatus = (project?.status || '').toLowerCase();
+            if (projectStatus === 'won') {
+                summary.wins += 1;
+                regionEntry.wins += 1;
+                totalWonActivities += 1;
+            } else if (projectStatus === 'lost') {
+                summary.losses += 1;
+                regionEntry.losses += 1;
+                totalLostActivities += 1;
+            }
+
+            if (project) {
+                if (!projectAggregates.has(project.id)) {
+                    projectAggregates.set(project.id, {
+                        projectId: project.id,
+                        projectName: project.name || project.projectName || activity.projectName || 'Unnamed Project',
+                        accountId: account?.id || '',
+                        accountName: account?.accountName || account?.name || activity.accountName || 'Unknown Account',
+                        status: project.status || 'inactive',
+                        region,
+                        totalActivities: 0,
+                        externalActivities: 0,
+                        internalActivities: 0,
+                        wins: 0,
+                        losses: 0,
+                        ownerIds: new Set(),
+                        lastActivityAt: null
+                    });
+                }
+                const projectAggregate = projectAggregates.get(project.id);
+                projectAggregate.totalActivities += 1;
+                if (activity.isInternal) {
+                    projectAggregate.internalActivities += 1;
+                } else {
+                    projectAggregate.externalActivities += 1;
+                }
+                if (projectStatus === 'won') {
+                    projectAggregate.wins += 1;
+                } else if (projectStatus === 'lost') {
+                    projectAggregate.losses += 1;
+                }
+                if (activity.date || activity.createdAt) {
+                    const activityDate = activity.date || activity.createdAt;
+                    if (!projectAggregate.lastActivityAt || activityDate > projectAggregate.lastActivityAt) {
+                        projectAggregate.lastActivityAt = activityDate;
+                    }
+                }
+                if (activity.userId) {
+                    projectAggregate.ownerIds.add(activity.userId);
+                }
+            }
+
+            if (account) {
+                if (!accountAggregates.has(account.id)) {
+                    accountAggregates.set(account.id, {
+                        accountId: account.id,
+                        accountName: account.accountName || account.name || activity.accountName || 'Unknown Account',
+                        region: this.resolveAccountRegion(account) || region,
+                        totalActivities: 0,
+                        externalActivities: 0,
+                        internalActivities: 0,
+                        activeProjects: new Set(),
+                        wonProjects: new Set(),
+                        lostProjects: new Set(),
+                        projectIds: new Set(),
+                        lastActivityAt: null
+                    });
+                }
+                const accountAggregate = accountAggregates.get(account.id);
+                accountAggregate.totalActivities += 1;
+                if (activity.isInternal) {
+                    accountAggregate.internalActivities += 1;
+                } else {
+                    accountAggregate.externalActivities += 1;
+                }
+                if (project?.id) {
+                    accountAggregate.projectIds.add(project.id);
+                    if (projectStatus === 'won') {
+                        accountAggregate.wonProjects.add(project.id);
+                    } else if (projectStatus === 'lost') {
+                        accountAggregate.lostProjects.add(project.id);
+                    } else {
+                        accountAggregate.activeProjects.add(project.id);
+                    }
+                }
+                if (activity.date || activity.createdAt) {
+                    const activityDate = activity.date || activity.createdAt;
+                    if (!accountAggregate.lastActivityAt || activityDate > accountAggregate.lastActivityAt) {
+                        accountAggregate.lastActivityAt = activityDate;
+                    }
+                }
+            }
         });
 
-        const userSummaries = Object.values(userSummariesMap).sort((a, b) => b.total - a.total);
+        const userSummaries = Object.values(userSummariesMap)
+            .map(summary => ({
+                ...summary,
+                wins: summary.wins || 0,
+                losses: summary.losses || 0
+            }))
+            .sort((a, b) => b.total - a.total);
+
+        const regionSummaries = Array.from(regionAggregates.values())
+            .map(entry => ({
+                region: entry.region,
+                totalActivities: entry.totalActivities,
+                externalActivities: entry.externalActivities,
+                internalActivities: entry.internalActivities,
+                wins: entry.wins,
+                losses: entry.losses,
+                uniqueAccounts: entry.uniqueAccounts.size,
+                uniqueProjects: entry.uniqueProjects.size
+            }))
+            .sort((a, b) => b.totalActivities - a.totalActivities);
+
+        const projectSummaries = Array.from(projectAggregates.values())
+            .map(entry => ({
+                ...entry,
+                ownerCount: entry.ownerIds.size,
+                ownerIds: Array.from(entry.ownerIds),
+                lastActivityAt: entry.lastActivityAt
+            }))
+            .sort((a, b) => b.totalActivities - a.totalActivities);
+
+        const accountSummaries = Array.from(accountAggregates.values())
+            .map(entry => ({
+                ...entry,
+                activeProjects: entry.activeProjects.size,
+                wonProjects: entry.wonProjects.size,
+                lostProjects: entry.lostProjects.size,
+                totalProjects: entry.projectIds.size,
+                lastActivityAt: entry.lastActivityAt
+            }))
+            .sort((a, b) => b.totalActivities - a.totalActivities);
+
+        const monthsCovered = Array.from(monthsInPeriod).sort((a, b) => a.localeCompare(b));
+        const monthsMultiplier = isYearMode ? Math.max(monthsCovered.length, 1) : 1;
+        const periodTargetValue = targetValue * monthsMultiplier;
 
         return {
-            month: referenceMonth,
+            month: referencePeriod,
+            periodType: isYearMode ? 'year' : 'month',
+            periodValue: referencePeriod,
+            monthsInPeriod: monthsCovered,
+            year: referencePeriod.substring(0, 4),
             target: targetInfo,
             targetValue,
             monthActivities: filteredActivities,
+            periodActivities: filteredActivities,
             presalesUsers: presalesUsers.map(user => ({
                 userId: user.id,
                 userName: user.username,
-                email: user.email
+                email: user.email,
+                region: this.resolveUserRegion(user)
             })),
             userSummaries,
             activityTypeCounts,
@@ -1747,9 +1963,15 @@ const DataManager = {
             productTotals,
             totalActivities: filteredActivities.length,
             totalPresalesUsers: presalesUsers.length,
-            teamTarget: targetValue * presalesUsers.length,
+            teamTarget: targetValue * presalesUsers.length * monthsMultiplier,
+            periodTargetValue,
             internalActivities: internalActivitiesCount,
-            externalActivities: externalActivitiesCount
+            externalActivities: externalActivitiesCount,
+            regionSummaries,
+            projectSummaries,
+            accountSummaries,
+            totalWonActivities,
+            totalLostActivities
         };
     },
 
@@ -1825,6 +2047,39 @@ const DataManager = {
             .sort((a, b) => a.localeCompare(b));
     },
 
+    getAvailableActivityYears(includeInternal = true) {
+        const years = new Set();
+        const addYear = (value) => {
+            if (!value) return;
+            const year =
+                typeof value === 'string'
+                    ? value.slice(0, 4)
+                    : '';
+            if (year) {
+                years.add(year);
+            }
+        };
+
+        this.getActivities().forEach((activity) => {
+            addYear(
+                activity.monthOfActivity ||
+                    (activity.date ? activity.date.slice(0, 7) : '')
+            );
+        });
+        if (includeInternal) {
+            this.getInternalActivities().forEach((activity) => {
+                addYear(
+                    activity.monthOfActivity ||
+                        (activity.date ? activity.date.slice(0, 7) : '')
+                );
+            });
+        }
+
+        return Array.from(years)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+    },
+
     // Utility
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -1843,14 +2098,156 @@ const DataManager = {
     formatMonth(monthString) {
         if (!monthString) return 'Unknown';
         try {
+            if (monthString.length === 4 && !monthString.includes('-')) {
+                return monthString;
+            }
             const [year, month] = monthString.split('-');
             if (!year || !month) return monthString;
-            const date = new Date(parseInt(year), parseInt(month) - 1);
+            const date = new Date(parseInt(year, 10), parseInt(month, 10) - 1);
             if (isNaN(date.getTime())) return monthString;
             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
         } catch (error) {
             console.error('Error formatting month:', error);
             return monthString;
+        }
+    },
+
+    resolveAccountRegion(account) {
+        if (!account) return '';
+        const candidates = [];
+        const pushCandidate = (value) => {
+            if (value && typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed) candidates.push(trimmed);
+            }
+        };
+
+        pushCandidate(account.region);
+        pushCandidate(account.salesRegion);
+        pushCandidate(account.salesTerritory);
+        pushCandidate(account.salesGeo);
+        if (Array.isArray(account.regions)) {
+            account.regions.forEach(pushCandidate);
+        }
+        if (Array.isArray(account.salesRegions)) {
+            account.salesRegions.forEach(pushCandidate);
+        }
+
+        return candidates.length ? candidates[0] : '';
+    },
+
+    resolveUserRegion(user) {
+        if (!user) return '';
+        const candidates = [];
+        const pushCandidate = (value) => {
+            if (value && typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed) candidates.push(trimmed);
+            }
+        };
+        pushCandidate(user.defaultRegion);
+        if (Array.isArray(user.regions)) {
+            user.regions.forEach(pushCandidate);
+        }
+        return candidates.length ? candidates[0] : '';
+    },
+
+    resolveActivityRegion(activity, account, user) {
+        const candidates = [];
+        const pushCandidate = (value) => {
+            if (value && typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed) candidates.push(trimmed);
+            }
+        };
+
+        if (activity) {
+            pushCandidate(activity.region);
+            pushCandidate(activity.salesRegion);
+            if (activity.metadata && typeof activity.metadata === 'object') {
+                pushCandidate(activity.metadata.region);
+                pushCandidate(activity.metadata.salesRegion);
+            }
+        }
+        if (account) {
+            pushCandidate(this.resolveAccountRegion(account));
+        }
+        if (user) {
+            pushCandidate(this.resolveUserRegion(user));
+        }
+
+        return candidates.length ? candidates[0] : 'Unassigned';
+    },
+
+    getAnalyticsAccessConfig() {
+        try {
+            const stored = localStorage.getItem(ANALYTICS_ACCESS_CONFIG_KEY);
+            if (!stored) {
+                return {
+                    password: 'Gup$hup.io',
+                    updatedAt: null,
+                    updatedBy: null
+                };
+            }
+            const parsed = JSON.parse(stored);
+            if (parsed && typeof parsed === 'object') {
+                return {
+                    password: typeof parsed.password === 'string' && parsed.password.trim()
+                        ? parsed.password.trim()
+                        : 'Gup$hup.io',
+                    updatedAt: parsed.updatedAt || null,
+                    updatedBy: parsed.updatedBy || null
+                };
+            }
+        } catch (error) {
+            console.warn('Failed to parse analytics access config. Using defaults.', error);
+        }
+        return {
+            password: 'Gup$hup.io',
+            updatedAt: null,
+            updatedBy: null
+        };
+    },
+
+    saveAnalyticsAccessConfig(config) {
+        if (!config || typeof config !== 'object') {
+            return;
+        }
+        const payload = {
+            password: typeof config.password === 'string' && config.password.trim()
+                ? config.password.trim()
+                : 'Gup$hup.io',
+            updatedAt: config.updatedAt || new Date().toISOString(),
+            updatedBy: config.updatedBy || null
+        };
+        localStorage.setItem(ANALYTICS_ACCESS_CONFIG_KEY, JSON.stringify(payload));
+        return payload;
+    },
+
+    getAnalyticsTablePresets() {
+        try {
+            const stored = localStorage.getItem(ANALYTICS_TABLE_PRESETS_KEY);
+            if (!stored) {
+                return [];
+            }
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                return parsed.filter(preset => preset && typeof preset === 'object');
+            }
+        } catch (error) {
+            console.warn('Failed to parse analytics table presets. Returning empty list.', error);
+        }
+        return [];
+    },
+
+    saveAnalyticsTablePresets(presets) {
+        try {
+            const sanitized = Array.isArray(presets)
+                ? presets.filter(preset => preset && typeof preset === 'object')
+                : [];
+            localStorage.setItem(ANALYTICS_TABLE_PRESETS_KEY, JSON.stringify(sanitized));
+        } catch (error) {
+            console.warn('Unable to save analytics table presets.', error);
         }
     },
 

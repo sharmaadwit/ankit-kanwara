@@ -3,6 +3,8 @@
 const Auth = {
     currentUser: null,
     pendingPasswordChangeUser: null,
+    currentLoginTab: 'presales',
+    analyticsGuestCounter: 0,
 
     getSessionStore() {
         try {
@@ -81,11 +83,81 @@ const Auth = {
         }
     },
 
+    createAnalyticsGuestUser() {
+        this.analyticsGuestCounter += 1;
+        return {
+            id: `analytics-guest-${Date.now()}-${this.analyticsGuestCounter}`,
+            username: 'Analytics Guest',
+            email: '',
+            roles: ['Analytics Access'],
+            regions: [],
+            defaultRegion: '',
+            isActive: true,
+            isAnalyticsGuest: true
+        };
+    },
+
+    switchLoginTab(tab, options = {}) {
+        const normalized = tab === 'analytics' ? 'analytics' : 'presales';
+        this.currentLoginTab = normalized;
+        this.updateLoginTabButtons(normalized);
+
+        const loginForm = document.getElementById('loginForm');
+        const analyticsForm = document.getElementById('analyticsAccessForm');
+        const passwordResetForm = document.getElementById('passwordResetForm');
+        const passwordResetVisible = passwordResetForm && !passwordResetForm.classList.contains('hidden');
+
+        if (loginForm && !passwordResetVisible) {
+            loginForm.classList.toggle('hidden', normalized === 'analytics');
+            if (normalized === 'presales' && !options.skipFocus) {
+                const usernameInput = document.getElementById('username');
+                if (usernameInput) {
+                    setTimeout(() => usernameInput.focus(), 50);
+                }
+            }
+        }
+
+        if (analyticsForm) {
+            if (!passwordResetVisible && normalized === 'analytics') {
+                analyticsForm.classList.remove('hidden');
+                if (!options.skipFocus) {
+                    const passwordInput = document.getElementById('analyticsAccessPassword');
+                    if (passwordInput) {
+                        setTimeout(() => passwordInput.focus(), 50);
+                    }
+                }
+            } else {
+                analyticsForm.classList.add('hidden');
+            }
+        }
+
+        if (typeof App !== 'undefined' && normalized === 'analytics') {
+            App.analyticsPeriodMode = App.analyticsPeriodMode === 'year' ? 'year' : 'month';
+        }
+    },
+
+    updateLoginTabButtons(activeTab) {
+        document.querySelectorAll('.login-tab').forEach(button => {
+            const tabKey = button.dataset.tab === 'analytics' ? 'analytics' : 'presales';
+            button.classList.toggle('active', tabKey === activeTab);
+        });
+    },
+
     // Initialize authentication
     init() {
         // Check for existing session
         this.clearRemoteSessionArtifact();
         const sessionData = this.readSession();
+        if (sessionData && sessionData.analyticsOnly) {
+            const guest = this.createAnalyticsGuestUser();
+            this.currentUser = guest;
+            if (typeof App !== 'undefined') {
+                App.analyticsPeriodMode = sessionData.periodMode === 'year' ? 'year' : 'month';
+            }
+            this.showMainApp();
+            return true;
+        }
+
         if (sessionData && sessionData.userId) {
             const user = DataManager.getUserById(sessionData.userId);
             if (user && user.isActive) {
@@ -173,6 +245,40 @@ const Auth = {
         }
     },
 
+    loginAnalytics(password, options = {}) {
+        try {
+            const trimmedPassword = (password || '').trim();
+            if (!trimmedPassword) {
+                return { success: false, message: 'Enter the analytics password.' };
+            }
+            const config = DataManager.getAnalyticsAccessConfig();
+            const expectedPassword = (config.password || 'Gup$hup.io').trim();
+            if (trimmedPassword !== expectedPassword) {
+                return { success: false, message: 'Incorrect analytics password.' };
+            }
+            const guestUser = this.createAnalyticsGuestUser();
+            this.pendingPasswordChangeUser = null;
+            this.currentUser = guestUser;
+            this.writeSession({
+                analyticsOnly: true,
+                periodMode: options.periodMode === 'year' ? 'year' : 'month',
+                loginTime: new Date().toISOString()
+            });
+            this.reportLoginEvent('success', {
+                username: 'analytics-guest',
+                message: 'Analytics access granted'
+            });
+            return { success: true, user: guestUser };
+        } catch (error) {
+            console.error('Analytics login error:', error);
+            this.reportLoginEvent('failure', {
+                username: 'analytics-guest',
+                message: error.message || 'Analytics login error'
+            });
+            return { success: false, message: 'Unable to open analytics. Try again.' };
+        }
+    },
+
     // Logout
     logout() {
         this.currentUser = null;
@@ -255,6 +361,13 @@ const Auth = {
         if (forceMessage) {
             forceMessage.textContent = 'please set a new password before continuing.';
         }
+        const analyticsForm = document.getElementById('analyticsAccessForm');
+        if (analyticsForm) {
+            analyticsForm.classList.add('hidden');
+            analyticsForm.reset();
+        }
+        this.currentLoginTab = 'presales';
+        this.switchLoginTab('presales', { skipFocus: true });
         if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
             App.setLoading(false);
         }
@@ -299,6 +412,7 @@ const Auth = {
                 newPasswordInput.focus();
             }
         }, 0);
+        this.updateLoginTabButtons('presales');
         if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
             App.setLoading(false);
         }

@@ -62,6 +62,85 @@ const App = {
         adminPoc: true
     },
     dashboardVisibility: {},
+    analyticsPeriodMode: 'month',
+    savedAnalyticsTables: [],
+    analyticsTableState: {
+        dataset: 'regionPerformance',
+        columns: [],
+        rows: [],
+        generatedAt: null,
+        generatedFrom: null
+    },
+    analyticsTableDefinitions: {
+        regionPerformance: {
+            label: 'Region Performance',
+            description: 'Activity, win/loss, and account coverage by region.',
+            columns: [
+                { key: 'region', label: 'Region', default: true },
+                { key: 'totalActivities', label: 'Total Activities', default: true },
+                { key: 'externalActivities', label: 'External Activities', default: true },
+                { key: 'internalActivities', label: 'Internal Activities', default: false },
+                { key: 'wins', label: 'Won Activity Count', default: false },
+                { key: 'losses', label: 'Lost Activity Count', default: false },
+                { key: 'uniqueAccounts', label: 'Active Accounts', default: true },
+                { key: 'uniqueProjects', label: 'Active Projects', default: false }
+            ]
+        },
+        presalesPerformance: {
+            label: 'Presales Performance',
+            description: 'Per-user activity totals across the selected period.',
+            columns: [
+                { key: 'userName', label: 'User', default: true },
+                { key: 'region', label: 'Region', default: true },
+                { key: 'total', label: 'Total Activities', default: true },
+                { key: 'external', label: 'External', default: true },
+                { key: 'internal', label: 'Internal', default: false },
+                { key: 'wins', label: 'Won Activity Count', default: false },
+                { key: 'losses', label: 'Lost Activity Count', default: false }
+            ]
+        },
+        projectPipeline: {
+            label: 'Project Pipeline',
+            description: 'Projects engaged during the selected period.',
+            columns: [
+                { key: 'projectName', label: 'Project', default: true },
+                { key: 'accountName', label: 'Account', default: true },
+                { key: 'status', label: 'Status', default: true },
+                { key: 'region', label: 'Region', default: false },
+                { key: 'totalActivities', label: 'Activity Count', default: true },
+                { key: 'externalActivities', label: 'External', default: false },
+                { key: 'internalActivities', label: 'Internal', default: false },
+                { key: 'wins', label: 'Won Activities', default: false },
+                { key: 'losses', label: 'Lost Activities', default: false },
+                { key: 'lastActivityAt', label: 'Last Activity', default: false },
+                { key: 'ownerCount', label: 'Owners', default: false }
+            ]
+        },
+        accountEngagement: {
+            label: 'Account Engagement',
+            description: 'Accounts touched within the selected period.',
+            columns: [
+                { key: 'accountName', label: 'Account', default: true },
+                { key: 'region', label: 'Region', default: true },
+                { key: 'totalActivities', label: 'Activity Count', default: true },
+                { key: 'externalActivities', label: 'External Activities', default: false },
+                { key: 'internalActivities', label: 'Internal Activities', default: false },
+                { key: 'totalProjects', label: 'Projects Involved', default: false },
+                { key: 'activeProjects', label: 'Active Projects', default: false },
+                { key: 'wonProjects', label: 'Won Projects', default: false },
+                { key: 'lostProjects', label: 'Lost Projects', default: false },
+                { key: 'lastActivityAt', label: 'Last Activity', default: false }
+            ]
+        },
+        activityTypeMix: {
+            label: 'Activity Type Mix',
+            description: 'Activity counts grouped by type.',
+            columns: [
+                { key: 'type', label: 'Activity Type', default: true },
+                { key: 'count', label: 'Count', default: true }
+            ]
+        }
+    },
     loadingOverlay: null,
     loadingMessageEl: null,
 
@@ -75,6 +154,7 @@ const App = {
             this.setupEventListeners();
 
             await this.loadAppConfig();
+            this.loadAnalyticsTablePresets();
 
             const hasSession = Auth.init();
             if (!hasSession) {
@@ -124,6 +204,24 @@ const App = {
                 } else {
                     this.setLoading(false);
                     UI.showNotification(result.message || 'Invalid credentials', 'error');
+                }
+            });
+        }
+
+        const analyticsAccessForm = document.getElementById('analyticsAccessForm');
+        if (analyticsAccessForm) {
+            analyticsAccessForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const passwordInput = document.getElementById('analyticsAccessPassword');
+                const password = passwordInput ? passwordInput.value : '';
+                this.setLoading(true, 'Preparing analytics…');
+                const result = Auth.loginAnalytics(password);
+                if (result.success) {
+                    this.analyticsPeriodMode = 'month';
+                    this.handleSuccessfulLogin();
+                } else {
+                    this.setLoading(false);
+                    UI.showNotification(result.message || 'Unable to open analytics workspace.', 'error');
                 }
             });
         }
@@ -271,6 +369,15 @@ const App = {
             ...(config.dashboardVisibility || {})
         };
         this.applyAppConfiguration();
+    },
+
+    loadAnalyticsTablePresets() {
+        try {
+            this.savedAnalyticsTables = DataManager.getAnalyticsTablePresets();
+        } catch (error) {
+            console.warn('Unable to load analytics table presets.', error);
+            this.savedAnalyticsTables = [];
+        }
     },
 
     async refreshAppConfiguration() {
@@ -1457,6 +1564,7 @@ const App = {
         this.latestAnalytics.cardMonth = selectedMonth;
         this.latestAnalytics.standard = analytics;
         this.latestAnalytics.standardMonth = selectedMonth;
+        this.latestAnalytics.standardPeriod = selectedMonth;
         const actionBar = `
             <div class="action-bar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1.5rem;">
                 <div class="form-group month-picker">
@@ -1480,7 +1588,8 @@ const App = {
             ${filterBar}
             ${this.buildAnalyticsMarkup(analytics, {
                 variant: 'card',
-                month: selectedMonth
+                periodType: 'month',
+                periodValue: selectedMonth
             })}
         `;
     },
@@ -1891,36 +2000,47 @@ const App = {
     // Load reports
     loadReports() {
         try {
-            const availableMonths = DataManager.getAvailableActivityMonths();
-            this.availableAnalyticsMonths = availableMonths;
+            const isYearMode = this.analyticsPeriodMode === 'year';
+            const availablePeriods = isYearMode
+                ? DataManager.getAvailableActivityYears()
+                : DataManager.getAvailableActivityMonths();
             const today = new Date();
-            const fallbackMonth = today.toISOString().substring(0, 7);
-            const latestAvailableMonth = availableMonths.length
-                ? availableMonths[availableMonths.length - 1]
-                : fallbackMonth;
-            const earliestAvailableMonth = availableMonths.length
-                ? availableMonths[0]
-                : '';
+            const fallbackPeriod = isYearMode
+                ? String(today.getFullYear())
+                : today.toISOString().substring(0, 7);
+            const periodOptions = availablePeriods.length ? [...availablePeriods] : [fallbackPeriod];
 
             const existingInput = document.getElementById('reportMonth');
-            let selectedMonth =
+            let selectedPeriod =
                 (existingInput && existingInput.value) ||
-                this.latestAnalytics.standardMonth ||
-                latestAvailableMonth;
-            if (availableMonths.length && !availableMonths.includes(selectedMonth)) {
-                selectedMonth = latestAvailableMonth;
+                this.latestAnalytics.standardPeriod ||
+                (isYearMode ? this.latestAnalytics.standardYear : this.latestAnalytics.standardMonth) ||
+                (periodOptions.length ? periodOptions[periodOptions.length - 1] : fallbackPeriod);
+
+            if (!periodOptions.includes(selectedPeriod)) {
+                selectedPeriod = periodOptions.length ? periodOptions[periodOptions.length - 1] : fallbackPeriod;
             }
-            if (!selectedMonth) {
-                selectedMonth = fallbackMonth;
+            if (!selectedPeriod) {
+                selectedPeriod = fallbackPeriod;
             }
+
             if (existingInput) {
-                if (earliestAvailableMonth) {
-                    existingInput.min = earliestAvailableMonth;
+                if (isYearMode) {
+                    existingInput.removeAttribute('min');
+                    existingInput.removeAttribute('max');
+                    existingInput.type = 'text';
+                } else {
+                    existingInput.type = 'month';
+                    const earliest = periodOptions[0];
+                    const latest = periodOptions[periodOptions.length - 1];
+                    if (earliest) {
+                        existingInput.min = earliest;
+                    }
+                    if (latest) {
+                        existingInput.max = latest;
+                    }
                 }
-                if (latestAvailableMonth) {
-                    existingInput.max = latestAvailableMonth;
-                }
-                existingInput.value = selectedMonth;
+                existingInput.value = selectedPeriod;
             }
 
             const container = document.getElementById('reportsContent');
@@ -1932,22 +2052,36 @@ const App = {
             container.innerHTML = Analytics.buildLoadingMarkup('standard');
 
             requestAnimationFrame(() => {
-                const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+                const analytics = DataManager.getMonthlyAnalytics(selectedPeriod, this.reportFilters || {});
                 this.latestAnalytics.standard = analytics;
-                this.latestAnalytics.standardMonth = selectedMonth;
+                this.latestAnalytics.standardPeriod = selectedPeriod;
+                if (isYearMode) {
+                    this.latestAnalytics.standardYear = selectedPeriod;
+                } else {
+                    this.latestAnalytics.standardMonth = selectedPeriod;
+                }
 
                 const filterBar = this.buildAnalyticsFilterBar('standard');
                 container.innerHTML = `
                     ${filterBar}
                     ${this.buildAnalyticsMarkup(analytics, {
                         variant: 'standard',
-                        month: selectedMonth
+                        periodType: isYearMode ? 'year' : 'month',
+                        periodValue: selectedPeriod,
+                        periodOptions,
+                        periodLabel: isYearMode ? selectedPeriod : selectedPeriod,
+                        allowPeriodShift: periodOptions.length > 1
                     })}
+                    ${this.buildAnalyticsTableBuilderMarkup()}
                 `;
 
                 this.setAnalyticsLoading('reports', true);
                 this.initAnalyticsCharts({ prefix: 'reports', analytics });
                 this.setAnalyticsLoading('reports', false);
+                this.renderAnalyticsTableBuilder(analytics, {
+                    periodType: isYearMode ? 'year' : 'month',
+                    periodValue: selectedPeriod
+                });
             });
         } catch (error) {
             console.error('Error loading reports:', error);
@@ -1958,36 +2092,73 @@ const App = {
         }
     },
 
+    setAnalyticsPeriodMode(mode = 'month', variant = 'standard') {
+        const normalized = mode === 'year' ? 'year' : 'month';
+        if (this.analyticsPeriodMode === normalized) {
+            return;
+        }
+        this.analyticsPeriodMode = normalized;
+        if (variant === 'card') {
+            this.loadCardReportsView();
+        } else {
+            this.loadReports();
+        }
+    },
+
+    handleReportPeriodInput(value, variant = 'standard') {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        if (variant === 'card') {
+            this.handleCardReportMonthChange(normalized);
+            return;
+        }
+        if (normalized) {
+            this.latestAnalytics.standardPeriod = normalized;
+            if (this.analyticsPeriodMode === 'year') {
+                this.latestAnalytics.standardYear = normalized;
+            } else {
+                this.latestAnalytics.standardMonth = normalized;
+            }
+        }
+        this.loadReports();
+    },
+
     shiftReportMonth(step = 1, variant = 'standard') {
-        const months = DataManager.getAvailableActivityMonths();
-        if (!months.length) {
+        const isCard = variant === 'card';
+        const isYearMode = !isCard && this.analyticsPeriodMode === 'year';
+        const periods = isYearMode
+            ? DataManager.getAvailableActivityYears()
+            : DataManager.getAvailableActivityMonths();
+        if (!periods.length) {
             return;
         }
         const normalizedStep = Number.isFinite(step) ? step : 1;
-        const isCard = variant === 'card';
         const inputId = isCard ? 'cardReportMonth' : 'reportMonth';
         const input = document.getElementById(inputId);
-        const storedMonth = isCard
+        const storedValue = isCard
             ? this.latestAnalytics.cardMonth
-            : this.latestAnalytics.standardMonth;
-        let current =
-            (input && input.value) ||
-            storedMonth ||
-            months[months.length - 1];
-        if (!months.includes(current)) {
-            current = months[months.length - 1];
+            : (isYearMode
+                ? (this.latestAnalytics.standardYear || this.latestAnalytics.standardPeriod)
+                : (this.latestAnalytics.standardMonth || this.latestAnalytics.standardPeriod));
+        let current = (input && input.value) || storedValue || periods[periods.length - 1];
+        if (!periods.includes(current)) {
+            current = periods[periods.length - 1];
         }
-        let index = months.indexOf(current) + normalizedStep;
+        let index = periods.indexOf(current) + normalizedStep;
         if (index < 0) index = 0;
-        if (index >= months.length) index = months.length - 1;
-        const nextMonth = months[index];
+        if (index >= periods.length) index = periods.length - 1;
+        const nextPeriod = periods[index];
         if (input) {
-            input.value = nextMonth;
+            input.value = nextPeriod;
         }
         if (isCard) {
-            this.handleCardReportMonthChange(nextMonth);
+            this.handleCardReportMonthChange(nextPeriod);
         } else {
-            this.latestAnalytics.standardMonth = nextMonth;
+            if (isYearMode) {
+                this.latestAnalytics.standardYear = nextPeriod;
+            } else {
+                this.latestAnalytics.standardMonth = nextPeriod;
+            }
+            this.latestAnalytics.standardPeriod = nextPeriod;
             this.loadReports();
         }
     },
@@ -2033,8 +2204,12 @@ const App = {
 
         const rows = [];
 
+        const periodLabel = analytics.periodType === 'year'
+            ? `${analytics.periodValue || analytics.month} (Annual)`
+            : DataManager.formatMonth(analytics.periodValue || analytics.month);
+
         rows.push(['Summary']);
-        rows.push(['Month', DataManager.formatMonth(analytics.month)]);
+        rows.push(['Period', periodLabel]);
         rows.push(['Total Activities', analytics.totalActivities]);
         rows.push(['Internal Activities', analytics.internalActivities]);
         rows.push(['External Activities', analytics.externalActivities]);
@@ -2086,6 +2261,7 @@ const App = {
             selected = availableMonths[availableMonths.length - 1];
         }
         this.latestAnalytics.cardMonth = selected;
+        this.latestAnalytics.standardPeriod = selected;
         const reportsView = document.getElementById('reportsView');
         if (reportsView) {
             reportsView.dataset.currentTab = 'reports';
@@ -2177,6 +2353,422 @@ const App = {
         } else {
             this.loadReports();
         }
+    },
+
+    buildAnalyticsTableBuilderMarkup() {
+        return `
+            <div class="card analytics-table-builder" id="analyticsTableBuilderCard">
+                <div class="card-header">
+                    <h3>Custom Analytics Table</h3>
+                    <p class="text-muted">Pick a dataset, configure the columns you care about, then export or save the view.</p>
+                </div>
+                <div class="card-body">
+                    <div id="analyticsTableBuilderControls" class="analytics-table-controls"></div>
+                    <div id="analyticsTablePreview" class="analytics-table-preview table-responsive"></div>
+                    <div id="analyticsTablePresetsPanel" class="analytics-table-presets"></div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderAnalyticsTableBuilder(analytics, context = {}) {
+        const controlsRoot = document.getElementById('analyticsTableBuilderControls');
+        const previewRoot = document.getElementById('analyticsTablePreview');
+        const presetsRoot = document.getElementById('analyticsTablePresetsPanel');
+        if (!controlsRoot || !previewRoot || !presetsRoot) {
+            return;
+        }
+        if (!analytics) {
+            controlsRoot.innerHTML = '<p class="text-muted">Analytics data will appear here once a period is loaded.</p>';
+            previewRoot.innerHTML = '';
+            presetsRoot.innerHTML = '';
+            return;
+        }
+
+        const definitions = this.getAnalyticsTableDefinitions();
+        const datasetKeys = Object.keys(definitions);
+        if (!datasetKeys.length) {
+            controlsRoot.innerHTML = '<p class="text-muted">No analytics datasets available.</p>';
+            previewRoot.innerHTML = '';
+            presetsRoot.innerHTML = '';
+            return;
+        }
+
+        if (!datasetKeys.includes(this.analyticsTableState.dataset)) {
+            this.analyticsTableState.dataset = datasetKeys[0];
+            this.analyticsTableState.columns = [];
+            this.analyticsTableState.rows = [];
+        }
+
+        const datasetDefinition = this.getAnalyticsTableDefinition(this.analyticsTableState.dataset);
+        const selectedColumns = this.ensureAnalyticsTableColumns(this.analyticsTableState.dataset);
+
+        controlsRoot.innerHTML = `
+            <div class="analytics-table-control-grid">
+                <div class="form-group">
+                    <label class="form-label">Dataset</label>
+                    <select id="analyticsTableDataset" class="form-control" onchange="App.handleAnalyticsTableDatasetChange(this.value)">
+                        ${datasetKeys.map(key => `
+                            <option value="${key}" ${key === this.analyticsTableState.dataset ? 'selected' : ''}>
+                                ${definitions[key].label}
+                            </option>
+                        `).join('')}
+                    </select>
+                    <small class="text-muted">${datasetDefinition.description || ''}</small>
+                </div>
+                <div class="form-group analytics-table-columns">
+                    <label class="form-label">Columns</label>
+                    <div class="analytics-columns-grid">
+                        ${datasetDefinition.columns.map(column => `
+                            <label class="checkbox">
+                                <input type="checkbox"
+                                       value="${column.key}"
+                                       ${selectedColumns.includes(column.key) ? 'checked' : ''}
+                                       onchange="App.handleAnalyticsTableColumnToggle('${column.key}', this.checked)">
+                                <span>${column.label}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="analytics-table-actions">
+                    <button class="btn btn-primary" onclick="App.generateAnalyticsTable()">Generate Table</button>
+                    <button class="btn btn-outline" onclick="App.exportAnalyticsTableCsv()">Export CSV</button>
+                    ${(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())
+                        ? '<button class="btn btn-secondary" onclick="App.saveAnalyticsTablePreset()">Save Preset</button>'
+                        : ''}
+                </div>
+            </div>
+        `;
+
+        this.renderAnalyticsTablePreview();
+        this.renderAnalyticsTablePresets();
+    },
+
+    getAnalyticsTableDefinitions() {
+        return this.analyticsTableDefinitions || {};
+    },
+
+    getAnalyticsTableDefinition(key) {
+        const definitions = this.getAnalyticsTableDefinitions();
+        return definitions && key ? definitions[key] || null : null;
+    },
+
+    ensureAnalyticsTableColumns(datasetKey) {
+        const definition = this.getAnalyticsTableDefinition(datasetKey);
+        if (!definition) {
+            this.analyticsTableState.columns = [];
+            return [];
+        }
+        const validKeys = definition.columns.map(column => column.key);
+        const existing = Array.isArray(this.analyticsTableState.columns) ? this.analyticsTableState.columns : [];
+        const filtered = existing.filter(key => validKeys.includes(key));
+        if (filtered.length) {
+            this.analyticsTableState.columns = filtered;
+            return filtered;
+        }
+
+        const defaults = definition.columns.filter(column => column.default).map(column => column.key);
+        const fallback = defaults.length ? defaults : (validKeys.length ? [validKeys[0]] : []);
+        this.analyticsTableState.columns = fallback;
+        return fallback;
+    },
+
+    handleAnalyticsTableDatasetChange(value) {
+        const datasetKey = value || 'regionPerformance';
+        this.analyticsTableState.dataset = datasetKey;
+        this.analyticsTableState.columns = [];
+        this.analyticsTableState.rows = [];
+        this.renderAnalyticsTableBuilder(this.latestAnalytics.standard || null);
+    },
+
+    handleAnalyticsTableColumnToggle(columnKey, isChecked) {
+        const definition = this.getAnalyticsTableDefinition(this.analyticsTableState.dataset);
+        if (!definition) return;
+        const validKeys = definition.columns.map(column => column.key);
+        if (!validKeys.includes(columnKey)) return;
+
+        const selected = new Set(this.analyticsTableState.columns || []);
+        if (isChecked) {
+            selected.add(columnKey);
+        } else {
+            selected.delete(columnKey);
+        }
+        if (!selected.size) {
+            const defaults = definition.columns.filter(column => column.default).map(column => column.key);
+            const fallback = defaults.length ? defaults[0] : validKeys[0];
+            if (fallback) {
+                selected.add(fallback);
+            }
+        }
+        this.analyticsTableState.columns = Array.from(selected);
+        if (this.analyticsTableState.rows && this.analyticsTableState.rows.length) {
+            this.renderAnalyticsTablePreview();
+        }
+    },
+
+    generateAnalyticsTable() {
+        const analytics = this.latestAnalytics.standard;
+        if (!analytics) {
+            UI.showNotification('Load analytics data first.', 'info');
+            return;
+        }
+        const datasetKey = this.analyticsTableState.dataset;
+        const rows = this.buildAnalyticsTableRows(datasetKey, analytics);
+        const definition = this.getAnalyticsTableDefinition(datasetKey);
+        if (!definition) {
+            UI.showNotification('Unknown dataset.', 'error');
+            return;
+        }
+
+        this.ensureAnalyticsTableColumns(datasetKey);
+        this.analyticsTableState.rows = rows;
+        this.analyticsTableState.generatedAt = new Date().toISOString();
+        this.analyticsTableState.generatedFrom = {
+            periodType: analytics.periodType || 'month',
+            periodValue: analytics.periodValue || analytics.month || ''
+        };
+
+        this.renderAnalyticsTablePreview();
+        if (!rows.length) {
+            UI.showNotification('No data for the selected dataset and filters.', 'info');
+        } else {
+            UI.showNotification('Analytics table generated.', 'success');
+        }
+    },
+
+    buildAnalyticsTableRows(datasetKey, analytics) {
+        switch (datasetKey) {
+            case 'regionPerformance':
+                return (analytics.regionSummaries || []).map(entry => ({ ...entry }));
+            case 'presalesPerformance':
+                return (analytics.userSummaries || []).map(entry => ({
+                    userName: entry.userName,
+                    region: entry.region || '',
+                    total: entry.total || 0,
+                    external: entry.external || 0,
+                    internal: entry.internal || 0,
+                    wins: entry.wins || 0,
+                    losses: entry.losses || 0
+                }));
+            case 'projectPipeline':
+                return (analytics.projectSummaries || []).map(entry => ({
+                    projectName: entry.projectName,
+                    accountName: entry.accountName,
+                    status: entry.status,
+                    region: entry.region || '',
+                    totalActivities: entry.totalActivities || 0,
+                    externalActivities: entry.externalActivities || 0,
+                    internalActivities: entry.internalActivities || 0,
+                    wins: entry.wins || 0,
+                    losses: entry.losses || 0,
+                    lastActivityAt: entry.lastActivityAt || '',
+                    ownerCount: entry.ownerCount || (Array.isArray(entry.ownerIds) ? entry.ownerIds.length : 0)
+                }));
+            case 'accountEngagement':
+                return (analytics.accountSummaries || []).map(entry => ({
+                    accountName: entry.accountName,
+                    region: entry.region || '',
+                    totalActivities: entry.totalActivities || 0,
+                    externalActivities: entry.externalActivities || 0,
+                    internalActivities: entry.internalActivities || 0,
+                    totalProjects: entry.totalProjects || 0,
+                    activeProjects: entry.activeProjects || 0,
+                    wonProjects: entry.wonProjects || 0,
+                    lostProjects: entry.lostProjects || 0,
+                    lastActivityAt: entry.lastActivityAt || ''
+                }));
+            case 'activityTypeMix':
+                return Object.entries(analytics.activityTypeCounts || {}).map(([type, count]) => ({
+                    type,
+                    count
+                }));
+            default:
+                return [];
+        }
+    },
+
+    renderAnalyticsTablePreview() {
+        const previewRoot = document.getElementById('analyticsTablePreview');
+        if (!previewRoot) {
+            return;
+        }
+        const datasetKey = this.analyticsTableState.dataset;
+        const definition = this.getAnalyticsTableDefinition(datasetKey);
+        if (!definition) {
+            previewRoot.innerHTML = '<p class="text-muted">Dataset not available.</p>';
+            return;
+        }
+        const rows = this.analyticsTableState.rows || [];
+        if (!rows.length) {
+            previewRoot.innerHTML = '<p class="text-muted">Generate a table to see the results here.</p>';
+            return;
+        }
+        const selectedKeys = this.ensureAnalyticsTableColumns(datasetKey);
+        const columns = definition.columns.filter(column => selectedKeys.includes(column.key));
+        if (!columns.length) {
+            previewRoot.innerHTML = '<p class="text-muted">Select at least one column.</p>';
+            return;
+        }
+
+        const headerMarkup = columns.map(column => `<th>${this.escapeHtml(column.label)}</th>`).join('');
+        const bodyMarkup = rows.map(row => {
+            const cells = columns.map(column => `<td>${this.normalizeAnalyticsTableValue(column.key, row[column.key])}</td>`).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+
+        previewRoot.innerHTML = `
+            <table class="table table-striped table-sm">
+                <thead><tr>${headerMarkup}</tr></thead>
+                <tbody>${bodyMarkup}</tbody>
+            </table>
+        `;
+    },
+
+    normalizeAnalyticsTableValue(key, value) {
+        if (value === null || value === undefined || value === '') {
+            return '–';
+        }
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value.toLocaleString() : '0';
+        }
+        if (key.toLowerCase().includes('date') || key === 'lastActivityAt') {
+            if (typeof DataManager !== 'undefined' && typeof DataManager.formatDate === 'function') {
+                return this.escapeHtml(DataManager.formatDate(value));
+            }
+            return this.escapeHtml(String(value));
+        }
+        return this.escapeHtml(String(value));
+    },
+
+    exportAnalyticsTableCsv() {
+        const rows = this.analyticsTableState.rows || [];
+        if (!rows.length) {
+            UI.showNotification('Generate a table before exporting.', 'info');
+            return;
+        }
+        const datasetKey = this.analyticsTableState.dataset;
+        const definition = this.getAnalyticsTableDefinition(datasetKey);
+        if (!definition) {
+            UI.showNotification('Unknown dataset.', 'error');
+            return;
+        }
+        const selectedKeys = this.ensureAnalyticsTableColumns(datasetKey);
+        const columns = definition.columns.filter(column => selectedKeys.includes(column.key));
+        if (!columns.length) {
+            UI.showNotification('Select at least one column.', 'info');
+            return;
+        }
+
+        const headerRow = columns.map(column => column.label);
+        const dataRows = rows.map(row =>
+            columns.map(column => {
+                const value = row[column.key];
+                if (value === null || value === undefined) return '';
+                if (typeof value === 'number') {
+                    return Number.isFinite(value) ? value : '';
+                }
+                if (column.key.toLowerCase().includes('date') || column.key === 'lastActivityAt') {
+                    return typeof DataManager !== 'undefined' && typeof DataManager.formatDate === 'function'
+                        ? DataManager.formatDate(value)
+                        : String(value);
+                }
+                return String(value);
+            })
+        );
+
+        const csvRows = [headerRow, ...dataRows];
+        const periodFragment = (this.analyticsTableState.generatedFrom?.periodValue || '')
+            .replace(/[^0-9a-z_-]/gi, '') || 'period';
+        const filename = `analytics_table_${datasetKey}_${periodFragment}.csv`;
+        this.downloadCsv(filename, csvRows);
+        UI.showNotification('Analytics table exported.', 'success');
+    },
+
+    saveAnalyticsTablePreset() {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only admins can save presets.', 'info');
+            return;
+        }
+        const datasetKey = this.analyticsTableState.dataset;
+        const columns = this.ensureAnalyticsTableColumns(datasetKey);
+        if (!columns.length) {
+            UI.showNotification('Select at least one column.', 'info');
+            return;
+        }
+        const name = prompt('Preset name');
+        if (!name || !name.trim()) {
+            return;
+        }
+        const trimmedName = name.trim();
+        const preset = {
+            id: DataManager.generateId(),
+            name: trimmedName,
+            dataset: datasetKey,
+            columns,
+            createdAt: new Date().toISOString(),
+            createdBy: Auth.getCurrentUser()?.username || 'Admin'
+        };
+        const updated = [
+            ...this.savedAnalyticsTables.filter(item => item.id !== preset.id && item.name !== trimmedName),
+            preset
+        ];
+        DataManager.saveAnalyticsTablePresets(updated);
+        this.savedAnalyticsTables = updated;
+        this.renderAnalyticsTablePresets();
+        UI.showNotification('Preset saved.', 'success');
+    },
+
+    renderAnalyticsTablePresets() {
+        const panel = document.getElementById('analyticsTablePresetsPanel');
+        if (!panel) {
+            return;
+        }
+        if (!this.savedAnalyticsTables.length) {
+            panel.innerHTML = '<p class="text-muted">No saved presets yet.</p>';
+            return;
+        }
+        const presetItems = this.savedAnalyticsTables
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(preset => {
+                const applyButton = `<button class="btn btn-link btn-sm" onclick="App.applyAnalyticsTablePreset('${preset.id}')">${this.escapeHtml(preset.name)}</button>`;
+                const deleteButton = (typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())
+                    ? `<button class="btn btn-link btn-sm text-danger" onclick="App.deleteAnalyticsTablePreset('${preset.id}')">Delete</button>`
+                    : '';
+                const meta = preset.createdAt
+                    ? `<span class="preset-meta text-muted">Saved ${DataManager.formatDate ? DataManager.formatDate(preset.createdAt) : preset.createdAt}</span>`
+                    : '';
+                return `<li>${applyButton}${deleteButton}${meta}</li>`;
+            }).join('');
+
+        panel.innerHTML = `
+            <div class="analytics-presets-header">
+                <h4>Saved Presets</h4>
+            </div>
+            <ul class="analytics-presets-list">
+                ${presetItems}
+            </ul>
+        `;
+    },
+
+    applyAnalyticsTablePreset(id) {
+        const preset = this.savedAnalyticsTables.find(item => item.id === id);
+        if (!preset) return;
+        this.analyticsTableState.dataset = preset.dataset;
+        this.analyticsTableState.columns = Array.isArray(preset.columns) ? [...preset.columns] : [];
+        this.analyticsTableState.rows = [];
+        this.renderAnalyticsTableBuilder(this.latestAnalytics.standard || null);
+        UI.showNotification(`Preset "${preset.name}" loaded.`, 'success');
+    },
+
+    deleteAnalyticsTablePreset(id) {
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only admins can delete presets.', 'info');
+            return;
+        }
+        this.savedAnalyticsTables = this.savedAnalyticsTables.filter(item => item.id !== id);
+        DataManager.saveAnalyticsTablePresets(this.savedAnalyticsTables);
+        this.renderAnalyticsTablePresets();
+        UI.showNotification('Preset deleted.', 'success');
     },
 
     getAvailableChannels() {
@@ -2523,6 +3115,26 @@ const App = {
 
     clearPendingDuplicateAlerts() {
         this.pendingDuplicateAlerts = [];
+    },
+
+    escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value).replace(/[&<>"']/g, (char) => {
+            switch (char) {
+                case '&':
+                    return '&amp;';
+                case '<':
+                    return '&lt;';
+                case '>':
+                    return '&gt;';
+                case '"':
+                    return '&quot;';
+                case '\'':
+                    return '&#39;';
+                default:
+                    return char;
+            }
+        });
     },
 
     downloadCsv(filename, rows) {

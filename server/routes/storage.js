@@ -1,8 +1,29 @@
 const express = require('express');
+const zlib = require('zlib');
 const router = express.Router();
 
 const { getPool } = require('../db');
 const logger = require('../logger');
+
+const GZIP_PREFIX = '__gz__';
+
+const maybeDecompressValue = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  if (!value.startsWith(GZIP_PREFIX)) {
+    return value;
+  }
+  try {
+    const compressed = Buffer.from(value.slice(GZIP_PREFIX.length), 'base64');
+    return zlib.gunzipSync(compressed).toString('utf8');
+  } catch (error) {
+    logger.warn('storage_decompress_failed', {
+      message: error.message
+    });
+    return value;
+  }
+};
 
 const listKeys = async () => {
   const { rows } = await getPool().query(
@@ -57,7 +78,8 @@ router.get('/', async (req, res) => {
 
 router.get('/:key', async (req, res) => {
   try {
-    const value = await getValue(req.params.key);
+    const storedValue = await getValue(req.params.key);
+    const value = maybeDecompressValue(storedValue);
     if (value === null || value === undefined) {
       res.status(404).json({ message: 'Key not found' });
       return;

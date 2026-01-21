@@ -7,8 +7,8 @@ const Analytics = (() => {
         palette: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795', '#F6AD55', '#63B3ED', '#4A5568'],
         extendedPalette: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795', '#F6AD55', '#63B3ED', '#4A5568', '#B794F4', '#68D391', '#F56565', '#ECC94B', '#4FD1C5', '#9F7AEA', '#ED64A6'],
         insightCopy: {
-            target: 'Actual activities versus monthly goal per presales user.',
-            mix: 'Distribution of external activity types logged this month.',
+            target: 'Actual activities versus the presales target for the selected period.',
+            mix: 'Distribution of external activity types logged in this period.',
             userStack: 'Breakdown of activity types owned by each presales user.',
             products: 'Products discussed per industry (top industries grouped).',
             industry: 'Total external activities logged per industry.',
@@ -26,16 +26,86 @@ const Analytics = (() => {
         ? `<span class="chart-info" title="${config.insightCopy[key]}">&#9432;</span>`
         : '';
 
-    function buildMarkup(analytics, { variant = 'standard', month }) {
+    function buildMarkup(analytics, options = {}) {
+        const {
+            variant = 'standard',
+            periodType = analytics.periodType || 'month',
+            periodValue = analytics.periodValue || analytics.month,
+            periodOptions = [],
+            periodLabel,
+            allowPeriodShift = true
+        } = options;
+
         const prefix = variant === 'card' ? 'card' : 'reports';
         const wrapperClass = variant === 'card' ? 'content-card' : 'card';
         const headerClass = variant === 'card' ? 'content-card-header' : 'card-header';
         const bodyClass = variant === 'card' ? 'analytics-card-body' : 'card-body';
-        const monthInputId = variant === 'card' ? 'cardReportMonth' : 'reportMonth';
-        const onChangeHandler = variant === 'card' ? 'App.loadCardReportsView()' : 'App.loadReports()';
+        const periodInputId = variant === 'card' ? 'cardReportMonth' : 'reportMonth';
+        const viewLabel = periodType === 'year' ? 'Annual' : 'Monthly';
+        const formatMonth = (value) => {
+            if (!value) return 'Unknown';
+            if (typeof DataManager !== 'undefined' && typeof DataManager.formatMonth === 'function') {
+                return DataManager.formatMonth(value);
+            }
+            return value;
+        };
+        const displayPeriod = periodLabel
+            ? periodLabel
+            : (periodType === 'year' ? (periodValue || '') : formatMonth(periodValue || analytics.month));
+
+        const onChangeHandler = variant === 'card'
+            ? 'App.handleCardReportMonthChange(this.value)'
+            : 'App.handleReportPeriodInput(this.value)';
+
         const titleMarkup = variant === 'card'
-            ? `<h2 class="content-card-title">Monthly Analytics - ${UI.formatMonth(month)}</h2>`
-            : `<h3>Monthly Analytics - ${UI.formatMonth(month)}</h3>`;
+            ? `<h2 class="content-card-title">${viewLabel} Analytics - ${displayPeriod}</h2>`
+            : `<h3>${viewLabel} Analytics - ${displayPeriod}</h3>`;
+
+        const periodToggleMarkup = variant === 'card'
+            ? ''
+            : `
+                <div class="analytics-period-toggle">
+                    <button type="button"
+                            class="btn btn-sm ${periodType === 'month' ? 'btn-primary' : 'btn-outline'}"
+                            onclick="App.setAnalyticsPeriodMode('month')">
+                        Monthly
+                    </button>
+                    <button type="button"
+                            class="btn btn-sm ${periodType === 'year' ? 'btn-primary' : 'btn-outline'}"
+                            onclick="App.setAnalyticsPeriodMode('year')">
+                        Annual
+                    </button>
+                </div>
+            `;
+
+        const periodPickerMarkup = (periodType === 'year' && variant !== 'card')
+            ? `
+                <select id="${periodInputId}"
+                        class="form-control"
+                        onchange="${onChangeHandler}"
+                        style="width: auto;">
+                    ${(periodOptions.length ? periodOptions : [periodValue]).map(option => `
+                        <option value="${option}" ${option === periodValue ? 'selected' : ''}>${option}</option>
+                    `).join('')}
+                </select>
+            `
+            : `
+                <input type="month"
+                       id="${periodInputId}"
+                       class="form-control"
+                       value="${periodValue || ''}"
+                       onchange="${onChangeHandler}"
+                       style="width: auto;">
+            `;
+
+        const periodControlsMarkup = variant === 'card'
+            ? periodPickerMarkup
+            : `
+                <div class="analytics-period-controls">
+                    ${periodToggleMarkup}
+                    ${periodPickerMarkup}
+                </div>
+            `;
 
         const statsMarkup = `
             <div class="stats-grid analytics-stats">
@@ -52,7 +122,7 @@ const Analytics = (() => {
                     <div class="stat-value">${formatNumber(analytics.teamTarget)}</div>
                 </div>
                 <div class="stat-card">
-                    <h4>Activities This Month</h4>
+                    <h4>Activities This Period</h4>
                     <div class="stat-value">${formatNumber(analytics.totalActivities)}</div>
                 </div>
             </div>
@@ -60,14 +130,20 @@ const Analytics = (() => {
 
         const targetMeta = analytics.target?.updatedAt
             ? `Target updated ${typeof DataManager !== 'undefined' && DataManager.formatDate ? DataManager.formatDate(analytics.target.updatedAt) : analytics.target.updatedAt}${analytics.target.updatedBy ? ` by ${analytics.target.updatedBy}` : ''}.`
-            : 'Default target active. Update the monthly presales target from Admin → Analytics Targets.';
+            : `Default target active. Update the presales target from Admin → Analytics Targets.`;
 
         const categorySummary = `
             <div class="analytics-category-summary">
                 <span><strong>External:</strong> ${formatNumber(analytics.externalActivities)}</span>
                 <span><strong>Internal:</strong> ${formatNumber(analytics.internalActivities)}</span>
+                <span><strong>Wins:</strong> ${formatNumber(analytics.totalWonActivities || 0)}</span>
+                <span><strong>Losses:</strong> ${formatNumber(analytics.totalLostActivities || 0)}</span>
             </div>
         `;
+
+        const periodMonthsSummary = periodType === 'year' && Array.isArray(analytics.monthsInPeriod) && analytics.monthsInPeriod.length
+            ? `<p class="text-muted analytics-note analytics-period-note">Covers ${analytics.monthsInPeriod.map(month => formatMonth(month)).join(', ')}.</p>`
+            : '';
 
         const loaderMarkup = `
             <div id="${prefix}AnalyticsLoading" class="analytics-loading hidden">
@@ -119,7 +195,7 @@ const Analytics = (() => {
                 <div class="${headerClass}">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
                         ${titleMarkup}
-                        <input type="month" id="${monthInputId}" class="form-control" value="${month}" onchange="${onChangeHandler}" style="width: auto;">
+                        ${periodControlsMarkup}
                     </div>
                 </div>
                 <div class="${bodyClass}">
@@ -127,6 +203,7 @@ const Analytics = (() => {
                     <div id="${prefix}AnalyticsWrapper">
                         ${statsMarkup}
                         ${categorySummary}
+                        ${periodMonthsSummary}
                         <p class="text-muted analytics-note">${targetMeta}</p>
                         ${chartsMarkup}
                     </div>
@@ -218,7 +295,7 @@ const Analytics = (() => {
 
         const summaries = (analytics.userSummaries || []).filter(summary => summary.total > 0);
         if (!summaries.length) {
-            renderEmptyState(canvas, 'No user activity logged for this month.');
+        renderEmptyState(canvas, 'No user activity logged for this period.');
             return;
         }
 
@@ -229,7 +306,7 @@ const Analytics = (() => {
         }));
 
         if (!orderedSummaries.length) {
-            renderEmptyState(canvas, 'No user activity logged for this month.');
+            renderEmptyState(canvas, 'No user activity logged for this period.');
             return;
         }
 
@@ -247,8 +324,8 @@ const Analytics = (() => {
                     },
                     {
                         type: 'line',
-                        label: `Target (${analytics.targetValue})`,
-                        data: orderedSummaries.map(() => analytics.targetValue),
+                        label: `Target (${analytics.periodTargetValue || analytics.targetValue})`,
+                        data: orderedSummaries.map(() => analytics.periodTargetValue || analytics.targetValue),
                         borderColor: '#F56565',
                         borderWidth: 2,
                         fill: false,
@@ -277,7 +354,7 @@ const Analytics = (() => {
         const totalActivities = activityEntries.reduce((acc, [, count]) => acc + count, 0);
 
         if (!totalActivities) {
-            renderEmptyState(canvas, 'No external activities recorded this month.');
+            renderEmptyState(canvas, 'No external activities recorded this period.');
             return;
         }
 
@@ -317,7 +394,7 @@ const Analytics = (() => {
 
         const summaries = (analytics.userSummaries || []).filter(summary => summary.total > 0);
         if (!summaries.length) {
-            renderEmptyState(canvas, 'No user activity logged this month.');
+            renderEmptyState(canvas, 'No user activity logged this period.');
             return;
         }
 
@@ -381,7 +458,7 @@ const Analytics = (() => {
         const topProducts = productEntries.slice(0, 5).map(([name]) => name);
 
         if (!industryLabels.length || !topProducts.length) {
-            renderEmptyState(canvas, 'No product discussions recorded this month.');
+            renderEmptyState(canvas, 'No product discussions recorded this period.');
             return;
         }
 
@@ -411,7 +488,7 @@ const Analytics = (() => {
 
         const combinedTotal = datasets.reduce((sum, dataset) => sum + dataset.data.reduce((a, b) => a + b, 0), 0);
         if (!combinedTotal) {
-            renderEmptyState(canvas, 'No product discussions recorded this month.');
+            renderEmptyState(canvas, 'No product discussions recorded this period.');
             return;
         }
 
@@ -438,7 +515,7 @@ const Analytics = (() => {
 
         const industryEntries = Object.entries(analytics.industryCounts || {}).sort((a, b) => b[1] - a[1]);
         if (!industryEntries.length) {
-            renderEmptyState(canvas, 'No industry-level activity recorded this month.');
+            renderEmptyState(canvas, 'No industry-level activity recorded this period.');
             return;
         }
 

@@ -80,7 +80,8 @@ const createApp = (options = {}) => {
       credentials: true
     })
   );
-  app.use(express.json({ limit: '1mb' }));
+  const jsonBodyLimit = process.env.API_JSON_LIMIT || '20mb';
+  app.use(express.json({ limit: jsonBodyLimit }));
   app.use((req, res, next) => {
     const start = process.hrtime.bigint();
     const pathName = req.originalUrl || req.url;

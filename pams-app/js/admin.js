@@ -267,6 +267,55 @@ const Admin = {
         summaryElements.forEach(el => {
             if (el) el.textContent = summaryText;
         });
+
+        const accessConfig = DataManager.getAnalyticsAccessConfig();
+        const accessInput = document.getElementById('analyticsAccessPasswordInput');
+        if (accessInput) {
+            accessInput.value = accessConfig.password || '';
+        }
+        const accessMeta = document.getElementById('analyticsAccessMeta');
+        if (accessMeta) {
+            accessMeta.textContent = accessConfig.updatedAt
+                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
+                : 'Using default analytics password.';
+        }
+    },
+
+    saveAnalyticsAccessPassword(event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+
+        if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
+            UI.showNotification('Only admins can update the analytics password.', 'info');
+            return;
+        }
+
+        const input = document.getElementById('analyticsAccessPasswordInput');
+        if (!input) {
+            UI.showNotification('Input not found.', 'error');
+            return;
+        }
+        const trimmed = input.value ? input.value.trim() : '';
+        if (!trimmed) {
+            UI.showNotification('Enter a password before saving.', 'error');
+            return;
+        }
+
+        const currentUser = Auth.getCurrentUser();
+        const config = DataManager.saveAnalyticsAccessConfig({
+            password: trimmed,
+            updatedBy: currentUser?.username || 'Admin',
+            updatedAt: new Date().toISOString()
+        });
+
+        const meta = document.getElementById('analyticsAccessMeta');
+        if (meta) {
+            meta.textContent = config.updatedAt
+                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
+                : '';
+        }
+        UI.showNotification('Analytics password updated.', 'success');
     },
 
     renderProjectHealthSettings() {
