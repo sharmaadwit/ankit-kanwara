@@ -2139,6 +2139,18 @@ const App = {
                         this.latestAnalytics.standardMonth = selectedPeriod;
                     }
 
+        console.info('analytics_loaded', {
+            period: selectedPeriod,
+            periodType: this.analyticsPeriodMode,
+            totalActivities: analytics?.totalActivities,
+            userSummaries: analytics?.userSummaries?.map(summary => ({
+                userId: summary.userId,
+                userName: summary.userName,
+                total: summary.total
+            })),
+            activityTypeCounts: analytics?.activityTypeCounts
+        });
+
                     const tabMarkup = this.buildAnalyticsTabContent(this.analyticsActiveTab, analytics, {
                         prefix: 'reports',
                         periodType: isYearMode ? 'year' : 'month',
@@ -4216,7 +4228,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: orderedSummaries.map(item => item.userName),
@@ -4239,6 +4251,9 @@ const App = {
                 }
             }
         }, `${prefix}-activity-report`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-activity-report`, data: orderedSummaries });
+        }
     },
 
     renderActivityMixChart(context, mode = 'donut') {
@@ -4347,7 +4362,10 @@ const App = {
         if (this.analyticsCharts[existingKey]) {
             this.analyticsCharts[existingKey].destroy();
         }
-        this.tryRenderChart(canvas, chartConfig, existingKey);
+        const chart = this.tryRenderChart(canvas, chartConfig, existingKey);
+        if (chart) {
+            console.info('chart_rendered', { key: existingKey, data: activityEntries });
+        }
     },
 
     renderUserStackedChart(context) {
@@ -4421,7 +4439,7 @@ const App = {
             }));
         }
 
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: { labels, datasets },
             options: {
@@ -4434,6 +4452,9 @@ const App = {
                 }
             }
         }, `${prefix}-stacked`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-stacked`, data: userSummaries });
+        }
     },
 
     renderProductsChart(context) {
@@ -4480,7 +4501,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: { labels: industryLabelsForProducts, datasets },
             options: {
@@ -4494,6 +4515,9 @@ const App = {
                 }
             }
         }, `${prefix}-products`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-products`, labels: industryLabelsForProducts });
+        }
     },
 
     renderIndustryActivityChart(context) {
@@ -4507,7 +4531,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: industriesForActivity,
@@ -4527,6 +4551,9 @@ const App = {
                 }
             }
         }, `${prefix}-industry`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-industry`, labels: industriesForActivity });
+        }
     },
 
     renderWinLossTrendChart(context) {
@@ -4543,7 +4570,7 @@ const App = {
 
         this.prepareChartCanvas(canvas);
         const labels = trendData.map(item => UI.formatMonth(item.month));
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'line',
             data: {
                 labels,
@@ -4575,6 +4602,9 @@ const App = {
                 }
             }
         }, `${prefix}-trend`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-trend`, labels });
+        }
     },
 
     renderChannelOutcomeChart(context) {
@@ -4611,7 +4641,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: limitedChannels.map(item => item.channel),
@@ -4637,6 +4667,9 @@ const App = {
                 }
             }
         }, `${prefix}-channels`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-channels`, labels: limitedChannels.map(item => item.channel) });
+        }
     },
 
     renderPocFunnelChart(context) {
@@ -4658,7 +4691,7 @@ const App = {
         }
 
         this.prepareChartCanvas(canvas);
-        this.tryRenderChart(canvas, {
+        const chart = this.tryRenderChart(canvas, {
             type: 'bar',
             data: {
                 labels: funnelEntries.map(entry => entry.accessType),
@@ -4689,6 +4722,9 @@ const App = {
                 }
             }
         }, `${prefix}-poc`);
+        if (chart) {
+            console.info('chart_rendered', { key: `${prefix}-poc`, labels: funnelEntries.map(entry => entry.accessType) });
+        }
     },
 
     destroyAnalyticsCharts(prefix) {
@@ -4748,7 +4784,11 @@ const App = {
             }
             return chart;
         } catch (error) {
-            console.error('analytics_chart_render_failed', { cacheKey, message: error?.message });
+            console.error('analytics_chart_render_failed', {
+                cacheKey,
+                message: error?.message,
+                stack: error?.stack
+            });
             this.renderChartError(canvas, error?.message);
             return null;
         }
