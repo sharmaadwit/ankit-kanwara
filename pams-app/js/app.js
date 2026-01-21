@@ -4188,11 +4188,25 @@ const App = {
         }
 
         const presalesUsers = analytics.presalesUsers || [];
-        const orderedSummaries = presalesUsers
+        const summaryEntries = (analytics.userSummaries || []).map(summary => ({
+            userId: summary.userId,
+            userName:
+                summary.userName ||
+                presalesUsers.find(user => user.userId === summary.userId)?.userName ||
+                summary.email ||
+                'Unknown',
+            total: summary.total || 0
+        }));
+
+        const supplementalEntries = presalesUsers
+            .filter(user => !summaryEntries.some(entry => entry.userId === user.userId))
             .map(user => ({
+                userId: user.userId,
                 userName: user.userName,
                 total: summaryMap[user.userId]?.total || 0
-            }))
+            }));
+
+        const orderedSummaries = [...summaryEntries, ...supplementalEntries]
             .filter(entry => entry.userName)
             .sort((a, b) => b.total - a.total);
 
@@ -4350,14 +4364,38 @@ const App = {
         }
 
         const summaries = analytics.userSummaries || [];
-        const userSummaries = presalesUsers.map(user => {
-            const summary = summaries.find(item => item.userId === user.userId);
-            return {
-                userName: user.userName,
-                total: summary?.total || 0,
-                types: summary?.types || {}
-            };
+        const presalesLookup = presalesUsers.reduce((acc, user) => {
+            acc[user.userId] = user;
+            return acc;
+        }, {});
+        const userSummariesMap = new Map();
+
+        summaries.forEach(summary => {
+            const baseName =
+                summary.userName ||
+                presalesLookup[summary.userId]?.userName ||
+                summary.email ||
+                'Unknown';
+            userSummariesMap.set(summary.userId, {
+                userId: summary.userId,
+                userName: baseName,
+                total: summary.total || 0,
+                types: summary.types || {}
+            });
         });
+
+        presalesUsers.forEach(user => {
+            if (!userSummariesMap.has(user.userId)) {
+                userSummariesMap.set(user.userId, {
+                    userId: user.userId,
+                    userName: user.userName,
+                    total: 0,
+                    types: {}
+                });
+            }
+        });
+
+        const userSummaries = Array.from(userSummariesMap.values());
 
         const sortedUsers = [...userSummaries].sort((a, b) => b.total - a.total);
 
