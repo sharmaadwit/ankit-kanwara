@@ -80,6 +80,7 @@ const App = {
         generatedAt: null,
         generatedFrom: null
     },
+    analyticsCharts: {},
     analyticsTableDefinitions: {
         regionPerformance: {
             label: 'Region Performance',
@@ -453,10 +454,10 @@ const App = {
         this.setAnalyticsLoading('reports', true);
         this.initAnalyticsCharts({ prefix: 'reports', analytics, month: periodValue });
         this.setAnalyticsLoading('reports', false);
-        this.setupActivityMixToggle('reports');
+        this.setupActivityMixToggle('reports', analytics);
     },
 
-    setupActivityMixToggle(prefix) {
+    setupActivityMixToggle(prefix, dataset) {
         const select = document.getElementById(`${prefix}ActivityMixView`);
         if (!select) return;
         if (!this.analyticsPreferences) {
@@ -469,10 +470,15 @@ const App = {
             this.analyticsPreferences.activityMixView[prefix] = mode;
             this.renderActivityMixChart({
                 prefix,
-                analytics: this.latestAnalytics.standard,
+                analytics: dataset || (prefix === 'card' ? this.latestAnalytics.card : this.latestAnalytics.standard),
                 palette: this.getPalette()
             }, mode);
         };
+        this.renderActivityMixChart({
+            prefix,
+            analytics: dataset || (prefix === 'card' ? this.latestAnalytics.card : this.latestAnalytics.standard),
+            palette: this.getPalette()
+        }, current);
     },
 
     // Setup event listeners
@@ -1758,7 +1764,7 @@ const App = {
         this.setAnalyticsLoading('card', true);
         this.initAnalyticsCharts({ prefix: 'card', analytics, month: selectedMonth });
         this.setAnalyticsLoading('card', false);
-        this.setupActivityMixToggle('card');
+        this.setupActivityMixToggle('card', analytics);
     },
     
     // Load card-based admin view
@@ -4098,9 +4104,16 @@ const App = {
     },
 
     renderActivityReportChart(context) {
-        const { prefix, analytics, palette, summaryMap } = context;
+        const prefix = context?.prefix || 'reports';
+        const analytics = context?.analytics;
+        const palette = context?.palette || this.getPalette();
+        const summaryMap = context?.summaryMap || {};
         const canvas = document.getElementById(`${prefix}ActivityReportChart`) || document.getElementById(`${prefix}TargetChart`);
         if (!canvas) return;
+        if (!analytics) {
+            this.renderChartEmptyState(canvas, 'Analytics data unavailable for this period.');
+            return;
+        }
 
         const presalesUsers = analytics.presalesUsers || [];
         const orderedSummaries = presalesUsers
@@ -4144,9 +4157,18 @@ const App = {
     },
 
     renderActivityMixChart(context, mode = 'donut') {
-        const { prefix, analytics, palette } = context;
+        const prefix = context?.prefix || 'reports';
+        const analytics = context?.analytics;
+        const palette = context?.palette || this.getPalette();
         const canvas = document.getElementById(`${prefix}ActivityMixChart`) || document.getElementById(`${prefix}ActivityPieChart`);
         if (!canvas) return;
+        if (!this.analyticsCharts) {
+            this.analyticsCharts = {};
+        }
+        if (!analytics) {
+            this.renderChartEmptyState(canvas, 'Analytics data unavailable for this period.');
+            return;
+        }
         if (!this.analyticsPreferences) {
             this.analyticsPreferences = { activityMixView: {} };
         }
