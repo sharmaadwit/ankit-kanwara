@@ -370,6 +370,7 @@ const DataManager = {
 
     prepareMigratedActivities(activities) {
         const seenSignatures = new Set();
+        const seenUserSummarySignatures = new Set();
         const deduped = [];
         let changed = false;
 
@@ -385,6 +386,15 @@ const DataManager = {
                 return;
             }
             seenSignatures.add(signature);
+
+             const userSummarySignature = this.buildActivityUserSummarySignature(
+                record
+            );
+            if (seenUserSummarySignatures.has(userSummarySignature)) {
+                changed = true;
+                return;
+            }
+            seenUserSummarySignatures.add(userSummarySignature);
             deduped.push(record);
         });
 
@@ -480,6 +490,39 @@ const DataManager = {
             normalize(activity.assignedUserEmail || activity.userId),
             normalize(activity.salesRep),
             summarySnippet
+        ].join('|');
+    },
+
+    buildActivityUserSummarySignature(activity = {}) {
+        const normalize = (value) =>
+            (value || '')
+                .toString()
+                .trim()
+                .toLowerCase();
+
+        const datePart = normalize(activity.date || activity.createdAt).slice(
+            0,
+            10
+        );
+
+        const accountKey = normalize(activity.accountId || activity.accountName);
+        const projectKey = normalize(activity.projectId || activity.projectName);
+        const typeKey = normalize(activity.type);
+        const summaryKey = normalize(activity.summary);
+        const userKey = normalize(
+            activity.assignedUserEmail ||
+                activity.userId ||
+                activity.userName ||
+                ''
+        );
+
+        return [
+            accountKey,
+            projectKey,
+            datePart,
+            typeKey,
+            summaryKey,
+            userKey
         ].join('|');
     },
 

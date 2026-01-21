@@ -218,6 +218,28 @@ const buildSignature = (activity) => {
   ].join('|');
 };
 
+const buildUserSummarySignature = (activity) => {
+  const normalize = (value) =>
+    (value || '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  const datePart = normalize(activity.date || activity.createdAt).slice(0, 10);
+  return [
+    normalize(activity.accountId || activity.accountName),
+    normalize(activity.projectId || activity.projectName),
+    normalize(activity.type),
+    datePart,
+    normalize(activity.summary),
+    normalize(
+      activity.assignedUserEmail ||
+        activity.userId ||
+        activity.userName ||
+        ''
+    )
+  ].join('|');
+};
+
 const removePatternDuplicates = (records) => {
   const working = records.map((activity) => ({ ...activity }));
   let changed = false;
@@ -370,6 +392,7 @@ const orchestrate = async () => {
   const normalised = activities.map(normalizeActivity);
 
   const signatures = new Set();
+  const userSummarySignatures = new Set();
   const deduped = [];
   normalised.forEach((activity) => {
     const signature = buildSignature(activity);
@@ -377,6 +400,12 @@ const orchestrate = async () => {
       return;
     }
     signatures.add(signature);
+
+    const userSummarySignature = buildUserSummarySignature(activity);
+    if (userSummarySignatures.has(userSummarySignature)) {
+      return;
+    }
+    userSummarySignatures.add(userSummarySignature);
     deduped.push(activity);
   });
 

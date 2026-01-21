@@ -2622,7 +2622,14 @@ const App = {
             const projectKey = (activity.projectName || '').toLowerCase();
             const dateKey = (activity.date || activity.createdAt || '').substring(0, 10);
             const typeKey = activity.type || '';
-            const key = `${accountKey}|${projectKey}|${dateKey}|${typeKey}|${activity.isInternal ? 'internal' : 'external'}`;
+            const summaryKey = (activity.summary || '').trim().toLowerCase();
+            const userKey = (
+                activity.assignedUserEmail ||
+                activity.userId ||
+                activity.userName ||
+                ''
+            ).toLowerCase();
+            const key = `${accountKey}|${projectKey}|${dateKey}|${typeKey}|${summaryKey}|${userKey}|${activity.isInternal ? 'internal' : 'external'}`;
             if (!map[key]) {
                 map[key] = {
                     source: 'existing',
@@ -2630,6 +2637,8 @@ const App = {
                     projectName: activity.projectName || (activity.isInternal ? 'Internal Activity' : 'Unknown Project'),
                     date: dateKey,
                     activityType: typeKey,
+                    summary: summaryKey ? activity.summary : '',
+                    owner: userKey ? (activity.userName || activity.assignedUserEmail || activity.userId) : '',
                     count: 0
                 };
             }
@@ -4506,11 +4515,13 @@ const App = {
                     const dateText = entry.date ? UI.formatDate(entry.date) : 'Unknown date';
                     const typeLabel = entry.activityType ? UI.getActivityTypeLabel(entry.activityType) : 'Activity';
                     const sourceLabel = entry.source === 'import' ? 'Import' : 'Existing';
+                    const ownerLabel = entry.owner ? ` • ${entry.owner}` : '';
+                    const summaryLabel = entry.summary ? ` • ${entry.summary}` : '';
                     return `
                         <li>
                             <span class="duplicate-source">${sourceLabel}</span>
                             <strong>${entry.accountName}</strong> → ${entry.projectName}
-                            <span class="text-muted">(${typeLabel} on ${dateText})</span>
+                            <span class="text-muted">(${typeLabel} on ${dateText}${ownerLabel}${summaryLabel})</span>
                             <span class="duplicate-count">×${entry.count}</span>
                         </li>
                     `;
@@ -4524,7 +4535,7 @@ const App = {
                         <ul class="duplicate-list">
                             ${displayItems}
                         </ul>
-                        <p class="duplicate-note text-muted">Duplicates are identified by matching account, project, date, and activity type.</p>
+                        <p class="duplicate-note text-muted">Duplicates are identified by matching account, project, date, activity type, owner, and summary.</p>
                     </div>
                 `;
             }
