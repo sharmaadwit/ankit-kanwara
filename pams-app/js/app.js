@@ -81,6 +81,8 @@ const App = {
         generatedFrom: null
     },
     analyticsCharts: {},
+    analyticsReloadTimer: null,
+    analyticsRetryAttempts: 0,
     analyticsTableDefinitions: {
         regionPerformance: {
             label: 'Region Performance',
@@ -282,6 +284,15 @@ const App = {
         this.loadReports();
     },
 
+    buildAnalyticsLoader(prefix = 'reports') {
+        return `
+            <div id="${prefix}AnalyticsLoading" class="analytics-loading hidden">
+                <div class="spinner"></div>
+                <span>Crunching the latest activity insights…</span>
+            </div>
+        `;
+    },
+
     buildAnalyticsTabContent(tab, analytics, context = {}) {
         const scopedContext = { ...context, prefix: context.prefix || 'reports' };
         switch (tab) {
@@ -449,6 +460,7 @@ const App = {
                 periodType: this.analyticsPeriodMode === 'year' ? 'year' : 'month',
                 periodValue
             });
+            this.setAnalyticsLoading('reports', false);
             return;
         }
         this.setAnalyticsLoading('reports', true);
@@ -2070,36 +2082,96 @@ const App = {
                 reportsView.dataset.currentTab = this.analyticsActiveTab;
             }
 
-            const analytics = DataManager.getMonthlyAnalytics(selectedPeriod, this.reportFilters || {});
-            this.latestAnalytics.standard = analytics;
-            this.latestAnalytics.standardPeriod = selectedPeriod;
-            if (isYearMode) {
-                this.latestAnalytics.standardYear = selectedPeriod;
-            } else {
-                this.latestAnalytics.standardMonth = selectedPeriod;
-            }
-
             const globalControls = this.buildAnalyticsGlobalControls({
                 periodType: isYearMode ? 'year' : 'month',
                 selectedPeriod,
                 periodOptions
             });
             const tabNav = this.buildAnalyticsTabNav();
-            const tabMarkup = this.buildAnalyticsTabContent(this.analyticsActiveTab, analytics, {
-                periodType: isYearMode ? 'year' : 'month',
-                periodValue: selectedPeriod,
-                periodOptions
-            });
-
             container.innerHTML = `
                 ${globalControls}
                 ${tabNav}
                 <div id="analyticsTabContent" class="analytics-tab-content">
-                    ${tabMarkup}
+                    ${this.buildAnalyticsLoader('reports')}
                 </div>
             `;
 
-            this.initAnalyticsChartsForTab(this.analyticsActiveTab, analytics, selectedPeriod);
+            if (this.analyticsReloadTimer) {
+                clearTimeout(this.analyticsReloadTimer);
+                this.analyticsReloadTimer = null;
+            }
+
+            this.setAnalyticsLoading('reports', true);
+
+            const finalizeAnalytics = () => {
+                try {
+                    const analytics = DataManager.getMonthlyAnalytics(
+                        selectedPeriod,
+                        this.reportFilters || {}
+                    );
+
+                    if (!analytics || typeof analytics !== 'object') {
+                        if (this.analyticsRetryAttempts >= 5) {
+                            const tabContent = document.getElementById('analyticsTabContent');
+                            if (tabContent) {
+                                tabContent.innerHTML = UI.emptyState('Analytics data unavailable.');
+                            }
+                            this.setAnalyticsLoading('reports', false);
+                            this.analyticsRetryAttempts = 0;
+                            return;
+                        }
+                        this.analyticsRetryAttempts += 1;
+                        this.analyticsReloadTimer = setTimeout(finalizeAnalytics, 500);
+                        return;
+                    }
+
+                    this.analyticsRetryAttempts = 0;
+                    if (this.analyticsReloadTimer) {
+                        clearTimeout(this.analyticsReloadTimer);
+                        this.analyticsReloadTimer = null;
+                    }
+
+                    this.latestAnalytics.standard = analytics;
+                    this.latestAnalytics.standardPeriod = selectedPeriod;
+                    if (isYearMode) {
+                        this.latestAnalytics.standardYear = selectedPeriod;
+                    } else {
+                        this.latestAnalytics.standardMonth = selectedPeriod;
+                    }
+
+                    const tabMarkup = this.buildAnalyticsTabContent(this.analyticsActiveTab, analytics, {
+                        prefix: 'reports',
+                        periodType: isYearMode ? 'year' : 'month',
+                        periodValue: selectedPeriod,
+                        periodOptions
+                    });
+                    const tabContent = document.getElementById('analyticsTabContent');
+                    if (tabContent) {
+                        tabContent.innerHTML = `
+                            ${this.buildAnalyticsLoader('reports')}
+                            ${tabMarkup}
+                        `;
+                    }
+
+                    this.setAnalyticsLoading('reports', true);
+                    this.initAnalyticsChartsForTab(this.analyticsActiveTab, analytics, selectedPeriod);
+                } catch (error) {
+                    console.error('Error loading reports:', error);
+                    const tabContent = document.getElementById('analyticsTabContent');
+                    if (tabContent) {
+                        tabContent.innerHTML = UI.emptyState('Error loading reports');
+                    } else {
+                        container.innerHTML = UI.emptyState('Error loading reports');
+                    }
+                    this.setAnalyticsLoading('reports', false);
+                }
+            };
+
+            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(finalizeAnalytics);
+            } else {
+                setTimeout(finalizeAnalytics, 16);
+            }
         } catch (error) {
             console.error('Error loading reports:', error);
             const container = document.getElementById('reportsContent');
