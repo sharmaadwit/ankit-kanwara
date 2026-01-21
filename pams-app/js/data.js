@@ -324,6 +324,7 @@ const DataManager = {
         this.backfillAccountSalesRepRegions();
         this.backfillActivitySalesRepRegions();
         this.applyMigrationCleanupIfNeeded();
+        this.ensureAnalyticsPresetBaseline();
         } catch (error) {
             console.error('Error initializing data:', error);
         }
@@ -2266,6 +2267,26 @@ const DataManager = {
             localStorage.setItem(ANALYTICS_TABLE_PRESETS_KEY, JSON.stringify(sanitized));
         } catch (error) {
             console.warn('Unable to save analytics table presets.', error);
+        }
+    },
+
+    ensureAnalyticsPresetBaseline() {
+        try {
+            let hasPresetKey = false;
+            if (typeof localStorage?.length === 'number' && typeof localStorage.key === 'function') {
+                for (let index = 0; index < localStorage.length; index += 1) {
+                    const key = localStorage.key(index);
+                    if (key === ANALYTICS_TABLE_PRESETS_KEY) {
+                        hasPresetKey = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasPresetKey) {
+                this.saveAnalyticsTablePresets([]);
+            }
+        } catch (error) {
+            console.warn('Failed to ensure analytics table preset baseline:', error);
         }
     },
 
