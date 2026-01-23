@@ -1,0 +1,217 @@
+/* Reports V2 Styling */
+
+.reports-v2-container {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.reports-v2-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: var(--gray-50, #f9fafb);
+    border-radius: 8px;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.reports-v2-period-toggle {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.reports-v2-month-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.reports-v2-current-period {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+    min-width: 150px;
+    text-align: center;
+}
+
+.reports-v2-year-selector {
+    min-width: 120px;
+}
+
+.reports-v2-year-selector select {
+    width: 100%;
+}
+
+.reports-v2-section {
+    margin-bottom: 3rem;
+}
+
+.reports-v2-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--gray-900, #111827);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--gray-200, #e5e7eb);
+}
+
+.reports-v2-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.reports-v2-card {
+    background: white;
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.reports-v2-card-wide {
+    grid-column: 1 / -1;
+}
+
+.reports-v2-card-header {
+    padding: 1rem 1.25rem;
+    background: var(--gray-50, #f9fafb);
+    border-bottom: 1px solid var(--gray-200, #e5e7eb);
+}
+
+.reports-v2-card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.reports-v2-card-body {
+    padding: 1.25rem;
+    min-height: 200px;
+}
+
+.reports-v2-stat-large {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--primary, #3182CE);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.reports-v2-stat-label {
+    font-size: 0.9rem;
+    color: var(--gray-600, #4b5563);
+    margin: 0;
+}
+
+.reports-v2-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.reports-v2-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--gray-700, #374151);
+}
+
+.reports-v2-legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.reports-v2-table-container {
+    overflow-x: auto;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.reports-v2-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.reports-v2-table thead {
+    background: var(--gray-50, #f9fafb);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.reports-v2-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+    border-bottom: 2px solid var(--gray-200, #e5e7eb);
+    white-space: nowrap;
+}
+
+.reports-v2-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--gray-200, #e5e7eb);
+    color: var(--gray-700, #374151);
+}
+
+.reports-v2-table tbody tr:hover {
+    background: var(--gray-50, #f9fafb);
+}
+
+.reports-v2-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--gray-500, #6b7280);
+    font-style: italic;
+}
+
+/* Chart containers */
+.reports-v2-card-body canvas {
+    max-height: 300px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .reports-v2-container {
+        padding: 1rem;
+    }
+
+    .reports-v2-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .reports-v2-month-nav {
+        justify-content: center;
+    }
+
+    .reports-v2-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .reports-v2-card-wide {
+        grid-column: 1;
+    }
+
+    .reports-v2-stat-large {
+        font-size: 2.5rem;
+    }
+}
+
+/* Button disabled state */
+.btn.disabled,
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
