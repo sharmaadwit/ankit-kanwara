@@ -268,6 +268,7 @@ const Auth = {
                 username: 'analytics-guest',
                 message: 'Analytics access granted'
             });
+            this.showMainApp();
             return { success: true, user: guestUser };
         } catch (error) {
             console.error('Analytics login error:', error);
