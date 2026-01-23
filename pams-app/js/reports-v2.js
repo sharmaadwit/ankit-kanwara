@@ -4,13 +4,30 @@ const ReportsV2 = {
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
+    activeTab: 'presales', // 'presales', 'sales', 'regional'
+    activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
 
     // Initialize Reports V2
     init(period, periodType = 'month') {
         this.currentPeriod = period;
         this.currentPeriodType = periodType;
         this.cachedData = null; // Clear cache
+        this.activeTab = 'presales';
+        this.activityBreakdownFilter = 'all';
         this.render();
+    },
+
+    // Switch active tab
+    switchTab(tab) {
+        this.activeTab = tab;
+        this.render();
+    },
+
+    // Change activity breakdown filter
+    changeActivityBreakdownFilter(filter) {
+        this.activityBreakdownFilter = filter;
+        const activities = this.getPeriodActivities();
+        this.initActivityBreakdownChart(activities);
     },
 
     // Get activities for the selected period
@@ -103,9 +120,8 @@ const ReportsV2 = {
         container.innerHTML = `
             <div class="reports-v2-container">
                 ${this.renderHeader(periodLabel)}
-                ${this.renderPresalesReports(activities)}
-                ${this.renderSalesView(activities)}
-                ${this.renderProductLevelData(activities)}
+                ${this.renderTabNavigation()}
+                ${this.renderTabContent(activities)}
             </div>
         `;
 
@@ -113,6 +129,43 @@ const ReportsV2 = {
         setTimeout(() => {
             this.initCharts(activities);
         }, 100);
+    },
+
+    // Render tab navigation
+    renderTabNavigation() {
+        return `
+            <div class="reports-v2-tabs">
+                <button class="reports-v2-tab ${this.activeTab === 'presales' ? 'active' : ''}" 
+                        onclick="ReportsV2.switchTab('presales')">
+                    Presales Reports
+                </button>
+                <button class="reports-v2-tab ${this.activeTab === 'sales' ? 'active' : ''}" 
+                        onclick="ReportsV2.switchTab('sales')">
+                    Sales View
+                </button>
+                <button class="reports-v2-tab ${this.activeTab === 'regional' ? 'active' : ''}" 
+                        onclick="ReportsV2.switchTab('regional')">
+                    Regional Data
+                </button>
+            </div>
+        `;
+    },
+
+    // Render tab content based on active tab
+    renderTabContent(activities) {
+        switch(this.activeTab) {
+            case 'presales':
+                return `
+                    ${this.renderPresalesReports(activities)}
+                    ${this.renderProductLevelData(activities)}
+                `;
+            case 'sales':
+                return this.renderSalesView(activities);
+            case 'regional':
+                return this.renderRegionalData(activities);
+            default:
+                return this.renderPresalesReports(activities);
+        }
     },
 
     // Compute all report data
@@ -310,6 +363,26 @@ const ReportsV2 = {
                 <h2 class="reports-v2-section-title">Presales Reports (Team Level)</h2>
                 
                 <div class="reports-v2-grid">
+                    <!-- Activity Breakdown - First Row with Donut Chart -->
+                    <div class="reports-v2-card reports-v2-card-wide">
+                        <div class="reports-v2-card-header">
+                            <h3>Activity Breakdown</h3>
+                            <select class="form-control reports-v2-filter-dropdown" 
+                                    id="activityBreakdownFilter"
+                                    onchange="ReportsV2.changeActivityBreakdownFilter(this.value)">
+                                <option value="all" ${this.activityBreakdownFilter === 'all' ? 'selected' : ''}>All Activities</option>
+                                <option value="sow" ${this.activityBreakdownFilter === 'sow' ? 'selected' : ''}>SOW</option>
+                                <option value="poc" ${this.activityBreakdownFilter === 'poc' ? 'selected' : ''}>POC</option>
+                                <option value="rfx" ${this.activityBreakdownFilter === 'rfx' ? 'selected' : ''}>RFx</option>
+                                <option value="pricing" ${this.activityBreakdownFilter === 'pricing' ? 'selected' : ''}>Pricing</option>
+                                <option value="customerCall" ${this.activityBreakdownFilter === 'customerCall' ? 'selected' : ''}>Customer Calls</option>
+                            </select>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            <canvas id="activityBreakdownChart" height="250"></canvas>
+                        </div>
+                    </div>
+
                     <!-- Total Activities -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
@@ -350,16 +423,6 @@ const ReportsV2 = {
                             <canvas id="presalesActivityChart" height="300"></canvas>
                         </div>
                     </div>
-
-                    <!-- Activity Breakdown -->
-                    <div class="reports-v2-card reports-v2-card-wide">
-                        <div class="reports-v2-card-header">
-                            <h3>Activity Breakdown</h3>
-                        </div>
-                        <div class="reports-v2-card-body">
-                            <canvas id="activityBreakdownChart" height="250"></canvas>
-                        </div>
-                    </div>
                 </div>
             </div>
         `;
@@ -367,52 +430,191 @@ const ReportsV2 = {
 
     // Render Sales View Section
     renderSalesView(activities) {
-        // Sales Rep Most Requests (Top 10)
-        const salesRepMap = new Map();
-        activities.forEach(activity => {
-            if (!activity.isInternal && activity.salesRep) {
-                const repName = activity.salesRep;
-                if (!salesRepMap.has(repName)) {
-                    salesRepMap.set(repName, { name: repName, count: 0 });
-                }
-                salesRepMap.get(repName).count++;
-            }
-        });
-        const topSalesReps = Array.from(salesRepMap.values())
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 10);
-
-        // Missing SFDC Links - Accounts without SFDC links
+        // Missing SFDC Links - Regional bar graph
         const accounts = DataManager.getAccounts();
-        const accountActivityMap = new Map();
+        const regionMissingMap = new Map();
+        
         activities.forEach(activity => {
             if (!activity.isInternal && activity.accountId) {
-                if (!accountActivityMap.has(activity.accountId)) {
-                    accountActivityMap.set(activity.accountId, {
-                        accountId: activity.accountId,
-                        accountName: activity.accountName || 'Unknown',
-                        salesRep: activity.salesRep || 'Unknown',
-                        salesRepRegion: activity.salesRepRegion || activity.region || 'Unknown',
-                        activityCount: 0
-                    });
+                const account = accounts.find(a => a.id === activity.accountId);
+                if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                    const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                    regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
                 }
-                accountActivityMap.get(activity.accountId).activityCount++;
             }
         });
 
-        const missingSfdcAccounts = Array.from(accountActivityMap.values())
-            .filter(item => {
-                const account = accounts.find(a => a.id === item.accountId);
-                return account && (!account.sfdcLink || !account.sfdcLink.trim());
-            })
-            .sort((a, b) => a.activityCount - b.activityCount);
+        const regionMissingData = Array.from(regionMissingMap.entries())
+            .map(([region, count]) => ({ region, count }))
+            .sort((a, b) => b.count - a.count);
 
         return `
             <div class="reports-v2-section">
                 <h2 class="reports-v2-section-title">Sales View</h2>
                 
                 <div class="reports-v2-grid">
-                    <!-- Sales Rep Most Requests -->
+                    <!-- Missing SFDC Links - Regional -->
+                    <div class="reports-v2-card reports-v2-card-wide">
+                        <div class="reports-v2-card-header">
+                            <h3>Missing SFDC Links by Region</h3>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            ${regionMissingData.length > 0 ? `
+                                <canvas id="missingSfdcRegionalChart" height="300"></canvas>
+                            ` : `
+                                <p class="reports-v2-empty">All accounts have SFDC links for this period.</p>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    // Render Regional Data Section
+    renderRegionalData(activities) {
+        const accounts = DataManager.getAccounts();
+        
+        // Sales Rep Missing Opportunities
+        const salesRepMissingMap = new Map();
+        activities.forEach(activity => {
+            if (!activity.isInternal && activity.salesRep && activity.accountId) {
+                const account = accounts.find(a => a.id === activity.accountId);
+                if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                    const repName = activity.salesRep;
+                    const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                    if (!salesRepMissingMap.has(repName)) {
+                        salesRepMissingMap.set(repName, {
+                            name: repName,
+                            region: region,
+                            missingCount: 0,
+                            accountIds: new Set()
+                        });
+                    }
+                    salesRepMissingMap.get(repName).missingCount++;
+                    salesRepMissingMap.get(repName).accountIds.add(activity.accountId);
+                }
+            }
+        });
+        const salesRepMissingData = Array.from(salesRepMissingMap.values())
+            .map(item => ({
+                name: item.name,
+                region: item.region,
+                missingCount: item.missingCount,
+                accountCount: item.accountIds.size
+            }))
+            .sort((a, b) => b.missingCount - a.missingCount);
+
+        // Industry Wise Regional Traffic
+        const regionIndustryMap = new Map();
+        activities.forEach(activity => {
+            if (!activity.isInternal && activity.accountId) {
+                const account = accounts.find(a => a.id === activity.accountId);
+                if (account && account.industry) {
+                    const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                    const industry = account.industry;
+                    const key = `${region}|${industry}`;
+                    if (!regionIndustryMap.has(key)) {
+                        regionIndustryMap.set(key, { region, industry, count: 0 });
+                    }
+                    regionIndustryMap.get(key).count++;
+                }
+            }
+        });
+
+        // Sales Rep Most Requests (by Region)
+        const regionSalesRepMap = new Map();
+        activities.forEach(activity => {
+            if (!activity.isInternal && activity.salesRep) {
+                const region = activity.salesRepRegion || activity.region || 'Unknown';
+                if (!regionSalesRepMap.has(region)) {
+                    regionSalesRepMap.set(region, new Map());
+                }
+                const repName = activity.salesRep;
+                const repMap = regionSalesRepMap.get(region);
+                repMap.set(repName, (repMap.get(repName) || 0) + 1);
+            }
+        });
+
+        // Missing SFDC Links by Sales Rep (bar graph)
+        const salesRepSfdcMap = new Map();
+        activities.forEach(activity => {
+            if (!activity.isInternal && activity.salesRep && activity.accountId) {
+                const account = accounts.find(a => a.id === activity.accountId);
+                if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                    const repName = activity.salesRep;
+                    if (!salesRepSfdcMap.has(repName)) {
+                        salesRepSfdcMap.set(repName, { name: repName, missingCount: 0, totalOpps: 0 });
+                    }
+                    salesRepSfdcMap.get(repName).missingCount++;
+                }
+            }
+        });
+        // Also count total opportunities per sales rep
+        activities.forEach(activity => {
+            if (!activity.isInternal && activity.salesRep) {
+                const repName = activity.salesRep;
+                if (!salesRepSfdcMap.has(repName)) {
+                    salesRepSfdcMap.set(repName, { name: repName, missingCount: 0, totalOpps: 0 });
+                }
+                salesRepSfdcMap.get(repName).totalOpps++;
+            }
+        });
+        const salesRepSfdcData = Array.from(salesRepSfdcMap.values())
+            .filter(item => item.missingCount > 0)
+            .sort((a, b) => b.missingCount - a.missingCount);
+
+        return `
+            <div class="reports-v2-section">
+                <h2 class="reports-v2-section-title">Regional Data</h2>
+                
+                <div class="reports-v2-grid">
+                    <!-- Sales Rep Missing Opportunities -->
+                    <div class="reports-v2-card reports-v2-card-wide">
+                        <div class="reports-v2-card-header">
+                            <h3>Sales Rep Missing Opportunities</h3>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            ${salesRepMissingData.length > 0 ? `
+                                <div class="reports-v2-table-container">
+                                    <table class="reports-v2-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Sales Rep</th>
+                                                <th>Region</th>
+                                                <th># Missing Opps</th>
+                                                <th># Accounts</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${salesRepMissingData.map(item => `
+                                                <tr>
+                                                    <td>${item.name}</td>
+                                                    <td>${item.region}</td>
+                                                    <td>${item.missingCount}</td>
+                                                    <td>${item.accountCount}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ` : `
+                                <p class="reports-v2-empty">No missing opportunities found for this period.</p>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Industry Wise Regional Traffic -->
+                    <div class="reports-v2-card reports-v2-card-wide">
+                        <div class="reports-v2-card-header">
+                            <h3>Industry Wise Regional Traffic</h3>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            <canvas id="industryRegionalChart" height="300"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Sales Rep Most Requests (by Region) -->
                     <div class="reports-v2-card reports-v2-card-wide">
                         <div class="reports-v2-card-header">
                             <h3>Sales Rep Most Requests (Top 10)</h3>
@@ -422,37 +624,16 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Missing SFDC Links -->
+                    <!-- Missing SFDC Links by Sales Rep -->
                     <div class="reports-v2-card reports-v2-card-wide">
                         <div class="reports-v2-card-header">
-                            <h3>Missing SFDC Links</h3>
+                            <h3>Missing SFDC Links by Sales Rep</h3>
                         </div>
                         <div class="reports-v2-card-body">
-                            ${missingSfdcAccounts.length > 0 ? `
-                                <div class="reports-v2-table-container">
-                                    <table class="reports-v2-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Sales Rep</th>
-                                                <th>Account Name</th>
-                                                <th># Activities</th>
-                                                <th>Region</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${missingSfdcAccounts.map(item => `
-                                                <tr>
-                                                    <td>${item.salesRep}</td>
-                                                    <td>${item.accountName}</td>
-                                                    <td>${item.activityCount}</td>
-                                                    <td>${item.salesRepRegion}</td>
-                                                </tr>
-                                            `).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
+                            ${salesRepSfdcData.length > 0 ? `
+                                <canvas id="missingSfdcSalesRepChart" height="300"></canvas>
                             ` : `
-                                <p class="reports-v2-empty">All accounts have SFDC links for this period.</p>
+                                <p class="reports-v2-empty">All sales reps have SFDC links for their accounts.</p>
                             `}
                         </div>
                     </div>
@@ -546,19 +727,106 @@ const ReportsV2 = {
             label: 'Activities'
         });
 
-        // Activity Breakdown
-        const breakdown = {
-            'SOW': activities.filter(a => a.type === 'sow').length,
-            'POC': activities.filter(a => a.type === 'poc').length,
-            'RFx': activities.filter(a => a.type === 'rfx').length,
-            'Pricing': activities.filter(a => a.type === 'pricing').length,
-            'Customer Calls': activities.filter(a => a.type === 'customerCall').length
-        };
-        this.renderBarChart('activityBreakdownChart', {
-            labels: Object.keys(breakdown),
-            data: Object.values(breakdown),
-            label: 'Activities'
-        });
+        // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
+        if (this.activeTab === 'presales') {
+            this.initActivityBreakdownChart(activities);
+        }
+
+        // Missing SFDC Links - Regional Bar Chart (Sales View)
+        if (this.activeTab === 'sales') {
+            const accounts = DataManager.getAccounts();
+            const regionMissingMap = new Map();
+            activities.forEach(activity => {
+                if (!activity.isInternal && activity.accountId) {
+                    const account = accounts.find(a => a.id === activity.accountId);
+                    if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                        const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                        regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
+                    }
+                }
+            });
+            const regionMissingData = Array.from(regionMissingMap.entries())
+                .map(([region, count]) => ({ region, count }))
+                .sort((a, b) => b.count - a.count);
+            
+            if (regionMissingData.length > 0) {
+                this.renderBarChart('missingSfdcRegionalChart', {
+                    labels: regionMissingData.map(d => d.region),
+                    data: regionMissingData.map(d => d.count),
+                    label: 'Missing SFDC Links'
+                });
+            }
+        }
+
+        // Regional Data Charts
+        if (this.activeTab === 'regional') {
+            const accounts = DataManager.getAccounts();
+            
+            // Industry Wise Regional Traffic
+            const regionIndustryMap = new Map();
+            activities.forEach(activity => {
+                if (!activity.isInternal && activity.accountId) {
+                    const account = accounts.find(a => a.id === activity.accountId);
+                    if (account && account.industry) {
+                        const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                        const industry = account.industry;
+                        const key = `${region}|${industry}`;
+                        if (!regionIndustryMap.has(key)) {
+                            regionIndustryMap.set(key, { region, industry, count: 0 });
+                        }
+                        regionIndustryMap.get(key).count++;
+                    }
+                }
+            });
+            
+            // Group by region for stacked bar chart
+            const regions = new Set();
+            const industries = new Set();
+            regionIndustryMap.forEach(({ region, industry }) => {
+                regions.add(region);
+                industries.add(industry);
+            });
+            
+            const regionLabels = Array.from(regions).sort();
+            const industryLabels = Array.from(industries).sort();
+            const datasets = industryLabels.map((industry, idx) => ({
+                label: industry,
+                data: regionLabels.map(region => {
+                    const key = `${region}|${industry}`;
+                    return regionIndustryMap.get(key)?.count || 0;
+                }),
+                backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
+            }));
+            
+            this.renderStackedBarChart('industryRegionalChart', {
+                labels: regionLabels,
+                datasets: datasets
+            });
+
+            // Missing SFDC Links by Sales Rep
+            const salesRepSfdcMap = new Map();
+            activities.forEach(activity => {
+                if (!activity.isInternal && activity.salesRep && activity.accountId) {
+                    const account = accounts.find(a => a.id === activity.accountId);
+                    if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                        const repName = activity.salesRep;
+                        salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
+                    }
+                }
+            });
+            const salesRepSfdcData = Array.from(salesRepSfdcMap.entries())
+                .filter(([, count]) => count > 0)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15); // Top 15
+            
+            if (salesRepSfdcData.length > 0) {
+                this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
+                    labels: salesRepSfdcData.map(([name]) => name),
+                    data: salesRepSfdcData.map(([, count]) => count),
+                    label: 'Missing SFDC Links'
+                });
+            }
+        }
 
         // Sales Rep Most Requests
         const salesRepMap = new Map();
@@ -745,6 +1013,143 @@ const ReportsV2 = {
                 plugins: {
                     legend: {
                         display: false
+                    }
+                }
+            }
+        });
+    },
+
+    // Initialize Activity Breakdown chart separately (for filter changes)
+    initActivityBreakdownChart(activities) {
+        const breakdown = {
+            'SOW': activities.filter(a => a.type === 'sow').length,
+            'POC': activities.filter(a => a.type === 'poc').length,
+            'RFx': activities.filter(a => a.type === 'rfx').length,
+            'Pricing': activities.filter(a => a.type === 'pricing').length,
+            'Customer Calls': activities.filter(a => a.type === 'customerCall').length
+        };
+        
+        let filteredBreakdown = breakdown;
+        if (this.activityBreakdownFilter !== 'all') {
+            const filterMap = {
+                'sow': 'SOW',
+                'poc': 'POC',
+                'rfx': 'RFx',
+                'pricing': 'Pricing',
+                'customerCall': 'Customer Calls'
+            };
+            const selectedType = filterMap[this.activityBreakdownFilter];
+            filteredBreakdown = { [selectedType]: breakdown[selectedType] || 0 };
+        }
+        
+        this.renderDonutChart('activityBreakdownChart', {
+            labels: Object.keys(filteredBreakdown),
+            data: Object.values(filteredBreakdown),
+            colors: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C']
+        });
+    },
+
+    // Render Donut Chart
+    renderDonutChart(canvasId, { labels, data, colors }) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        if (this.charts[canvasId]) {
+            this.charts[canvasId].destroy();
+        }
+
+        const total = data.reduce((a, b) => a + b, 0);
+
+        this.charts[canvasId] = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            },
+            plugins: [{
+                id: 'centerText',
+                beforeDraw: function(chart) {
+                    const ctx = chart.ctx;
+                    const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+                    const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+                    
+                    ctx.save();
+                    ctx.font = 'bold 24px Arial';
+                    ctx.fillStyle = '#111827';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(total.toString(), centerX, centerY - 10);
+                    
+                    ctx.font = '14px Arial';
+                    ctx.fillStyle = '#6b7280';
+                    ctx.fillText('Total', centerX, centerY + 15);
+                    ctx.restore();
+                }
+            }]
+        });
+    },
+
+    // Render Stacked Bar Chart
+    renderStackedBarChart(canvasId, { labels, datasets }) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        if (this.charts[canvasId]) {
+            this.charts[canvasId].destroy();
+        }
+
+        this.charts[canvasId] = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        beginAtZero: true
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom'
                     }
                 }
             }
