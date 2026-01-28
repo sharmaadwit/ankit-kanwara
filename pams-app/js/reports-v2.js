@@ -758,202 +758,204 @@ const ReportsV2 = {
                 });
             }
 
-        // Presales Activity Report
-        const userActivityMap = new Map();
-        activities.forEach(activity => {
-            const userId = activity.userId || activity.assignedUserEmail || 'unknown';
-            const userName = activity.userName || 'Unknown';
-            if (!userActivityMap.has(userId)) {
-                userActivityMap.set(userId, { userName, count: 0 });
-            }
-            userActivityMap.get(userId).count++;
-        });
-        const userActivityData = Array.from(userActivityMap.values())
-            .sort((a, b) => b.count - a.count);
-        
-        if (userActivityData.length > 0) {
-            this.renderHorizontalBarChart('presalesActivityChart', {
-                labels: userActivityData.map(u => u.userName),
-                data: userActivityData.map(u => u.count),
-                label: 'Activities'
-            });
-        }
-
-        // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
-        if (this.activeTab === 'presales') {
-            this.initActivityBreakdownChart(activities);
-        }
-
-        // Missing SFDC Links - Regional Bar Chart (Sales View)
-        if (this.activeTab === 'sales') {
-            const accounts = DataManager.getAccounts();
-            const regionMissingMap = new Map();
+            // Presales Activity Report
+            const userActivityMap = new Map();
             activities.forEach(activity => {
-                if (!activity.isInternal && activity.accountId) {
-                    const account = accounts.find(a => a.id === activity.accountId);
-                    if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
-                        const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
-                        regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
-                    }
+                const userId = activity.userId || activity.assignedUserEmail || 'unknown';
+                const userName = activity.userName || 'Unknown';
+                if (!userActivityMap.has(userId)) {
+                    userActivityMap.set(userId, { userName, count: 0 });
                 }
+                userActivityMap.get(userId).count++;
             });
-            const regionMissingData = Array.from(regionMissingMap.entries())
-                .map(([region, count]) => ({ region, count }))
+            const userActivityData = Array.from(userActivityMap.values())
                 .sort((a, b) => b.count - a.count);
             
-            if (regionMissingData.length > 0) {
-                this.renderBarChart('missingSfdcRegionalChart', {
-                    labels: regionMissingData.map(d => d.region),
-                    data: regionMissingData.map(d => d.count),
-                    label: 'Missing SFDC Links'
+            if (userActivityData.length > 0) {
+                this.renderHorizontalBarChart('presalesActivityChart', {
+                    labels: userActivityData.map(u => u.userName),
+                    data: userActivityData.map(u => u.count),
+                    label: 'Activities'
                 });
             }
-        }
 
-        // Regional Data Charts
-        if (this.activeTab === 'regional') {
-            const accounts = DataManager.getAccounts();
+            // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
+            if (this.activeTab === 'presales') {
+                this.initActivityBreakdownChart(activities);
+            }
+
+            // Missing SFDC Links - Regional Bar Chart (Sales View)
+            if (this.activeTab === 'sales') {
+                const accounts = DataManager.getAccounts();
+                const regionMissingMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.accountId) {
+                        const account = accounts.find(a => a.id === activity.accountId);
+                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                            const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                            regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
+                        }
+                    }
+                });
+                const regionMissingData = Array.from(regionMissingMap.entries())
+                    .map(([region, count]) => ({ region, count }))
+                    .sort((a, b) => b.count - a.count);
+                
+                if (regionMissingData.length > 0) {
+                    this.renderBarChart('missingSfdcRegionalChart', {
+                        labels: regionMissingData.map(d => d.region),
+                        data: regionMissingData.map(d => d.count),
+                        label: 'Missing SFDC Links'
+                    });
+                }
+            }
+
+            // Regional Data Charts
+            if (this.activeTab === 'regional') {
+                const accounts = DataManager.getAccounts();
+                
+                // Industry Wise Regional Traffic
+                const regionIndustryMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.accountId) {
+                        const account = accounts.find(a => a.id === activity.accountId);
+                        if (account && account.industry) {
+                            const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                            const industry = account.industry;
+                            const key = `${region}|${industry}`;
+                            if (!regionIndustryMap.has(key)) {
+                                regionIndustryMap.set(key, { region, industry, count: 0 });
+                            }
+                            regionIndustryMap.get(key).count++;
+                        }
+                    }
+                });
+                
+                // Group by region for stacked bar chart
+                const regions = new Set();
+                const industries = new Set();
+                regionIndustryMap.forEach(({ region, industry }) => {
+                    regions.add(region);
+                    industries.add(industry);
+                });
+                
+                const regionLabels = Array.from(regions).sort();
+                const industryLabels = Array.from(industries).sort();
+                const datasets = industryLabels.map((industry, idx) => ({
+                    label: industry,
+                    data: regionLabels.map(region => {
+                        const key = `${region}|${industry}`;
+                        return regionIndustryMap.get(key)?.count || 0;
+                    }),
+                    backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
+                }));
+                
+                if (datasets.length > 0 && regionLabels.length > 0) {
+                    this.renderStackedBarChart('industryRegionalChart', {
+                        labels: regionLabels,
+                        datasets: datasets
+                    });
+                }
+
+                // Missing SFDC Links by Sales Rep
+                const salesRepSfdcMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.salesRep && activity.accountId) {
+                        const account = accounts.find(a => a.id === activity.accountId);
+                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                            const repName = activity.salesRep;
+                            salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
+                        }
+                    }
+                });
+                const salesRepSfdcData = Array.from(salesRepSfdcMap.entries())
+                    .filter(([, count]) => count > 0)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 15); // Top 15
+                
+                if (salesRepSfdcData.length > 0) {
+                    this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
+                        labels: salesRepSfdcData.map(([name]) => name),
+                        data: salesRepSfdcData.map(([, count]) => count),
+                        label: 'Missing SFDC Links'
+                    });
+                }
+            }
+
+            // Sales Rep Most Requests
+            const salesRepMap = new Map();
+            activities.forEach(activity => {
+                if (!activity.isInternal && activity.salesRep) {
+                    const repName = activity.salesRep;
+                    if (!salesRepMap.has(repName)) {
+                        salesRepMap.set(repName, 0);
+                    }
+                    salesRepMap.set(repName, salesRepMap.get(repName) + 1);
+                }
+            });
+            const topSalesReps = Array.from(salesRepMap.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
             
-            // Industry Wise Regional Traffic
-            const regionIndustryMap = new Map();
+            if (topSalesReps.length > 0) {
+                this.renderHorizontalBarChart('salesRepRequestsChart', {
+                    labels: topSalesReps.map(([name]) => name),
+                    data: topSalesReps.map(([, count]) => count),
+                    label: 'Requests'
+                });
+            }
+
+            // Industry Total Activities
+            const industryActivityMap = new Map();
             activities.forEach(activity => {
                 if (!activity.isInternal && activity.accountId) {
-                    const account = accounts.find(a => a.id === activity.accountId);
+                    const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
                     if (account && account.industry) {
-                        const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
                         const industry = account.industry;
-                        const key = `${region}|${industry}`;
-                        if (!regionIndustryMap.has(key)) {
-                            regionIndustryMap.set(key, { region, industry, count: 0 });
-                        }
-                        regionIndustryMap.get(key).count++;
+                        industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
                     }
                 }
             });
+            const industryData = Array.from(industryActivityMap.entries())
+                .sort((a, b) => b[1] - a[1]);
             
-            // Group by region for stacked bar chart
-            const regions = new Set();
-            const industries = new Set();
-            regionIndustryMap.forEach(({ region, industry }) => {
-                regions.add(region);
-                industries.add(industry);
-            });
-            
-            const regionLabels = Array.from(regions).sort();
-            const industryLabels = Array.from(industries).sort();
-            const datasets = industryLabels.map((industry, idx) => ({
-                label: industry,
-                data: regionLabels.map(region => {
-                    const key = `${region}|${industry}`;
-                    return regionIndustryMap.get(key)?.count || 0;
-                }),
-                backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
-            }));
-            
-            this.renderStackedBarChart('industryRegionalChart', {
-                labels: regionLabels,
-                datasets: datasets
-            });
-
-            // Missing SFDC Links by Sales Rep
-            const salesRepSfdcMap = new Map();
-            activities.forEach(activity => {
-                if (!activity.isInternal && activity.salesRep && activity.accountId) {
-                    const account = accounts.find(a => a.id === activity.accountId);
-                    if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
-                        const repName = activity.salesRep;
-                        salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
-                    }
-                }
-            });
-            const salesRepSfdcData = Array.from(salesRepSfdcMap.entries())
-                .filter(([, count]) => count > 0)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 15); // Top 15
-            
-            if (salesRepSfdcData.length > 0) {
-                this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
-                    labels: salesRepSfdcData.map(([name]) => name),
-                    data: salesRepSfdcData.map(([, count]) => count),
-                    label: 'Missing SFDC Links'
+            if (industryData.length > 0) {
+                this.renderHorizontalBarChart('industryTotalChart', {
+                    labels: industryData.map(([industry]) => industry),
+                    data: industryData.map(([, count]) => count),
+                    label: 'Total Activities'
                 });
             }
-        }
 
-        // Sales Rep Most Requests
-        const salesRepMap = new Map();
-        activities.forEach(activity => {
-            if (!activity.isInternal && activity.salesRep) {
-                const repName = activity.salesRep;
-                if (!salesRepMap.has(repName)) {
-                    salesRepMap.set(repName, 0);
-                }
-                salesRepMap.set(repName, salesRepMap.get(repName) + 1);
-            }
-        });
-        const topSalesReps = Array.from(salesRepMap.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
-        
-        if (topSalesReps.length > 0) {
-            this.renderHorizontalBarChart('salesRepRequestsChart', {
-                labels: topSalesReps.map(([name]) => name),
-                data: topSalesReps.map(([, count]) => count),
-                label: 'Requests'
-            });
-        }
-
-        // Industry Total Activities
-        const industryActivityMap = new Map();
-        activities.forEach(activity => {
-            if (!activity.isInternal && activity.accountId) {
-                const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                if (account && account.industry) {
-                    const industry = account.industry;
-                    industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
-                }
-            }
-        });
-        const industryData = Array.from(industryActivityMap.entries())
-            .sort((a, b) => b[1] - a[1]);
-        
-        if (industryData.length > 0) {
-            this.renderHorizontalBarChart('industryTotalChart', {
-                labels: industryData.map(([industry]) => industry),
-                data: industryData.map(([, count]) => count),
-                label: 'Total Activities'
-            });
-        }
-
-        // Industry Average Activities
-        const industryAvgMap = new Map();
-        activities.forEach(activity => {
-            if (!activity.isInternal && activity.accountId) {
-                const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                if (account && account.industry) {
-                    const industry = account.industry;
-                    if (!industryAvgMap.has(industry)) {
-                        industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+            // Industry Average Activities
+            const industryAvgMap = new Map();
+            activities.forEach(activity => {
+                if (!activity.isInternal && activity.accountId) {
+                    const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                    if (account && account.industry) {
+                        const industry = account.industry;
+                        if (!industryAvgMap.has(industry)) {
+                            industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+                        }
+                        industryAvgMap.get(industry).total++;
+                        industryAvgMap.get(industry).accounts.add(activity.accountId);
                     }
-                    industryAvgMap.get(industry).total++;
-                    industryAvgMap.get(industry).accounts.add(activity.accountId);
                 }
-            }
-        });
-        const industryAvgData = Array.from(industryAvgMap.entries())
-            .map(([industry, data]) => ({
-                industry,
-                average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
-            }))
-            .sort((a, b) => b.average - a.average);
-        
-        if (industryAvgData.length > 0) {
-            this.renderHorizontalBarChart('industryAverageChart', {
-                labels: industryAvgData.map(d => d.industry),
-                data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
-                label: 'Average Activities'
             });
-        }
+            const industryAvgData = Array.from(industryAvgMap.entries())
+                .map(([industry, data]) => ({
+                    industry,
+                    average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
+                }))
+                .sort((a, b) => b.average - a.average);
+            
+            if (industryAvgData.length > 0) {
+                this.renderHorizontalBarChart('industryAverageChart', {
+                    labels: industryAvgData.map(d => d.industry),
+                    data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
+                    label: 'Average Activities'
+                });
+            }
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
         }
