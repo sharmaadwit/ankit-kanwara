@@ -217,11 +217,18 @@ const ReportsV2 = {
             requestAnimationFrame(() => {
                 setTimeout(() => {
                     try {
+                        // Double check that canvas elements exist before initializing charts
+                        const internalExternalCanvas = document.getElementById('internalExternalChart');
+                        if (internalExternalCanvas) {
+                            console.log('Internal vs External canvas found, dimensions:', internalExternalCanvas.offsetWidth, 'x', internalExternalCanvas.offsetHeight);
+                        } else {
+                            console.warn('Internal vs External canvas not found in DOM');
+                        }
                         this.initCharts(activities);
                     } catch (error) {
                         console.error('ReportsV2: Error initializing charts:', error);
                     }
-                }, 100);
+                }, 150);
             });
         } catch (error) {
             console.error('ReportsV2: Error in render():', error);
@@ -1076,8 +1083,18 @@ const ReportsV2 = {
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
         
         console.log(`Creating pie chart ${canvasId} with data:`, { labels, data, colors: chartColors });
+        console.log(`Canvas element:`, canvas, `Canvas dimensions:`, canvas.width, canvas.height);
 
         try {
+            // Ensure canvas is visible and has dimensions
+            if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
+                console.warn(`Canvas ${canvasId} has zero dimensions, waiting for layout...`);
+                setTimeout(() => {
+                    this.renderPieChart(canvasId, { labels, data, colors });
+                }, 200);
+                return;
+            }
+
             this.charts[canvasId] = new Chart(canvas, {
                 type: 'pie',
                 data: {
@@ -1091,7 +1108,8 @@ const ReportsV2 = {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: true,
+                    aspectRatio: 1.5,
                     plugins: {
                         legend: {
                             display: false
@@ -1110,8 +1128,10 @@ const ReportsV2 = {
                     }
                 }
             });
+            console.log(`Successfully created pie chart ${canvasId}:`, this.charts[canvasId]);
         } catch (error) {
             console.error(`Error creating pie chart ${canvasId}:`, error);
+            console.error('Error stack:', error.stack);
         }
     },
 
