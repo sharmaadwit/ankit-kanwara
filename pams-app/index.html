@@ -172,54 +172,7 @@
             <main class="main-content">
                 <!-- Dashboard View -->
                 <div id="dashboardView" class="view active">
-                    <div class="page-header">
-                        <h1 class="page-title">Dashboard</h1>
-                        <p class="page-subtitle">Overview of all activities and projects</p>
-                    </div>
-
-                    <!-- Statistics Grid -->
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <h4>Total Projects</h4>
-                            <div class="stat-value" id="totalProjectsStat">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <h4>Total Activities</h4>
-                            <div class="stat-value" id="totalActivitiesStat">0</div>
-                            <div class="stat-detail">
-                                <span id="customerActivitiesStat">0</span> Customer | 
-                                <span id="internalActivitiesStat">0</span> Internal
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <h4>Project Status</h4>
-                            <div class="stat-value" id="projectStatusStat">0</div>
-                            <div class="stat-detail">
-                                <span id="wonProjectsStat">0</span> Won | 
-                                <span id="lostProjectsStat">0</span> Lost | 
-                                <span id="activeProjectsStat">0</span> Active
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Quick Actions -->
-                    <div class="action-bar">
-                        <div class="action-buttons">
-                            <button class="btn btn-primary" onclick="Activities.openActivityModal()">
-                                + Log Activity
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activities -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>Recent Activities</h3>
-                        </div>
-                        <div class="card-body">
-                            <div id="recentActivitiesList"></div>
-                        </div>
-                    </div>
+                    <!-- Dashboard content is dynamically loaded by loadCardDashboard() -->
                 </div>
 
                 <!-- Activities View -->

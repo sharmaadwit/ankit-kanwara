@@ -1008,13 +1008,9 @@ const App = {
 
     // Load dashboard
     loadDashboard() {
-        // Check if card interface is active
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardDashboard();
-        } else {
-            this.updateStats();
-            this.loadRecentActivities();
-        }
+        // Always use the new card-based dashboard
+        // The old dashboard (updateStats/loadRecentActivities) is deprecated
+        this.loadCardDashboard();
     },
     
     // Load card-based dashboard
@@ -1025,11 +1021,13 @@ const App = {
             return;
         }
         
-        // Clear any existing content first
+        // Clear any existing content first (including old static HTML)
         dashboardView.innerHTML = '';
         
         // Destroy existing charts before reloading
         this.destroyDashboardCharts();
+        
+        console.log('Loading new dashboard...');
         
         const stats = this.updateStats() || {};
         
