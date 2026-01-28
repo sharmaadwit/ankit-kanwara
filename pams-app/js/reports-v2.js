@@ -432,8 +432,8 @@ const ReportsV2 = {
                 <h2 class="reports-v2-section-title">Presales Reports (Team Level)</h2>
                 
                 <div class="reports-v2-grid">
-                    <!-- Activity Breakdown - First Row with Donut Chart -->
-                    <div class="reports-v2-card reports-v2-card-wide">
+                    <!-- Activity Breakdown - First Row -->
+                    <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Activity Breakdown</h3>
                             <select class="form-control reports-v2-filter-dropdown" 
@@ -779,12 +779,18 @@ const ReportsV2 = {
             const internalCount = activities.filter(a => a.isInternal).length;
             const externalCount = activities.filter(a => !a.isInternal).length;
             
-            if (internalCount > 0 || externalCount > 0) {
+            const internalExternalCanvas = document.getElementById('internalExternalChart');
+            if (internalExternalCanvas && (internalCount > 0 || externalCount > 0)) {
+                console.log('Rendering Internal vs External chart:', { internalCount, externalCount });
                 this.renderPieChart('internalExternalChart', {
                     labels: ['Internal', 'External'],
                     data: [internalCount, externalCount],
                     colors: ['#3182CE', '#38A169']
                 });
+            } else if (!internalExternalCanvas) {
+                console.warn('Internal vs External chart canvas not found');
+            } else {
+                console.log('No data for Internal vs External chart');
             }
 
             // Presales Activity Report
@@ -993,14 +999,19 @@ const ReportsV2 = {
     // Chart rendering helpers
     renderPieChart(canvasId, { labels, data, colors }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') {
-            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+        if (!canvas) {
+            console.warn(`Chart canvas not found: ${canvasId}`);
+            return;
+        }
+        
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded');
             return;
         }
 
         // Ensure data is valid
         if (!data || !Array.isArray(data) || data.length === 0) {
-            console.warn(`Invalid data for chart ${canvasId}`);
+            console.warn(`Invalid data for chart ${canvasId}:`, data);
             return;
         }
 
@@ -1017,6 +1028,8 @@ const ReportsV2 = {
         // Default colors if not provided
         const defaultColors = ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'];
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
+        
+        console.log(`Creating pie chart ${canvasId} with data:`, { labels, data, colors: chartColors });
 
         try {
             this.charts[canvasId] = new Chart(canvas, {
