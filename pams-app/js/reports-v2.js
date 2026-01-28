@@ -988,13 +988,7 @@ const ReportsV2 = {
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
         }
-    }
-};
-
-// Make ReportsV2 globally available
-if (typeof window !== 'undefined') {
-    window.ReportsV2 = ReportsV2;
-}
+    },
 
     // Chart rendering helpers
     renderPieChart(canvasId, { labels, data, colors }) {
@@ -1335,5 +1329,7 @@ if (typeof window !== 'undefined') {
     }
 };
 
-// Expose globally
-window.ReportsV2 = ReportsV2;
+// Expose globally (only once)
+if (typeof window !== 'undefined' && !window.ReportsV2) {
+    window.ReportsV2 = ReportsV2;
+}
