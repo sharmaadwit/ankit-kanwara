@@ -2465,8 +2465,11 @@ const App = {
 
             // Use Reports V2
             if (typeof ReportsV2 !== 'undefined') {
+                console.log(`Loading Reports V2 for period: ${selectedPeriod}, type: ${isYearMode ? 'year' : 'month'}`);
                 ReportsV2.init(selectedPeriod, isYearMode ? 'year' : 'month');
                 return;
+            } else {
+                console.error('ReportsV2 is not defined. Check if reports-v2.js is loaded.');
             }
 
             // Fallback to old reports (hidden)

@@ -32,13 +32,21 @@ const ReportsV2 = {
 
     // Get activities for the selected period
     getPeriodActivities() {
+        if (!this.currentPeriod) {
+            console.warn('ReportsV2: currentPeriod is not set');
+            return [];
+        }
+
         const allActivities = DataManager.getAllActivities();
-        if (!allActivities || !allActivities.length) return [];
+        if (!allActivities || !allActivities.length) {
+            console.warn('ReportsV2: No activities found in DataManager');
+            return [];
+        }
 
         const period = this.currentPeriod;
         const isYear = this.currentPeriodType === 'year';
 
-        return allActivities.filter(activity => {
+        const filtered = allActivities.filter(activity => {
             const activityDate = activity.date || activity.createdAt;
             if (!activityDate) return false;
 
@@ -50,6 +58,9 @@ const ReportsV2 = {
                 return activityMonth === period;
             }
         });
+
+        console.log(`ReportsV2: Found ${filtered.length} activities for period ${period} (${isYear ? 'year' : 'month'})`);
+        return filtered;
     },
 
     // Format period display
@@ -137,12 +148,20 @@ const ReportsV2 = {
             return;
         }
 
+        if (!this.currentPeriod) {
+            console.error('ReportsV2: currentPeriod is null, cannot render');
+            container.innerHTML = '<div class="error-message">Reports period not set. Please try refreshing the page.</div>';
+            return;
+        }
+
         try {
             // Destroy existing charts before re-rendering
             this.destroyCharts();
 
             const activities = this.getPeriodActivities();
             const periodLabel = this.formatPeriod(this.currentPeriod);
+            
+            console.log(`ReportsV2: Rendering reports for period ${this.currentPeriod} (${this.currentPeriodType}), ${activities.length} activities`);
             
             // Compute and cache data for charts
             this.cachedData = this.computeReportData(activities);
@@ -959,7 +978,13 @@ const ReportsV2 = {
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
         }
-    },
+    }
+};
+
+// Make ReportsV2 globally available
+if (typeof window !== 'undefined') {
+    window.ReportsV2 = ReportsV2;
+}
 
     // Chart rendering helpers
     renderPieChart(canvasId, { labels, data, colors }) {
