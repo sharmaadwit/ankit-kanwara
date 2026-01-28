@@ -1090,9 +1090,11 @@ const App = {
         // Missing SFDC Opportunities calculation
         const externalMonthActivities = monthActivities.filter(a => !a.isInternal);
         const missingSfdcData = this.calculateMissingSfdcStats(externalMonthActivities, currentUser, defaultRegion);
+        console.log('Dashboard: Missing SFDC Data', missingSfdcData);
         
         // Top 3 Presales Reps by activity count
         const topPresalesReps = this.getTopPresalesReps(monthActivities, 3);
+        console.log('Dashboard: Top 3 Presales Reps', topPresalesReps);
         
         // Wins and Losses this month
         const accounts = DataManager.getAccounts();
