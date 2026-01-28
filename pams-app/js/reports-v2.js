@@ -815,18 +815,88 @@ const ReportsV2 = {
             const internalCount = activities.filter(a => a.isInternal).length;
             const externalCount = activities.filter(a => !a.isInternal).length;
             
-            const internalExternalCanvas = document.getElementById('internalExternalChart');
-            if (internalExternalCanvas && (internalCount > 0 || externalCount > 0)) {
-                console.log('Rendering Internal vs External chart:', { internalCount, externalCount });
-                this.renderPieChart('internalExternalChart', {
-                    labels: ['Internal', 'External'],
-                    data: [internalCount, externalCount],
-                    colors: ['#3182CE', '#38A169']
-                });
-            } else if (!internalExternalCanvas) {
-                console.warn('Internal vs External chart canvas not found');
-            } else {
-                console.log('No data for Internal vs External chart');
+            // Internal vs External Pie Chart - use donut chart approach like Activity Breakdown
+            if (this.activeTab === 'presales' && (internalCount > 0 || externalCount > 0)) {
+                const internalExternalCanvas = document.getElementById('internalExternalChart');
+                if (internalExternalCanvas) {
+                    // Destroy existing chart if it exists
+                    if (this.charts['internalExternalChart']) {
+                        try {
+                            this.charts['internalExternalChart'].destroy();
+                        } catch (e) {
+                            console.warn('Error destroying existing internalExternalChart:', e);
+                        }
+                        delete this.charts['internalExternalChart'];
+                    }
+                    
+                    // Also check Chart.js registry
+                    if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
+                        try {
+                            Chart.getChart(internalExternalCanvas).destroy();
+                        } catch (e) {
+                            console.warn('Error destroying Chart.js instance:', e);
+                        }
+                    }
+                    
+                    try {
+                        this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['Internal', 'External'],
+                                datasets: [{
+                                    data: [internalCount, externalCount],
+                                    backgroundColor: ['#3182CE', '#38A169'],
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '60%',
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                const label = context.label || '';
+                                                const value = context.parsed || 0;
+                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                                return `${label}: ${value} (${percentage}%)`;
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            plugins: [{
+                                id: 'centerText',
+                                beforeDraw: function(chart) {
+                                    const ctx = chart.ctx;
+                                    const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+                                    const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+                                    
+                                    ctx.save();
+                                    ctx.font = 'bold 20px Arial';
+                                    ctx.fillStyle = '#111827';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText((internalCount + externalCount).toString(), centerX, centerY - 8);
+                                    
+                                    ctx.font = '12px Arial';
+                                    ctx.fillStyle = '#6b7280';
+                                    ctx.fillText('Total', centerX, centerY + 12);
+                                    ctx.restore();
+                                }
+                            }]
+                        });
+                        console.log('Successfully created Internal vs External chart');
+                    } catch (error) {
+                        console.error('Error creating Internal vs External chart:', error);
+                    }
+                }
             }
 
             // Presales Activity Report
