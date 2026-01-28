@@ -505,7 +505,7 @@ const ReportsV2 = {
                             <h3>Internal vs External Activity</h3>
                         </div>
                         <div class="reports-v2-card-body">
-                            <canvas id="internalExternalChart" height="200"></canvas>
+                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; height: auto;"></canvas>
                             <div class="reports-v2-legend">
                                 <span class="reports-v2-legend-item">
                                     <span class="reports-v2-legend-color" style="background: #3182CE;"></span>
@@ -1083,38 +1083,20 @@ const ReportsV2 = {
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
         
         console.log(`Creating pie chart ${canvasId} with data:`, { labels, data, colors: chartColors });
-        console.log(`Canvas element:`, canvas, `Canvas dimensions:`, canvas.width, canvas.height, `offset:`, canvas.offsetWidth, 'x', canvas.offsetHeight);
 
         try {
-            // Ensure canvas is visible and has dimensions - use getBoundingClientRect for more reliable check
-            const rect = canvas.getBoundingClientRect();
-            const hasDimensions = rect.width > 0 && rect.height > 0;
+            // Chart.js can handle zero dimensions and will resize when container becomes visible
+            // Just ensure we have the canvas element and proceed with chart creation
+            if (!canvas) {
+                console.error(`Canvas ${canvasId} not found`);
+                return;
+            }
             
-            if (!hasDimensions) {
-                // Check if parent container has dimensions
-                const parent = canvas.parentElement;
-                const parentRect = parent ? parent.getBoundingClientRect() : null;
-                console.warn(`Canvas ${canvasId} has zero dimensions. Parent:`, parentRect);
-                
-                // Set explicit dimensions if parent has them
-                if (parentRect && parentRect.width > 0 && parentRect.height > 0) {
-                    canvas.style.width = parentRect.width + 'px';
-                    canvas.style.height = Math.min(parentRect.height, 200) + 'px';
-                    console.log(`Set explicit dimensions for ${canvasId}:`, canvas.style.width, canvas.style.height);
-                } else {
-                    // Only retry a few times to prevent infinite loops
-                    const retryCount = (canvas.dataset.retryCount || 0);
-                    if (retryCount < 3) {
-                        canvas.dataset.retryCount = String(parseInt(retryCount) + 1);
-                        console.warn(`Canvas ${canvasId} has zero dimensions, retry ${retryCount + 1}/3...`);
-                        setTimeout(() => {
-                            this.renderPieChart(canvasId, { labels, data, colors });
-                        }, 300);
-                        return;
-                    } else {
-                        console.error(`Canvas ${canvasId} still has zero dimensions after 3 retries, proceeding anyway`);
-                    }
-                }
+            // Set explicit dimensions if not already set
+            if (!canvas.style.width || canvas.style.width === '0px') {
+                canvas.style.width = '100%';
+                canvas.style.maxWidth = '300px';
+                canvas.style.height = 'auto';
             }
 
             this.charts[canvasId] = new Chart(canvas, {
