@@ -262,10 +262,12 @@ const ReportsV2 = {
             case 'presales':
                 return `
                     ${this.renderPresalesReports(activities)}
-                    ${this.renderProductLevelData(activities)}
                 `;
             case 'sales':
-                return this.renderSalesView(activities);
+                return `
+                    ${this.renderSalesView(activities)}
+                    ${this.renderProductLevelData(activities)}
+                `;
             case 'regional':
                 return this.renderRegionalData(activities);
             default:
@@ -899,25 +901,47 @@ const ReportsV2 = {
                 }
             }
 
-            // Presales Activity Report
-            const userActivityMap = new Map();
-            activities.forEach(activity => {
-                const userId = activity.userId || activity.assignedUserEmail || 'unknown';
-                const userName = activity.userName || 'Unknown';
-                if (!userActivityMap.has(userId)) {
-                    userActivityMap.set(userId, { userName, count: 0 });
+            // Presales Activity Report (only in Presales tab)
+            if (this.activeTab === 'presales') {
+                const presalesActivityCanvas = document.getElementById('presalesActivityChart');
+                if (presalesActivityCanvas) {
+                    const userActivityMap = new Map();
+                    activities.forEach(activity => {
+                        const userId = activity.userId || activity.assignedUserEmail || 'unknown';
+                        const userName = activity.userName || 'Unknown';
+                        if (!userActivityMap.has(userId)) {
+                            userActivityMap.set(userId, { userName, count: 0 });
+                        }
+                        userActivityMap.get(userId).count++;
+                    });
+                    const userActivityData = Array.from(userActivityMap.values())
+                        .sort((a, b) => b.count - a.count);
+                    
+                    if (userActivityData.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['presalesActivityChart']) {
+                            try {
+                                this.charts['presalesActivityChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying presalesActivityChart:', e);
+                            }
+                            delete this.charts['presalesActivityChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(presalesActivityCanvas)) {
+                            try {
+                                Chart.getChart(presalesActivityCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderHorizontalBarChart('presalesActivityChart', {
+                            labels: userActivityData.map(u => u.userName),
+                            data: userActivityData.map(u => u.count),
+                            label: 'Activities'
+                        });
+                    }
                 }
-                userActivityMap.get(userId).count++;
-            });
-            const userActivityData = Array.from(userActivityMap.values())
-                .sort((a, b) => b.count - a.count);
-            
-            if (userActivityData.length > 0) {
-                this.renderHorizontalBarChart('presalesActivityChart', {
-                    labels: userActivityData.map(u => u.userName),
-                    data: userActivityData.map(u => u.count),
-                    label: 'Activities'
-                });
             }
 
             // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
@@ -927,27 +951,47 @@ const ReportsV2 = {
 
             // Missing SFDC Links - Regional Bar Chart (Sales View)
             if (this.activeTab === 'sales') {
-                const accounts = DataManager.getAccounts();
-                const regionMissingMap = new Map();
-                activities.forEach(activity => {
-                    if (!activity.isInternal && activity.accountId) {
-                        const account = accounts.find(a => a.id === activity.accountId);
-                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
-                            const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
-                            regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
+                const missingSfdcCanvas = document.getElementById('missingSfdcRegionalChart');
+                if (missingSfdcCanvas) {
+                    const accounts = DataManager.getAccounts();
+                    const regionMissingMap = new Map();
+                    activities.forEach(activity => {
+                        if (!activity.isInternal && activity.accountId) {
+                            const account = accounts.find(a => a.id === activity.accountId);
+                            if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                                const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                                regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
+                            }
                         }
-                    }
-                });
-                const regionMissingData = Array.from(regionMissingMap.entries())
-                    .map(([region, count]) => ({ region, count }))
-                    .sort((a, b) => b.count - a.count);
-                
-                if (regionMissingData.length > 0) {
-                    this.renderBarChart('missingSfdcRegionalChart', {
-                        labels: regionMissingData.map(d => d.region),
-                        data: regionMissingData.map(d => d.count),
-                        label: 'Missing SFDC Links'
                     });
+                    const regionMissingData = Array.from(regionMissingMap.entries())
+                        .map(([region, count]) => ({ region, count }))
+                        .sort((a, b) => b.count - a.count);
+                    
+                    if (regionMissingData.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['missingSfdcRegionalChart']) {
+                            try {
+                                this.charts['missingSfdcRegionalChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying missingSfdcRegionalChart:', e);
+                            }
+                            delete this.charts['missingSfdcRegionalChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(missingSfdcCanvas)) {
+                            try {
+                                Chart.getChart(missingSfdcCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderBarChart('missingSfdcRegionalChart', {
+                            labels: regionMissingData.map(d => d.region),
+                            data: regionMissingData.map(d => d.count),
+                            label: 'Missing SFDC Links'
+                        });
+                    }
                 }
             }
 
@@ -956,70 +1000,110 @@ const ReportsV2 = {
                 const accounts = DataManager.getAccounts();
                 
                 // Industry Wise Regional Traffic
-                const regionIndustryMap = new Map();
-                activities.forEach(activity => {
-                    if (!activity.isInternal && activity.accountId) {
-                        const account = accounts.find(a => a.id === activity.accountId);
-                        if (account && account.industry) {
-                            const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
-                            const industry = account.industry;
-                            const key = `${region}|${industry}`;
-                            if (!regionIndustryMap.has(key)) {
-                                regionIndustryMap.set(key, { region, industry, count: 0 });
+                const industryRegionalCanvas = document.getElementById('industryRegionalChart');
+                if (industryRegionalCanvas) {
+                    const regionIndustryMap = new Map();
+                    activities.forEach(activity => {
+                        if (!activity.isInternal && activity.accountId) {
+                            const account = accounts.find(a => a.id === activity.accountId);
+                            if (account && account.industry) {
+                                const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
+                                const industry = account.industry;
+                                const key = `${region}|${industry}`;
+                                if (!regionIndustryMap.has(key)) {
+                                    regionIndustryMap.set(key, { region, industry, count: 0 });
+                                }
+                                regionIndustryMap.get(key).count++;
                             }
-                            regionIndustryMap.get(key).count++;
                         }
-                    }
-                });
-                
-                // Group by region for stacked bar chart
-                const regions = new Set();
-                const industries = new Set();
-                regionIndustryMap.forEach(({ region, industry }) => {
-                    regions.add(region);
-                    industries.add(industry);
-                });
-                
-                const regionLabels = Array.from(regions).sort();
-                const industryLabels = Array.from(industries).sort();
-                const datasets = industryLabels.map((industry, idx) => ({
-                    label: industry,
-                    data: regionLabels.map(region => {
-                        const key = `${region}|${industry}`;
-                        return regionIndustryMap.get(key)?.count || 0;
-                    }),
-                    backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
-                }));
-                
-                if (datasets.length > 0 && regionLabels.length > 0) {
-                    this.renderStackedBarChart('industryRegionalChart', {
-                        labels: regionLabels,
-                        datasets: datasets
                     });
+                    
+                    // Group by region for stacked bar chart
+                    const regions = new Set();
+                    const industries = new Set();
+                    regionIndustryMap.forEach(({ region, industry }) => {
+                        regions.add(region);
+                        industries.add(industry);
+                    });
+                    
+                    const regionLabels = Array.from(regions).sort();
+                    const industryLabels = Array.from(industries).sort();
+                    const datasets = industryLabels.map((industry, idx) => ({
+                        label: industry,
+                        data: regionLabels.map(region => {
+                            const key = `${region}|${industry}`;
+                            return regionIndustryMap.get(key)?.count || 0;
+                        }),
+                        backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
+                    }));
+                    
+                    if (datasets.length > 0 && regionLabels.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['industryRegionalChart']) {
+                            try {
+                                this.charts['industryRegionalChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying industryRegionalChart:', e);
+                            }
+                            delete this.charts['industryRegionalChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(industryRegionalCanvas)) {
+                            try {
+                                Chart.getChart(industryRegionalCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderStackedBarChart('industryRegionalChart', {
+                            labels: regionLabels,
+                            datasets: datasets
+                        });
+                    }
                 }
 
                 // Missing SFDC Links by Sales Rep
-                const salesRepSfdcMap = new Map();
-                activities.forEach(activity => {
-                    if (!activity.isInternal && activity.salesRep && activity.accountId) {
-                        const account = accounts.find(a => a.id === activity.accountId);
-                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
-                            const repName = activity.salesRep;
-                            salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
+                const missingSfdcSalesRepCanvas = document.getElementById('missingSfdcSalesRepChart');
+                if (missingSfdcSalesRepCanvas) {
+                    const salesRepSfdcMap = new Map();
+                    activities.forEach(activity => {
+                        if (!activity.isInternal && activity.salesRep && activity.accountId) {
+                            const account = accounts.find(a => a.id === activity.accountId);
+                            if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                                const repName = activity.salesRep;
+                                salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
+                            }
                         }
-                    }
-                });
-                const salesRepSfdcData = Array.from(salesRepSfdcMap.entries())
-                    .filter(([, count]) => count > 0)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 15); // Top 15
-                
-                if (salesRepSfdcData.length > 0) {
-                    this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
-                        labels: salesRepSfdcData.map(([name]) => name),
-                        data: salesRepSfdcData.map(([, count]) => count),
-                        label: 'Missing SFDC Links'
                     });
+                    const salesRepSfdcData = Array.from(salesRepSfdcMap.entries())
+                        .filter(([, count]) => count > 0)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 15); // Top 15
+                    
+                    if (salesRepSfdcData.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['missingSfdcSalesRepChart']) {
+                            try {
+                                this.charts['missingSfdcSalesRepChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying missingSfdcSalesRepChart:', e);
+                            }
+                            delete this.charts['missingSfdcSalesRepChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(missingSfdcSalesRepCanvas)) {
+                            try {
+                                Chart.getChart(missingSfdcSalesRepCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
+                            labels: salesRepSfdcData.map(([name]) => name),
+                            data: salesRepSfdcData.map(([, count]) => count),
+                            label: 'Missing SFDC Links'
+                        });
+                    }
                 }
             }
 
@@ -1251,14 +1335,19 @@ const ReportsV2 = {
 
     renderBarChart(canvasId, { labels, data, label }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') {
-            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+        if (!canvas) {
+            console.warn(`Chart canvas not found: ${canvasId}`);
+            return;
+        }
+        
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded');
             return;
         }
 
         // Ensure data is valid
         if (!data || !Array.isArray(data) || data.length === 0) {
-            console.warn(`Invalid data for chart ${canvasId}`);
+            console.warn(`Invalid data for chart ${canvasId}:`, data);
             return;
         }
 
@@ -1267,44 +1356,58 @@ const ReportsV2 = {
             try {
                 this.charts[canvasId].destroy();
             } catch (e) {
-                console.warn(`Error destroying chart ${canvasId}:`, e);
+                console.warn(`Error destroying chart ${canvasId} from cache:`, e);
             }
             delete this.charts[canvasId];
+        }
+        
+        // Also check Chart.js registry
+        if (Chart.getChart && Chart.getChart(canvas)) {
+            try {
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+            } catch (e) {
+                console.warn(`Error destroying Chart.js instance on ${canvasId}:`, e);
+            }
         }
 
         try {
             this.charts[canvasId] = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: label,
-                    data: data,
-                    backgroundColor: '#3182CE',
-                    borderColor: '#2B6CB0',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: '#3182CE',
+                        borderColor: '#2B6CB0',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
                         }
                     }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
                 }
-            }
-        });
+            });
+            console.log(`Successfully created bar chart ${canvasId}`);
         } catch (error) {
             console.error(`Error creating bar chart ${canvasId}:`, error);
+            console.error('Error stack:', error.stack);
         }
     },
 
