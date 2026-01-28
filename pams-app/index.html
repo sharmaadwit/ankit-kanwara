@@ -361,19 +361,46 @@
                     <div class="admin-sections-help text-muted">Select a module to open its tools. Only the chosen module loads, keeping the page fast.</div>
 
                     <div class="admin-sections-nav" id="adminSectionsNav">
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="users">System Users</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="sales">Sales Users</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="regions">Regions</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="industryUseCases">Industry & Use Cases</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="interface">Interface Settings</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="analytics">Analytics Targets</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="projectHealth">Project Health Filters</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="features">Feature Flags</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="login">Login Activity</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="audit">Activity Audit Log</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="monthly">Monthly Export</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="poc">POC Sandbox</button>
-                        <button class="btn btn-outline admin-section-link" data-admin-nav="reports">Reports</button>
+                        <div class="admin-nav-groups">
+                            <div class="admin-nav-group">
+                                <div class="admin-nav-group-label">Users & Access</div>
+                                <div class="admin-nav-group-buttons">
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="users">System Users</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="sales">Sales Users</button>
+                                </div>
+                            </div>
+                            <div class="admin-nav-group">
+                                <div class="admin-nav-group-label">Configuration</div>
+                                <div class="admin-nav-group-buttons">
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="regions">Regions</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="industryUseCases">Industry & Use Cases</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="interface">Interface</button>
+                                </div>
+                            </div>
+                            <div class="admin-nav-group">
+                                <div class="admin-nav-group-label">Analytics</div>
+                                <div class="admin-nav-group-buttons">
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="analytics">Targets</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="reports">Reports</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="monthly">Export</button>
+                                </div>
+                            </div>
+                            <div class="admin-nav-group">
+                                <div class="admin-nav-group-label">Monitoring</div>
+                                <div class="admin-nav-group-buttons">
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="login">Login Activity</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="audit">Audit Log</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="projectHealth">Project Health</button>
+                                </div>
+                            </div>
+                            <div class="admin-nav-group">
+                                <div class="admin-nav-group-label">Features</div>
+                                <div class="admin-nav-group-buttons">
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="features">Feature Flags</button>
+                                    <button class="btn btn-outline admin-section-link" data-admin-nav="poc">POC Sandbox</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="adminSectionsContainer">
@@ -420,15 +447,15 @@
                         <!-- Regions -->
                         <div class="admin-section hidden" data-admin-section="regions">
                             <div class="card">
-                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div class="card-header">
                                     <h3>Regions</h3>
-                                    <div style="display:flex; gap:0.75rem; flex-wrap: wrap;">
+                                    <div class="card-header-actions">
                                         <button class="btn btn-secondary btn-sm" onclick="Admin.pruneUnusedRegions()">Remove Unused</button>
-                                        <button class="btn btn-primary btn-sm" onclick="Admin.showAddRegionModal()">+ Add Region</button>
+                                        <button class="btn btn-primary btn-sm" onclick="Admin.showAddRegionModal()">+ Add</button>
                                     </div>
                                 </div>
                                 <div class="card-body">
-                                    <div id="regionsList" class="space-y-2"></div>
+                                    <div id="regionsList" class="space-y-compact"></div>
                                 </div>
                             </div>
                         </div>
@@ -437,46 +464,65 @@
                         <div class="admin-section hidden" data-admin-section="industryUseCases">
                             <div class="card">
                                 <div class="card-header">
-                                    <h3>Industries</h3>
+                                    <h3>Industry & Use Cases</h3>
                                 </div>
                                 <div class="card-body">
-                                    <div class="form-group" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
-                                        <input type="text" id="adminNewIndustry" class="form-control" placeholder="New industry name" style="max-width: 280px;">
-                                        <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addIndustryFromAdmin()">Add Industry</button>
+                                    <div class="admin-tabs">
+                                        <button class="admin-tab active" data-tab="industries" onclick="Admin.switchIndustryUseCaseTab('industries')">Industries</button>
+                                        <button class="admin-tab" data-tab="useCases" onclick="Admin.switchIndustryUseCaseTab('useCases')">Use Cases</button>
+                                        <button class="admin-tab" data-tab="pending" onclick="Admin.switchIndustryUseCaseTab('pending')">
+                                            Pending
+                                            <span id="adminPendingBadge" class="admin-collapsible-badge" style="display: none; margin-left: 0.5rem;">0</span>
+                                        </button>
                                     </div>
-                                    <div id="adminIndustriesList" class="space-y-2" style="margin-top: 1rem;"></div>
-                                </div>
-                            </div>
-                            <div class="card" style="margin-top: 1.5rem;">
-                                <div class="card-header">
-                                    <h3>Pending Industries (from &ldquo;Other&rdquo;)</h3>
-                                </div>
-                                <div class="card-body">
-                                    <p class="text-muted" style="margin-bottom: 0.75rem;">Accept or reject industry suggestions submitted by users when they chose &ldquo;Other&rdquo;.</p>
-                                    <div id="adminPendingIndustriesList" class="space-y-2"></div>
-                                </div>
-                            </div>
-                            <div class="card" style="margin-top: 1.5rem;">
-                                <div class="card-header">
-                                    <h3>Use Cases by Industry</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="form-group">
-                                        <label class="form-label">Industry</label>
-                                        <select id="adminUseCaseIndustrySelect" class="form-control" onchange="Admin.renderUseCasesForIndustry()" style="max-width: 320px;">
-                                            <option value="">Select industry...</option>
-                                        </select>
+                                    
+                                    <!-- Industries Tab -->
+                                    <div class="admin-tab-content active" data-tab-content="industries">
+                                        <div class="admin-inline-form">
+                                            <input type="text" id="adminNewIndustry" class="form-control" placeholder="New industry name">
+                                            <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addIndustryFromAdmin()">Add</button>
+                                        </div>
+                                        <div id="adminIndustriesList" class="space-y-compact" style="margin-top: 1rem;"></div>
                                     </div>
-                                    <div id="adminUseCasesPanel" style="margin-top: 1rem;"></div>
-                                </div>
-                            </div>
-                            <div class="card" style="margin-top: 1.5rem;">
-                                <div class="card-header">
-                                    <h3>Pending Use Cases (from &ldquo;Other&rdquo;)</h3>
-                                </div>
-                                <div class="card-body">
-                                    <p class="text-muted" style="margin-bottom: 0.75rem;">Accept or reject use case suggestions; accepted items are added to the selected industry.</p>
-                                    <div id="adminPendingUseCasesList" class="space-y-2"></div>
+                                    
+                                    <!-- Use Cases Tab -->
+                                    <div class="admin-tab-content" data-tab-content="useCases">
+                                        <div class="form-group">
+                                            <label class="form-label">Industry</label>
+                                            <select id="adminUseCaseIndustrySelect" class="form-control" onchange="Admin.renderUseCasesForIndustry()" style="max-width: 320px;">
+                                                <option value="">Select industry...</option>
+                                            </select>
+                                        </div>
+                                        <div id="adminUseCasesPanel" style="margin-top: 1rem;"></div>
+                                    </div>
+                                    
+                                    <!-- Pending Tab -->
+                                    <div class="admin-tab-content" data-tab-content="pending">
+                                        <div class="admin-collapsible">
+                                            <div class="admin-collapsible-header" onclick="Admin.toggleCollapsible('pendingIndustries')">
+                                                <h4>
+                                                    Pending Industries
+                                                    <span id="adminPendingIndustriesBadge" class="admin-collapsible-badge" style="display: none;">0</span>
+                                                </h4>
+                                                <span class="admin-collapsible-icon">▼</span>
+                                            </div>
+                                            <div class="admin-collapsible-content" id="pendingIndustriesContent">
+                                                <div id="adminPendingIndustriesList" class="space-y-compact"></div>
+                                            </div>
+                                        </div>
+                                        <div class="admin-collapsible" style="margin-top: 1rem;">
+                                            <div class="admin-collapsible-header" onclick="Admin.toggleCollapsible('pendingUseCases')">
+                                                <h4>
+                                                    Pending Use Cases
+                                                    <span id="adminPendingUseCasesBadge" class="admin-collapsible-badge" style="display: none;">0</span>
+                                                </h4>
+                                                <span class="admin-collapsible-icon">▼</span>
+                                            </div>
+                                            <div class="admin-collapsible-content" id="pendingUseCasesContent">
+                                                <div id="adminPendingUseCasesList" class="space-y-compact"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

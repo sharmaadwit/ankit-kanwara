@@ -229,6 +229,8 @@ const Admin = {
     },
 
     loadIndustryUseCasesSection() {
+        // Ensure industries tab is active by default
+        this.switchIndustryUseCaseTab('industries');
         this.renderAdminIndustriesList();
         this.renderAdminPendingIndustries();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
@@ -239,6 +241,67 @@ const Admin = {
             this.renderUseCasesForIndustry();
         }
         this.renderAdminPendingUseCases();
+        this.updatePendingBadges();
+    },
+
+    switchIndustryUseCaseTab(tabName) {
+        document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.admin-tab-content').forEach(content => content.classList.remove('active'));
+        const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+        const activeContent = document.querySelector(`[data-tab-content="${tabName}"]`);
+        if (activeTab) activeTab.classList.add('active');
+        if (activeContent) activeContent.classList.add('active');
+    },
+
+    toggleCollapsible(id) {
+        const header = document.querySelector(`[onclick*="${id}"]`);
+        const content = document.getElementById(`${id}Content`);
+        if (!header || !content) return;
+        const isExpanded = content.classList.contains('expanded');
+        if (isExpanded) {
+            content.classList.remove('expanded');
+            header.classList.remove('expanded');
+        } else {
+            content.classList.add('expanded');
+            header.classList.add('expanded');
+        }
+    },
+
+    updatePendingBadges() {
+        const pendingIndustries = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
+        const pendingUseCases = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
+        const totalPending = pendingIndustries.length + pendingUseCases.length;
+        
+        const pendingBadge = document.getElementById('adminPendingBadge');
+        const industriesBadge = document.getElementById('adminPendingIndustriesBadge');
+        const useCasesBadge = document.getElementById('adminPendingUseCasesBadge');
+        
+        if (pendingBadge) {
+            if (totalPending > 0) {
+                pendingBadge.textContent = totalPending;
+                pendingBadge.style.display = 'inline-flex';
+            } else {
+                pendingBadge.style.display = 'none';
+            }
+        }
+        
+        if (industriesBadge) {
+            if (pendingIndustries.length > 0) {
+                industriesBadge.textContent = pendingIndustries.length;
+                industriesBadge.style.display = 'inline-flex';
+            } else {
+                industriesBadge.style.display = 'none';
+            }
+        }
+        
+        if (useCasesBadge) {
+            if (pendingUseCases.length > 0) {
+                useCasesBadge.textContent = pendingUseCases.length;
+                useCasesBadge.style.display = 'inline-flex';
+            } else {
+                useCasesBadge.style.display = 'none';
+            }
+        }
     },
 
     renderAdminIndustriesList() {
@@ -246,12 +309,12 @@ const Admin = {
         if (!container) return;
         const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
         container.innerHTML = industries.length === 0
-            ? '<p class="text-muted">No industries yet. Add one above.</p>'
+            ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">📋</div><p>No industries yet. Add one above.</p></div>'
             : industries.map(ind => {
                 const attrVal = (ind || '').replace(/"/g, '&quot;');
-                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                return `<div class="admin-list-row">
                     <span>${ind}</span>
-                    <button type="button" class="btn btn-danger btn-sm" data-industry="${attrVal}" onclick="Admin.removeIndustryFromAdmin(this.getAttribute('data-industry'))">Remove</button>
+                    <button type="button" class="btn btn-danger btn-xs" data-industry="${attrVal}" onclick="Admin.removeIndustryFromAdmin(this.getAttribute('data-industry'))">Remove</button>
                 </div>`;
             }).join('');
     },
@@ -299,19 +362,20 @@ const Admin = {
         if (!container) return;
         const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
         container.innerHTML = pending.length === 0
-            ? '<p class="text-muted">No pending industry suggestions.</p>'
+            ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>'
             : pending.map(p => {
                 const val = (p.value != null ? p.value : p).toString().trim();
                 const dataVal = val.replace(/"/g, '&quot;');
-                const meta = p.suggestedBy ? ` (by ${p.suggestedBy})` : '';
-                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                const meta = p.suggestedBy ? ` <small class="text-muted">(${p.suggestedBy})</small>` : '';
+                return `<div class="admin-list-row">
                     <span>${val}${meta}</span>
                     <span style="display: flex; gap: 0.5rem;">
-                        <button type="button" class="btn btn-primary btn-sm" data-pending-industry="${dataVal}" onclick="Admin.acceptPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Accept</button>
-                        <button type="button" class="btn btn-secondary btn-sm" data-pending-industry="${dataVal}" onclick="Admin.rejectPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Reject</button>
+                        <button type="button" class="btn btn-primary btn-xs" data-pending-industry="${dataVal}" onclick="Admin.acceptPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Accept</button>
+                        <button type="button" class="btn btn-secondary btn-xs" data-pending-industry="${dataVal}" onclick="Admin.rejectPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Reject</button>
                     </span>
                 </div>`;
             }).join('');
+        this.updatePendingBadges();
     },
 
     acceptPendingIndustryFromAdmin(value) {
@@ -319,20 +383,22 @@ const Admin = {
         DataManager.acceptPendingIndustry(value);
         this.renderAdminIndustriesList();
         this.renderAdminPendingIndustries();
+        this.updatePendingBadges();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
         if (industrySelect) {
             const industries = DataManager.getIndustries();
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
         }
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry accepted and added to list.', 'success');
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry accepted.', 'success');
     },
 
     rejectPendingIndustryFromAdmin(value) {
         if (typeof DataManager === 'undefined') return;
         DataManager.rejectPendingIndustry(value);
         this.renderAdminPendingIndustries();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Suggestion rejected.', 'success');
+        this.updatePendingBadges();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
     },
 
     renderUseCasesForIndustry() {
@@ -347,22 +413,22 @@ const Admin = {
         const useCases = typeof DataManager !== 'undefined' ? DataManager.getUseCasesForIndustry(industry) : [];
         const addInputId = 'adminNewUseCaseInput';
         panel.innerHTML = `
-            <div class="form-group" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
-                <input type="text" id="${addInputId}" class="form-control" placeholder="New use case" style="max-width: 280px;">
-                <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addUseCaseFromAdmin()">Add Use Case</button>
+            <div class="admin-inline-form">
+                <input type="text" id="${addInputId}" class="form-control" placeholder="New use case">
+                <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addUseCaseFromAdmin()">Add</button>
             </div>
-            <div id="adminUseCasesList" class="space-y-2" style="margin-top: 1rem;"></div>
+            <div id="adminUseCasesList" class="space-y-compact" style="margin-top: 1rem;"></div>
         `;
         const listEl = document.getElementById('adminUseCasesList');
         if (listEl) {
             listEl.innerHTML = useCases.length === 0
-                ? '<p class="text-muted">No use cases for this industry. Add one above.</p>'
+                ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">📋</div><p>No use cases. Add one above.</p></div>'
                 : useCases.map(uc => {
                     const ucAttr = (uc || '').replace(/"/g, '&quot;');
                     const indAttr = (industry || '').replace(/"/g, '&quot;');
-                    return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                    return `<div class="admin-list-row">
                         <span>${uc}</span>
-                        <button type="button" class="btn btn-danger btn-sm" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.removeUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Remove</button>
+                        <button type="button" class="btn btn-danger btn-xs" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.removeUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Remove</button>
                     </div>`;
                 }).join('');
         }
@@ -398,22 +464,23 @@ const Admin = {
         if (!container) return;
         const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
         container.innerHTML = pending.length === 0
-            ? '<p class="text-muted">No pending use case suggestions.</p>'
+            ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>'
             : pending.map(p => {
                 const val = (p.value != null ? p.value : p).toString().trim();
                 const ind = (p.industry != null ? p.industry : '').toString().trim() || '';
                 const dataVal = val.replace(/"/g, '&quot;');
                 const dataInd = ind.replace(/"/g, '&quot;');
-                const meta = p.suggestedBy ? ` (by ${p.suggestedBy})` : '';
-                const indLabel = ind || '(no industry)';
-                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
-                    <span>${val} → ${indLabel}${meta}</span>
+                const meta = p.suggestedBy ? ` <small class="text-muted">(${p.suggestedBy})</small>` : '';
+                const indLabel = ind || 'Unassigned';
+                return `<div class="admin-list-row">
+                    <span>${val} <small class="text-muted">→ ${indLabel}</small>${meta}</span>
                     <span style="display: flex; gap: 0.5rem;">
-                        <button type="button" class="btn btn-primary btn-sm" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.acceptPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Accept</button>
-                        <button type="button" class="btn btn-secondary btn-sm" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.rejectPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Reject</button>
+                        <button type="button" class="btn btn-primary btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.acceptPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Accept</button>
+                        <button type="button" class="btn btn-secondary btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.rejectPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Reject</button>
                     </span>
                 </div>`;
             }).join('');
+        this.updatePendingBadges();
     },
 
     acceptPendingUseCaseFromAdmin(value, industry) {
@@ -421,14 +488,16 @@ const Admin = {
         DataManager.acceptPendingUseCase(value, industry);
         this.renderUseCasesForIndustry();
         this.renderAdminPendingUseCases();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case accepted and added to industry.', 'success');
+        this.updatePendingBadges();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case accepted.', 'success');
     },
 
     rejectPendingUseCaseFromAdmin(value, industry) {
         if (typeof DataManager === 'undefined') return;
         DataManager.rejectPendingUseCase(value, industry);
         this.renderAdminPendingUseCases();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Suggestion rejected.', 'success');
+        this.updatePendingBadges();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
     },
 
     loadAnalyticsSettings() {
@@ -1467,7 +1536,7 @@ const Admin = {
 
         const regions = DataManager.getRegions();
         if (!regions.length) {
-            container.innerHTML = '<div class="text-muted">No regions configured yet.</div>';
+            container.innerHTML = '<div class="admin-empty-state"><div class="admin-empty-state-icon">🌍</div><p>No regions configured</p></div>';
             return;
         }
 
@@ -1480,30 +1549,26 @@ const Admin = {
                 (usage.accounts || 0) +
                 (usage.activities || 0) +
                 (usage.users || 0);
-            const statusLabel = isDefault ? 'Default region' : totalUsage > 0 ? 'In use' : 'Unused';
+            const statusLabel = isDefault ? 'Default' : totalUsage > 0 ? 'In use' : 'Unused';
             const encoded = encodeURIComponent(region);
             const canDelete = !isDefault && totalUsage === 0;
             const deleteButton = canDelete
-                ? `<button class="btn btn-sm btn-danger" data-region="${encoded}" onclick="Admin.handleRegionDelete(event)">Remove</button>`
-                : `<button class="btn btn-sm btn-danger" disabled title="${isDefault ? 'Default regions cannot be removed' : 'Region still referenced by records'}">Remove</button>`;
+                ? `<button class="btn btn-xs btn-danger" data-region="${encoded}" onclick="Admin.handleRegionDelete(event)">Remove</button>`
+                : `<button class="btn btn-xs btn-danger" disabled title="${isDefault ? 'Default regions cannot be removed' : 'Region still referenced by records'}">Remove</button>`;
 
             html += `
-                <div class="admin-user-item">
-                    <div class="admin-user-info">
-                        <div class="admin-user-name">${region}</div>
-                        <div class="admin-user-roles">
-                            <span class="badge">${usage.salesReps || 0} sales users</span>
-                            <span class="badge">${usage.accounts || 0} accounts</span>
-                            <span class="badge">${usage.activities || 0} activities</span>
-                            <span class="badge">${usage.users || 0} system users</span>
-                        </div>
-                        <div class="text-muted" style="margin-top: 0.25rem; font-size: 0.85rem;">
-                            ${statusLabel}${!canDelete && !isDefault && totalUsage > 0 ? ' • Clear linked records before removal' : ''}
+                <div class="admin-list-row">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 500; margin-bottom: 0.25rem;">${region}</div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--gray-600);">
+                            <span>${usage.salesReps || 0} sales</span>
+                            <span>${usage.accounts || 0} accounts</span>
+                            <span>${usage.activities || 0} activities</span>
+                            <span>${usage.users || 0} users</span>
+                            <span class="text-muted">• ${statusLabel}</span>
                         </div>
                     </div>
-                    <div class="admin-user-actions">
-                        ${deleteButton}
-                    </div>
+                    ${deleteButton}
                 </div>
             `;
         });
