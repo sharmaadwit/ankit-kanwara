@@ -72,9 +72,15 @@ const Activities = {
 
         UI.showModal(modalId);
 
-        if (isEdit && activity) {
-            this.populateEditForm(activity, !!isInternal);
-        }
+        // Initialize use case dropdown after modal is shown
+        setTimeout(() => {
+            if (isEdit && activity) {
+                this.populateEditForm(activity, !!isInternal);
+            } else {
+                // Initialize use case dropdown with defaults for new activities
+                this.refreshUseCaseOptions('');
+            }
+        }, 100);
     },
 
     formatDateForInput(value) {

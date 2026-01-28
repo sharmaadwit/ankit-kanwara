@@ -2689,5 +2689,7 @@ if (typeof DataManager !== 'undefined') {
     // Also ensure users exist
     DataManager.ensureDefaultUsers();
     console.log('DataManager initialized. Users:', DataManager.getUsers().length);
+    console.log('Industries:', DataManager.getIndustries().length);
+    console.log('Industry Use Cases initialized:', Object.keys(DataManager.getIndustryUseCases()).length);
 }
 
