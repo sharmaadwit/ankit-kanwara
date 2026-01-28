@@ -119,31 +119,56 @@ const ReportsV2 = {
     // Main render function
     render() {
         const container = document.getElementById('reportsContent');
-        if (!container) return;
+        if (!container) {
+            console.error('ReportsV2: reportsContent container not found');
+            return;
+        }
 
-        // Destroy existing charts before re-rendering
-        this.destroyCharts();
+        // Check dependencies
+        if (typeof DataManager === 'undefined') {
+            console.error('ReportsV2: DataManager not available');
+            container.innerHTML = '<div class="error-message">DataManager not loaded. Please refresh the page.</div>';
+            return;
+        }
 
-        const activities = this.getPeriodActivities();
-        const periodLabel = this.formatPeriod(this.currentPeriod);
-        
-        // Compute and cache data for charts
-        this.cachedData = this.computeReportData(activities);
+        if (typeof Chart === 'undefined') {
+            console.error('ReportsV2: Chart.js not loaded');
+            container.innerHTML = '<div class="error-message">Chart.js library not loaded. Please check your internet connection.</div>';
+            return;
+        }
 
-        container.innerHTML = `
-            <div class="reports-v2-container">
-                ${this.renderHeader(periodLabel)}
-                ${this.renderTabNavigation()}
-                ${this.renderTabContent(activities)}
-            </div>
-        `;
+        try {
+            // Destroy existing charts before re-rendering
+            this.destroyCharts();
 
-        // Initialize charts after render - use requestAnimationFrame for better timing
-        requestAnimationFrame(() => {
-            setTimeout(() => {
-                this.initCharts(activities);
-            }, 50);
-        });
+            const activities = this.getPeriodActivities();
+            const periodLabel = this.formatPeriod(this.currentPeriod);
+            
+            // Compute and cache data for charts
+            this.cachedData = this.computeReportData(activities);
+
+            container.innerHTML = `
+                <div class="reports-v2-container">
+                    ${this.renderHeader(periodLabel)}
+                    ${this.renderTabNavigation()}
+                    ${this.renderTabContent(activities)}
+                </div>
+            `;
+
+            // Initialize charts after render - use requestAnimationFrame for better timing
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    try {
+                        this.initCharts(activities);
+                    } catch (error) {
+                        console.error('ReportsV2: Error initializing charts:', error);
+                    }
+                }, 100);
+            });
+        } catch (error) {
+            console.error('ReportsV2: Error in render():', error);
+            container.innerHTML = `<div class="error-message">Error loading reports: ${error.message}</div>`;
+        }
     },
 
     // Render tab navigation
@@ -715,14 +740,23 @@ const ReportsV2 = {
 
     // Initialize all charts
     initCharts(activities) {
-        // Internal vs External Pie Chart
-        const internalCount = activities.filter(a => a.isInternal).length;
-        const externalCount = activities.filter(a => !a.isInternal).length;
-        this.renderPieChart('internalExternalChart', {
-            labels: ['Internal', 'External'],
-            data: [internalCount, externalCount],
-            colors: ['#3182CE', '#38A169']
-        });
+        if (!activities || activities.length === 0) {
+            console.warn('ReportsV2: No activities to chart');
+            return;
+        }
+
+        try {
+            // Internal vs External Pie Chart
+            const internalCount = activities.filter(a => a.isInternal).length;
+            const externalCount = activities.filter(a => !a.isInternal).length;
+            
+            if (internalCount > 0 || externalCount > 0) {
+                this.renderPieChart('internalExternalChart', {
+                    labels: ['Internal', 'External'],
+                    data: [internalCount, externalCount],
+                    colors: ['#3182CE', '#38A169']
+                });
+            }
 
         // Presales Activity Report
         const userActivityMap = new Map();
@@ -736,11 +770,14 @@ const ReportsV2 = {
         });
         const userActivityData = Array.from(userActivityMap.values())
             .sort((a, b) => b.count - a.count);
-        this.renderHorizontalBarChart('presalesActivityChart', {
-            labels: userActivityData.map(u => u.userName),
-            data: userActivityData.map(u => u.count),
-            label: 'Activities'
-        });
+        
+        if (userActivityData.length > 0) {
+            this.renderHorizontalBarChart('presalesActivityChart', {
+                labels: userActivityData.map(u => u.userName),
+                data: userActivityData.map(u => u.count),
+                label: 'Activities'
+            });
+        }
 
         // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
         if (this.activeTab === 'presales') {
@@ -857,11 +894,14 @@ const ReportsV2 = {
         const topSalesReps = Array.from(salesRepMap.entries())
             .sort((a, b) => b[1] - a[1])
             .slice(0, 10);
-        this.renderHorizontalBarChart('salesRepRequestsChart', {
-            labels: topSalesReps.map(([name]) => name),
-            data: topSalesReps.map(([, count]) => count),
-            label: 'Requests'
-        });
+        
+        if (topSalesReps.length > 0) {
+            this.renderHorizontalBarChart('salesRepRequestsChart', {
+                labels: topSalesReps.map(([name]) => name),
+                data: topSalesReps.map(([, count]) => count),
+                label: 'Requests'
+            });
+        }
 
         // Industry Total Activities
         const industryActivityMap = new Map();
@@ -876,11 +916,14 @@ const ReportsV2 = {
         });
         const industryData = Array.from(industryActivityMap.entries())
             .sort((a, b) => b[1] - a[1]);
-        this.renderHorizontalBarChart('industryTotalChart', {
-            labels: industryData.map(([industry]) => industry),
-            data: industryData.map(([, count]) => count),
-            label: 'Total Activities'
-        });
+        
+        if (industryData.length > 0) {
+            this.renderHorizontalBarChart('industryTotalChart', {
+                labels: industryData.map(([industry]) => industry),
+                data: industryData.map(([, count]) => count),
+                label: 'Total Activities'
+            });
+        }
 
         // Industry Average Activities
         const industryAvgMap = new Map();
@@ -903,11 +946,17 @@ const ReportsV2 = {
                 average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
             }))
             .sort((a, b) => b.average - a.average);
-        this.renderHorizontalBarChart('industryAverageChart', {
-            labels: industryAvgData.map(d => d.industry),
-            data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
-            label: 'Average Activities'
-        });
+        
+        if (industryAvgData.length > 0) {
+            this.renderHorizontalBarChart('industryAverageChart', {
+                labels: industryAvgData.map(d => d.industry),
+                data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
+                label: 'Average Activities'
+            });
+        }
+        } catch (error) {
+            console.error('ReportsV2: Error in initCharts():', error);
+        }
     },
 
     // Chart rendering helpers
