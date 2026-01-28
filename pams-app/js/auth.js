@@ -501,11 +501,22 @@ const Auth = {
     updateNavigation() {
         if (!this.currentUser) return;
 
+        const isAdmin = this.currentUser.roles.includes('Admin');
         const adminNav = document.getElementById('adminNav');
+        const systemAdminNav = document.getElementById('systemAdminNav');
+        const configurationNav = document.getElementById('configurationNav');
+        
+        // Hide legacy admin nav, show new ones
         if (adminNav) {
-            const isAdmin = this.currentUser.roles.includes('Admin');
-            adminNav.classList.toggle('hidden', !isAdmin);
+            adminNav.classList.add('hidden');
         }
+        if (systemAdminNav) {
+            systemAdminNav.classList.toggle('hidden', !isAdmin);
+        }
+        if (configurationNav) {
+            configurationNav.classList.toggle('hidden', !isAdmin);
+        }
+        
         document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
             el.classList.toggle('hidden', !this.isAdmin());
         });

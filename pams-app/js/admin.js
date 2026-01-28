@@ -124,48 +124,86 @@ const Admin = {
         return headers;
     },
 
-    // Load admin panel
+    // Load admin panel (legacy - redirects to systemAdmin)
     loadAdminPanel() {
+        this.loadSystemAdminPanel();
+    },
+    
+    // Load System Admin panel
+    loadSystemAdminPanel() {
         try {
             this.loadedSections = new Set();
             this.activeSection = null;
-            this.setupSectionNavigation();
+            this.setupSectionNavigation('systemAdmin');
 
-            const interfaceSelect = document.getElementById('interfaceSelect');
-            if (interfaceSelect) {
-                interfaceSelect.value = InterfaceManager.getCurrentInterface();
-            }
-            const themeSelect = document.getElementById('interfaceThemeSelect');
-            if (themeSelect) {
-                themeSelect.value = InterfaceManager.getCurrentTheme();
-            }
             const monthInput = document.getElementById('adminReportMonth');
             if (monthInput && !monthInput.value) {
                 monthInput.value = new Date().toISOString().substring(0, 7);
             }
 
             // Open first section by default
-            const firstSectionItem = document.querySelector('#adminSectionsNav [data-admin-nav]');
+            const firstSectionItem = document.querySelector('#systemAdminSectionsNav [data-admin-nav]');
             if (firstSectionItem) {
-                this.openAdminSection(firstSectionItem.dataset.adminNav);
+                this.openAdminSection(firstSectionItem.dataset.adminNav, null, 'systemAdmin');
             } else {
                 // Show empty state if no sections
-                const container = document.getElementById('adminSectionsContainer');
+                const container = document.getElementById('systemAdminSectionsContainer');
                 if (container) {
                     container.innerHTML = '<div class="admin-content-empty">Select an option from the sidebar to get started</div>';
                 }
             }
         } catch (error) {
-            console.error('Error loading admin panel:', error);
-            UI.showNotification('Error loading admin panel', 'error');
+            console.error('Error loading system admin panel:', error);
+            UI.showNotification('Error loading system admin panel', 'error');
+        }
+    },
+    
+    // Load Configuration panel
+    loadConfigurationPanel() {
+        try {
+            this.loadedSections = new Set();
+            this.activeSection = null;
+            this.setupSectionNavigation('configuration');
+
+            const interfaceSelect = document.getElementById('interfaceSelect') || document.getElementById('interfaceSelectConfig');
+            if (interfaceSelect) {
+                interfaceSelect.value = InterfaceManager.getCurrentInterface();
+            }
+            const themeSelect = document.getElementById('interfaceThemeSelect') || document.getElementById('interfaceThemeSelectConfig');
+            if (themeSelect) {
+                themeSelect.value = InterfaceManager.getCurrentTheme();
+            }
+            const monthInput = document.getElementById('adminReportMonth') || document.getElementById('adminReportMonthConfig');
+            if (monthInput && !monthInput.value) {
+                monthInput.value = new Date().toISOString().substring(0, 7);
+            }
+
+            // Open first section by default
+            const firstSectionItem = document.querySelector('#configurationSectionsNav [data-admin-nav]');
+            if (firstSectionItem) {
+                this.openAdminSection(firstSectionItem.dataset.adminNav, null, 'configuration');
+            } else {
+                // Show empty state if no sections
+                const container = document.getElementById('configurationSectionsContainer');
+                if (container) {
+                    container.innerHTML = '<div class="admin-content-empty">Select an option from the sidebar to get started</div>';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading configuration panel:', error);
+            UI.showNotification('Error loading configuration panel', 'error');
         }
     },
 
-    setupSectionNavigation() {
+    setupSectionNavigation(viewType = 'systemAdmin') {
         // Expand all nav groups by default for easier navigation
-        document.querySelectorAll('.admin-nav-group').forEach(group => {
-            group.classList.add('expanded');
-        });
+        const navId = viewType === 'configuration' ? '#configurationSectionsNav' : '#systemAdminSectionsNav';
+        const nav = document.querySelector(navId);
+        if (nav) {
+            nav.querySelectorAll('.admin-nav-group').forEach(group => {
+                group.classList.add('expanded');
+            });
+        }
     },
 
     toggleNavGroup(header) {
@@ -175,37 +213,73 @@ const Admin = {
         }
     },
 
-    openAdminSection(sectionId, event) {
+    openAdminSection(sectionId, event, viewType = null) {
         if (event) {
             event.preventDefault();
         }
-        this.openSection(sectionId);
         
-        // Update active nav item
-        document.querySelectorAll('.admin-nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        const activeItem = document.querySelector(`[data-admin-nav="${sectionId}"]`);
-        if (activeItem) {
-            activeItem.classList.add('active');
-            // Expand parent group if collapsed
-            const parentGroup = activeItem.closest('.admin-nav-group');
-            if (parentGroup && !parentGroup.classList.contains('expanded')) {
-                parentGroup.classList.add('expanded');
+        // Determine view type from context if not provided
+        if (!viewType) {
+            const systemAdminView = document.getElementById('systemAdminView');
+            const configurationView = document.getElementById('configurationView');
+            if (systemAdminView && !systemAdminView.classList.contains('hidden')) {
+                viewType = 'systemAdmin';
+            } else if (configurationView && !configurationView.classList.contains('hidden')) {
+                viewType = 'configuration';
+            } else {
+                viewType = 'systemAdmin'; // Default
+            }
+        }
+        
+        this.openSection(sectionId, viewType);
+        
+        // Update active nav item in the current view
+        const navId = viewType === 'configuration' ? '#configurationSectionsNav' : '#systemAdminSectionsNav';
+        const nav = document.querySelector(navId);
+        if (nav) {
+            nav.querySelectorAll('.admin-nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeItem = nav.querySelector(`[data-admin-nav="${sectionId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+                // Expand parent group if collapsed
+                const parentGroup = activeItem.closest('.admin-nav-group');
+                if (parentGroup && !parentGroup.classList.contains('expanded')) {
+                    parentGroup.classList.add('expanded');
+                }
             }
         }
     },
 
-    openSection(sectionId) {
+    openSection(sectionId, viewType = 'systemAdmin') {
         if (!sectionId) {
             return;
         }
 
-        const sections = document.querySelectorAll('[data-admin-section]');
-        sections.forEach((section) => {
-            const matches = section.dataset.adminSection === sectionId;
-            section.classList.toggle('hidden', !matches);
-        });
+        // Hide all sections in both views first
+        const systemAdminContainer = document.getElementById('systemAdminSectionsContainer');
+        const configurationContainer = document.getElementById('configurationSectionsContainer');
+        
+        if (systemAdminContainer) {
+            systemAdminContainer.querySelectorAll('[data-admin-section]').forEach((section) => {
+                section.classList.add('hidden');
+            });
+        }
+        if (configurationContainer) {
+            configurationContainer.querySelectorAll('[data-admin-section]').forEach((section) => {
+                section.classList.add('hidden');
+            });
+        }
+
+        // Show the selected section in the appropriate container
+        const container = viewType === 'configuration' ? configurationContainer : systemAdminContainer;
+        if (container) {
+            const section = container.querySelector(`[data-admin-section="${sectionId}"]`);
+            if (section) {
+                section.classList.remove('hidden');
+            }
+        }
 
         // Scroll to top of content area
         const contentArea = document.querySelector('.admin-content');
@@ -259,7 +333,7 @@ const Admin = {
         this.switchIndustryUseCaseTab('industries');
         this.renderAdminIndustriesList();
         this.renderAdminPendingIndustries();
-        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
             const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
@@ -298,40 +372,50 @@ const Admin = {
         const pendingUseCases = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
         const totalPending = pendingIndustries.length + pendingUseCases.length;
         
-        const pendingBadge = document.getElementById('adminPendingBadge');
-        const industriesBadge = document.getElementById('adminPendingIndustriesBadge');
-        const useCasesBadge = document.getElementById('adminPendingUseCasesBadge');
+        // Update badges in both views
+        const pendingBadges = [
+            document.getElementById('adminPendingBadge'),
+            document.getElementById('adminPendingBadgeConfig')
+        ].filter(Boolean);
+        const industriesBadges = [
+            document.getElementById('adminPendingIndustriesBadge'),
+            document.getElementById('adminPendingIndustriesBadgeConfig')
+        ].filter(Boolean);
+        const useCasesBadges = [
+            document.getElementById('adminPendingUseCasesBadge'),
+            document.getElementById('adminPendingUseCasesBadgeConfig')
+        ].filter(Boolean);
         
-        if (pendingBadge) {
+        pendingBadges.forEach(badge => {
             if (totalPending > 0) {
-                pendingBadge.textContent = totalPending;
-                pendingBadge.style.display = 'inline-flex';
+                badge.textContent = totalPending;
+                badge.style.display = 'inline-flex';
             } else {
-                pendingBadge.style.display = 'none';
+                badge.style.display = 'none';
             }
-        }
+        });
         
-        if (industriesBadge) {
+        industriesBadges.forEach(badge => {
             if (pendingIndustries.length > 0) {
-                industriesBadge.textContent = pendingIndustries.length;
-                industriesBadge.style.display = 'inline-flex';
+                badge.textContent = pendingIndustries.length;
+                badge.style.display = 'inline-flex';
             } else {
-                industriesBadge.style.display = 'none';
+                badge.style.display = 'none';
             }
-        }
+        });
         
-        if (useCasesBadge) {
+        useCasesBadges.forEach(badge => {
             if (pendingUseCases.length > 0) {
-                useCasesBadge.textContent = pendingUseCases.length;
-                useCasesBadge.style.display = 'inline-flex';
+                badge.textContent = pendingUseCases.length;
+                badge.style.display = 'inline-flex';
             } else {
-                useCasesBadge.style.display = 'none';
+                badge.style.display = 'none';
             }
-        }
+        });
     },
 
     renderAdminIndustriesList() {
-        const container = document.getElementById('adminIndustriesList');
+        const container = document.getElementById('adminIndustriesList') || document.getElementById('adminIndustriesListConfig');
         if (!container) return;
         const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
         container.innerHTML = industries.length === 0
@@ -346,7 +430,7 @@ const Admin = {
     },
 
     addIndustryFromAdmin() {
-        const input = document.getElementById('adminNewIndustry');
+        const input = document.getElementById('adminNewIndustry') || document.getElementById('adminNewIndustryConfig');
         if (!input) return;
         const value = (input.value || '').trim();
         if (!value) {
@@ -374,7 +458,7 @@ const Admin = {
         const list = DataManager.getIndustries().filter(i => i !== industry);
         DataManager.saveIndustries(list);
         this.renderAdminIndustriesList();
-        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 list.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
@@ -384,7 +468,7 @@ const Admin = {
     },
 
     renderAdminPendingIndustries() {
-        const container = document.getElementById('adminPendingIndustriesList');
+        const container = document.getElementById('adminPendingIndustriesList') || document.getElementById('adminPendingIndustriesListConfig');
         if (!container) return;
         const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
         container.innerHTML = pending.length === 0
@@ -428,8 +512,8 @@ const Admin = {
     },
 
     renderUseCasesForIndustry() {
-        const panel = document.getElementById('adminUseCasesPanel');
-        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        const panel = document.getElementById('adminUseCasesPanel') || document.getElementById('adminUseCasesPanelConfig');
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (!panel || !industrySelect) return;
         const industry = (industrySelect.value || '').trim();
         if (!industry) {
@@ -461,7 +545,7 @@ const Admin = {
     },
 
     addUseCaseFromAdmin() {
-        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         const input = document.getElementById('adminNewUseCaseInput');
         if (!industrySelect || !input) return;
         const industry = (industrySelect.value || '').trim();
@@ -486,7 +570,7 @@ const Admin = {
     },
 
     renderAdminPendingUseCases() {
-        const container = document.getElementById('adminPendingUseCasesList');
+        const container = document.getElementById('adminPendingUseCasesList') || document.getElementById('adminPendingUseCasesListConfig');
         if (!container) return;
         const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
         container.innerHTML = pending.length === 0
@@ -532,8 +616,9 @@ const Admin = {
 
         const inputs = [
             document.getElementById('presalesTargetInput'),
+            document.getElementById('presalesTargetInputConfig'),
             document.getElementById('cardPresalesTargetInput')
-        ];
+        ].filter(Boolean);
 
         inputs.forEach(input => {
             if (input) {
@@ -547,8 +632,9 @@ const Admin = {
 
         const metaElements = [
             document.getElementById('presalesTargetMeta'),
+            document.getElementById('presalesTargetMetaConfig'),
             document.getElementById('cardPresalesTargetMeta')
-        ];
+        ].filter(Boolean);
         metaElements.forEach(el => {
             if (el) el.textContent = metaText;
         });
@@ -561,23 +647,33 @@ const Admin = {
 
         const summaryElements = [
             document.getElementById('presalesTargetSummary'),
+            document.getElementById('presalesTargetSummaryConfig'),
             document.getElementById('cardPresalesTargetSummary')
-        ];
+        ].filter(Boolean);
         summaryElements.forEach(el => {
             if (el) el.textContent = summaryText;
         });
 
         const accessConfig = DataManager.getAnalyticsAccessConfig();
-        const accessInput = document.getElementById('analyticsAccessPasswordInput');
-        if (accessInput) {
-            accessInput.value = accessConfig.password || '';
-        }
-        const accessMeta = document.getElementById('analyticsAccessMeta');
-        if (accessMeta) {
-            accessMeta.textContent = accessConfig.updatedAt
-                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
-                : 'Using default analytics password.';
-        }
+        const accessInputs = [
+            document.getElementById('analyticsAccessPasswordInput'),
+            document.getElementById('analyticsAccessPasswordInputConfig')
+        ].filter(Boolean);
+        accessInputs.forEach(input => {
+            if (input) input.value = accessConfig.password || '';
+        });
+        
+        const accessMetaElements = [
+            document.getElementById('analyticsAccessMeta'),
+            document.getElementById('analyticsAccessMetaConfig')
+        ].filter(Boolean);
+        accessMetaElements.forEach(meta => {
+            if (meta) {
+                meta.textContent = accessConfig.updatedAt
+                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
+                    : 'Using default analytics password.';
+            }
+        });
     },
 
     saveAnalyticsAccessPassword(event) {
@@ -590,7 +686,7 @@ const Admin = {
             return;
         }
 
-        const input = document.getElementById('analyticsAccessPasswordInput');
+        const input = document.getElementById('analyticsAccessPasswordInput') || document.getElementById('analyticsAccessPasswordInputConfig');
         if (!input) {
             UI.showNotification('Input not found.', 'error');
             return;
@@ -608,12 +704,17 @@ const Admin = {
             updatedAt: new Date().toISOString()
         });
 
-        const meta = document.getElementById('analyticsAccessMeta');
-        if (meta) {
-            meta.textContent = config.updatedAt
-                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
-                : '';
-        }
+        const metaElements = [
+            document.getElementById('analyticsAccessMeta'),
+            document.getElementById('analyticsAccessMetaConfig')
+        ].filter(Boolean);
+        metaElements.forEach(meta => {
+            if (meta) {
+                meta.textContent = config.updatedAt
+                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
+                    : '';
+            }
+        });
         UI.showNotification('Analytics password updated.', 'success');
     },
 
@@ -1826,7 +1927,7 @@ const Admin = {
 
 
     loadControls(force) {
-        const container = document.getElementById('featureDashboardControls');
+        const container = document.getElementById('featureDashboardControls') || document.getElementById('featureDashboardControlsConfig');
         if (!container) return;
 
         if (!force) {
@@ -1938,7 +2039,7 @@ const Admin = {
     },
 
     renderControlMatrix() {
-        const container = document.getElementById('featureDashboardControls');
+        const container = document.getElementById('featureDashboardControls') || document.getElementById('featureDashboardControlsConfig');
         if (!container) return;
 
         if (!this.controlDefinitions.length) {

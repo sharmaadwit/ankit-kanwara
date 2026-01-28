@@ -752,7 +752,9 @@ const App = {
             'projectHealth',
             'sfdcCompliance',
             'import',
-            'admin',
+            'systemAdmin',
+            'configuration',
+            'admin', // Legacy support
             'adminLoginLogs',
             'adminPoc'
         ].filter(Boolean);
@@ -784,6 +786,8 @@ const App = {
             case 'sfdcCompliance':
                 return 'sfdcCompliance';
             case 'admin':
+            case 'systemAdmin':
+            case 'configuration':
                 return 'admin';
             case 'adminLoginLogs':
                 return 'adminLogin';
@@ -976,14 +980,30 @@ const App = {
                 this.loadSfdcComplianceView();
                 break;
             case 'admin':
+                // Legacy support - redirect to systemAdmin
+                this.switchView('systemAdmin');
+                break;
+            case 'systemAdmin':
                 if (Auth.isAdmin()) {
                     if (InterfaceManager.getCurrentInterface() === 'card') {
-                        this.loadCardAdminView();
+                        this.loadCardSystemAdminView();
                     } else {
-                        Admin.loadAdminPanel();
+                        Admin.loadSystemAdminPanel();
                     }
                 } else {
-                    console.warn('User is not admin, cannot access admin panel');
+                    console.warn('User is not admin, cannot access system admin panel');
+                    UI.showNotification('You do not have admin access', 'error');
+                }
+                break;
+            case 'configuration':
+                if (Auth.isAdmin()) {
+                    if (InterfaceManager.getCurrentInterface() === 'card') {
+                        this.loadCardConfigurationView();
+                    } else {
+                        Admin.loadConfigurationPanel();
+                    }
+                } else {
+                    console.warn('User is not admin, cannot access configuration panel');
                     UI.showNotification('You do not have admin access', 'error');
                 }
                 break;
@@ -1580,8 +1600,17 @@ const App = {
                     this.loadCardSfdcComplianceView();
                     break;
                 case 'admin':
+                    // Legacy - redirect to systemAdmin
+                    this.switchView('systemAdmin');
+                    break;
+                case 'systemAdmin':
                     if (Auth.isAdmin()) {
-                        this.loadCardAdminView();
+                        this.loadCardSystemAdminView();
+                    }
+                    break;
+                case 'configuration':
+                    if (Auth.isAdmin()) {
+                        this.loadCardConfigurationView();
                     }
                     break;
                 case 'adminLoginLogs':
@@ -2134,15 +2163,16 @@ const App = {
     
     // Load card-based admin view
     loadCardAdminView() {
-        Admin.loadAdminPanel();
-        const interfaceSelect = document.getElementById('interfaceSelect');
-        if (interfaceSelect) {
-            interfaceSelect.value = InterfaceManager.getCurrentInterface();
-        }
-        const themeSelect = document.getElementById('interfaceThemeSelect');
-        if (themeSelect) {
-            themeSelect.value = InterfaceManager.getCurrentTheme();
-        }
+        // Legacy - redirect to systemAdmin
+        this.loadCardSystemAdminView();
+    },
+    
+    loadCardSystemAdminView() {
+        Admin.loadSystemAdminPanel();
+    },
+    
+    loadCardConfigurationView() {
+        Admin.loadConfigurationPanel();
     },
 
     // Load activities view
