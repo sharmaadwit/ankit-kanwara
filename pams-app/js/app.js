@@ -2464,12 +2464,24 @@ const App = {
             }
 
             // Use Reports V2
-            if (typeof ReportsV2 !== 'undefined') {
+            const container = document.getElementById('reportsContent');
+            if (typeof ReportsV2 !== 'undefined' && ReportsV2 && typeof ReportsV2.init === 'function') {
                 console.log(`Loading Reports V2 for period: ${selectedPeriod}, type: ${isYearMode ? 'year' : 'month'}`);
-                ReportsV2.init(selectedPeriod, isYearMode ? 'year' : 'month');
+                try {
+                    ReportsV2.init(selectedPeriod, isYearMode ? 'year' : 'month');
+                } catch (error) {
+                    console.error('Error initializing ReportsV2:', error);
+                    if (container) {
+                        container.innerHTML = `<div class="error-message">Error loading reports: ${error.message}</div>`;
+                    }
+                }
                 return;
             } else {
-                console.error('ReportsV2 is not defined. Check if reports-v2.js is loaded.');
+                console.error('ReportsV2 is not defined or init function missing. Check if reports-v2.js is loaded.');
+                console.log('Available globals:', typeof window !== 'undefined' ? Object.keys(window).filter(k => k.includes('Report')) : 'window not available');
+                if (container) {
+                    container.innerHTML = '<div class="error-message">Reports module not loaded. Please refresh the page.</div>';
+                }
             }
 
             // Fallback to old reports (hidden)
