@@ -2488,17 +2488,17 @@ const App = {
             }
 
             // Fallback to old reports (hidden)
-            const container = document.getElementById('reportsContent');
-            if (!container) {
+            const reportsContainer = document.getElementById('reportsContent');
+            if (!reportsContainer) {
                 console.error('reportsContent container not found');
                 return;
             }
-            container.innerHTML = '<div style="display:none;"><!-- Old reports hidden --></div>';
+            reportsContainer.innerHTML = '<div style="display:none;"><!-- Old reports hidden --></div>';
         } catch (error) {
             console.error('Error loading reports:', error);
-            const container = document.getElementById('reportsContent');
-            if (container) {
-                container.innerHTML = UI.emptyState('Error loading reports');
+            const errorContainer = document.getElementById('reportsContent');
+            if (errorContainer) {
+                errorContainer.innerHTML = UI.emptyState('Error loading reports');
             }
         }
     },
