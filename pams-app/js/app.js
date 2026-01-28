@@ -5899,10 +5899,16 @@ const App = {
     toggleActivitiesSidebar() {
         const sidebar = document.querySelector('.activities-sidebar');
         const icon = document.getElementById('activitiesSidebarToggleIcon');
+        const toggleBtn = document.getElementById('activitiesSidebarToggleBtn');
         if (sidebar) {
+            const isCollapsing = !sidebar.classList.contains('collapsed');
             sidebar.classList.toggle('collapsed');
             if (icon) {
                 icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '▼';
+            }
+            // Show/hide the toggle button in header when sidebar is collapsed
+            if (toggleBtn) {
+                toggleBtn.style.display = sidebar.classList.contains('collapsed') ? 'flex' : 'none';
             }
         }
     },

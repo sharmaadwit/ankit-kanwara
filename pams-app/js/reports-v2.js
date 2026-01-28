@@ -106,10 +106,23 @@ const ReportsV2 = {
         this.render();
     },
 
+    // Destroy all charts
+    destroyCharts() {
+        Object.keys(this.charts).forEach(canvasId => {
+            if (this.charts[canvasId] && typeof this.charts[canvasId].destroy === 'function') {
+                this.charts[canvasId].destroy();
+            }
+        });
+        this.charts = {};
+    },
+
     // Main render function
     render() {
         const container = document.getElementById('reportsContent');
         if (!container) return;
+
+        // Destroy existing charts before re-rendering
+        this.destroyCharts();
 
         const activities = this.getPeriodActivities();
         const periodLabel = this.formatPeriod(this.currentPeriod);
@@ -904,13 +917,17 @@ const ReportsV2 = {
             this.charts[canvasId].destroy();
         }
 
+        // Default colors if not provided
+        const defaultColors = ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'];
+        const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
+
         this.charts[canvasId] = new Chart(canvas, {
             type: 'pie',
             data: {
                 labels: labels,
                 datasets: [{
                     data: data,
-                    backgroundColor: colors,
+                    backgroundColor: chartColors,
                     borderWidth: 2,
                     borderColor: '#fff'
                 }]

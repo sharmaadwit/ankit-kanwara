@@ -243,6 +243,14 @@
                                     <p class="page-subtitle">View and manage all activities</p>
                                 </div>
                             <div class="activities-header-actions">
+                                <button class="btn btn-outline btn-sm" id="activitiesSidebarToggleBtn" onclick="App.toggleActivitiesSidebar()" style="display: none;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                                    </svg>
+                                    Filters
+                                </button>
                                 <div class="activities-view-toggle">
                                     <button class="btn btn-sm btn-outline" id="activitiesViewModeCards" onclick="App.setActivitiesViewMode('cards')">Cards</button>
                                     <button class="btn btn-sm btn-outline" id="activitiesViewModeTable" onclick="App.setActivitiesViewMode('table')">Table</button>
