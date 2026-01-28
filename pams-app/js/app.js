@@ -1016,23 +1016,91 @@ const App = {
         const dashboardView = document.getElementById('dashboardView');
         if (!dashboardView) return;
         
+        // Destroy existing charts before reloading
+        this.destroyDashboardCharts();
+        
         const stats = this.updateStats() || {};
         
-        // Get current month activities count
+        // Get current month and week activities
         const activities = DataManager.getAllActivities();
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        // Calculate week start (Monday)
+        const weekStart = new Date(now);
+        const dayOfWeek = now.getDay();
+        const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        
         const monthActivities = activities.filter(a => {
             const date = a.date || a.createdAt;
-            return date && date.substring(0, 7) === currentMonth;
+            if (!date) return false;
+            return date.substring(0, 7) === currentMonth;
+        });
+        
+        const weekActivities = activities.filter(a => {
+            const date = a.date || a.createdAt;
+            if (!date) return false;
+            const activityDate = new Date(date);
+            return activityDate >= weekStart && activityDate <= weekEnd;
+        });
+        
+        // Internal vs External breakdown
+        const internalCount = monthActivities.filter(a => a.isInternal).length;
+        const externalCount = monthActivities.filter(a => !a.isInternal).length;
+        
+        // Call types breakdown (external activities only)
+        const callTypes = {};
+        monthActivities.filter(a => !a.isInternal).forEach(a => {
+            const type = a.type || 'Other';
+            callTypes[type] = (callTypes[type] || 0) + 1;
+        });
+        
+        // Region activity (for default region)
+        const currentUser = Auth.getCurrentUser();
+        const defaultRegion = currentUser?.defaultRegion || '';
+        const regionActivities = defaultRegion 
+            ? monthActivities.filter(a => {
+                const account = DataManager.getAccountById(a.accountId);
+                const user = DataManager.getUserById(a.userId);
+                const region = DataManager.resolveActivityRegion(a, account, user);
+                return region === defaultRegion;
+            }).length
+            : 0;
+        
+        // All regions breakdown for bar chart
+        const regionBreakdown = {};
+        monthActivities.forEach(a => {
+            const account = DataManager.getAccountById(a.accountId);
+            const user = DataManager.getUserById(a.userId);
+            const region = DataManager.resolveActivityRegion(a, account, user) || 'Unassigned';
+            regionBreakdown[region] = (regionBreakdown[region] || 0) + 1;
+        });
+        
+        // Wins and Losses this month
+        const accounts = DataManager.getAccounts();
+        let winsThisMonth = 0;
+        let lossesThisMonth = 0;
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                if (project.status === 'won' || project.status === 'lost') {
+                    const winLossDate = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
+                    if (winLossDate && winLossDate.substring(0, 7) === currentMonth) {
+                        if (project.status === 'won') winsThisMonth++;
+                        else if (project.status === 'lost') lossesThisMonth++;
+                    }
+                }
+            });
         });
         
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                            'July', 'August', 'September', 'October', 'November', 'December'];
         const currentMonthName = monthNames[now.getMonth()];
         
-        // Get stats
-        const accounts = DataManager.getAccounts();
         let totalProjects = 0;
         let customerActivities = 0;
         const internalActivities = DataManager.getInternalActivities();
@@ -1045,21 +1113,56 @@ const App = {
         });
         
         let html = `
-            <!-- Month Header & Key Stats -->
-            <div class="month-summary-row">
-                <div class="month-pill">
-                    <div class="month-pill-label">Monthly Activities</div>
-                    <div class="month-pill-value">${monthActivities.length}</div>
-                    <div class="month-pill-caption">${currentMonthName} ${now.getFullYear()}</div>
+            <!-- Quick Stats Row -->
+            <div class="dashboard-stats-row">
+                <div class="dashboard-stat-card">
+                    <div class="dashboard-stat-card-title">Activities This Month</div>
+                    <div class="dashboard-stat-card-value">${monthActivities.length}</div>
+                    <div class="dashboard-stat-card-detail">${currentMonthName} ${now.getFullYear()}</div>
                 </div>
-                <div class="month-stat-card">
-                    <div class="month-stat-title">Total Projects</div>
-                    <div class="month-stat-value">${stats.totalProjects ?? totalProjects}</div>
+                <div class="dashboard-stat-card">
+                    <div class="dashboard-stat-card-title">Activities This Week</div>
+                    <div class="dashboard-stat-card-value">${weekActivities.length}</div>
+                    <div class="dashboard-stat-card-detail">Current week</div>
                 </div>
-                <div class="month-stat-card">
-                    <div class="month-stat-title">Total Activities</div>
-                    <div class="month-stat-value">${stats.totalActivities ?? activities.length}</div>
-                    <div class="month-stat-caption">${(stats.customerActivities ?? customerActivities)} Customer • ${(stats.internalActivities ?? internalActivities.length)} Internal</div>
+                <div class="dashboard-stat-card" style="border-left-color: #48BB78;">
+                    <div class="dashboard-stat-card-title">Wins This Month</div>
+                    <div class="dashboard-stat-card-value" style="color: #48BB78;">${winsThisMonth}</div>
+                    <div class="dashboard-stat-card-detail">Projects won</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #F56565;">
+                    <div class="dashboard-stat-card-title">Losses This Month</div>
+                    <div class="dashboard-stat-card-value" style="color: #F56565;">${lossesThisMonth}</div>
+                    <div class="dashboard-stat-card-detail">Projects lost</div>
+                </div>
+            </div>
+            
+            <!-- Charts Row 1: Pie Charts -->
+            <div class="dashboard-charts-row">
+                <div class="dashboard-chart-card">
+                    <div class="dashboard-chart-header">
+                        <h3>Internal vs External</h3>
+                        <span class="text-muted">This Month</span>
+                    </div>
+                    <canvas id="internalExternalChart" style="max-height: 300px;"></canvas>
+                </div>
+                <div class="dashboard-chart-card">
+                    <div class="dashboard-chart-header">
+                        <h3>Call Types</h3>
+                        <span class="text-muted">External Activities</span>
+                    </div>
+                    <canvas id="callTypesChart" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+            
+            <!-- Charts Row 2: Region Activity -->
+            <div class="dashboard-charts-row">
+                <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
+                    <div class="dashboard-chart-header">
+                        <h3>Region Activity</h3>
+                        <span class="text-muted">${defaultRegion ? `Default: ${defaultRegion}` : 'All Regions'} - This Month</span>
+                    </div>
+                    <canvas id="regionActivityChart" style="max-height: 300px;"></canvas>
                 </div>
             </div>
             
@@ -1170,6 +1273,156 @@ const App = {
         
         dashboardView.innerHTML = html;
         this.applyAppConfiguration();
+        
+        // Initialize charts after DOM is ready
+        setTimeout(() => {
+            this.initDashboardCharts({
+                internalCount,
+                externalCount,
+                callTypes,
+                regionBreakdown
+            });
+        }, 100);
+    },
+    
+    dashboardCharts: {},
+    
+    destroyDashboardCharts() {
+        Object.values(this.dashboardCharts).forEach(chart => {
+            if (chart && typeof chart.destroy === 'function') {
+                chart.destroy();
+            }
+        });
+        this.dashboardCharts = {};
+    },
+    
+    initDashboardCharts(data) {
+        // Destroy existing charts first
+        this.destroyDashboardCharts();
+        
+        const { internalCount, externalCount, callTypes, regionBreakdown } = data;
+        
+        // Internal vs External Pie Chart
+        const internalExternalCtx = document.getElementById('internalExternalChart');
+        if (internalExternalCtx && (internalCount > 0 || externalCount > 0)) {
+            this.dashboardCharts.internalExternal = new Chart(internalExternalCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Internal', 'External'],
+                    datasets: [{
+                        data: [internalCount, externalCount],
+                        backgroundColor: ['#805AD5', '#4299E1'],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Call Types Pie Chart
+        const callTypesCtx = document.getElementById('callTypesChart');
+        if (callTypesCtx && Object.keys(callTypes).length > 0) {
+            const labels = Object.keys(callTypes).map(type => {
+                const labelMap = {
+                    'customerCall': 'Customer Call',
+                    'sow': 'SOW',
+                    'poc': 'POC',
+                    'rfx': 'RFx',
+                    'pricing': 'Pricing',
+                    'other': 'Other'
+                };
+                return labelMap[type.toLowerCase()] || type;
+            });
+            const values = Object.values(callTypes);
+            const colors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#F56565', '#38B2AC', '#ECC94B'];
+            
+            this.dashboardCharts.callTypes = new Chart(callTypesCtx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.parsed} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Region Activity Bar Chart
+        const regionActivityCtx = document.getElementById('regionActivityChart');
+        if (regionActivityCtx && Object.keys(regionBreakdown).length > 0) {
+            const regions = Object.keys(regionBreakdown).sort((a, b) => regionBreakdown[b] - regionBreakdown[a]);
+            const counts = regions.map(r => regionBreakdown[r]);
+            
+            this.dashboardCharts.regionActivity = new Chart(regionActivityCtx, {
+                type: 'bar',
+                data: {
+                    labels: regions,
+                    datasets: [{
+                        label: 'Activities',
+                        data: counts,
+                        backgroundColor: '#4299E1',
+                        borderColor: '#3182CE',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
     },
     
     // Navigate to card view (for card interface)
