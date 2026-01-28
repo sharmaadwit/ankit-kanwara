@@ -1027,8 +1027,6 @@ const App = {
         // Destroy existing charts before reloading
         this.destroyDashboardCharts();
         
-        console.log('Loading new dashboard...');
-        
         const stats = this.updateStats() || {};
         
         // Get current month and week activities
