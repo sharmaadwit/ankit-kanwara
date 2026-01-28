@@ -946,79 +946,83 @@ const ReportsV2 = {
                 }
             }
 
-            // Sales Rep Most Requests
-            const salesRepMap = new Map();
-            activities.forEach(activity => {
-                if (!activity.isInternal && activity.salesRep) {
-                    const repName = activity.salesRep;
-                    if (!salesRepMap.has(repName)) {
-                        salesRepMap.set(repName, 0);
-                    }
-                    salesRepMap.set(repName, salesRepMap.get(repName) + 1);
-                }
-            });
-            const topSalesReps = Array.from(salesRepMap.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-            
-            if (topSalesReps.length > 0) {
-                this.renderHorizontalBarChart('salesRepRequestsChart', {
-                    labels: topSalesReps.map(([name]) => name),
-                    data: topSalesReps.map(([, count]) => count),
-                    label: 'Requests'
-                });
-            }
-
-            // Industry Total Activities
-            const industryActivityMap = new Map();
-            activities.forEach(activity => {
-                if (!activity.isInternal && activity.accountId) {
-                    const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                    if (account && account.industry) {
-                        const industry = account.industry;
-                        industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
-                    }
-                }
-            });
-            const industryData = Array.from(industryActivityMap.entries())
-                .sort((a, b) => b[1] - a[1]);
-            
-            if (industryData.length > 0) {
-                this.renderHorizontalBarChart('industryTotalChart', {
-                    labels: industryData.map(([industry]) => industry),
-                    data: industryData.map(([, count]) => count),
-                    label: 'Total Activities'
-                });
-            }
-
-            // Industry Average Activities
-            const industryAvgMap = new Map();
-            activities.forEach(activity => {
-                if (!activity.isInternal && activity.accountId) {
-                    const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                    if (account && account.industry) {
-                        const industry = account.industry;
-                        if (!industryAvgMap.has(industry)) {
-                            industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+            // Sales Rep Most Requests (only in Regional Data tab)
+            if (this.activeTab === 'regional') {
+                const salesRepMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.salesRep) {
+                        const repName = activity.salesRep;
+                        if (!salesRepMap.has(repName)) {
+                            salesRepMap.set(repName, 0);
                         }
-                        industryAvgMap.get(industry).total++;
-                        industryAvgMap.get(industry).accounts.add(activity.accountId);
+                        salesRepMap.set(repName, salesRepMap.get(repName) + 1);
                     }
-                }
-            });
-            const industryAvgData = Array.from(industryAvgMap.entries())
-                .map(([industry, data]) => ({
-                    industry,
-                    average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
-                }))
-                .sort((a, b) => b.average - a.average);
-            
-            if (industryAvgData.length > 0) {
-                this.renderHorizontalBarChart('industryAverageChart', {
-                    labels: industryAvgData.map(d => d.industry),
-                    data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
-                    label: 'Average Activities'
                 });
+                const topSalesReps = Array.from(salesRepMap.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+                
+                if (topSalesReps.length > 0) {
+                    this.renderHorizontalBarChart('salesRepRequestsChart', {
+                        labels: topSalesReps.map(([name]) => name),
+                        data: topSalesReps.map(([, count]) => count),
+                        label: 'Requests'
+                    });
+                }
+            }
+
+            // Industry Total Activities (only in Sales View tab)
+            if (this.activeTab === 'sales') {
+                const industryActivityMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.accountId) {
+                        const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                        if (account && account.industry) {
+                            const industry = account.industry;
+                            industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
+                        }
+                    }
+                });
+                const industryData = Array.from(industryActivityMap.entries())
+                    .sort((a, b) => b[1] - a[1]);
+                
+                if (industryData.length > 0) {
+                    this.renderHorizontalBarChart('industryTotalChart', {
+                        labels: industryData.map(([industry]) => industry),
+                        data: industryData.map(([, count]) => count),
+                        label: 'Total Activities'
+                    });
+                }
+
+                // Industry Average Activities
+                const industryAvgMap = new Map();
+                activities.forEach(activity => {
+                    if (!activity.isInternal && activity.accountId) {
+                        const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                        if (account && account.industry) {
+                            const industry = account.industry;
+                            if (!industryAvgMap.has(industry)) {
+                                industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+                            }
+                            industryAvgMap.get(industry).total++;
+                            industryAvgMap.get(industry).accounts.add(activity.accountId);
+                        }
+                    }
+                });
+                const industryAvgData = Array.from(industryAvgMap.entries())
+                    .map(([industry, data]) => ({
+                        industry,
+                        average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
+                    }))
+                    .sort((a, b) => b.average - a.average);
+                
+                if (industryAvgData.length > 0) {
+                    this.renderHorizontalBarChart('industryAverageChart', {
+                        labels: industryAvgData.map(d => d.industry),
+                        data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
+                        label: 'Average Activities'
+                    });
+                }
             }
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
