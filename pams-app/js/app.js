@@ -23,11 +23,17 @@ const App = {
     },
     activityFilters: {
         search: '',
+        type: 'all',
         industry: '',
-        channel: '',
+        region: '',
+        activityType: '',
         timeframe: 'all',
+        dateFrom: '',
+        dateTo: '',
         owner: 'all'
     },
+    activitySortBy: 'dateDesc',
+    activitiesViewMode: 'cards',
     winLossFilters: {
         owner: 'all'
     },
@@ -1081,6 +1087,13 @@ const App = {
             regionBreakdown[region] = (regionBreakdown[region] || 0) + 1;
         });
         
+        // Missing SFDC Opportunities calculation
+        const externalMonthActivities = monthActivities.filter(a => !a.isInternal);
+        const missingSfdcData = this.calculateMissingSfdcStats(externalMonthActivities, currentUser, defaultRegion);
+        
+        // Top 3 Presales Reps by activity count
+        const topPresalesReps = this.getTopPresalesReps(monthActivities, 3);
+        
         // Wins and Losses this month
         const accounts = DataManager.getAccounts();
         let winsThisMonth = 0;
@@ -1166,6 +1179,75 @@ const App = {
                 </div>
             </div>
             
+            ${missingSfdcData.teamPercentage > 0 ? `
+            <!-- Missing SFDC Opportunities -->
+            <div class="dashboard-charts-row">
+                <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
+                    <div class="dashboard-chart-header">
+                        <h3>Missing SFDC Opportunities</h3>
+                        <span class="text-muted">This Month</span>
+                    </div>
+                    <div style="padding: 1rem 0;">
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.5rem;">
+                                Team Level: ${missingSfdcData.teamPercentage.toFixed(1)}%
+                            </div>
+                            <div style="font-size: 0.875rem; color: var(--gray-600);">
+                                ${missingSfdcData.teamMissing} of ${missingSfdcData.teamTotal} external activities missing SFDC links
+                            </div>
+                        </div>
+                        ${missingSfdcData.regionPercentage > 0 ? `
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.5rem;">
+                                ${defaultRegion || 'Your Region'}: ${missingSfdcData.regionPercentage.toFixed(1)}%
+                            </div>
+                            <div style="font-size: 0.875rem; color: var(--gray-600);">
+                                ${missingSfdcData.regionMissing} of ${missingSfdcData.regionTotal} activities missing SFDC links
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${missingSfdcData.individualPercentage > 0 ? `
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 1.25rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.5rem;">
+                                Your Activities: ${missingSfdcData.individualPercentage.toFixed(1)}%
+                            </div>
+                            <div style="font-size: 0.875rem; color: var(--gray-600);">
+                                ${missingSfdcData.individualMissing} of ${missingSfdcData.individualTotal} activities missing SFDC links
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
+            ${topPresalesReps.length > 0 ? `
+            <!-- Top 3 Presales Reps -->
+            <div class="dashboard-charts-row">
+                <div class="dashboard-chart-card">
+                    <div class="dashboard-chart-header">
+                        <h3>Top 3 Presales Reps</h3>
+                        <span class="text-muted">This Month</span>
+                    </div>
+                    <div style="padding: 1rem 0;">
+                        ${topPresalesReps.map((rep, index) => `
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: ${index < topPresalesReps.length - 1 ? '1px solid var(--gray-200)' : 'none'};">
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <div style="width: 2rem; height: 2rem; border-radius: 50%; background: ${index === 0 ? '#FFD700' : index === 1 ? '#C0C0C0' : '#CD7F32'}; display: flex; align-items: center; justify-content: center; font-weight: 600; color: white; font-size: 0.875rem;">
+                                        ${index + 1}
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--gray-900);">${rep.name}</div>
+                                        <div style="font-size: 0.875rem; color: var(--gray-600);">${rep.count} activities</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+            
             <!-- Navigation Cards (3-column layout) -->
             <div class="card-grid minimal-nav">
                 <!-- Log Activity - First Card -->
@@ -1229,28 +1311,6 @@ const App = {
                     <div class="nav-card-subtitle">Bulk upload activities</div>
                 </div>
                 
-                <div class="nav-card clickable project-health" data-dashboard="projectHealth" onclick="App.navigateToCardView('projectHealth')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"></path>
-                            <polyline points="18 17 13 12 10 15 6 11"></polyline>
-                            <polyline points="18 7 18 17 8 17"></polyline>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Project Health</div>
-                    <div class="nav-card-subtitle">Aging projects & follow-ups</div>
-                </div>
-                
-                <div class="nav-card clickable compliance" data-dashboard="sfdcCompliance" onclick="App.navigateToCardView('sfdcCompliance')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"></path>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">SFDC Compliance</div>
-                    <div class="nav-card-subtitle">Update missing SFDC links</div>
-                </div>
         `;
         
         // Add Admin card if user is admin
@@ -1283,6 +1343,119 @@ const App = {
                 regionBreakdown
             });
         }, 100);
+    },
+    
+    calculateMissingSfdcStats(externalActivities, currentUser, defaultRegion) {
+        const accounts = DataManager.getAccounts();
+        const accountMap = new Map(accounts.map(a => [a.id, a]));
+        const projectMap = new Map();
+        accounts.forEach(account => {
+            account.projects?.forEach(project => {
+                projectMap.set(project.id, { account, project });
+            });
+        });
+        
+        // Team level
+        let teamMissing = 0;
+        let teamTotal = externalActivities.length;
+        externalActivities.forEach(activity => {
+            if (activity.projectId) {
+                const projectData = projectMap.get(activity.projectId);
+                const project = projectData?.project;
+                if (project && (!project.sfdcLink || !project.sfdcLink.trim())) {
+                    teamMissing++;
+                }
+            } else if (activity.accountId) {
+                const account = accountMap.get(activity.accountId);
+                if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                    teamMissing++;
+                }
+            }
+        });
+        const teamPercentage = teamTotal > 0 ? (teamMissing / teamTotal) * 100 : 0;
+        
+        // Region level (default region)
+        let regionMissing = 0;
+        let regionTotal = 0;
+        if (defaultRegion) {
+            externalActivities.forEach(activity => {
+                const account = accountMap.get(activity.accountId);
+                const user = DataManager.getUserById(activity.userId);
+                const region = DataManager.resolveActivityRegion(activity, account, user);
+                if (region === defaultRegion) {
+                    regionTotal++;
+                    if (activity.projectId) {
+                        const projectData = projectMap.get(activity.projectId);
+                        const project = projectData?.project;
+                        if (project && (!project.sfdcLink || !project.sfdcLink.trim())) {
+                            regionMissing++;
+                        }
+                    } else if (activity.accountId) {
+                        const account = accountMap.get(activity.accountId);
+                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                            regionMissing++;
+                        }
+                    }
+                }
+            });
+        }
+        const regionPercentage = regionTotal > 0 ? (regionMissing / regionTotal) * 100 : 0;
+        
+        // Individual level (current user)
+        let individualMissing = 0;
+        let individualTotal = 0;
+        if (currentUser) {
+            externalActivities.forEach(activity => {
+                if (activity.userId === currentUser.id) {
+                    individualTotal++;
+                    if (activity.projectId) {
+                        const projectData = projectMap.get(activity.projectId);
+                        const project = projectData?.project;
+                        if (project && (!project.sfdcLink || !project.sfdcLink.trim())) {
+                            individualMissing++;
+                        }
+                    } else if (activity.accountId) {
+                        const account = accountMap.get(activity.accountId);
+                        if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                            individualMissing++;
+                        }
+                    }
+                }
+            });
+        }
+        const individualPercentage = individualTotal > 0 ? (individualMissing / individualTotal) * 100 : 0;
+        
+        return {
+            teamMissing,
+            teamTotal,
+            teamPercentage,
+            regionMissing,
+            regionTotal,
+            regionPercentage,
+            individualMissing,
+            individualTotal,
+            individualPercentage
+        };
+    },
+    
+    getTopPresalesReps(activities, limit = 3) {
+        const userCounts = {};
+        activities.forEach(activity => {
+            if (activity.userId && activity.userName) {
+                if (!userCounts[activity.userId]) {
+                    userCounts[activity.userId] = {
+                        id: activity.userId,
+                        name: activity.userName,
+                        count: 0
+                    };
+                }
+                userCounts[activity.userId].count++;
+            }
+        });
+        
+        return Object.values(userCounts)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, limit);
     },
     
     dashboardCharts: {},
@@ -2051,6 +2224,14 @@ const App = {
             this.loadCardActivitiesView();
             return;
         }
+        // Initialize view mode if not set
+        if (!this.activitiesViewMode) {
+            this.activitiesViewMode = 'cards';
+        }
+        // Set initial button state
+        setTimeout(() => {
+            this.setActivitiesViewMode(this.activitiesViewMode);
+        }, 50);
         this.renderActivitiesList('activitiesContent');
     },
 
@@ -3155,129 +3336,172 @@ const App = {
     },
 
     populateActivityFilterControls() {
-        const channels = this.getAvailableChannels();
         const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
+        const regions = DataManager.getRegions().sort((a, b) => a.localeCompare(b));
+        const activityTypes = ['customerCall', 'sow', 'poc', 'rfx', 'pricing', 'other'];
         const timeframeOptions = [
             { value: 'all', label: 'All Time' },
-            { value: 'month', label: 'This Month' },
-            { value: '30', label: 'Last 30 Days' },
-            { value: '90', label: 'Last 90 Days' },
-            { value: '365', label: 'Last 12 Months' }
+            { value: 'thisMonth', label: 'This Month' },
+            { value: 'lastMonth', label: 'Last Month' },
+            { value: 'thisWeek', label: 'This Week' },
+            { value: 'custom', label: 'Custom Range' }
         ];
 
-        const variants = [
-            { prefix: '', searchId: 'activitySearch', channelId: 'activityFilterChannel', industryId: 'activityFilterIndustry', timeframeId: 'activityFilterTimeframe', ownerId: 'activityFilterOwner' },
-            { prefix: 'card', searchId: 'cardActivitySearch', channelId: 'cardActivityFilterChannel', industryId: 'cardActivityFilterIndustry', timeframeId: 'cardActivityFilterTimeframe', ownerId: 'cardActivityFilterOwner' }
-        ];
+        // Populate Type filter
+        const typeSelect = document.getElementById('activityFilterType');
+        if (typeSelect) {
+            typeSelect.value = this.activityFilters.type || 'all';
+        }
 
-        variants.forEach(variant => {
-            const channelSelect = document.getElementById(variant.channelId);
-            if (channelSelect) {
-                channelSelect.innerHTML = [
-                    `<option value="">All Channels</option>`,
-                    ...channels.map(channel => `<option value="${channel}">${channel}</option>`)
-                ].join('');
-                channelSelect.value = this.activityFilters.channel || '';
+        // Populate Industry filter
+        const industrySelect = document.getElementById('activityFilterIndustry');
+        if (industrySelect) {
+            industrySelect.innerHTML = [
+                `<option value="">All Industries</option>`,
+                ...industries.map(industry => `<option value="${industry}">${industry}</option>`)
+            ].join('');
+            industrySelect.value = this.activityFilters.industry || '';
+        }
+
+        // Populate Region filter
+        const regionSelect = document.getElementById('activityFilterRegion');
+        if (regionSelect) {
+            regionSelect.innerHTML = [
+                `<option value="">All Regions</option>`,
+                ...regions.map(region => `<option value="${region}">${region}</option>`)
+            ].join('');
+            regionSelect.value = this.activityFilters.region || '';
+        }
+
+        // Populate Activity Type filter
+        const activityTypeSelect = document.getElementById('activityFilterActivityType');
+        if (activityTypeSelect) {
+            activityTypeSelect.innerHTML = [
+                `<option value="">All Types</option>`,
+                ...activityTypes.map(type => {
+                    const label = UI.getActivityTypeLabel(type);
+                    return `<option value="${type}">${label}</option>`;
+                })
+            ].join('');
+            activityTypeSelect.value = this.activityFilters.activityType || '';
+        }
+
+        // Populate Timeframe filter
+        const timeframeSelect = document.getElementById('activityFilterTimeframe');
+        if (timeframeSelect) {
+            timeframeSelect.innerHTML = timeframeOptions.map(option => `
+                <option value="${option.value}" ${option.value === (this.activityFilters.timeframe || 'all') ? 'selected' : ''}>
+                    ${option.label}
+                </option>
+            `).join('');
+            this.toggleCustomDateRange();
+        }
+
+        // Populate Date inputs
+        const dateFromInput = document.getElementById('activityFilterDateFrom');
+        if (dateFromInput) {
+            dateFromInput.value = this.activityFilters.dateFrom || '';
+        }
+        const dateToInput = document.getElementById('activityFilterDateTo');
+        if (dateToInput) {
+            dateToInput.value = this.activityFilters.dateTo || '';
+        }
+
+        // Populate Owner filter
+        const ownerSelect = document.getElementById('activityFilterOwner');
+        if (ownerSelect) {
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+            const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
+                ? Auth.getCurrentUser()
+                : null;
+            const users = this.getActiveUsers();
+            const options = [];
+
+            if (currentUser) {
+                const currentUserValue = currentUser.id || 'mine';
+                options.push({ value: currentUserValue, label: 'My activities' });
             }
 
-            const industrySelect = document.getElementById(variant.industryId);
-            if (industrySelect) {
-                industrySelect.innerHTML = [
-                    `<option value="">All Industries</option>`,
-                    ...industries.map(industry => `<option value="${industry}">${industry}</option>`)
-                ].join('');
-                industrySelect.value = this.activityFilters.industry || '';
+            if (isAdmin) {
+                options.unshift({ value: 'all', label: 'All activities' });
+            } else {
+                options.push({ value: 'all', label: 'All team activities' });
             }
 
-            const timeframeSelect = document.getElementById(variant.timeframeId);
-            if (timeframeSelect) {
-                timeframeSelect.innerHTML = timeframeOptions.map(option => `
-                    <option value="${option.value}" ${option.value === this.activityFilters.timeframe ? 'selected' : ''}>
-                        ${option.label}
-                    </option>
-                `).join('');
-            }
-
-            const searchInput = document.getElementById(variant.searchId);
-            if (searchInput && searchInput.value !== this.activityFilters.search) {
-                searchInput.value = this.activityFilters.search;
-            }
-
-            const ownerSelect = document.getElementById(variant.ownerId);
-            if (ownerSelect) {
-                const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-                const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
-                    ? Auth.getCurrentUser()
-                    : null;
-                const users = this.getActiveUsers();
-                const options = [];
-
-                if (currentUser) {
-                    const currentUserValue = currentUser.id || 'mine';
-                    options.push({ value: currentUserValue, label: 'My activities' });
-                }
-
-                if (isAdmin) {
-                    options.unshift({ value: 'all', label: 'All activities' });
-                } else {
-                    options.push({ value: 'all', label: 'All team activities' });
-                }
-
-                if (isAdmin) {
-                    users.forEach(user => {
-                        options.push({ value: user.id, label: user.username });
-                    });
-                }
-
-                const uniqueOptions = [];
-                const seenValues = new Set();
-                options.forEach(option => {
-                    if (!option?.value) return;
-                    if (seenValues.has(option.value)) return;
-                    seenValues.add(option.value);
-                    uniqueOptions.push(option);
+            if (isAdmin) {
+                users.forEach(user => {
+                    options.push({ value: user.id, label: user.username });
                 });
-
-                ownerSelect.innerHTML = uniqueOptions
-                    .map(option => `<option value="${option.value}">${option.label}</option>`)
-                    .join('');
-
-                const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
-                if (ownerSelect.querySelector(`option[value="${desiredValue}"]`)) {
-                    ownerSelect.value = desiredValue;
-                } else if (currentUser?.id && ownerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
-                    ownerSelect.value = currentUser.id;
-                    this.activityFilters.owner = currentUser.id;
-                } else if (ownerSelect.querySelector('option[value="all"]')) {
-                    ownerSelect.value = 'all';
-                    this.activityFilters.owner = 'all';
-                }
             }
-        });
+
+            const uniqueOptions = [];
+            const seenValues = new Set();
+            options.forEach(option => {
+                if (!option?.value) return;
+                if (seenValues.has(option.value)) return;
+                seenValues.add(option.value);
+                uniqueOptions.push(option);
+            });
+
+            ownerSelect.innerHTML = uniqueOptions
+                .map(option => `<option value="${option.value}">${option.label}</option>`)
+                .join('');
+
+            const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
+            if (ownerSelect.querySelector(`option[value="${desiredValue}"]`)) {
+                ownerSelect.value = desiredValue;
+            } else if (currentUser?.id && ownerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
+                ownerSelect.value = currentUser.id;
+                this.activityFilters.owner = currentUser.id;
+            } else if (ownerSelect.querySelector('option[value="all"]')) {
+                ownerSelect.value = 'all';
+                this.activityFilters.owner = 'all';
+            }
+        }
+
+        // Populate search
+        const searchInput = document.getElementById('activitySearch');
+        if (searchInput && searchInput.value !== this.activityFilters.search) {
+            searchInput.value = this.activityFilters.search || '';
+        }
+
+        // Populate sort
+        const sortSelect = document.getElementById('activitySortBy');
+        if (sortSelect) {
+            sortSelect.value = this.activitySortBy || 'dateDesc';
+        }
+    },
+    
+    toggleCustomDateRange() {
+        const timeframeSelect = document.getElementById('activityFilterTimeframe');
+        const customRangeDiv = document.getElementById('activityCustomDateRange');
+        if (timeframeSelect && customRangeDiv) {
+            if (timeframeSelect.value === 'custom') {
+                customRangeDiv.style.display = 'block';
+            } else {
+                customRangeDiv.style.display = 'none';
+            }
+        }
     },
 
     applyActivityFilters(activities = []) {
         const filters = this.activityFilters || {};
         const searchTerm = (filters.search || '').toLowerCase().trim();
+        const typeFilter = filters.type || 'all';
         const industryFilter = (filters.industry || '').toLowerCase();
-        const channelFilter = (filters.channel || '').toLowerCase();
+        const regionFilter = (filters.region || '').toLowerCase();
+        const activityTypeFilter = (filters.activityType || '').toLowerCase();
         const timeframe = filters.timeframe || 'all';
+        const dateFrom = filters.dateFrom || '';
+        const dateTo = filters.dateTo || '';
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
         const ownerFilterRaw = filters.owner || this.getDefaultActivityOwnerFilter();
         const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
-        const channelMap = {};
+        
         const accounts = DataManager.getAccounts();
-        accounts.forEach(account => {
-            account.projects?.forEach(project => {
-                if (!channelMap[project.id]) {
-                    channelMap[project.id] = (project.channels || []).map(channel => (channel || '').toLowerCase());
-                }
-            });
-        });
-
         const accountMap = {};
         accounts.forEach(account => {
             accountMap[account.id] = account;
@@ -3286,35 +3510,84 @@ const App = {
         const now = new Date();
 
         return activities.filter(activity => {
+            // Type filter (Internal/External)
+            if (typeFilter !== 'all') {
+                if (typeFilter === 'internal' && !activity.isInternal) return false;
+                if (typeFilter === 'external' && activity.isInternal) return false;
+            }
+
+            // Activity type filter
+            if (activityTypeFilter) {
+                const activityType = (activity.type || '').toLowerCase();
+                if (activityType !== activityTypeFilter) return false;
+            }
+
+            // Date range filter
             const activityDate = new Date(activity.date || activity.createdAt);
-            if (timeframe !== 'all' && !Number.isNaN(activityDate.getTime())) {
-                const diffDays = (now - activityDate) / (1000 * 60 * 60 * 24);
-                if (timeframe === 'month') {
+            if (!Number.isNaN(activityDate.getTime())) {
+                if (timeframe === 'thisMonth') {
                     const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
                     const currentMonth = now.toISOString().substring(0, 7);
                     if (monthKey !== currentMonth) return false;
-                } else if (timeframe === '30' && diffDays > 30) {
-                    return false;
-                } else if (timeframe === '90' && diffDays > 90) {
-                    return false;
-                } else if (timeframe === '365' && diffDays > 365) {
-                    return false;
+                } else if (timeframe === 'lastMonth') {
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                    const lastMonthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+                    if (monthKey !== lastMonthKey) return false;
+                } else if (timeframe === 'thisWeek') {
+                    const weekStart = new Date(now);
+                    const dayOfWeek = now.getDay();
+                    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                    weekStart.setDate(diff);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    weekEnd.setHours(23, 59, 59, 999);
+                    if (activityDate < weekStart || activityDate > weekEnd) return false;
+                } else if (timeframe === 'custom' && (dateFrom || dateTo)) {
+                    if (dateFrom) {
+                        const fromDate = new Date(dateFrom);
+                        fromDate.setHours(0, 0, 0, 0);
+                        if (activityDate < fromDate) return false;
+                    }
+                    if (dateTo) {
+                        const toDate = new Date(dateTo);
+                        toDate.setHours(23, 59, 59, 999);
+                        if (activityDate > toDate) return false;
+                    }
+                } else if (timeframe !== 'all') {
+                    // Legacy timeframe support
+                    const diffDays = (now - activityDate) / (1000 * 60 * 60 * 24);
+                    if (timeframe === 'month') {
+                        const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                        const currentMonth = now.toISOString().substring(0, 7);
+                        if (monthKey !== currentMonth) return false;
+                    } else if (timeframe === '30' && diffDays > 30) {
+                        return false;
+                    } else if (timeframe === '90' && diffDays > 90) {
+                        return false;
+                    } else if (timeframe === '365' && diffDays > 365) {
+                        return false;
+                    }
                 }
             }
 
+            // Industry filter
             if (industryFilter) {
                 if (activity.isInternal) return false;
                 const industry = (activity.industry || accountMap[activity.accountId]?.industry || '').toLowerCase();
                 if (!industry || industry !== industryFilter) return false;
             }
 
-            if (channelFilter) {
-                if (activity.isInternal) return false;
-                const channels = channelMap[activity.projectId] || [];
-                const matches = channels.some(channel => channel === channelFilter || channel.includes(channelFilter));
-                if (!matches) return false;
+            // Region filter
+            if (regionFilter) {
+                const account = accountMap[activity.accountId];
+                const user = DataManager.getUserById(activity.userId);
+                const region = DataManager.resolveActivityRegion(activity, account, user) || '';
+                if (region.toLowerCase() !== regionFilter) return false;
             }
 
+            // Search filter
             if (searchTerm) {
                 const haystack = [
                     activity.accountName,
@@ -3323,11 +3596,13 @@ const App = {
                     UI.getActivityTypeLabel(activity.type),
                     activity.details?.description,
                     activity.activityName,
-                    activity.topic
+                    activity.topic,
+                    activity.summary
                 ].filter(Boolean).join(' ').toLowerCase();
                 if (!haystack.includes(searchTerm)) return false;
             }
 
+            // Owner filter
             if (ownerFilterValue !== 'all') {
                 const targetOwnerId = ownerFilterValue === 'mine' ? currentUser?.id : ownerFilterValue;
                 if (!targetOwnerId || activity.userId !== targetOwnerId) {
@@ -3352,24 +3627,50 @@ const App = {
     },
 
     handleActivityFiltersChange(variant = 'standard') {
-        const channelId = variant === 'card' ? 'cardActivityFilterChannel' : 'activityFilterChannel';
-        const industryId = variant === 'card' ? 'cardActivityFilterIndustry' : 'activityFilterIndustry';
-        const timeframeId = variant === 'card' ? 'cardActivityFilterTimeframe' : 'activityFilterTimeframe';
-        const ownerId = variant === 'card' ? 'cardActivityFilterOwner' : 'activityFilterOwner';
-        const channelSelect = document.getElementById(channelId);
-        const industrySelect = document.getElementById(industryId);
-        const timeframeSelect = document.getElementById(timeframeId);
-        const ownerSelect = document.getElementById(ownerId);
-        this.activityFilters.channel = channelSelect ? channelSelect.value : '';
-        this.activityFilters.industry = industrySelect ? industrySelect.value : '';
-        this.activityFilters.timeframe = timeframeSelect ? timeframeSelect.value || 'all' : 'all';
-        if (ownerSelect) {
-            const selectedOwner = ownerSelect.value;
-            this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
-        }
-        this.renderActivitiesList();
-        if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
+        if (variant === 'card') {
+            // Legacy card view filters (keep for compatibility)
+            const channelId = 'cardActivityFilterChannel';
+            const industryId = 'cardActivityFilterIndustry';
+            const timeframeId = 'cardActivityFilterTimeframe';
+            const ownerId = 'cardActivityFilterOwner';
+            const channelSelect = document.getElementById(channelId);
+            const industrySelect = document.getElementById(industryId);
+            const timeframeSelect = document.getElementById(timeframeId);
+            const ownerSelect = document.getElementById(ownerId);
+            this.activityFilters.channel = channelSelect ? channelSelect.value : '';
+            this.activityFilters.industry = industrySelect ? industrySelect.value : '';
+            this.activityFilters.timeframe = timeframeSelect ? timeframeSelect.value || 'all' : 'all';
+            if (ownerSelect) {
+                const selectedOwner = ownerSelect.value;
+                this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
+            }
             this.loadCardActivitiesView();
+        } else {
+            // New sidebar filters
+            const typeSelect = document.getElementById('activityFilterType');
+            const industrySelect = document.getElementById('activityFilterIndustry');
+            const regionSelect = document.getElementById('activityFilterRegion');
+            const activityTypeSelect = document.getElementById('activityFilterActivityType');
+            const timeframeSelect = document.getElementById('activityFilterTimeframe');
+            const dateFromInput = document.getElementById('activityFilterDateFrom');
+            const dateToInput = document.getElementById('activityFilterDateTo');
+            const ownerSelect = document.getElementById('activityFilterOwner');
+            
+            if (typeSelect) this.activityFilters.type = typeSelect.value || 'all';
+            if (industrySelect) this.activityFilters.industry = industrySelect.value || '';
+            if (regionSelect) this.activityFilters.region = regionSelect.value || '';
+            if (activityTypeSelect) this.activityFilters.activityType = activityTypeSelect.value || '';
+            if (timeframeSelect) {
+                this.activityFilters.timeframe = timeframeSelect.value || 'all';
+                this.toggleCustomDateRange();
+            }
+            if (dateFromInput) this.activityFilters.dateFrom = dateFromInput.value || '';
+            if (dateToInput) this.activityFilters.dateTo = dateToInput.value || '';
+            if (ownerSelect) {
+                const selectedOwner = ownerSelect.value;
+                this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
+            }
+            this.renderActivitiesList();
         }
     },
 
@@ -5351,128 +5652,339 @@ const App = {
                 ? Auth.getCurrentUser()
                 : null;
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+            
             if (containerId === 'activitiesContent') {
                 this.populateActivityFilterControls();
             }
+            
             const applyFilters = containerId === 'activitiesContent';
-            const activities = applyFilters ? this.applyActivityFilters(allActivities) : allActivities;
-
-        let duplicatesBanner = '';
-        if (applyFilters) {
-            const existingDuplicates = this.getExistingDuplicateActivities(allActivities);
-            const importDuplicates = this.pendingDuplicateAlerts || [];
-            const combinedDuplicates = [...existingDuplicates, ...importDuplicates];
-            if (combinedDuplicates.length) {
-                const displayItems = combinedDuplicates.slice(0, 5).map(entry => {
-                    const dateText = entry.date ? UI.formatDate(entry.date) : 'Unknown date';
-                    const typeLabel = entry.activityType ? UI.getActivityTypeLabel(entry.activityType) : 'Activity';
-                    const sourceLabel = entry.source === 'import' ? 'Import' : 'Existing';
-                    const ownerLabel = entry.owner ? ` • ${entry.owner}` : '';
-                    const summaryLabel = entry.summary ? ` • ${entry.summary}` : '';
-                    return `
-                        <li>
-                            <span class="duplicate-source">${sourceLabel}</span>
-                            <strong>${entry.accountName}</strong> → ${entry.projectName}
-                            <span class="text-muted">(${typeLabel} on ${dateText}${ownerLabel}${summaryLabel})</span>
-                            <span class="duplicate-count">×${entry.count}</span>
-                        </li>
-                    `;
-                }).join('');
-                duplicatesBanner = `
-                    <div class="duplicate-banner">
-                        <div class="duplicate-banner-header">
-                            <strong>${combinedDuplicates.length} potential duplicate activity group${combinedDuplicates.length === 1 ? '' : 's'} detected</strong>
-                            <span class="text-muted">Resolve duplicates to maintain accurate stats.</span>
-                        </div>
-                        <ul class="duplicate-list">
-                            ${displayItems}
-                        </ul>
-                        <p class="duplicate-note text-muted">Duplicates are identified by matching account, project, date, activity type, owner, and summary.</p>
-                    </div>
-                `;
-            }
-        }
+            let activities = applyFilters ? this.applyActivityFilters(allActivities) : allActivities;
+            
+            // Apply sorting
+            activities = this.applyActivitySorting(activities);
 
             if (activities.length === 0) {
                 container.innerHTML = UI.emptyState(applyFilters ? 'No activities match the current filters.' : 'No activities found');
                 return;
             }
 
-            const activitiesByMonth = {};
-            activities.forEach(activity => {
-                const date = activity.date || activity.createdAt;
-                const month = date ? date.substring(0, 7) : 'Unknown';
-                if (!activitiesByMonth[month]) {
-                    activitiesByMonth[month] = [];
-                }
-                activitiesByMonth[month].push(activity);
-            });
-
-            let html = duplicatesBanner || '';
-            Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
-                html += `
-                    <div class="card">
-                        <div class="card-header">
-                            <h3>${DataManager.formatMonth(month)}</h3>
-                        </div>
-                        <div class="card-body">
-                `;
-
-                activitiesByMonth[month].forEach(activity => {
-                    const isOwner = currentUser
-                        ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
-                        : false;
-                    const canManage = isOwner || isAdmin;
-                    const activitySummary = activity.isInternal
-                        ? (activity.activityName || UI.getActivityTypeLabel(activity.type) || 'Internal Activity')
-                        : UI.getActivitySummary(activity) || 'No details provided';
-
-                    html += `
-                        <div class="activity-item ${activity.isInternal ? 'activity-internal' : 'activity-external'}">
-                            <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
-                                <div>
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <strong>${UI.getActivityTypeLabel(activity.type)}</strong>
-                                        <span class="activity-badge ${activity.isInternal ? 'internal' : 'customer'}">
-                                            ${activity.isInternal ? 'Internal' : 'Customer'}
-                                        </span>
-                                    </div>
-                                    ${!activity.isInternal ? `
-                                        <div class="text-muted" style="margin-top: 0.5rem; font-size: 0.875rem;">
-                                            ${activity.accountName || 'N/A'} ${activity.projectName ? '→ ' + activity.projectName : ''}
-                                        </div>
-                                    ` : ''}
-                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
-                                        ${UI.formatDate(activity.date || activity.createdAt)} • ${activity.userName || 'Unknown'}
-                                    </div>
-                                    <div class="text-muted" style="font-size: 0.75rem; margin-top: 0.25rem;">
-                                        ${activitySummary}
-                                    </div>
-                                </div>
-                                ${canManage ? `
-                                    <div class="activity-actions">
-                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}', ${activity.isInternal})">Edit</button>
-                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}', ${activity.isInternal})">Delete</button>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                });
-
-                html += `
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
+            const viewMode = this.activitiesViewMode || 'cards';
+            
+            if (viewMode === 'table') {
+                container.innerHTML = this.renderActivitiesTable(activities, currentUser, isAdmin);
+            } else {
+                container.innerHTML = this.renderActivitiesCards(activities, currentUser, isAdmin);
+            }
         } catch (error) {
             console.error('Error loading activities view:', error);
             const container = document.getElementById(containerId);
             if (container) {
                 container.innerHTML = UI.emptyState('Error loading activities');
             }
+        }
+    },
+    
+    renderActivitiesCards(activities, currentUser, isAdmin) {
+        const activityTypeColors = {
+            'customerCall': '#4299E1',
+            'sow': '#48BB78',
+            'poc': '#ED8936',
+            'rfx': '#9F7AEA',
+            'pricing': '#F56565',
+            'other': '#718096'
+        };
+        
+        const activitiesByMonth = {};
+        activities.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+
+        let html = '';
+        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+            html += `
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h3>${DataManager.formatMonth(month)}</h3>
+                    </div>
+                    <div class="card-body">
+            `;
+
+            activitiesByMonth[month].forEach(activity => {
+                const isOwner = currentUser
+                    ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
+                    : false;
+                const canManage = isOwner || isAdmin;
+                
+                const activityType = activity.type || 'other';
+                const typeColor = activityTypeColors[activityType.toLowerCase()] || activityTypeColors.other;
+                const typeLabel = UI.getActivityTypeLabel(activityType);
+                
+                if (activity.isInternal) {
+                    const activityName = activity.activityName || typeLabel || 'Internal Activity';
+                    html += `
+                        <div class="activity-item">
+                            <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <span class="activity-badge internal">Internal</span>
+                                    </div>
+                                    <div style="margin-bottom: 0.5rem;">
+                                        <span class="activity-highlight internal-name" style="color: ${typeColor}; font-weight: 600;">${activityName}</span>
+                                        <span style="color: var(--gray-600);"> - </span>
+                                        <span class="activity-highlight type" style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span>
+                                    </div>
+                                    <div class="activity-meta">
+                                        <span>Entered by: <strong>${activity.userName || 'Unknown'}</strong></span>
+                                        <span>•</span>
+                                        <span>Date: <strong>${UI.formatDate(activity.date || activity.createdAt)}</strong></span>
+                                    </div>
+                                    ${activity.description ? `<div style="margin-top: 0.5rem; color: var(--gray-600); font-size: 0.875rem;">${activity.description}</div>` : ''}
+                                </div>
+                                ${canManage ? `
+                                    <div class="activity-actions">
+                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}', true)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}', true)">Delete</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const accountName = activity.accountName || 'N/A';
+                    const projectName = activity.projectName || '';
+                    html += `
+                        <div class="activity-item">
+                            <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <span class="activity-badge external">External</span>
+                                    </div>
+                                    <div style="margin-bottom: 0.5rem; font-size: 1rem;">
+                                        <span class="activity-highlight account" style="color: #3182CE; font-weight: 600;">${accountName}</span>
+                                        ${projectName ? `<span style="color: var(--gray-400);"> → </span><span class="activity-highlight project" style="color: #38A169; font-weight: 600;">${projectName}</span>` : ''}
+                                        <span style="color: var(--gray-400);"> → </span>
+                                        <span class="activity-highlight type" style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span>
+                                    </div>
+                                    <div class="activity-meta">
+                                        <span>Entered by: <strong>${activity.userName || 'Unknown'}</strong></span>
+                                        <span>•</span>
+                                        <span>Date: <strong>${UI.formatDate(activity.date || activity.createdAt)}</strong></span>
+                                    </div>
+                                    ${activity.summary ? `<div style="margin-top: 0.5rem; color: var(--gray-600); font-size: 0.875rem;">${activity.summary}</div>` : ''}
+                                </div>
+                                ${canManage ? `
+                                    <div class="activity-actions">
+                                        <button class="btn btn-sm btn-secondary" onclick="App.editActivity('${activity.id}', false)">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="App.deleteActivity('${activity.id}', false)">Delete</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        return html;
+    },
+    
+    renderActivitiesTable(activities, currentUser, isAdmin) {
+        const activityTypeColors = {
+            'customerCall': '#4299E1',
+            'sow': '#48BB78',
+            'poc': '#ED8936',
+            'rfx': '#9F7AEA',
+            'pricing': '#F56565',
+            'other': '#718096'
+        };
+        
+        const activitiesByMonth = {};
+        activities.forEach(activity => {
+            const date = activity.date || activity.createdAt;
+            const month = date ? date.substring(0, 7) : 'Unknown';
+            if (!activitiesByMonth[month]) {
+                activitiesByMonth[month] = [];
+            }
+            activitiesByMonth[month].push(activity);
+        });
+
+        let html = '';
+        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+            html += `
+                <div class="card" style="margin-bottom: 1.5rem;">
+                    <div class="card-header">
+                        <h3>${DataManager.formatMonth(month)}</h3>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <table class="activities-table">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Account / Activity</th>
+                                    <th>Project</th>
+                                    <th>Activity Type</th>
+                                    <th>Entered By</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            activitiesByMonth[month].forEach(activity => {
+                const isOwner = currentUser
+                    ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
+                    : false;
+                const canManage = isOwner || isAdmin;
+                
+                const activityType = activity.type || 'other';
+                const typeColor = activityTypeColors[activityType.toLowerCase()] || activityTypeColors.other;
+                const typeLabel = UI.getActivityTypeLabel(activityType);
+                
+                if (activity.isInternal) {
+                    const activityName = activity.activityName || typeLabel || 'Internal Activity';
+                    html += `
+                        <tr>
+                            <td><span class="activity-badge internal">Internal</span></td>
+                            <td><span class="activity-highlight internal-name" style="color: ${typeColor}; font-weight: 600;">${activityName}</span></td>
+                            <td>-</td>
+                            <td><span class="activity-highlight type" style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span></td>
+                            <td>${activity.userName || 'Unknown'}</td>
+                            <td>${UI.formatDate(activity.date || activity.createdAt)}</td>
+                            <td>
+                                ${canManage ? `
+                                    <button class="btn btn-xs btn-secondary" onclick="App.editActivity('${activity.id}', true)">Edit</button>
+                                    <button class="btn btn-xs btn-danger" onclick="App.deleteActivity('${activity.id}', true)">Delete</button>
+                                ` : '-'}
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    const accountName = activity.accountName || 'N/A';
+                    const projectName = activity.projectName || '-';
+                    html += `
+                        <tr>
+                            <td><span class="activity-badge external">External</span></td>
+                            <td><span class="activity-highlight account" style="color: #3182CE; font-weight: 600;">${accountName}</span></td>
+                            <td><span class="activity-highlight project" style="color: #38A169; font-weight: 600;">${projectName}</span></td>
+                            <td><span class="activity-highlight type" style="color: ${typeColor}; font-weight: 600;">${typeLabel}</span></td>
+                            <td>${activity.userName || 'Unknown'}</td>
+                            <td>${UI.formatDate(activity.date || activity.createdAt)}</td>
+                            <td>
+                                ${canManage ? `
+                                    <button class="btn btn-xs btn-secondary" onclick="App.editActivity('${activity.id}', false)">Edit</button>
+                                    <button class="btn btn-xs btn-danger" onclick="App.deleteActivity('${activity.id}', false)">Delete</button>
+                                ` : '-'}
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        });
+
+        return html;
+    },
+    
+    applyActivitySorting(activities) {
+        const sortBy = this.activitySortBy || 'dateDesc';
+        const sorted = [...activities];
+        
+        sorted.sort((a, b) => {
+            switch (sortBy) {
+                case 'dateDesc':
+                    const dateA = new Date(a.date || a.createdAt);
+                    const dateB = new Date(b.date || b.createdAt);
+                    return dateB - dateA;
+                case 'dateAsc':
+                    const dateA2 = new Date(a.date || a.createdAt);
+                    const dateB2 = new Date(b.date || b.createdAt);
+                    return dateA2 - dateB2;
+                case 'accountAsc':
+                    const accountA = (a.accountName || '').toLowerCase();
+                    const accountB = (b.accountName || '').toLowerCase();
+                    return accountA.localeCompare(accountB);
+                case 'accountDesc':
+                    const accountA2 = (a.accountName || '').toLowerCase();
+                    const accountB2 = (b.accountName || '').toLowerCase();
+                    return accountB2.localeCompare(accountA2);
+                case 'typeAsc':
+                    const typeA = (UI.getActivityTypeLabel(a.type) || '').toLowerCase();
+                    const typeB = (UI.getActivityTypeLabel(b.type) || '').toLowerCase();
+                    return typeA.localeCompare(typeB);
+                case 'typeDesc':
+                    const typeA2 = (UI.getActivityTypeLabel(a.type) || '').toLowerCase();
+                    const typeB2 = (UI.getActivityTypeLabel(b.type) || '').toLowerCase();
+                    return typeB2.localeCompare(typeA2);
+                case 'userAsc':
+                    const userA = (a.userName || '').toLowerCase();
+                    const userB = (b.userName || '').toLowerCase();
+                    return userA.localeCompare(userB);
+                case 'userDesc':
+                    const userA2 = (a.userName || '').toLowerCase();
+                    const userB2 = (b.userName || '').toLowerCase();
+                    return userB2.localeCompare(userA2);
+                default:
+                    return 0;
+            }
+        });
+        
+        return sorted;
+    },
+    
+    setActivitiesViewMode(mode) {
+        this.activitiesViewMode = mode;
+        // Update toggle buttons
+        const cardsBtn = document.getElementById('activitiesViewModeCards');
+        const tableBtn = document.getElementById('activitiesViewModeTable');
+        if (cardsBtn && tableBtn) {
+            if (mode === 'cards') {
+                cardsBtn.classList.remove('btn-outline');
+                cardsBtn.classList.add('btn-primary');
+                tableBtn.classList.remove('btn-primary');
+                tableBtn.classList.add('btn-outline');
+            } else {
+                tableBtn.classList.remove('btn-outline');
+                tableBtn.classList.add('btn-primary');
+                cardsBtn.classList.remove('btn-primary');
+                cardsBtn.classList.add('btn-outline');
+            }
+        }
+        this.renderActivitiesList();
+    },
+    
+    toggleActivitiesSidebar() {
+        const sidebar = document.querySelector('.activities-sidebar');
+        const icon = document.getElementById('activitiesSidebarToggleIcon');
+        if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            if (icon) {
+                icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '▼';
+            }
+        }
+    },
+    
+    handleActivitySortChange() {
+        const sortSelect = document.getElementById('activitySortBy');
+        if (sortSelect) {
+            this.activitySortBy = sortSelect.value;
+            this.renderActivitiesList();
         }
     },
 

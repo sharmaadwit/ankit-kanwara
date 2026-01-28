@@ -138,30 +138,6 @@
                         </svg>
                         <span>Reports</span>
                     </a></li>
-                    <li data-dashboard="accounts"><a href="#" data-view="accounts" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <span>Accounts</span>
-                    </a></li>
-                    <li data-dashboard="projectHealth"><a href="#" data-view="projectHealth" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"></path>
-                            <polyline points="18 17 13 12 10 15 6 11"></polyline>
-                            <polyline points="18 7 18 17 8 17"></polyline>
-                        </svg>
-                        <span>Project Health</span>
-                    </a></li>
-                    <li data-dashboard="sfdcCompliance"><a href="#" data-view="sfdcCompliance" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"></path>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                        </svg>
-                        <span>SFDC Compliance</span>
-                    </a></li>
                     <li id="adminNav" class="hidden" data-dashboard="admin"><a href="#" data-view="admin" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
@@ -248,38 +224,109 @@
 
                 <!-- Activities View -->
                 <div id="activitiesView" class="view hidden">
-                    <div class="page-header">
-                        <h1 class="page-title">All Activities</h1>
-                        <p class="page-subtitle">View and manage all customer and internal activities</p>
-                    </div>
+                    <div class="activities-layout">
+                        <!-- Activities Sidebar -->
+                        <div class="activities-sidebar">
+                            <div class="activities-sidebar-header">
+                                <h3>Filters & Sort</h3>
+                                <button class="btn btn-link btn-sm" onclick="App.toggleActivitiesSidebar()" style="padding: 0.25rem;">
+                                    <span id="activitiesSidebarToggleIcon">▼</span>
+                                </button>
+                            </div>
+                            <div class="activities-sidebar-content" id="activitiesSidebarContent">
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Type</label>
+                                    <select id="activityFilterType" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                        <option value="all">All Activities</option>
+                                        <option value="external">External</option>
+                                        <option value="internal">Internal</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Industry</label>
+                                    <select id="activityFilterIndustry" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                        <option value="">All Industries</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Region</label>
+                                    <select id="activityFilterRegion" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                        <option value="">All Regions</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Activity Type</label>
+                                    <select id="activityFilterActivityType" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                        <option value="">All Types</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Date Range</label>
+                                    <select id="activityFilterTimeframe" class="form-control" onchange="App.handleActivityFiltersChange(); App.toggleCustomDateRange();">
+                                        <option value="all">All Time</option>
+                                        <option value="thisMonth">This Month</option>
+                                        <option value="lastMonth">Last Month</option>
+                                        <option value="thisWeek">This Week</option>
+                                        <option value="custom">Custom Range</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section" id="activityCustomDateRange" style="display: none;">
+                                    <label class="form-label">From</label>
+                                    <input type="date" id="activityFilterDateFrom" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <label class="form-label" style="margin-top: 0.5rem;">To</label>
+                                    <input type="date" id="activityFilterDateTo" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Entered By</label>
+                                    <select id="activityFilterOwner" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                        <option value="all">All Users</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <label class="form-label">Sort By</label>
+                                    <select id="activitySortBy" class="form-control" onchange="App.handleActivitySortChange()">
+                                        <option value="dateDesc">Date (Newest First)</option>
+                                        <option value="dateAsc">Date (Oldest First)</option>
+                                        <option value="accountAsc">Account Name (A-Z)</option>
+                                        <option value="accountDesc">Account Name (Z-A)</option>
+                                        <option value="typeAsc">Activity Type (A-Z)</option>
+                                        <option value="typeDesc">Activity Type (Z-A)</option>
+                                        <option value="userAsc">Entered By (A-Z)</option>
+                                        <option value="userDesc">Entered By (Z-A)</option>
+                                    </select>
+                                </div>
+                                <div class="activities-filter-section">
+                                    <button class="btn btn-secondary btn-block" onclick="App.resetActivityFilters()">Reset Filters</button>
+                                </div>
+                            </div>
+                        </div>
 
-                    <div class="action-bar">
-                        <div class="search-bar">
-                            <input type="text" class="form-control" placeholder="Search activities..." id="activitySearch" oninput="App.handleActivitySearch(this.value)">
-                        </div>
-                        <div class="action-buttons">
-                            <button class="btn btn-primary" onclick="Activities.openActivityModal()">
-                                + Log Activity
-                            </button>
-                        </div>
-                        <div class="filter-group">
-                            <select id="activityFilterChannel" class="form-control" onchange="App.handleActivityFiltersChange()">
-                                <option value="">All Channels</option>
-                            </select>
-                            <select id="activityFilterIndustry" class="form-control" onchange="App.handleActivityFiltersChange()">
-                                <option value="">All Industries</option>
-                            </select>
-                            <select id="activityFilterTimeframe" class="form-control" onchange="App.handleActivityFiltersChange()">
-                                <option value="all">All Time</option>
-                            </select>
-                            <select id="activityFilterOwner" class="form-control" onchange="App.handleActivityFiltersChange()">
-                                <option value="all">All Activities</option>
-                            </select>
-                            <button class="btn btn-link" onclick="App.resetActivityFilters(); return false;">Reset</button>
+                        <!-- Activities Content Area -->
+                        <div class="activities-content">
+                            <div class="activities-header">
+                                <div>
+                                    <h1 class="page-title">All Activities</h1>
+                                    <p class="page-subtitle">View and manage all activities</p>
+                                </div>
+                            <div class="activities-header-actions">
+                                <div class="activities-view-toggle">
+                                    <button class="btn btn-sm btn-outline" id="activitiesViewModeCards" onclick="App.setActivitiesViewMode('cards')">Cards</button>
+                                    <button class="btn btn-sm btn-outline" id="activitiesViewModeTable" onclick="App.setActivitiesViewMode('table')">Table</button>
+                                </div>
+                                    <div class="activities-search">
+                                        <input type="text" class="form-control" placeholder="Search activities..." id="activitySearch" oninput="App.handleActivitySearch(this.value)">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="Activities.openActivityModal()">+ Log Activity</button>
+                                </div>
+                            </div>
+                            <div class="activities-nav-buttons">
+                                <button class="btn btn-outline" onclick="App.switchView('accounts')">Accounts</button>
+                                <button class="btn btn-outline" onclick="App.switchView('projectHealth')">Project Health</button>
+                                <button class="btn btn-outline" onclick="App.switchView('sfdcCompliance')">SFDC Compliance</button>
+                            </div>
+                            <div id="activitiesContent"></div>
                         </div>
                     </div>
-
-                    <div id="activitiesContent"></div>
                 </div>
 
                 <!-- Win/Loss View -->
