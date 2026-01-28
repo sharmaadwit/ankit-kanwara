@@ -967,7 +967,10 @@ const App = {
                 if (InterfaceManager.getCurrentInterface() === 'card') {
                     this.loadCardReportsView();
                 } else {
-                    this.loadReports();
+                    // Small delay to ensure view is visible before loading reports
+                    setTimeout(() => {
+                        this.loadReports();
+                    }, 50);
                 }
                 break;
             case 'accounts':

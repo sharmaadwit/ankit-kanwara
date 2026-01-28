@@ -129,9 +129,19 @@ const ReportsV2 = {
 
     // Main render function
     render() {
+        // Ensure we wait for DOM to be ready
         const container = document.getElementById('reportsContent');
         if (!container) {
-            console.error('ReportsV2: reportsContent container not found');
+            console.error('ReportsV2: reportsContent container not found. Retrying in 100ms...');
+            setTimeout(() => this.render(), 100);
+            return;
+        }
+
+        // Check if container is in a hidden view
+        const reportsView = document.getElementById('reportsView');
+        if (reportsView && reportsView.classList.contains('hidden')) {
+            console.warn('ReportsV2: reportsView is hidden, waiting for view to be shown...');
+            setTimeout(() => this.render(), 100);
             return;
         }
 
