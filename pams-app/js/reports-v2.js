@@ -1048,57 +1048,98 @@ const ReportsV2 = {
                 }
             }
 
-            // Industry Total Activities (only in Sales View tab)
+            // Industry Total Activities (in Sales View tab - Product Level Data section)
             if (this.activeTab === 'sales') {
-                const industryActivityMap = new Map();
-                activities.forEach(activity => {
-                    if (!activity.isInternal && activity.accountId) {
-                        const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                        if (account && account.industry) {
-                            const industry = account.industry;
-                            industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
-                        }
-                    }
-                });
-                const industryData = Array.from(industryActivityMap.entries())
-                    .sort((a, b) => b[1] - a[1]);
+                const industryTotalCanvas = document.getElementById('industryTotalChart');
+                const industryAverageCanvas = document.getElementById('industryAverageChart');
                 
-                if (industryData.length > 0) {
-                    this.renderHorizontalBarChart('industryTotalChart', {
-                        labels: industryData.map(([industry]) => industry),
-                        data: industryData.map(([, count]) => count),
-                        label: 'Total Activities'
+                if (industryTotalCanvas) {
+                    const industryActivityMap = new Map();
+                    activities.forEach(activity => {
+                        if (!activity.isInternal && activity.accountId) {
+                            const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                            if (account && account.industry) {
+                                const industry = account.industry;
+                                industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
+                            }
+                        }
                     });
+                    const industryData = Array.from(industryActivityMap.entries())
+                        .sort((a, b) => b[1] - a[1]);
+                    
+                    if (industryData.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['industryTotalChart']) {
+                            try {
+                                this.charts['industryTotalChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying industryTotalChart:', e);
+                            }
+                            delete this.charts['industryTotalChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(industryTotalCanvas)) {
+                            try {
+                                Chart.getChart(industryTotalCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderHorizontalBarChart('industryTotalChart', {
+                            labels: industryData.map(([industry]) => industry),
+                            data: industryData.map(([, count]) => count),
+                            label: 'Total Activities'
+                        });
+                    }
                 }
 
                 // Industry Average Activities
-                const industryAvgMap = new Map();
-                activities.forEach(activity => {
-                    if (!activity.isInternal && activity.accountId) {
-                        const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
-                        if (account && account.industry) {
-                            const industry = account.industry;
-                            if (!industryAvgMap.has(industry)) {
-                                industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+                if (industryAverageCanvas) {
+                    const industryAvgMap = new Map();
+                    activities.forEach(activity => {
+                        if (!activity.isInternal && activity.accountId) {
+                            const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                            if (account && account.industry) {
+                                const industry = account.industry;
+                                if (!industryAvgMap.has(industry)) {
+                                    industryAvgMap.set(industry, { total: 0, accounts: new Set() });
+                                }
+                                industryAvgMap.get(industry).total++;
+                                industryAvgMap.get(industry).accounts.add(activity.accountId);
                             }
-                            industryAvgMap.get(industry).total++;
-                            industryAvgMap.get(industry).accounts.add(activity.accountId);
                         }
-                    }
-                });
-                const industryAvgData = Array.from(industryAvgMap.entries())
-                    .map(([industry, data]) => ({
-                        industry,
-                        average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
-                    }))
-                    .sort((a, b) => b.average - a.average);
-                
-                if (industryAvgData.length > 0) {
-                    this.renderHorizontalBarChart('industryAverageChart', {
-                        labels: industryAvgData.map(d => d.industry),
-                        data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
-                        label: 'Average Activities'
                     });
+                    const industryAvgData = Array.from(industryAvgMap.entries())
+                        .map(([industry, data]) => ({
+                            industry,
+                            average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
+                        }))
+                        .sort((a, b) => b.average - a.average);
+                    
+                    if (industryAvgData.length > 0) {
+                        // Destroy existing chart
+                        if (this.charts['industryAverageChart']) {
+                            try {
+                                this.charts['industryAverageChart'].destroy();
+                            } catch (e) {
+                                console.warn('Error destroying industryAverageChart:', e);
+                            }
+                            delete this.charts['industryAverageChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(industryAverageCanvas)) {
+                            try {
+                                Chart.getChart(industryAverageCanvas).destroy();
+                            } catch (e) {
+                                console.warn('Error destroying Chart.js instance:', e);
+                            }
+                        }
+                        
+                        this.renderHorizontalBarChart('industryAverageChart', {
+                            labels: industryAvgData.map(d => d.industry),
+                            data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
+                            label: 'Average Activities'
+                        });
+                    }
                 }
             }
         } catch (error) {
@@ -1269,14 +1310,19 @@ const ReportsV2 = {
 
     renderHorizontalBarChart(canvasId, { labels, data, label }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') {
-            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+        if (!canvas) {
+            console.warn(`Chart canvas not found: ${canvasId}`);
+            return;
+        }
+        
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded');
             return;
         }
 
         // Ensure data is valid
         if (!data || !Array.isArray(data) || data.length === 0) {
-            console.warn(`Invalid data for chart ${canvasId}`);
+            console.warn(`Invalid data for chart ${canvasId}:`, data);
             return;
         }
 
@@ -1285,45 +1331,59 @@ const ReportsV2 = {
             try {
                 this.charts[canvasId].destroy();
             } catch (e) {
-                console.warn(`Error destroying chart ${canvasId}:`, e);
+                console.warn(`Error destroying chart ${canvasId} from cache:`, e);
             }
             delete this.charts[canvasId];
+        }
+        
+        // Also check Chart.js registry
+        if (Chart.getChart && Chart.getChart(canvas)) {
+            try {
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) {
+                    existingChart.destroy();
+                }
+            } catch (e) {
+                console.warn(`Error destroying Chart.js instance on ${canvasId}:`, e);
+            }
         }
 
         try {
             this.charts[canvasId] = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: label,
-                    data: data,
-                    backgroundColor: '#3182CE',
-                    borderColor: '#2B6CB0',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        backgroundColor: '#3182CE',
+                        borderColor: '#2B6CB0',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
                         }
                     }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
                 }
-            }
-        });
+            });
+            console.log(`Successfully created horizontal bar chart ${canvasId}`);
         } catch (error) {
             console.error(`Error creating horizontal bar chart ${canvasId}:`, error);
+            console.error('Error stack:', error.stack);
         }
     },
 
