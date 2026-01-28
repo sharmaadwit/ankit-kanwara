@@ -1256,6 +1256,7 @@ const App = {
                 </div>
             </div>
             ` : ''}
+        `;
         
         dashboardView.innerHTML = html;
         this.applyAppConfiguration();
