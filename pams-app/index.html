@@ -146,25 +146,6 @@
                         </svg>
                         <span>Admin & Settings</span>
                     </a></li>
-                    <li class="hidden" data-dashboard="adminLogin" data-admin-only="true"><a href="#" data-view="adminLoginLogs" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 2L2 7l7 5 7-5-7-5z"></path>
-                            <path d="M2 17l7 5 7-5"></path>
-                            <path d="M2 12l7 5 7-5"></path>
-                            <path d="M17 8h5v8h-5"></path>
-                            <path d="M19.5 10v4"></path>
-                        </svg>
-                        <span>Login Activity</span>
-                    </a></li>
-                    <li class="hidden" data-dashboard="adminPoc" data-admin-only="true"><a href="#" data-view="adminPoc" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3h18v4H3z"></path>
-                            <path d="M8 7v13"></path>
-                            <path d="M16 7v13"></path>
-                            <path d="M3 13h18"></path>
-                        </svg>
-                        <span>POC Sandbox</span>
-                    </a></li>
                 </ul>
             </nav>
 
@@ -755,6 +736,14 @@
                 <!-- Login Activity Detail View -->
                 <div id="adminLoginLogsView" class="view hidden">
                     <div class="page-header">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                            <button class="btn btn-outline btn-sm" onclick="App.switchView('admin')" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                                </svg>
+                                Back to Admin
+                            </button>
+                        </div>
                         <h1 class="page-title">Login Activity</h1>
                         <p class="page-subtitle">Review recent authentication events across the organisation.</p>
                     </div>
