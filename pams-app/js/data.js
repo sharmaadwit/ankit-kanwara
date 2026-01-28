@@ -110,6 +110,24 @@ const MIGRATION_DUPLICATE_PATTERNS = [
 const ANALYTICS_ACCESS_CONFIG_KEY = 'analyticsAccessConfig';
 const ANALYTICS_TABLE_PRESETS_KEY = 'analyticsTablePresets';
 
+const INDUSTRIES_KEY = 'industries';
+const INDUSTRY_USE_CASES_KEY = 'industryUseCases';
+const PENDING_INDUSTRIES_KEY = 'pendingIndustries';
+const PENDING_USE_CASES_KEY = 'pendingUseCases';
+
+const DEFAULT_INDUSTRY_USE_CASES = {
+    'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Customer Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
+    'IT & Software': ['Product Onboarding', 'Feature Updates', 'Technical Support', 'License Management', 'User Training', 'Bug Reports', 'API Documentation', 'System Alerts'],
+    'Retail & eCommerce': ['Lead Generation', 'WhatsApp Commerce', 'Post Sales Support', 'Order Management', 'COD (Cash on Delivery)', 'Returns & Refunds', 'Customer Onboarding', 'Promotions & Campaigns', 'Inventory Management', 'Product Recommendations', 'Abandoned Cart Recovery'],
+    'Telecom': ['SIM Activation', 'Bill Payments', 'Plan Upgrades', 'Network Alerts', 'Customer Support', 'Service Activation', 'Data Usage Alerts', 'Recharge Reminders'],
+    'Healthcare': ['Appointment Booking', 'Patient Reminders', 'Prescription Management', 'Health Check-ups', 'Lab Reports', 'Telemedicine', 'Patient Onboarding', 'Medical Records', 'Vaccination Reminders'],
+    'Media & Entertainment': ['Content Notifications', 'Subscription Management', 'User Engagement', 'Event Reminders', 'Support'],
+    'Travel & Hospitality': ['Booking Confirmations', 'Check-in Reminders', 'Loyalty Updates', 'Customer Support', 'Offers'],
+    'Automotive': ['Lead Follow-up', 'Service Reminders', 'Booking', 'Support'],
+    'Government': ['Citizen Notifications', 'Document Status', 'Support'],
+    'Education': ['Student Enrollment', 'Course Updates', 'Fee Reminders', 'Exam Notifications', 'Assignment Submissions', 'Parent-Teacher Communication', 'Library Management', 'Attendance Alerts', 'Result Notifications']
+};
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -210,6 +228,7 @@ const DataManager = {
             ];
             this.saveIndustries(defaultIndustries);
         }
+        this.ensureIndustryUseCasesBaseline();
 
         // Initialize regions if none exist
         if (!this.getRegions().length) {
@@ -947,6 +966,168 @@ const DataManager = {
         this.saveIndustries(industries);
     },
 
+    // Industry Use Cases (per-industry)
+    getIndustryUseCases() {
+        const stored = localStorage.getItem(INDUSTRY_USE_CASES_KEY);
+        if (!stored) return {};
+        try {
+            const parsed = JSON.parse(stored);
+            return typeof parsed === 'object' && parsed !== null ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    },
+
+    getUseCasesForIndustry(industry) {
+        if (!industry || typeof industry !== 'string') return [];
+        const map = this.getIndustryUseCases();
+        const list = map[industry.trim()];
+        return Array.isArray(list) ? [...list] : [];
+    },
+
+    saveIndustryUseCases(map) {
+        localStorage.setItem(INDUSTRY_USE_CASES_KEY, JSON.stringify(map || {}));
+    },
+
+    setUseCasesForIndustry(industry, useCases) {
+        const trimmed = industry && typeof industry === 'string' ? industry.trim() : '';
+        if (!trimmed) return;
+        const map = this.getIndustryUseCases();
+        map[trimmed] = Array.isArray(useCases) ? useCases : [];
+        this.saveIndustryUseCases(map);
+    },
+
+    addUseCaseToIndustry(industry, useCase) {
+        const trimmed = (useCase && typeof useCase === 'string' ? useCase.trim() : '') || '';
+        if (!trimmed) return;
+        const list = this.getUseCasesForIndustry(industry);
+        if (list.includes(trimmed)) return;
+        list.push(trimmed);
+        this.setUseCasesForIndustry(industry, list);
+    },
+
+    removeUseCaseFromIndustry(industry, useCase) {
+        const list = this.getUseCasesForIndustry(industry).filter(uc => uc !== useCase);
+        this.setUseCasesForIndustry(industry, list);
+    },
+
+    ensureIndustryUseCasesBaseline() {
+        const industries = this.getIndustries();
+        const map = this.getIndustryUseCases();
+        let changed = false;
+        industries.forEach(ind => {
+            if (!Array.isArray(map[ind]) || !map[ind].length) {
+                const defaults = DEFAULT_INDUSTRY_USE_CASES[ind];
+                map[ind] = Array.isArray(defaults) ? [...defaults] : ['Marketing', 'Commerce', 'Support'];
+                changed = true;
+            }
+        });
+        if (changed) this.saveIndustryUseCases(map);
+    },
+
+    // Pending industries (from "Other" in forms)
+    getPendingIndustries() {
+        const stored = localStorage.getItem(PENDING_INDUSTRIES_KEY);
+        if (!stored) return [];
+        try {
+            const parsed = JSON.parse(stored);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    },
+
+    savePendingIndustries(list) {
+        localStorage.setItem(PENDING_INDUSTRIES_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    },
+
+    addPendingIndustry(value, meta = {}) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        if (!trimmed) return null;
+        const industries = this.getIndustries();
+        if (industries.includes(trimmed)) return null;
+        const pending = this.getPendingIndustries();
+        if (pending.some(p => (p.value || p).toString().trim() === trimmed)) return null;
+        const entry = { value: trimmed, suggestedBy: meta.suggestedBy || null, createdAt: meta.createdAt || new Date().toISOString() };
+        pending.push(entry);
+        this.savePendingIndustries(pending);
+        return entry;
+    },
+
+    acceptPendingIndustry(value) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        if (!trimmed) return false;
+        const pending = this.getPendingIndustries();
+        const filtered = pending.filter(p => (p.value || p).toString().trim() !== trimmed);
+        if (filtered.length === pending.length) return false;
+        this.savePendingIndustries(filtered);
+        this.addIndustry(trimmed);
+        const map = this.getIndustryUseCases();
+        if (!Array.isArray(map[trimmed]) || !map[trimmed].length) {
+            map[trimmed] = ['Marketing', 'Commerce', 'Support'];
+            this.saveIndustryUseCases(map);
+        }
+        return true;
+    },
+
+    rejectPendingIndustry(value) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        if (!trimmed) return false;
+        const pending = this.getPendingIndustries().filter(p => (p.value || p).toString().trim() !== trimmed);
+        this.savePendingIndustries(pending);
+        return true;
+    },
+
+    // Pending use cases (from "Other" in forms, per industry)
+    getPendingUseCases() {
+        const stored = localStorage.getItem(PENDING_USE_CASES_KEY);
+        if (!stored) return [];
+        try {
+            const parsed = JSON.parse(stored);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    },
+
+    savePendingUseCases(list) {
+        localStorage.setItem(PENDING_USE_CASES_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    },
+
+    addPendingUseCase(value, industry, meta = {}) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        if (!trimmed) return null;
+        const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
+        const existing = this.getUseCasesForIndustry(ind);
+        if (existing.includes(trimmed)) return null;
+        const pending = this.getPendingUseCases();
+        if (pending.some(p => (p.value || p).toString().trim() === trimmed && (p.industry || '') === ind)) return null;
+        const entry = { value: trimmed, industry: ind, suggestedBy: meta.suggestedBy || null, createdAt: meta.createdAt || new Date().toISOString() };
+        pending.push(entry);
+        this.savePendingUseCases(pending);
+        return entry;
+    },
+
+    acceptPendingUseCase(value, industry) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
+        if (!trimmed) return false;
+        const pending = this.getPendingUseCases();
+        const filtered = pending.filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
+        if (filtered.length === pending.length) return false;
+        this.savePendingUseCases(filtered);
+        this.addUseCaseToIndustry(ind, trimmed);
+        return true;
+    },
+
+    rejectPendingUseCase(value, industry) {
+        const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
+        const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
+        const pending = this.getPendingUseCases().filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
+        this.savePendingUseCases(pending);
+        return true;
+    },
+
     // Region Management
     getRegions() {
         const stored = localStorage.getItem('regions');
@@ -1164,23 +1345,6 @@ const DataManager = {
         this.recordAudit('salesRep.delete', 'salesRep', salesRepId);
     },
 
-    // Get unique sales rep names from activities (for promotion)
-    getSalesRepsFromActivities() {
-        const activities = this.getAllActivities();
-        const salesRepNames = new Set();
-        
-        activities.forEach(activity => {
-            if (activity.salesRep) {
-                salesRepNames.add(activity.salesRep);
-            }
-        });
-        
-        const globalSalesReps = this.getGlobalSalesReps();
-        const globalNames = new Set(globalSalesReps.map(r => r.name));
-        
-        // Return names that are in activities but not in global list
-        return Array.from(salesRepNames).filter(name => !globalNames.has(name));
-    },
 
     // Account Management
     getAccounts() {

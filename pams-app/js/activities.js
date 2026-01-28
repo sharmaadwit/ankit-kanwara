@@ -221,6 +221,7 @@ const Activities = {
         const industrySelect = document.getElementById('industry');
         if (industrySelect && activity.industry) {
             industrySelect.value = activity.industry;
+            this.handleIndustryChange(activity.industry);
         }
 
         this.populateExternalDetailFields(activity);
@@ -447,10 +448,12 @@ const Activities = {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label required">Industry</label>
-                                    <select class="form-control" id="industry" data-was-required="true" required>
+                                    <select class="form-control" id="industry" data-was-required="true" required onchange="Activities.handleIndustryChange(this.value)">
                                         <option value="">Select Industry</option>
-                                        ${DataManager.getIndustries().map(ind => `<option value="${ind}">${ind}</option>`).join('')}
+                                        ${(DataManager.getIndustries() || []).map(ind => `<option value="${ind}">${ind}</option>`).join('')}
+                                        <option value="Other">Other</option>
                                     </select>
+                                    <input type="text" class="form-control" id="industryOtherText" placeholder="Specify industry..." style="margin-top: 0.5rem; display: none;">
                                 </div>
                             </div>
                         </div>
@@ -495,17 +498,14 @@ const Activities = {
                                             <span>▼</span>
                                         </div>
                                         <div class="multi-select-dropdown" id="useCaseDropdown">
-                                            ${['Marketing', 'Commerce', 'Support'].map(uc => `
-                                                <div class="multi-select-option" onclick="Activities.toggleOption('useCase', '${uc}')">
-                                                    <input type="checkbox" value="${uc}"> ${uc}
-                                                </div>
-                                            `).join('')}
-                                            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
-                                                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
-                                            </div>
+                                            <!-- Populated by refreshUseCaseOptions() -->
                                         </div>
                                     </div>
                                     <input type="text" class="form-control" id="useCaseOtherText" placeholder="Specify other use case..." style="margin-top: 0.5rem; display: none;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Location</label>
+                                    <input type="text" class="form-control" id="projectLocation" placeholder="e.g. store, region, territory (Retail & others)">
                                 </div>
                             </div>
                             <div class="form-group">
@@ -991,6 +991,43 @@ const Activities = {
         });
     },
 
+    handleIndustryChange(value) {
+        const otherText = document.getElementById('industryOtherText');
+        if (otherText) {
+            if (value === 'Other') {
+                otherText.style.display = 'block';
+                otherText.required = true;
+            } else {
+                otherText.style.display = 'none';
+                otherText.value = '';
+                otherText.required = false;
+            }
+        }
+        this.refreshUseCaseOptions(value === 'Other' ? '' : value);
+    },
+
+    refreshUseCaseOptions(industry) {
+        const dropdown = document.getElementById('useCaseDropdown');
+        if (!dropdown) return;
+        const useCases = (typeof DataManager !== 'undefined' && industry)
+            ? DataManager.getUseCasesForIndustry(industry)
+            : [];
+        const list = useCases.length ? useCases : ['Marketing', 'Commerce', 'Support'];
+        const keepSelected = this.selectedUseCases.filter(uc => uc !== 'Other' && list.includes(uc));
+        this.selectedUseCases = keepSelected;
+        dropdown.innerHTML = list.map(uc => {
+            const attrVal = (uc || '').replace(/"/g, '&quot;');
+            return `<div class="multi-select-option" data-value="${attrVal}" onclick="Activities.toggleOption('useCase', this.getAttribute('data-value'))">
+                <input type="checkbox" value="${attrVal}"> ${uc}
+            </div>`;
+        }).join('') + `
+            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
+                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
+            </div>`;
+        this.syncMultiSelectState('useCase', this.selectedUseCases);
+        this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
+    },
+
     // Load account dropdown (with inline search)
     loadAccountDropdown() {
         const dropdown = document.getElementById('accountDropdown');
@@ -1159,6 +1196,7 @@ const Activities = {
             }
             if (industrySelect && account.industry) {
                 industrySelect.value = account.industry;
+                this.handleIndustryChange(account.industry);
             }
         }
         
@@ -1355,6 +1393,8 @@ const Activities = {
                 sfdcLink.style.display = 'none';
             }
         }
+        const projectLocation = document.getElementById('projectLocation');
+        if (projectLocation) projectLocation.value = project.location || '';
         
         // Pre-populate Use Cases
         if (project.useCases && project.useCases.length > 0) {
@@ -1425,6 +1465,8 @@ const Activities = {
         if (sfdcLink) sfdcLink.value = '';
         if (noSfdcLink) noSfdcLink.checked = false;
         if (sfdcLink) sfdcLink.style.display = 'block';
+        const projectLocation = document.getElementById('projectLocation');
+        if (projectLocation) projectLocation.value = '';
         
         // Clear Use Cases
         this.selectedUseCases = [];
@@ -1667,7 +1709,20 @@ const Activities = {
         if (accountId === 'new') {
             accountName = document.getElementById('newAccountName')?.value || '';
         }
-        const industry = industryEl.value;
+        let industry = (industryEl.value || '').trim();
+        const industryOtherTextEl = document.getElementById('industryOtherText');
+        const industryOtherText = industryOtherTextEl?.value?.trim();
+        if (industry === 'Other') {
+            if (!industryOtherText) {
+                UI.setFieldError(industryOtherTextEl, 'Please specify the industry.');
+                UI.showNotification('Please specify the industry when selecting Other.', 'error');
+                return;
+            }
+            industry = industryOtherText;
+            if (typeof DataManager !== 'undefined' && DataManager.addPendingIndustry) {
+                DataManager.addPendingIndustry(industryOtherText, { suggestedBy: currentUser.username });
+            }
+        }
         
         // Get project info (now from Project Information section)
         const projectId = projectIdEl ? projectIdEl.value : '';
@@ -1747,11 +1802,27 @@ const Activities = {
         
         // Get use cases (handle Other)
         let useCases = [...this.selectedUseCases];
-        const useCaseOtherText = document.getElementById('useCaseOtherText')?.value;
+        const useCaseOtherText = document.getElementById('useCaseOtherText')?.value?.trim();
         if (useCases.includes('Other') && useCaseOtherText) {
             const otherIndex = useCases.indexOf('Other');
             useCases[otherIndex] = `Other: ${useCaseOtherText}`;
+            if (typeof DataManager !== 'undefined' && DataManager.addPendingUseCase && industry) {
+                DataManager.addPendingUseCase(useCaseOtherText, industry, { suggestedBy: currentUser.username });
+            }
         }
+        
+        // Validate use cases (mandatory for new external activities)
+        if (useCases.length === 0) {
+            UI.showNotification('Please select at least one use case for the project', 'error');
+            const useCaseSelected = document.getElementById('useCaseSelected');
+            if (useCaseSelected) {
+                useCaseSelected.style.borderColor = '#dc3545';
+                useCaseSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+        
+        const projectLocation = (document.getElementById('projectLocation')?.value || '').trim();
         
         // Get project products (handle Other) - Required for external activities
         let projectProducts = this.getProjectProductsWithOther();
@@ -1780,19 +1851,21 @@ const Activities = {
                 useCases: useCases,
                 productsInterested: projectProducts,
                 channels: projectChannels,
+                location: projectLocation || undefined,
                 createdBy: currentUser.id
             });
             finalProjectId = newProject.id;
         } else if (projectId && projectId !== 'new') {
-            // Update existing project if SFDC link, use cases, products, or channels changed
+            // Update existing project if SFDC link, use cases, products, channels, or location changed
             const accounts = DataManager.getAccounts();
             const account = accounts.find(a => a.id === finalAccountId);
             const project = account?.projects?.find(p => p.id === projectId);
             if (project) {
-                if (sfdcLink) project.sfdcLink = sfdcLink;
+                if (sfdcLink !== undefined) project.sfdcLink = sfdcLink;
                 if (useCases.length > 0) project.useCases = useCases;
                 if (projectProducts.length > 0) project.productsInterested = projectProducts;
                 if (projectChannels.length > 0) project.channels = projectChannels;
+                if (projectLocation !== undefined) project.location = projectLocation || '';
                 DataManager.saveAccounts(accounts);
             }
         }
@@ -2068,6 +2141,8 @@ const Activities = {
                     field.setAttribute('required', 'required');
                 });
             }
+            const industrySelect = document.getElementById('industry');
+            this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '');
             
             // Populate External activity types
             if (activityTypeSelect) {
@@ -2193,6 +2268,13 @@ const Activities = {
         }
         
         this.clearProjectFields();
+        
+        const industryOtherText = document.getElementById('industryOtherText');
+        if (industryOtherText) {
+            industryOtherText.style.display = 'none';
+            industryOtherText.required = false;
+            industryOtherText.value = '';
+        }
         
         const activityFields = document.getElementById('activityFields');
         if (activityFields) activityFields.innerHTML = '';

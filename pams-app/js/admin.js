@@ -215,6 +215,7 @@ const Admin = {
             users: () => this.loadUsers(),
             sales: () => this.loadSalesReps(),
             regions: () => this.renderRegionsPanel(),
+            industryUseCases: () => this.loadIndustryUseCasesSection(),
             interface: () => {},
             analytics: () => this.loadAnalyticsSettings(),
             projectHealth: () => this.renderProjectHealthSettings(),
@@ -225,6 +226,209 @@ const Admin = {
             reports: () => {},
             poc: () => {}
         };
+    },
+
+    loadIndustryUseCasesSection() {
+        this.renderAdminIndustriesList();
+        this.renderAdminPendingIndustries();
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        if (industrySelect) {
+            const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
+            industrySelect.innerHTML = '<option value="">Select industry...</option>' +
+                industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
+            this.renderUseCasesForIndustry();
+        }
+        this.renderAdminPendingUseCases();
+    },
+
+    renderAdminIndustriesList() {
+        const container = document.getElementById('adminIndustriesList');
+        if (!container) return;
+        const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
+        container.innerHTML = industries.length === 0
+            ? '<p class="text-muted">No industries yet. Add one above.</p>'
+            : industries.map(ind => {
+                const attrVal = (ind || '').replace(/"/g, '&quot;');
+                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                    <span>${ind}</span>
+                    <button type="button" class="btn btn-danger btn-sm" data-industry="${attrVal}" onclick="Admin.removeIndustryFromAdmin(this.getAttribute('data-industry'))">Remove</button>
+                </div>`;
+            }).join('');
+    },
+
+    addIndustryFromAdmin() {
+        const input = document.getElementById('adminNewIndustry');
+        if (!input) return;
+        const value = (input.value || '').trim();
+        if (!value) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Enter an industry name.', 'error');
+            return;
+        }
+        if (typeof DataManager === 'undefined') return;
+        DataManager.addIndustry(value);
+        input.value = '';
+        DataManager.ensureIndustryUseCasesBaseline();
+        this.renderAdminIndustriesList();
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        if (industrySelect) {
+            const industries = DataManager.getIndustries();
+            industrySelect.innerHTML = '<option value="">Select industry...</option>' +
+                industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
+        }
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry added.', 'success');
+    },
+
+    removeIndustryFromAdmin(industry) {
+        if (!industry) return;
+        if (!window.confirm('Remove industry "' + String(industry).replace(/"/g, '') + '"?')) return;
+        if (typeof DataManager === 'undefined') return;
+        const list = DataManager.getIndustries().filter(i => i !== industry);
+        DataManager.saveIndustries(list);
+        this.renderAdminIndustriesList();
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        if (industrySelect) {
+            industrySelect.innerHTML = '<option value="">Select industry...</option>' +
+                list.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
+            this.renderUseCasesForIndustry();
+        }
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry removed.', 'success');
+    },
+
+    renderAdminPendingIndustries() {
+        const container = document.getElementById('adminPendingIndustriesList');
+        if (!container) return;
+        const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
+        container.innerHTML = pending.length === 0
+            ? '<p class="text-muted">No pending industry suggestions.</p>'
+            : pending.map(p => {
+                const val = (p.value != null ? p.value : p).toString().trim();
+                const dataVal = val.replace(/"/g, '&quot;');
+                const meta = p.suggestedBy ? ` (by ${p.suggestedBy})` : '';
+                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                    <span>${val}${meta}</span>
+                    <span style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-primary btn-sm" data-pending-industry="${dataVal}" onclick="Admin.acceptPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Accept</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-pending-industry="${dataVal}" onclick="Admin.rejectPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Reject</button>
+                    </span>
+                </div>`;
+            }).join('');
+    },
+
+    acceptPendingIndustryFromAdmin(value) {
+        if (typeof DataManager === 'undefined') return;
+        DataManager.acceptPendingIndustry(value);
+        this.renderAdminIndustriesList();
+        this.renderAdminPendingIndustries();
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        if (industrySelect) {
+            const industries = DataManager.getIndustries();
+            industrySelect.innerHTML = '<option value="">Select industry...</option>' +
+                industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
+        }
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry accepted and added to list.', 'success');
+    },
+
+    rejectPendingIndustryFromAdmin(value) {
+        if (typeof DataManager === 'undefined') return;
+        DataManager.rejectPendingIndustry(value);
+        this.renderAdminPendingIndustries();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Suggestion rejected.', 'success');
+    },
+
+    renderUseCasesForIndustry() {
+        const panel = document.getElementById('adminUseCasesPanel');
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        if (!panel || !industrySelect) return;
+        const industry = (industrySelect.value || '').trim();
+        if (!industry) {
+            panel.innerHTML = '<p class="text-muted">Select an industry to manage its use cases.</p>';
+            return;
+        }
+        const useCases = typeof DataManager !== 'undefined' ? DataManager.getUseCasesForIndustry(industry) : [];
+        const addInputId = 'adminNewUseCaseInput';
+        panel.innerHTML = `
+            <div class="form-group" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
+                <input type="text" id="${addInputId}" class="form-control" placeholder="New use case" style="max-width: 280px;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addUseCaseFromAdmin()">Add Use Case</button>
+            </div>
+            <div id="adminUseCasesList" class="space-y-2" style="margin-top: 1rem;"></div>
+        `;
+        const listEl = document.getElementById('adminUseCasesList');
+        if (listEl) {
+            listEl.innerHTML = useCases.length === 0
+                ? '<p class="text-muted">No use cases for this industry. Add one above.</p>'
+                : useCases.map(uc => {
+                    const ucAttr = (uc || '').replace(/"/g, '&quot;');
+                    const indAttr = (industry || '').replace(/"/g, '&quot;');
+                    return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                        <span>${uc}</span>
+                        <button type="button" class="btn btn-danger btn-sm" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.removeUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Remove</button>
+                    </div>`;
+                }).join('');
+        }
+    },
+
+    addUseCaseFromAdmin() {
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
+        const input = document.getElementById('adminNewUseCaseInput');
+        if (!industrySelect || !input) return;
+        const industry = (industrySelect.value || '').trim();
+        const value = (input.value || '').trim();
+        if (!industry || !value) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Select industry and enter a use case.', 'error');
+            return;
+        }
+        if (typeof DataManager === 'undefined') return;
+        DataManager.addUseCaseToIndustry(industry, value);
+        input.value = '';
+        this.renderUseCasesForIndustry();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case added.', 'success');
+    },
+
+    removeUseCaseFromAdmin(industry, useCase) {
+        if (!industry || !useCase) return;
+        if (typeof DataManager === 'undefined') return;
+        DataManager.removeUseCaseFromIndustry(industry, useCase);
+        this.renderUseCasesForIndustry();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case removed.', 'success');
+    },
+
+    renderAdminPendingUseCases() {
+        const container = document.getElementById('adminPendingUseCasesList');
+        if (!container) return;
+        const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
+        container.innerHTML = pending.length === 0
+            ? '<p class="text-muted">No pending use case suggestions.</p>'
+            : pending.map(p => {
+                const val = (p.value != null ? p.value : p).toString().trim();
+                const ind = (p.industry != null ? p.industry : '').toString().trim() || '';
+                const dataVal = val.replace(/"/g, '&quot;');
+                const dataInd = ind.replace(/"/g, '&quot;');
+                const meta = p.suggestedBy ? ` (by ${p.suggestedBy})` : '';
+                const indLabel = ind || '(no industry)';
+                return `<div class="admin-list-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e5e7eb;">
+                    <span>${val} → ${indLabel}${meta}</span>
+                    <span style="display: flex; gap: 0.5rem;">
+                        <button type="button" class="btn btn-primary btn-sm" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.acceptPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Accept</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.rejectPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Reject</button>
+                    </span>
+                </div>`;
+            }).join('');
+    },
+
+    acceptPendingUseCaseFromAdmin(value, industry) {
+        if (typeof DataManager === 'undefined') return;
+        DataManager.acceptPendingUseCase(value, industry);
+        this.renderUseCasesForIndustry();
+        this.renderAdminPendingUseCases();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case accepted and added to industry.', 'success');
+    },
+
+    rejectPendingUseCaseFromAdmin(value, industry) {
+        if (typeof DataManager === 'undefined') return;
+        DataManager.rejectPendingUseCase(value, industry);
+        this.renderAdminPendingUseCases();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Suggestion rejected.', 'success');
     },
 
     loadAnalyticsSettings() {
@@ -1529,190 +1733,6 @@ const Admin = {
         }
     },
 
-    // Load promotable sales reps (from activities)
-    loadPromotableSalesReps() {
-        const promotable = DataManager.getSalesRepsFromActivities();
-        const container = document.getElementById('promotableSalesReps');
-        if (!container) return;
-
-        if (promotable.length === 0) {
-            container.innerHTML = '<p class="text-muted text-sm">No sales reps to promote</p>';
-            return;
-        }
-
-        let html = '';
-        promotable.forEach(name => {
-            html += `
-                <div class="flex items-center justify-between p-2 bg-gray-50 rounded mb-2">
-                    <span class="text-sm">${name}</span>
-                    <button class="btn btn-sm btn-primary" onclick="Admin.promoteSalesRep('${name}')">Promote</button>
-                </div>
-            `;
-        });
-        container.innerHTML = html;
-    },
-
-    promoteSalesRep(name) {
-        // Show modal to add email and region
-        const container = document.getElementById('modalsContainer');
-        const modalId = 'promoteSalesRepModal';
-        
-        if (document.getElementById(modalId)) {
-            document.getElementById(modalId).remove();
-        }
-
-        const modalHTML = `
-            <div id="${modalId}" class="modal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2 class="modal-title">Promote Sales Rep</h2>
-                        <button class="modal-close" onclick="UI.hideModal('${modalId}')">&times;</button>
-                    </div>
-                    <form id="promoteSalesRepForm" onsubmit="Admin.addPromotedSalesRep(event, '${name}')">
-                        <div class="form-group">
-                            <label class="form-label">Name</label>
-                            <input type="text" class="form-control" value="${name}" disabled>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label required">Email</label>
-                            <input type="email" class="form-control" id="promoteSalesRepEmail" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label required">Region</label>
-                            <select class="form-control" id="promoteSalesRepRegion" required>
-                                <option value="">Select Region</option>
-                                ${DataManager.getRegions().map(r => `<option value="${r}">${r}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" onclick="UI.hideModal('${modalId}')">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Add to Global List</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', modalHTML);
-        UI.showModal(modalId);
-    },
-
-    addPromotedSalesRep(event, name) {
-        event.preventDefault();
-        
-        const email = document.getElementById('promoteSalesRepEmail').value.trim();
-        const region = document.getElementById('promoteSalesRepRegion').value;
-
-        if (!email || !region) {
-            UI.showNotification('Please fill in all required fields', 'error');
-            return;
-        }
-
-        const salesRep = {
-            name: name,
-            email: email,
-            region: region,
-            isActive: true
-        };
-
-        const result = DataManager.addGlobalSalesRep(salesRep);
-        if (result) {
-            UI.hideModal('promoteSalesRepModal');
-            UI.showNotification('Sales rep promoted successfully', 'success');
-            this.loadSalesReps();
-            this.loadPromotableSalesReps();
-        } else {
-            UI.showNotification('Sales rep already exists', 'error');
-        }
-    },
-
-    // Admin Activities View
-    loadAdminActivities() {
-        const activities = DataManager.getAllActivities();
-        const container = document.getElementById('adminActivitiesTable');
-        if (!container) return;
-
-        // Populate filters
-        this.populateAdminFilters(activities);
-
-        // Filter activities
-        const filtered = this.filterAdminActivities(activities);
-
-        if (filtered.length === 0) {
-            container.innerHTML = '<p class="text-muted">No activities found</p>';
-            return;
-        }
-
-        let html = `
-            <table class="admin-activities-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>User</th>
-                        <th>Type</th>
-                        <th>Account</th>
-                        <th>Project</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        filtered.forEach(activity => {
-            html += `
-                <tr>
-                    <td>${UI.formatDate(activity.date || activity.createdAt)}</td>
-                    <td>${activity.userName || 'Unknown'}</td>
-                    <td><span class="badge ${activity.isInternal ? 'badge-internal' : 'badge-customer'}">${UI.getActivityTypeLabel(activity.type)}</span></td>
-                    <td>${activity.accountName || '-'}</td>
-                    <td>${activity.projectName || '-'}</td>
-                    <td>${UI.getActivitySummary(activity) || '-'}</td>
-                </tr>
-            `;
-        });
-
-        html += `
-                </tbody>
-            </table>
-        `;
-
-        container.innerHTML = html;
-    },
-
-    populateAdminFilters(activities) {
-        const users = DataManager.getUsers();
-        const regions = DataManager.getRegions();
-        
-        // User filter
-        const userFilter = document.getElementById('adminUserFilter');
-        if (userFilter) {
-            let html = '<option value="">All Users</option>';
-            users.forEach(user => {
-                html += `<option value="${user.id}">${user.username}</option>`;
-            });
-            userFilter.innerHTML = html;
-        }
-
-        // Region filter
-        const regionFilter = document.getElementById('adminRegionFilter');
-        if (regionFilter) {
-            let html = '<option value="">All Regions</option>';
-            regions.forEach(region => {
-                html += `<option value="${region}">${region}</option>`;
-            });
-            regionFilter.innerHTML = html;
-        }
-
-        // Activity type filter
-        const activityFilter = document.getElementById('adminActivityFilter');
-        if (activityFilter) {
-            const types = [...new Set(activities.map(a => a.type))];
-            let html = '<option value="">All Activity Types</option>';
-            types.forEach(type => {
-                html += `<option value="${type}">${UI.getActivityTypeLabel(type)}</option>`;
-            });
-            activityFilter.innerHTML = html;
-        }
-    },
 
     loadControls(force) {
         const container = document.getElementById('featureDashboardControls');
@@ -2517,75 +2537,6 @@ const Admin = {
         }
     },
 
-    filterAdminActivities(activities = null) {
-        if (!activities) {
-            activities = DataManager.getAllActivities();
-        }
-
-        const userId = document.getElementById('adminUserFilter')?.value;
-        const region = document.getElementById('adminRegionFilter')?.value;
-        const activityType = document.getElementById('adminActivityFilter')?.value;
-
-        let filtered = activities;
-
-        if (userId) {
-            filtered = filtered.filter(a => a.userId === userId);
-        }
-
-        if (region) {
-            filtered = filtered.filter(a => a.region === region || a.account?.region === region);
-        }
-
-        if (activityType) {
-            filtered = filtered.filter(a => a.type === activityType);
-        }
-
-        // Update table
-        const container = document.getElementById('adminActivitiesTable');
-        if (container) {
-            if (filtered.length === 0) {
-                container.innerHTML = '<p class="text-muted">No activities found</p>';
-                return filtered;
-            }
-
-            let html = `
-                <table class="admin-activities-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>User</th>
-                            <th>Type</th>
-                            <th>Account</th>
-                            <th>Project</th>
-                            <th>Details</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            filtered.forEach(activity => {
-                html += `
-                    <tr>
-                        <td>${UI.formatDate(activity.date || activity.createdAt)}</td>
-                        <td>${activity.userName || 'Unknown'}</td>
-                        <td><span class="badge ${activity.isInternal ? 'badge-internal' : 'badge-customer'}">${UI.getActivityTypeLabel(activity.type)}</span></td>
-                        <td>${activity.accountName || '-'}</td>
-                        <td>${activity.projectName || '-'}</td>
-                        <td>${UI.getActivitySummary(activity) || '-'}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        return filtered;
-    }
 };
 
 // Expose Admin globally

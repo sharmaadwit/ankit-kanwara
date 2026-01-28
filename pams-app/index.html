@@ -364,6 +364,7 @@
                         <button class="btn btn-outline admin-section-link" data-admin-nav="users">System Users</button>
                         <button class="btn btn-outline admin-section-link" data-admin-nav="sales">Sales Users</button>
                         <button class="btn btn-outline admin-section-link" data-admin-nav="regions">Regions</button>
+                        <button class="btn btn-outline admin-section-link" data-admin-nav="industryUseCases">Industry & Use Cases</button>
                         <button class="btn btn-outline admin-section-link" data-admin-nav="interface">Interface Settings</button>
                         <button class="btn btn-outline admin-section-link" data-admin-nav="analytics">Analytics Targets</button>
                         <button class="btn btn-outline admin-section-link" data-admin-nav="projectHealth">Project Health Filters</button>
@@ -428,6 +429,54 @@
                                 </div>
                                 <div class="card-body">
                                     <div id="regionsList" class="space-y-2"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Industry & Use Cases -->
+                        <div class="admin-section hidden" data-admin-section="industryUseCases">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h3>Industries</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group" style="display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap;">
+                                        <input type="text" id="adminNewIndustry" class="form-control" placeholder="New industry name" style="max-width: 280px;">
+                                        <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addIndustryFromAdmin()">Add Industry</button>
+                                    </div>
+                                    <div id="adminIndustriesList" class="space-y-2" style="margin-top: 1rem;"></div>
+                                </div>
+                            </div>
+                            <div class="card" style="margin-top: 1.5rem;">
+                                <div class="card-header">
+                                    <h3>Pending Industries (from &ldquo;Other&rdquo;)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted" style="margin-bottom: 0.75rem;">Accept or reject industry suggestions submitted by users when they chose &ldquo;Other&rdquo;.</p>
+                                    <div id="adminPendingIndustriesList" class="space-y-2"></div>
+                                </div>
+                            </div>
+                            <div class="card" style="margin-top: 1.5rem;">
+                                <div class="card-header">
+                                    <h3>Use Cases by Industry</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-group">
+                                        <label class="form-label">Industry</label>
+                                        <select id="adminUseCaseIndustrySelect" class="form-control" onchange="Admin.renderUseCasesForIndustry()" style="max-width: 320px;">
+                                            <option value="">Select industry...</option>
+                                        </select>
+                                    </div>
+                                    <div id="adminUseCasesPanel" style="margin-top: 1rem;"></div>
+                                </div>
+                            </div>
+                            <div class="card" style="margin-top: 1.5rem;">
+                                <div class="card-header">
+                                    <h3>Pending Use Cases (from &ldquo;Other&rdquo;)</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted" style="margin-bottom: 0.75rem;">Accept or reject use case suggestions; accepted items are added to the selected industry.</p>
+                                    <div id="adminPendingUseCasesList" class="space-y-2"></div>
                                 </div>
                             </div>
                         </div>
