@@ -353,57 +353,98 @@
 
                 <!-- Admin & Settings View -->
                 <div id="adminView" class="view hidden">
-                    <div class="page-header">
-                        <h1 class="page-title">Admin & Settings</h1>
-                        <p class="page-subtitle">Choose a module below to manage platform configuration without endless scrolling.</p>
-                    </div>
-
-                    <div class="admin-sections-help text-muted">Select a module to open its tools. Only the chosen module loads, keeping the page fast.</div>
-
-                    <div class="admin-sections-nav" id="adminSectionsNav">
-                        <div class="admin-nav-groups">
-                            <div class="admin-nav-group">
-                                <div class="admin-nav-group-label">Users & Access</div>
-                                <div class="admin-nav-group-buttons">
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="users">System Users</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="sales">Sales Users</button>
-                                </div>
+                    <div class="admin-layout">
+                        <!-- Admin Sidebar -->
+                        <div class="admin-sidebar">
+                            <div class="admin-sidebar-header">
+                                <h2>Admin & Settings</h2>
                             </div>
-                            <div class="admin-nav-group">
-                                <div class="admin-nav-group-label">Configuration</div>
-                                <div class="admin-nav-group-buttons">
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="regions">Regions</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="industryUseCases">Industry & Use Cases</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="interface">Interface</button>
+                            <nav class="admin-sidebar-nav" id="adminSectionsNav">
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Users & Access</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="users" onclick="Admin.openAdminSection('users', event)">
+                                            <span>System Users</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="sales" onclick="Admin.openAdminSection('sales', event)">
+                                            <span>Sales Users</span>
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="admin-nav-group">
-                                <div class="admin-nav-group-label">Analytics</div>
-                                <div class="admin-nav-group-buttons">
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="analytics">Targets</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="reports">Reports</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="monthly">Export</button>
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Configuration</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="regions" onclick="Admin.openAdminSection('regions', event)">
+                                            <span>Regions</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="industryUseCases" onclick="Admin.openAdminSection('industryUseCases', event)">
+                                            <span>Industry & Use Cases</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="interface" onclick="Admin.openAdminSection('interface', event)">
+                                            <span>Interface</span>
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="admin-nav-group">
-                                <div class="admin-nav-group-label">Monitoring</div>
-                                <div class="admin-nav-group-buttons">
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="login">Login Activity</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="audit">Audit Log</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="projectHealth">Project Health</button>
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Analytics</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="analytics" onclick="Admin.openAdminSection('analytics', event)">
+                                            <span>Targets</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="reports" onclick="Admin.openAdminSection('reports', event)">
+                                            <span>Reports</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="monthly" onclick="Admin.openAdminSection('monthly', event)">
+                                            <span>Export</span>
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="admin-nav-group">
-                                <div class="admin-nav-group-label">Features</div>
-                                <div class="admin-nav-group-buttons">
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="features">Feature Flags</button>
-                                    <button class="btn btn-outline admin-section-link" data-admin-nav="poc">POC Sandbox</button>
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Monitoring</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="login" onclick="Admin.openAdminSection('login', event)">
+                                            <span>Login Activity</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="audit" onclick="Admin.openAdminSection('audit', event)">
+                                            <span>Audit Log</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="projectHealth" onclick="Admin.openAdminSection('projectHealth', event)">
+                                            <span>Project Health</span>
+                                        </a>
+                                    </div>
                                 </div>
-                            </div>
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Features</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="features" onclick="Admin.openAdminSection('features', event)">
+                                            <span>Feature Flags</span>
+                                        </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="poc" onclick="Admin.openAdminSection('poc', event)">
+                                            <span>POC Sandbox</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </nav>
                         </div>
-                    </div>
 
-                    <div id="adminSectionsContainer">
+                        <!-- Admin Content Area -->
+                        <div class="admin-content">
+                            <div id="adminSectionsContainer">
                         <!-- System Users -->
                         <div class="admin-section hidden" data-admin-section="users">
                             <div class="card">
@@ -704,6 +745,8 @@
                                     <p class="text-muted" style="margin-bottom:1rem;">Review sandbox allocations, update statuses, and capture POC progress from the dedicated admin workspace.</p>
                                     <button class="btn btn-outline" onclick="App.switchView('adminPoc')">Open POC Sandbox Manager</button>
                                 </div>
+                            </div>
+                        </div>
                             </div>
                         </div>
                     </div>

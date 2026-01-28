@@ -144,9 +144,16 @@ const Admin = {
                 monthInput.value = new Date().toISOString().substring(0, 7);
             }
 
-            const firstSectionButton = document.querySelector('#adminSectionsNav [data-admin-nav]');
-            if (firstSectionButton) {
-                this.openSection(firstSectionButton.dataset.adminNav);
+            // Open first section by default
+            const firstSectionItem = document.querySelector('#adminSectionsNav [data-admin-nav]');
+            if (firstSectionItem) {
+                this.openAdminSection(firstSectionItem.dataset.adminNav);
+            } else {
+                // Show empty state if no sections
+                const container = document.getElementById('adminSectionsContainer');
+                if (container) {
+                    container.innerHTML = '<div class="admin-content-empty">Select an option from the sidebar to get started</div>';
+                }
             }
         } catch (error) {
             console.error('Error loading admin panel:', error);
@@ -155,21 +162,42 @@ const Admin = {
     },
 
     setupSectionNavigation() {
-        const nav = document.getElementById('adminSectionsNav');
-        if (!nav) return;
-
-        nav.querySelectorAll('[data-admin-nav]').forEach((button) => {
-            button.addEventListener('click', () => {
-                const section = button.dataset.adminNav;
-                if (section) {
-                    this.openSection(section);
-                }
-            });
+        // Expand all nav groups by default for easier navigation
+        document.querySelectorAll('.admin-nav-group').forEach(group => {
+            group.classList.add('expanded');
         });
     },
 
+    toggleNavGroup(header) {
+        const group = header.closest('.admin-nav-group');
+        if (group) {
+            group.classList.toggle('expanded');
+        }
+    },
+
+    openAdminSection(sectionId, event) {
+        if (event) {
+            event.preventDefault();
+        }
+        this.openSection(sectionId);
+        
+        // Update active nav item
+        document.querySelectorAll('.admin-nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        const activeItem = document.querySelector(`[data-admin-nav="${sectionId}"]`);
+        if (activeItem) {
+            activeItem.classList.add('active');
+            // Expand parent group if collapsed
+            const parentGroup = activeItem.closest('.admin-nav-group');
+            if (parentGroup && !parentGroup.classList.contains('expanded')) {
+                parentGroup.classList.add('expanded');
+            }
+        }
+    },
+
     openSection(sectionId) {
-        if (!sectionId || this.activeSection === sectionId) {
+        if (!sectionId) {
             return;
         }
 
@@ -177,10 +205,13 @@ const Admin = {
         sections.forEach((section) => {
             const matches = section.dataset.adminSection === sectionId;
             section.classList.toggle('hidden', !matches);
-            if (matches) {
-                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
         });
+
+        // Scroll to top of content area
+        const contentArea = document.querySelector('.admin-content');
+        if (contentArea) {
+            contentArea.scrollTo({ top: 0, behavior: 'smooth' });
+        }
 
         this.markActiveSectionButton(sectionId);
         this.ensureSectionLoaded(sectionId);
@@ -188,13 +219,8 @@ const Admin = {
     },
 
     markActiveSectionButton(sectionId) {
-        const nav = document.getElementById('adminSectionsNav');
-        if (!nav) return;
-
-        nav.querySelectorAll('[data-admin-nav]').forEach((button) => {
-            const isActive = button.dataset.adminNav === sectionId;
-            button.classList.toggle('active', isActive);
-        });
+        // Active state is now handled by openAdminSection
+        // This method kept for compatibility but sidebar handles it differently
     },
 
     ensureSectionLoaded(sectionId) {
