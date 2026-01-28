@@ -167,6 +167,35 @@ const ReportsV2 = {
         try {
             // Destroy existing charts before re-rendering
             this.destroyCharts();
+            
+            // Also destroy any Chart.js instances that might be lingering on canvases
+            if (typeof Chart !== 'undefined' && Chart.getChart) {
+                const chartCanvases = [
+                    'internalExternalChart',
+                    'activityBreakdownChart',
+                    'presalesActivityChart',
+                    'missingSfdcRegionalChart',
+                    'industryRegionalChart',
+                    'missingSfdcSalesRepChart',
+                    'salesRepRequestsChart',
+                    'industryTotalChart',
+                    'industryAverageChart'
+                ];
+                
+                chartCanvases.forEach(canvasId => {
+                    const canvas = document.getElementById(canvasId);
+                    if (canvas) {
+                        const existingChart = Chart.getChart(canvas);
+                        if (existingChart) {
+                            try {
+                                existingChart.destroy();
+                            } catch (e) {
+                                console.warn(`Error destroying chart on ${canvasId}:`, e);
+                            }
+                        }
+                    }
+                });
+            }
 
             const activities = this.getPeriodActivities();
             const periodLabel = this.formatPeriod(this.currentPeriod);
@@ -1015,14 +1044,27 @@ const ReportsV2 = {
             return;
         }
 
-        // Destroy existing chart if it exists
+        // Destroy existing chart if it exists (check both our cache and Chart.js registry)
         if (this.charts[canvasId]) {
             try {
                 this.charts[canvasId].destroy();
             } catch (e) {
-                console.warn(`Error destroying chart ${canvasId}:`, e);
+                console.warn(`Error destroying chart ${canvasId} from cache:`, e);
             }
             delete this.charts[canvasId];
+        }
+        
+        // Also check if Chart.js has a chart instance on this canvas
+        if (Chart.getChart && Chart.getChart(canvas)) {
+            try {
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) {
+                    existingChart.destroy();
+                    console.log(`Destroyed existing Chart.js instance on ${canvasId}`);
+                }
+            } catch (e) {
+                console.warn(`Error destroying Chart.js instance on ${canvasId}:`, e);
+            }
         }
 
         // Default colors if not provided
