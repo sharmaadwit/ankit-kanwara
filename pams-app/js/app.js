@@ -1020,7 +1020,13 @@ const App = {
     // Load card-based dashboard
     loadCardDashboard() {
         const dashboardView = document.getElementById('dashboardView');
-        if (!dashboardView) return;
+        if (!dashboardView) {
+            console.error('Dashboard view element not found');
+            return;
+        }
+        
+        // Clear any existing content first
+        dashboardView.innerHTML = '';
         
         // Destroy existing charts before reloading
         this.destroyDashboardCharts();
