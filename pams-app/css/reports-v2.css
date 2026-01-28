@@ -215,6 +215,9 @@
 /* Chart containers */
 .reports-v2-card-body canvas {
     max-height: 300px;
+    min-height: 200px;
+    width: 100% !important;
+    height: auto !important;
 }
 
 /* Responsive */

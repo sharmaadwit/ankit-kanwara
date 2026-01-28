@@ -1083,16 +1083,38 @@ const ReportsV2 = {
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
         
         console.log(`Creating pie chart ${canvasId} with data:`, { labels, data, colors: chartColors });
-        console.log(`Canvas element:`, canvas, `Canvas dimensions:`, canvas.width, canvas.height);
+        console.log(`Canvas element:`, canvas, `Canvas dimensions:`, canvas.width, canvas.height, `offset:`, canvas.offsetWidth, 'x', canvas.offsetHeight);
 
         try {
-            // Ensure canvas is visible and has dimensions
-            if (canvas.offsetWidth === 0 || canvas.offsetHeight === 0) {
-                console.warn(`Canvas ${canvasId} has zero dimensions, waiting for layout...`);
-                setTimeout(() => {
-                    this.renderPieChart(canvasId, { labels, data, colors });
-                }, 200);
-                return;
+            // Ensure canvas is visible and has dimensions - use getBoundingClientRect for more reliable check
+            const rect = canvas.getBoundingClientRect();
+            const hasDimensions = rect.width > 0 && rect.height > 0;
+            
+            if (!hasDimensions) {
+                // Check if parent container has dimensions
+                const parent = canvas.parentElement;
+                const parentRect = parent ? parent.getBoundingClientRect() : null;
+                console.warn(`Canvas ${canvasId} has zero dimensions. Parent:`, parentRect);
+                
+                // Set explicit dimensions if parent has them
+                if (parentRect && parentRect.width > 0 && parentRect.height > 0) {
+                    canvas.style.width = parentRect.width + 'px';
+                    canvas.style.height = Math.min(parentRect.height, 200) + 'px';
+                    console.log(`Set explicit dimensions for ${canvasId}:`, canvas.style.width, canvas.style.height);
+                } else {
+                    // Only retry a few times to prevent infinite loops
+                    const retryCount = (canvas.dataset.retryCount || 0);
+                    if (retryCount < 3) {
+                        canvas.dataset.retryCount = String(parseInt(retryCount) + 1);
+                        console.warn(`Canvas ${canvasId} has zero dimensions, retry ${retryCount + 1}/3...`);
+                        setTimeout(() => {
+                            this.renderPieChart(canvasId, { labels, data, colors });
+                        }, 300);
+                        return;
+                    } else {
+                        console.error(`Canvas ${canvasId} still has zero dimensions after 3 retries, proceeding anyway`);
+                    }
+                }
             }
 
             this.charts[canvasId] = new Chart(canvas, {
@@ -1108,8 +1130,7 @@ const ReportsV2 = {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
-                    aspectRatio: 1.5,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
                             display: false
