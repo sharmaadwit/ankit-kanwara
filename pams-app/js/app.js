@@ -1080,9 +1080,9 @@ const App = {
             }).length
             : 0;
         
-        // All regions breakdown for bar chart
+        // All regions breakdown for bar chart (EXTERNAL ACTIVITIES ONLY)
         const regionBreakdown = {};
-        monthActivities.forEach(a => {
+        monthActivities.filter(a => !a.isInternal).forEach(a => {
             const account = DataManager.getAccountById(a.accountId);
             const user = DataManager.getUserById(a.userId);
             const region = DataManager.resolveActivityRegion(a, account, user) || 'Unassigned';
@@ -1128,6 +1128,13 @@ const App = {
         });
         
         let html = `
+            <!-- Log Activity Button -->
+            <div style="margin-bottom: 2rem; display: flex; justify-content: flex-start;">
+                <button class="btn btn-primary" onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
+                    + Log Activity
+                </button>
+            </div>
+            
             <!-- Quick Stats Row -->
             <div class="dashboard-stats-row">
                 <div class="dashboard-stat-card">
@@ -1159,14 +1166,14 @@ const App = {
                         <h3>Internal vs External</h3>
                         <span class="text-muted">This Month</span>
                     </div>
-                    <canvas id="internalExternalChart" style="max-height: 300px;"></canvas>
+                    <canvas id="internalExternalChart" style="max-height: 200px;"></canvas>
                 </div>
                 <div class="dashboard-chart-card">
                     <div class="dashboard-chart-header">
                         <h3>Call Types</h3>
                         <span class="text-muted">External Activities</span>
                     </div>
-                    <canvas id="callTypesChart" style="max-height: 300px;"></canvas>
+                    <canvas id="callTypesChart" style="max-height: 200px;"></canvas>
                 </div>
             </div>
             
@@ -1175,9 +1182,9 @@ const App = {
                 <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
                     <div class="dashboard-chart-header">
                         <h3>Region Activity</h3>
-                        <span class="text-muted">${defaultRegion ? `Default: ${defaultRegion}` : 'All Regions'} - This Month</span>
+                        <span class="text-muted">${defaultRegion ? `Default: ${defaultRegion}` : 'All Regions'} - This Month (External Only)</span>
                     </div>
-                    <canvas id="regionActivityChart" style="max-height: 300px;"></canvas>
+                    <canvas id="regionActivityChart" style="max-height: 200px;"></canvas>
                 </div>
             </div>
             
@@ -1249,89 +1256,6 @@ const App = {
                 </div>
             </div>
             ` : ''}
-            
-            <!-- Navigation Cards (3-column layout) -->
-            <div class="card-grid minimal-nav">
-                <!-- Log Activity - First Card -->
-                <div class="nav-card clickable log-activity" data-dashboard="logActivity" onclick="Activities.openActivityModal()">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Log Activity</div>
-                    <div class="nav-card-subtitle">Create a new activity</div>
-                </div>
-                
-                <div class="nav-card clickable activities" data-dashboard="activities" onclick="App.navigateToCardView('activities')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">All Activities</div>
-                    <div class="nav-card-subtitle">View and manage activities</div>
-                </div>
-                
-                <div class="nav-card clickable winloss" data-feature="winLoss" data-dashboard="winLoss" onclick="App.navigateToCardView('winloss')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Win/Loss</div>
-                    <div class="nav-card-subtitle">Track project wins and losses</div>
-                </div>
-                
-                <div class="nav-card clickable reports" data-dashboard="reports" onclick="App.navigateToCardView('reports')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Reports</div>
-                    <div class="nav-card-subtitle">Activity reports and analytics</div>
-                </div>
-                
-                <div class="nav-card clickable import" data-feature="csvImport" data-dashboard="csvImport" onclick="App.navigateToCardView('import')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-                            <polyline points="7 9 12 4 17 9"></polyline>
-                            <line x1="12" y1="4" x2="12" y2="16"></line>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Import CSV</div>
-                    <div class="nav-card-subtitle">Bulk upload activities</div>
-                </div>
-                
-        `;
-        
-        // Add Admin card if user is admin
-        if (Auth.isAdmin()) {
-            html += `
-                <div class="nav-card clickable admin" data-dashboard="admin" onclick="App.navigateToCardView('admin')">
-                    <div class="nav-card-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                    </div>
-                    <div class="nav-card-title">Admin & Settings</div>
-                    <div class="nav-card-subtitle">System administration</div>
-                </div>
-            `;
-        }
-        
-        html += `</div>`;
         
         dashboardView.innerHTML = html;
         this.applyAppConfiguration();
