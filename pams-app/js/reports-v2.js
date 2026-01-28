@@ -138,10 +138,12 @@ const ReportsV2 = {
             </div>
         `;
 
-        // Initialize charts after render
-        setTimeout(() => {
-            this.initCharts(activities);
-        }, 100);
+        // Initialize charts after render - use requestAnimationFrame for better timing
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                this.initCharts(activities);
+            }, 50);
+        });
     },
 
     // Render tab navigation
@@ -911,17 +913,33 @@ const ReportsV2 = {
     // Chart rendering helpers
     renderPieChart(canvasId, { labels, data, colors }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') return;
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
+        }
 
+        // Ensure data is valid
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.warn(`Invalid data for chart ${canvasId}`);
+            return;
+        }
+
+        // Destroy existing chart if it exists
         if (this.charts[canvasId]) {
-            this.charts[canvasId].destroy();
+            try {
+                this.charts[canvasId].destroy();
+            } catch (e) {
+                console.warn(`Error destroying chart ${canvasId}:`, e);
+            }
+            delete this.charts[canvasId];
         }
 
         // Default colors if not provided
         const defaultColors = ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'];
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
 
-        this.charts[canvasId] = new Chart(canvas, {
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
             type: 'pie',
             data: {
                 labels: labels,
@@ -957,13 +975,29 @@ const ReportsV2 = {
 
     renderBarChart(canvasId, { labels, data, label }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') return;
-
-        if (this.charts[canvasId]) {
-            this.charts[canvasId].destroy();
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
         }
 
-        this.charts[canvasId] = new Chart(canvas, {
+        // Ensure data is valid
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.warn(`Invalid data for chart ${canvasId}`);
+            return;
+        }
+
+        // Destroy existing chart if it exists
+        if (this.charts[canvasId]) {
+            try {
+                this.charts[canvasId].destroy();
+            } catch (e) {
+                console.warn(`Error destroying chart ${canvasId}:`, e);
+            }
+            delete this.charts[canvasId];
+        }
+
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -993,17 +1027,36 @@ const ReportsV2 = {
                 }
             }
         });
+        } catch (error) {
+            console.error(`Error creating bar chart ${canvasId}:`, error);
+        }
     },
 
     renderHorizontalBarChart(canvasId, { labels, data, label }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') return;
-
-        if (this.charts[canvasId]) {
-            this.charts[canvasId].destroy();
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
         }
 
-        this.charts[canvasId] = new Chart(canvas, {
+        // Ensure data is valid
+        if (!data || !Array.isArray(data) || data.length === 0) {
+            console.warn(`Invalid data for chart ${canvasId}`);
+            return;
+        }
+
+        // Destroy existing chart if it exists
+        if (this.charts[canvasId]) {
+            try {
+                this.charts[canvasId].destroy();
+            } catch (e) {
+                console.warn(`Error destroying chart ${canvasId}:`, e);
+            }
+            delete this.charts[canvasId];
+        }
+
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -1034,6 +1087,9 @@ const ReportsV2 = {
                 }
             }
         });
+        } catch (error) {
+            console.error(`Error creating horizontal bar chart ${canvasId}:`, error);
+        }
     },
 
     // Initialize Activity Breakdown chart separately (for filter changes)
@@ -1135,13 +1191,29 @@ const ReportsV2 = {
     // Render Stacked Bar Chart
     renderStackedBarChart(canvasId, { labels, datasets }) {
         const canvas = document.getElementById(canvasId);
-        if (!canvas || typeof Chart === 'undefined') return;
-
-        if (this.charts[canvasId]) {
-            this.charts[canvasId].destroy();
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
         }
 
-        this.charts[canvasId] = new Chart(canvas, {
+        // Ensure data is valid
+        if (!datasets || !Array.isArray(datasets) || datasets.length === 0) {
+            console.warn(`Invalid datasets for chart ${canvasId}`);
+            return;
+        }
+
+        // Destroy existing chart if it exists
+        if (this.charts[canvasId]) {
+            try {
+                this.charts[canvasId].destroy();
+            } catch (e) {
+                console.warn(`Error destroying chart ${canvasId}:`, e);
+            }
+            delete this.charts[canvasId];
+        }
+
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels: labels,
@@ -1171,6 +1243,9 @@ const ReportsV2 = {
                 }
             }
         });
+        } catch (error) {
+            console.error(`Error creating stacked bar chart ${canvasId}:`, error);
+        }
     }
 };
 

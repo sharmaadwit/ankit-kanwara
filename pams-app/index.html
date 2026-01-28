@@ -138,13 +138,20 @@
                         </svg>
                         <span>Reports</span>
                     </a></li>
-                    <li id="adminNav" class="hidden" data-dashboard="admin"><a href="#" data-view="admin" class="sidebar-link">
+                    <li id="systemAdminNav" class="hidden" data-dashboard="systemAdmin" data-admin-only="true"><a href="#" data-view="systemAdmin" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
                             <path d="M2 17l10 5 10-5"></path>
                             <path d="M2 12l10 5 10-5"></path>
                         </svg>
-                        <span>Admin & Settings</span>
+                        <span>System Admin</span>
+                    </a></li>
+                    <li id="configurationNav" class="hidden" data-dashboard="configuration" data-admin-only="true"><a href="#" data-view="configuration" class="sidebar-link">
+                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
+                        </svg>
+                        <span>Configuration</span>
                     </a></li>
                 </ul>
             </nav>
