@@ -1026,6 +1026,9 @@ const App = {
                     this.switchView('dashboard');
                 }
                 break;
+            case 'suggestionsBugs':
+                this.loadSuggestionsBugsView();
+                break;
         }
     },
 
@@ -2428,6 +2431,230 @@ const App = {
                 header.appendChild(backBtn);
             }
         }
+    },
+
+    // --- Suggestions and Bugs ---
+    loadSuggestionsBugsView() {
+        const listEl = document.getElementById('suggestionsBugsList');
+        if (!listEl) return;
+        const entries = (typeof DataManager !== 'undefined' && DataManager.getSuggestionsAndBugs) ? DataManager.getSuggestionsAndBugs() : [];
+        const sorted = [...entries].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        const user = typeof Auth !== 'undefined' && Auth.currentUser ? Auth.currentUser : null;
+        const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
+        const canEdit = (e) => user && (e.ownerId === user.id || isAdmin);
+
+        if (sorted.length === 0) {
+            listEl.innerHTML = `
+                <div class="suggestions-bugs-empty">
+                    <p>No suggestions or bugs yet. Use <strong>+ New suggestion or bug</strong> to add one.</p>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = sorted.map((e) => {
+            const comments = Array.isArray(e.comments) ? e.comments : [];
+            const showEditDelete = canEdit(e);
+            const createdAt = e.createdAt ? UI.formatDate ? UI.formatDate(e.createdAt) : e.createdAt : '';
+            const updatedAt = e.updatedAt ? UI.formatDate ? UI.formatDate(e.updatedAt) : e.updatedAt : '';
+            const updatedLine = e.updatedAt && e.updatedAt !== e.createdAt ? ` · Updated ${updatedAt}` : '';
+            const commentsHtml = comments.map((c) => {
+                const cDate = c.createdAt ? (UI.formatDate ? UI.formatDate(c.createdAt) : c.createdAt) : '';
+                return `<div class="suggestions-bugs-comment"><strong>${(c.authorName || 'Unknown').replace(/</g, '&lt;')}</strong> <span class="suggestions-bugs-comment-date">${cDate}</span><p class="suggestions-bugs-comment-text">${(c.text || '').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p></div>`;
+            }).join('');
+            return `
+                <div class="suggestions-bugs-card" data-entry-id="${(e.id || '').replace(/"/g, '&quot;')}">
+                    <div class="suggestions-bugs-card-header">
+                        <h3 class="suggestions-bugs-card-title">${(e.header || '').replace(/</g, '&lt;')}</h3>
+                        ${showEditDelete ? `<span class="suggestions-bugs-actions"><button type="button" class="btn btn-link btn-sm" onclick="App.openSuggestionsBugsModal('${(e.id || '').replace(/'/g, "\\'")}')">Edit</button> <button type="button" class="btn btn-link btn-sm text-danger" onclick="App.deleteSuggestionsBugs('${(e.id || '').replace(/'/g, "\\'")}')">Delete</button></span>` : ''}
+                    </div>
+                    <p class="suggestions-bugs-card-description">${(e.description || '').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>
+                    <div class="suggestions-bugs-card-meta">By ${(e.ownerName || 'Unknown').replace(/</g, '&lt;')} · ${createdAt}${updatedLine}</div>
+                    <div class="suggestions-bugs-comments">
+                        <div class="suggestions-bugs-comments-list">${commentsHtml}</div>
+                        <div class="suggestions-bugs-add-comment">
+                            <input type="text" class="form-control suggestions-bugs-comment-input" placeholder="Add a comment..." data-entry-id="${(e.id || '').replace(/"/g, '&quot;')}">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="App.addSuggestionsBugsComment('${(e.id || '').replace(/'/g, "\\'")}')">Comment</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        listEl.querySelectorAll('.suggestions-bugs-comment-input').forEach((input) => {
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    App.addSuggestionsBugsComment(input.dataset.entryId);
+                }
+            });
+        });
+    },
+
+    openSuggestionsBugsModal(entryId) {
+        const modalId = 'suggestionsBugsModal';
+        let modal = document.getElementById(modalId);
+        if (!modal) {
+            const container = document.getElementById('modalsContainer');
+            if (!container) return;
+            const modalHTML = `
+                <div id="${modalId}" class="modal">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2 class="modal-title" id="suggestionsBugsModalTitle">New suggestion or bug</h2>
+                            <button class="modal-close" onclick="App.closeSuggestionsBugsModal()">&times;</button>
+                        </div>
+                        <form id="suggestionsBugsForm" onsubmit="App.saveSuggestionsBugs(event)">
+                            <input type="hidden" id="suggestionsBugsEntryId" value="">
+                            <div class="form-group">
+                                <label class="form-label required">Header</label>
+                                <input type="text" class="form-control" id="suggestionsBugsHeader" required placeholder="Short title">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label required">Description</label>
+                                <textarea class="form-control" id="suggestionsBugsDescription" rows="4" required placeholder="Describe your suggestion or bug..."></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" onclick="App.closeSuggestionsBugsModal()">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', modalHTML);
+            modal = document.getElementById(modalId);
+        }
+        const titleEl = document.getElementById('suggestionsBugsModalTitle');
+        const idInput = document.getElementById('suggestionsBugsEntryId');
+        const headerInput = document.getElementById('suggestionsBugsHeader');
+        const descInput = document.getElementById('suggestionsBugsDescription');
+        if (entryId) {
+            const entries = DataManager.getSuggestionsAndBugs();
+            const entry = entries.find((e) => e.id === entryId);
+            if (entry) {
+                if (titleEl) titleEl.textContent = 'Edit suggestion or bug';
+                if (idInput) idInput.value = entry.id;
+                if (headerInput) headerInput.value = entry.header || '';
+                if (descInput) descInput.value = entry.description || '';
+            } else {
+                if (titleEl) titleEl.textContent = 'New suggestion or bug';
+                if (idInput) idInput.value = '';
+                if (headerInput) headerInput.value = '';
+                if (descInput) descInput.value = '';
+            }
+        } else {
+            if (titleEl) titleEl.textContent = 'New suggestion or bug';
+            if (idInput) idInput.value = '';
+            if (headerInput) headerInput.value = '';
+            if (descInput) descInput.value = '';
+        }
+        UI.showModal(modalId);
+    },
+
+    closeSuggestionsBugsModal() {
+        UI.hideModal('suggestionsBugsModal');
+    },
+
+    saveSuggestionsBugs(event) {
+        if (event) event.preventDefault();
+        const idInput = document.getElementById('suggestionsBugsEntryId');
+        const headerInput = document.getElementById('suggestionsBugsHeader');
+        const descInput = document.getElementById('suggestionsBugsDescription');
+        if (!headerInput || !descInput || !DataManager || !DataManager.getSuggestionsAndBugs || !DataManager.saveSuggestionsAndBugs) return;
+        const header = (headerInput.value || '').trim();
+        const description = (descInput.value || '').trim();
+        if (!header || !description) {
+            UI.showNotification('Header and description are required', 'error');
+            return;
+        }
+        const user = Auth && Auth.currentUser;
+        if (!user) {
+            UI.showNotification('You must be logged in to submit.', 'error');
+            return;
+        }
+        const entries = DataManager.getSuggestionsAndBugs();
+        const existingId = (idInput && idInput.value) || null;
+        if (existingId) {
+            const entry = entries.find((e) => e.id === existingId);
+            if (!entry) {
+                UI.showNotification('Entry not found.', 'error');
+                return;
+            }
+            const isAdmin = Auth.isAdmin && Auth.isAdmin();
+            if (entry.ownerId !== user.id && !isAdmin) {
+                UI.showNotification('Only the author or an admin can edit.', 'error');
+                return;
+            }
+            entry.header = header;
+            entry.description = description;
+            entry.updatedAt = new Date().toISOString();
+            DataManager.saveSuggestionsAndBugs(entries);
+            UI.showNotification('Updated.');
+            this.closeSuggestionsBugsModal();
+        } else {
+            const newEntry = {
+                id: 'sb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+                header,
+                description,
+                ownerId: user.id,
+                ownerName: user.username || user.name || 'Unknown',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                comments: []
+            };
+            entries.push(newEntry);
+            DataManager.saveSuggestionsAndBugs(entries);
+            UI.showNotification('Submitted.');
+            this.closeSuggestionsBugsModal();
+        }
+        this.loadSuggestionsBugsView();
+    },
+
+    deleteSuggestionsBugs(entryId) {
+        if (!entryId || !DataManager || !DataManager.getSuggestionsAndBugs || !DataManager.saveSuggestionsAndBugs) return;
+        const user = Auth && Auth.currentUser;
+        if (!user) return;
+        const isAdmin = Auth.isAdmin && Auth.isAdmin();
+        const entries = DataManager.getSuggestionsAndBugs();
+        const entry = entries.find((e) => e.id === entryId);
+        if (!entry) return;
+        if (entry.ownerId !== user.id && !isAdmin) {
+            UI.showNotification('Only the author or an admin can delete.', 'error');
+            return;
+        }
+        if (!window.confirm('Delete this suggestion/bug? This cannot be undone.')) return;
+        const filtered = entries.filter((e) => e.id !== entryId);
+        DataManager.saveSuggestionsAndBugs(filtered);
+        UI.showNotification('Deleted.');
+        this.loadSuggestionsBugsView();
+    },
+
+    addSuggestionsBugsComment(entryId) {
+        if (!entryId || !DataManager || !DataManager.getSuggestionsAndBugs || !DataManager.saveSuggestionsAndBugs) return;
+        const user = Auth && Auth.currentUser;
+        if (!user) {
+            UI.showNotification('You must be logged in to comment.', 'error');
+            return;
+        }
+        const card = Array.from(document.querySelectorAll('.suggestions-bugs-card')).find((el) => el.getAttribute('data-entry-id') === entryId);
+        const input = card ? card.querySelector('.suggestions-bugs-comment-input') : null;
+        const text = (input && input.value) ? input.value.trim() : '';
+        if (!text) return;
+        const entries = DataManager.getSuggestionsAndBugs();
+        const entry = entries.find((e) => e.id === entryId);
+        if (!entry) return;
+        if (!Array.isArray(entry.comments)) entry.comments = [];
+        entry.comments.push({
+            id: 'sbc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+            authorId: user.id,
+            authorName: user.username || user.name || 'Unknown',
+            text,
+            createdAt: new Date().toISOString()
+        });
+        DataManager.saveSuggestionsAndBugs(entries);
+        if (input) input.value = '';
+        this.loadSuggestionsBugsView();
     },
 
     // Filter win/loss

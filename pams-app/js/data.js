@@ -114,6 +114,7 @@ const INDUSTRIES_KEY = 'industries';
 const INDUSTRY_USE_CASES_KEY = 'industryUseCases';
 const PENDING_INDUSTRIES_KEY = 'pendingIndustries';
 const PENDING_USE_CASES_KEY = 'pendingUseCases';
+const SUGGESTIONS_AND_BUGS_KEY = 'suggestionsAndBugs';
 
 const DEFAULT_INDUSTRY_USE_CASES = {
     'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Customer Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
@@ -1092,6 +1093,20 @@ const DataManager = {
 
     savePendingUseCases(list) {
         localStorage.setItem(PENDING_USE_CASES_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    },
+
+    getSuggestionsAndBugs() {
+        try {
+            const stored = localStorage.getItem(SUGGESTIONS_AND_BUGS_KEY);
+            const list = stored ? JSON.parse(stored) : [];
+            return Array.isArray(list) ? list : [];
+        } catch (e) {
+            return [];
+        }
+    },
+
+    saveSuggestionsAndBugs(list) {
+        localStorage.setItem(SUGGESTIONS_AND_BUGS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
     },
 
     addPendingUseCase(value, industry, meta = {}) {

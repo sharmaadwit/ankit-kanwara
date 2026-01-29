@@ -138,6 +138,12 @@
                         </svg>
                         <span>Reports</span>
                     </a></li>
+                    <li data-dashboard="suggestionsBugs"><a href="#" data-view="suggestionsBugs" class="sidebar-link">
+                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>Suggestions and Bugs</span>
+                    </a></li>
                     <li id="systemAdminNav" class="hidden" data-dashboard="systemAdmin" data-admin-only="true"><a href="#" data-view="systemAdmin" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
@@ -311,6 +317,18 @@
                         <p class="page-subtitle">Explore activity trends, product insights, regional performance, and custom tables.</p>
                     </div>
                     <div id="reportsContent"></div>
+                </div>
+
+                <!-- Suggestions and Bugs View -->
+                <div id="suggestionsBugsView" class="view hidden">
+                    <div class="page-header suggestions-bugs-header">
+                        <h1 class="page-title">Suggestions and Bugs</h1>
+                        <p class="page-subtitle">Share feedback, suggestions, or report bugs. Everyone can view and comment; only the author or an admin can edit or delete.</p>
+                        <div class="action-bar" style="margin-top: 0.75rem;">
+                            <button type="button" class="btn btn-primary" id="suggestionsBugsNewBtn" onclick="App.openSuggestionsBugsModal()">+ New suggestion or bug</button>
+                        </div>
+                    </div>
+                    <div id="suggestionsBugsList" class="suggestions-bugs-list"></div>
                 </div>
 
                 <!-- Accounts View -->
