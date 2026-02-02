@@ -40,8 +40,9 @@ function maybeDecompress(raw) {
 
 router.post('/reset-password', async (req, res) => {
   try {
-    const username = (req.body?.username || '').trim();
-    const newPassword = (req.body?.password || DEFAULT_PASSWORD).trim();
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const username = (body.username != null ? String(body.username) : '').trim();
+    const newPassword = (body.password != null ? String(body.password) : DEFAULT_PASSWORD).trim();
 
     if (!username) {
       return res.status(400).json({ message: 'Username is required' });
@@ -61,11 +62,23 @@ router.post('/reset-password', async (req, res) => {
       return res.status(404).json({ message: 'Users data not found' });
     }
 
-    const raw = rows[0].value;
+    let raw = rows[0].value;
+    if (raw == null) {
+      return res.status(404).json({ message: 'Users data not found' });
+    }
+    if (typeof raw !== 'string') {
+      raw = String(raw);
+    }
     const decoded = maybeDecompress(raw);
     let users;
     try {
-      users = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
+      if (typeof decoded === 'object' && decoded !== null && Array.isArray(decoded)) {
+        users = decoded;
+      } else if (typeof decoded === 'string') {
+        users = JSON.parse(decoded);
+      } else {
+        return res.status(500).json({ message: 'Invalid users data' });
+      }
     } catch (err) {
       logger.warn('admin_users_parse_failed', { message: err.message });
       return res.status(500).json({ message: 'Invalid users data' });

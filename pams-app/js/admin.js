@@ -865,7 +865,7 @@ const Admin = {
                         ${defaultRegionInfo}
                     </div>
                     <div class="admin-user-actions">
-                        <button class="btn btn-sm btn-outline" data-username="${(user.username || '').replace(/"/g, '&quot;')}" onclick="Admin.resetUserPassword(this.getAttribute('data-username'))" title="Reset to default password (Welcome@Gupshup1)">Reset password</button>
+                        <button class="btn btn-sm btn-outline" data-username="${(user.username || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onclick="Admin.resetUserPassword(this)" title="Reset to default password (Welcome@Gupshup1)">Reset password</button>
                         <button class="btn btn-sm btn-secondary" onclick="Admin.editUser('${user.id}')">Edit</button>
                         <button class="btn btn-sm btn-danger" onclick="Admin.deleteUser('${user.id}')">Delete</button>
                     </div>
@@ -1164,38 +1164,51 @@ const Admin = {
     },
 
     resetUserPassword(username) {
-        if (!username) return;
+        const raw = typeof username === 'string'
+            ? username
+            : (username && typeof username.getAttribute === 'function' ? username.getAttribute('data-username') : null) || '';
+        const trimmed = String(raw || '').trim();
+        if (!trimmed) return;
         const defaultPassword = 'Welcome@Gupshup1';
-        if (!confirm(`Reset password for "${username}" to default (${defaultPassword})? They can log in immediately.`)) return;
+        if (!confirm(`Reset password for "${trimmed}" to default (${defaultPassword})? They can log in immediately.`)) return;
 
-        if (window.__REMOTE_STORAGE_ENABLED__) {
-            fetch('/api/admin/users/reset-password', {
+        const tryApi = () => {
+            return fetch('/api/admin/users/reset-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-                body: JSON.stringify({ username: username.trim(), password: defaultPassword })
-            })
-                .then((response) => {
-                    if (!response.ok) return response.json().then((b) => { throw new Error(b.message || 'Reset failed'); });
-                    return response.json();
-                })
-                .then((data) => {
-                    UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
-                })
-                .catch((err) => {
-                    console.error('Reset password failed', err);
-                    UI.showNotification(err.message || 'Failed to reset password.', 'error');
-                });
-            return;
-        }
+                body: JSON.stringify({ username: trimmed, password: defaultPassword }),
+                credentials: 'same-origin'
+            });
+        };
 
-        const user = DataManager.getUserByUsername(username.trim());
-        if (!user) {
-            UI.showNotification('User not found.', 'error');
-            return;
-        }
-        DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
-        UI.showNotification('Password reset. User can log in with ' + defaultPassword, 'success');
-        this.loadUsers();
+        tryApi()
+            .then((response) => {
+                if (response.ok) {
+                    return response.json().then((data) => {
+                        UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
+                    });
+                }
+                return response.json()
+                    .then((b) => { throw new Error(b.message || 'Reset failed'); })
+                    .catch((e) => {
+                        if (e instanceof Error && e.message && e.message !== 'Reset failed') throw e;
+                        throw new Error('Reset failed: ' + response.status);
+                    });
+            })
+            .catch((err) => {
+                console.warn('Reset password API failed, trying local update', err);
+                const user = DataManager.getUserByUsername(trimmed) || DataManager.getUsers().find((u) =>
+                    (u.email || '').toLowerCase() === trimmed.toLowerCase() ||
+                    (String(u.username || '').toLowerCase()).replace(/\./g, ' ') === trimmed.toLowerCase()
+                );
+                if (user) {
+                    DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
+                    UI.showNotification('Password reset (local). User can log in with ' + defaultPassword + '. If using remote storage, refresh and use Reset password again after deploy.', 'success');
+                    this.loadUsers();
+                } else {
+                    UI.showNotification(err.message || 'Failed to reset password. User not found locally.', 'error');
+                }
+            });
     },
 
     // Sales Rep Management
