@@ -1,0 +1,43 @@
+# Daily storage snapshot backup (Option C)
+# Runs on schedule and can be triggered manually. Commits latest snapshot to the repo.
+name: Daily storage backup
+
+on:
+  schedule:
+    # Daily at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  SNAPSHOT_FILE: backups/storage-snapshot-latest.json
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run storage snapshot export
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+        run: node server/scripts/export-storage-snapshot.js
+
+      - name: Commit and push snapshot
+        if: success() && hashFiles('backups/storage-snapshot-latest.json') != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/storage-snapshot-latest.json
+          git diff --staged --quiet || git commit -m "chore: daily storage snapshot backup [skip ci]"
+          git push
