@@ -511,23 +511,13 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Internal vs External -->
+                    <!-- Internal vs External (donut chart with legend at bottom) -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Internal vs External Activity</h3>
                         </div>
-                        <div class="reports-v2-card-body">
-                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; min-height: 200px; height: 200px;"></canvas>
-                            <div class="reports-v2-legend">
-                                <span class="reports-v2-legend-item">
-                                    <span class="reports-v2-legend-color" style="background: #3182CE;"></span>
-                                    Internal: ${internalCount} (${internalPercent}%)
-                                </span>
-                                <span class="reports-v2-legend-item">
-                                    <span class="reports-v2-legend-color" style="background: #38A169;"></span>
-                                    External: ${externalCount} (${externalPercent}%)
-                                </span>
-                            </div>
+                        <div class="reports-v2-card-body" style="min-height: 240px;">
+                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; height: 200px; display: block;"></canvas>
                         </div>
                     </div>
 
@@ -893,7 +883,7 @@ const ReportsV2 = {
         const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External – always render when on Presales and canvas exists (even if 0/0)
+            // Internal vs External – use same donut helper as Activity Breakdown so it renders reliably
             if (this.activeTab === 'presales') {
                 const internalExternalCanvas = document.getElementById('internalExternalChart');
                 if (internalExternalCanvas) {
@@ -904,65 +894,12 @@ const ReportsV2 = {
                     if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
                         try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
                     }
-                    // Ensure canvas has room to draw
-                    if (!internalExternalCanvas.style.minHeight) {
-                        internalExternalCanvas.style.minHeight = '200px';
-                    }
                     const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
-                    try {
-                        this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
-                            type: 'doughnut',
-                            data: {
-                                labels: ['Internal', 'External'],
-                                datasets: [{
-                                    data: dataValues,
-                                    backgroundColor: ['#3182CE', '#38A169'],
-                                    borderWidth: 2,
-                                    borderColor: '#fff'
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '60%',
-                                plugins: {
-                                    legend: { display: false },
-                                    tooltip: {
-                                        callbacks: {
-                                            label: function(context) {
-                                                const label = context.label || '';
-                                                const value = context.parsed || 0;
-                                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-                                                return `${label}: ${value} (${pct}%)`;
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            plugins: [{
-                                id: 'centerText',
-                                beforeDraw: function(chart) {
-                                    if (!chart.chartArea) return;
-                                    const ctx = chart.ctx;
-                                    const centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
-                                    const centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
-                                    ctx.save();
-                                    ctx.font = 'bold 20px Arial';
-                                    ctx.fillStyle = '#111827';
-                                    ctx.textAlign = 'center';
-                                    ctx.textBaseline = 'middle';
-                                    ctx.fillText(totalCount > 0 ? totalCount.toString() : 'No data', centerX, centerY - 8);
-                                    ctx.font = '12px Arial';
-                                    ctx.fillStyle = '#6b7280';
-                                    ctx.fillText('Total', centerX, centerY + 12);
-                                    ctx.restore();
-                                }
-                            }]
-                        });
-                    } catch (err) {
-                        console.error('ReportsV2: Internal vs External chart error', err);
-                    }
+                    this.renderDonutChart('internalExternalChart', {
+                        labels: ['Internal', 'External'],
+                        data: dataValues,
+                        colors: ['#3182CE', '#38A169']
+                    });
                 }
             }
 
@@ -1655,10 +1592,10 @@ const ReportsV2 = {
             plugins: [{
                 id: 'centerText',
                 beforeDraw: function(chart) {
+                    if (!chart.chartArea || chart.chartArea.right <= chart.chartArea.left || chart.chartArea.bottom <= chart.chartArea.top) return;
                     const ctx = chart.ctx;
-                    const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-                    const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
-                    
+                    const centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
+                    const centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
                     ctx.save();
                     ctx.font = 'bold 24px Arial';
                     ctx.fillStyle = '#111827';
