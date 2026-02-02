@@ -291,7 +291,11 @@ const Admin = {
         this.ensureSectionLoaded(sectionId);
         // Always refresh POC Sandbox data when section is shown so it displays correctly
         if (sectionId === 'poc') {
-            this.loadPOCSandbox();
+            const section = container && container.querySelector(`[data-admin-section="poc"]`);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            requestAnimationFrame(() => this.loadPOCSandbox());
         }
         this.activeSection = sectionId;
     },
@@ -1884,14 +1888,10 @@ const Admin = {
     },
 
 
-    // POC Sandbox Access Management
+    // POC Sandbox Access Management – show all POC activities (Sandbox + Custom POC)
     loadPOCSandbox() {
         const activities = DataManager.getAllActivities();
-        const pocSandboxActivities = activities.filter(a => 
-            a.type === 'poc' && 
-            a.details && 
-            a.details.accessType === 'Sandbox'
-        );
+        const pocSandboxActivities = (activities || []).filter(a => a.type === 'poc');
 
         // Populate account filter
         const accounts = [...new Set(pocSandboxActivities.map(a => a.accountName).filter(Boolean))];
@@ -1910,11 +1910,7 @@ const Admin = {
     filterPOCSandbox(activities = null) {
         if (!activities) {
             const allActivities = DataManager.getAllActivities();
-            activities = allActivities.filter(a => 
-                a.type === 'poc' && 
-                a.details && 
-                a.details.accessType === 'Sandbox'
-            );
+            activities = (allActivities || []).filter(a => a.type === 'poc');
         }
 
         const statusFilter = document.getElementById('pocStatusFilter')?.value;
@@ -1966,6 +1962,7 @@ const Admin = {
                     <tr style="background: #f5f5f5; border-bottom: 2px solid #ddd;">
                         <th style="padding: 0.75rem; text-align: left;">Account Name</th>
                         <th style="padding: 0.75rem; text-align: left;">User Name</th>
+                        <th style="padding: 0.75rem; text-align: left;">Access Type</th>
                         <th style="padding: 0.75rem; text-align: left;">Start Date</th>
                         <th style="padding: 0.75rem; text-align: left;">End Date</th>
                         <th style="padding: 0.75rem; text-align: left;">POC Environment Name</th>
@@ -1976,6 +1973,7 @@ const Admin = {
         `;
 
         filtered.forEach(activity => {
+            const accessType = activity.details?.accessType || '—';
             const envName = activity.details?.pocEnvironmentName || '';
             const status = activity.details?.assignedStatus || 'Unassigned';
             const envNameId = `pocEnv_${activity.id}`;
@@ -1985,6 +1983,7 @@ const Admin = {
                 <tr style="border-bottom: 1px solid #eee;">
                     <td style="padding: 0.75rem;">${activity.accountName || '-'}</td>
                     <td style="padding: 0.75rem;">${activity.userName || '-'}</td>
+                    <td style="padding: 0.75rem;">${accessType}</td>
                     <td style="padding: 0.75rem;">${UI.formatDate(activity.details?.startDate || '')}</td>
                     <td style="padding: 0.75rem;">${UI.formatDate(activity.details?.endDate || '')}</td>
                     <td style="padding: 0.75rem;">
