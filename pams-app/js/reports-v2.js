@@ -170,8 +170,7 @@ const ReportsV2 = {
             
             // Also destroy any Chart.js instances that might be lingering on canvases
             if (typeof Chart !== 'undefined' && Chart.getChart) {
-                const                 chartCanvases = [
-                    'internalExternalChart',
+                const chartCanvases = [
                     'activityBreakdownChart',
                     'callTypeChart',
                     'presalesActivityChart',
@@ -573,15 +572,20 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Internal vs External Activity – fixed-size wrapper so Chart.js always has dimensions -->
+                    <!-- Internal vs External Activity – numbers only (no chart) -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Internal vs External Activity</h3>
                             <span class="text-muted">${this.formatPeriod(this.currentPeriod)}</span>
                         </div>
-                        <div class="reports-v2-card-body">
-                            <div class="reports-v2-pie-chart-wrap" style="width:300px;height:200px;margin:0 auto;">
-                                <canvas id="internalExternalChart" class="reports-v2-pie-chart" width="300" height="200"></canvas>
+                        <div class="reports-v2-card-body reports-v2-internal-external-box">
+                            <div class="reports-v2-internal-external-row">
+                                <span class="reports-v2-internal-external-label">Internal</span>
+                                <span class="reports-v2-internal-external-value">${(this.cachedData && this.cachedData.internalCount) || 0}</span>
+                            </div>
+                            <div class="reports-v2-internal-external-row">
+                                <span class="reports-v2-internal-external-label">External</span>
+                                <span class="reports-v2-internal-external-value">${(this.cachedData && this.cachedData.externalCount) || 0}</span>
                             </div>
                         </div>
                     </div>
@@ -943,64 +947,8 @@ const ReportsV2 = {
     // Initialize all charts
     initCharts(activities) {
         const safeActivities = activities && Array.isArray(activities) ? activities : [];
-        const internalCount = safeActivities.filter(a => a.isInternal === true).length;
-        const externalCount = safeActivities.filter(a => !a.isInternal).length;
-        const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External – force canvas size in JS so Chart.js always has dimensions (fixes blank chart)
-            if (this.activeTab === 'presales') {
-                const internalExternalCanvas = document.getElementById('internalExternalChart');
-                if (internalExternalCanvas) {
-                    if (this.charts['internalExternalChart']) {
-                        try { this.charts['internalExternalChart'].destroy(); } catch (e) { /* ignore */ }
-                        delete this.charts['internalExternalChart'];
-                    }
-                    if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
-                        try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
-                    }
-                    // Force display size so Chart.js never sees 0 dimensions (critical for hidden-then-shown views)
-                    internalExternalCanvas.setAttribute('width', '300');
-                    internalExternalCanvas.setAttribute('height', '200');
-                    internalExternalCanvas.style.width = '300px';
-                    internalExternalCanvas.style.height = '200px';
-                    internalExternalCanvas.style.display = 'block';
-                    internalExternalCanvas.style.margin = '0 auto';
-                    const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
-                    this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
-                        type: 'pie',
-                        data: {
-                            labels: ['Internal', 'External'],
-                            datasets: [{
-                                data: dataValues,
-                                backgroundColor: ['#805AD5', '#4299E1'],
-                                borderWidth: 2,
-                                borderColor: '#fff'
-                            }]
-                        },
-                        options: {
-                            responsive: false,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'bottom'
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                            const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : '0';
-                                            return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            }
-
             // Presales Activity Report (only in Presales tab)
             if (this.activeTab === 'presales') {
                 const presalesActivityCanvas = document.getElementById('presalesActivityChart');
