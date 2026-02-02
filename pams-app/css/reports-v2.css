@@ -275,14 +275,22 @@
     height: auto !important;
 }
 
-/* Pie charts (e.g. Internal vs External): fixed height so Chart.js gets valid dimensions (height: auto can yield 0 and blank chart) */
-.reports-v2-pie-chart,
-#internalExternalChart {
-    height: 200px !important;
-    min-height: 200px !important;
-    max-width: 320px;
+/* Wrapper for Internal vs External pie so layout always reserves space */
+.reports-v2-pie-chart-wrap {
+    width: 300px;
+    height: 200px;
     margin: 0 auto;
+    position: relative;
+}
+
+/* Pie chart canvas: fixed size so Chart.js never sees 0 dimensions */
+.reports-v2-pie-chart-wrap .reports-v2-pie-chart,
+.reports-v2-pie-chart-wrap #internalExternalChart {
+    width: 300px !important;
+    height: 200px !important;
+    max-width: none;
     display: block;
+    margin: 0 auto;
 }
 
 /* Responsive */

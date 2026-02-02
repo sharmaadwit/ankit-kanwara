@@ -215,22 +215,18 @@ const ReportsV2 = {
                 </div>
             `;
 
-            // Initialize charts after render - use requestAnimationFrame for better timing
+            // Initialize charts after render; double rAF + delay so layout is complete (fixes blank Internal vs External chart)
+            const self = this;
             requestAnimationFrame(() => {
-                setTimeout(() => {
-                    try {
-                        // Double check that canvas elements exist before initializing charts
-                        const internalExternalCanvas = document.getElementById('internalExternalChart');
-                        if (internalExternalCanvas) {
-                            console.log('Internal vs External canvas found, dimensions:', internalExternalCanvas.offsetWidth, 'x', internalExternalCanvas.offsetHeight);
-                        } else {
-                            console.warn('Internal vs External canvas not found in DOM');
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        try {
+                            self.initCharts(activities);
+                        } catch (error) {
+                            console.error('ReportsV2: Error initializing charts:', error);
                         }
-                        this.initCharts(activities);
-                    } catch (error) {
-                        console.error('ReportsV2: Error initializing charts:', error);
-                    }
-                }, 150);
+                    }, 100);
+                });
             });
         } catch (error) {
             console.error('ReportsV2: Error in render():', error);
@@ -577,14 +573,16 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Internal vs External Activity – same setup as dashboard (explicit canvas size) -->
+                    <!-- Internal vs External Activity – fixed-size wrapper so Chart.js always has dimensions -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Internal vs External Activity</h3>
                             <span class="text-muted">${this.formatPeriod(this.currentPeriod)}</span>
                         </div>
                         <div class="reports-v2-card-body">
-                            <canvas id="internalExternalChart" class="reports-v2-pie-chart" width="300" height="200"></canvas>
+                            <div class="reports-v2-pie-chart-wrap" style="width:300px;height:200px;margin:0 auto;">
+                                <canvas id="internalExternalChart" class="reports-v2-pie-chart" width="300" height="200"></canvas>
+                            </div>
                         </div>
                     </div>
 
@@ -950,7 +948,7 @@ const ReportsV2 = {
         const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External – exact same config as dashboard (pie, explicit size, always draw when canvas exists)
+            // Internal vs External – force canvas size in JS so Chart.js always has dimensions (fixes blank chart)
             if (this.activeTab === 'presales') {
                 const internalExternalCanvas = document.getElementById('internalExternalChart');
                 if (internalExternalCanvas) {
@@ -961,13 +959,14 @@ const ReportsV2 = {
                     if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
                         try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
                     }
-                    // Force canvas to have size so Chart.js always has dimensions (fixes blank chart)
-                    if (internalExternalCanvas.offsetWidth === 0 || internalExternalCanvas.offsetHeight === 0) {
-                        internalExternalCanvas.setAttribute('width', '300');
-                        internalExternalCanvas.setAttribute('height', '200');
-                    }
+                    // Force display size so Chart.js never sees 0 dimensions (critical for hidden-then-shown views)
+                    internalExternalCanvas.setAttribute('width', '300');
+                    internalExternalCanvas.setAttribute('height', '200');
+                    internalExternalCanvas.style.width = '300px';
+                    internalExternalCanvas.style.height = '200px';
+                    internalExternalCanvas.style.display = 'block';
+                    internalExternalCanvas.style.margin = '0 auto';
                     const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
-                    // Same config as dashboard initDashboardCharts (type: pie, legend bottom, tooltip %)
                     this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
                         type: 'pie',
                         data: {
@@ -980,8 +979,8 @@ const ReportsV2 = {
                             }]
                         },
                         options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
+                            responsive: false,
+                            maintainAspectRatio: false,
                             plugins: {
                                 legend: {
                                     display: true,
