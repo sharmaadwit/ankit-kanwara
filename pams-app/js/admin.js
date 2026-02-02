@@ -324,7 +324,7 @@ const Admin = {
             audit: () => this.loadActivityLogs(),
             monthly: () => {},
             reports: () => {},
-            poc: () => {}
+            poc: () => this.loadPOCSandbox()
         };
     },
 
@@ -825,15 +825,24 @@ const Admin = {
     loadUsers() {
         const users = DataManager.getUsers();
         const container = document.getElementById('usersList');
+        const statusEl = document.getElementById('usersFilterStatus');
         if (!container) return;
 
-        if (users.length === 0) {
-            container.innerHTML = '<p class="text-muted">No users found</p>';
+        const statusFilter = (statusEl && statusEl.value) || 'active';
+        let filtered = users;
+        if (statusFilter === 'active') {
+            filtered = users.filter(u => u.isActive !== false);
+        } else if (statusFilter === 'inactive') {
+            filtered = users.filter(u => u.isActive === false);
+        }
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<p class="text-muted">No users match the current filter.</p>';
             return;
         }
 
         let html = '';
-        users.forEach(user => {
+        filtered.forEach(user => {
             const statusBadge = user.isActive !== false
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
@@ -856,6 +865,7 @@ const Admin = {
                         ${defaultRegionInfo}
                     </div>
                     <div class="admin-user-actions">
+                        <button class="btn btn-sm btn-outline" data-username="${(user.username || '').replace(/"/g, '&quot;')}" onclick="Admin.resetUserPassword(this.getAttribute('data-username'))" title="Reset to default password (Welcome@Gupshup1)">Reset password</button>
                         <button class="btn btn-sm btn-secondary" onclick="Admin.editUser('${user.id}')">Edit</button>
                         <button class="btn btn-sm btn-danger" onclick="Admin.deleteUser('${user.id}')">Delete</button>
                     </div>
@@ -1153,9 +1163,44 @@ const Admin = {
         this.loadUsers();
     },
 
+    resetUserPassword(username) {
+        if (!username) return;
+        const defaultPassword = 'Welcome@Gupshup1';
+        if (!confirm(`Reset password for "${username}" to default (${defaultPassword})? They can log in immediately.`)) return;
+
+        if (window.__REMOTE_STORAGE_ENABLED__) {
+            fetch('/api/admin/users/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+                body: JSON.stringify({ username: username.trim(), password: defaultPassword })
+            })
+                .then((response) => {
+                    if (!response.ok) return response.json().then((b) => { throw new Error(b.message || 'Reset failed'); });
+                    return response.json();
+                })
+                .then((data) => {
+                    UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
+                })
+                .catch((err) => {
+                    console.error('Reset password failed', err);
+                    UI.showNotification(err.message || 'Failed to reset password.', 'error');
+                });
+            return;
+        }
+
+        const user = DataManager.getUserByUsername(username.trim());
+        if (!user) {
+            UI.showNotification('User not found.', 'error');
+            return;
+        }
+        DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
+        UI.showNotification('Password reset. User can log in with ' + defaultPassword, 'success');
+        this.loadUsers();
+    },
 
     // Sales Rep Management
     initSalesRepFilters() {
+        const statusSelect = document.getElementById('salesRepFilterStatus');
         const regionSelect = document.getElementById('salesRepFilterRegion');
         const searchInput = document.getElementById('salesRepFilterSearch');
         const resetBtn = document.getElementById('salesRepResetFilters');
@@ -1168,6 +1213,10 @@ const Admin = {
                 searchInput.value = this.salesRepFilters.search || '';
             }
             return;
+        }
+
+        if (statusSelect) {
+            statusSelect.addEventListener('change', () => this.loadSalesReps());
         }
 
         if (regionSelect) {
@@ -1200,6 +1249,7 @@ const Admin = {
                     this.salesRepSearchDebounce = null;
                 }
                 this.salesRepFilters = { region: 'all', search: '' };
+                if (statusSelect) statusSelect.value = 'active';
                 if (regionSelect) {
                     this.populateSalesRepRegionOptions(regionSelect);
                     regionSelect.value = 'all';
@@ -1263,11 +1313,16 @@ const Admin = {
             this.populateSalesRepRegionOptions(regionSelect);
         }
 
+        const statusEl = document.getElementById('salesRepFilterStatus');
+        const statusFilter = (statusEl && statusEl.value) || 'active';
         const { region = 'all', search = '' } = this.salesRepFilters || {};
         const normalizedSearch = search ? search.toLowerCase() : '';
 
         const filtered = salesReps.filter(rep => {
             if (!rep) return false;
+
+            if (statusFilter === 'active' && rep.isActive === false) return false;
+            if (statusFilter === 'inactive' && rep.isActive !== false) return false;
 
             const repRegion = rep.region || 'India West';
             if (region && region !== 'all' && repRegion !== region) {

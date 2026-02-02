@@ -72,6 +72,7 @@ const App = {
         adminPoc: true
     },
     dashboardVisibility: {},
+    dashboardMonth: 'last',
     analyticsPeriodMode: 'month',
     analyticsActiveTab: 'overview',
     analyticsPreferences: {
@@ -684,6 +685,9 @@ const App = {
             ...this.defaultDashboardVisibility,
             ...(config.dashboardVisibility || {})
         };
+        this.dashboardMonth = typeof config.dashboardMonth === 'string' && config.dashboardMonth.trim()
+            ? config.dashboardMonth.trim()
+            : 'last';
         this.applyAppConfiguration();
     },
 
@@ -908,6 +912,18 @@ const App = {
             return;
         }
 
+        // POC Sandbox is now inline in System Admin; redirect there
+        if (viewName === 'adminPoc') {
+            if (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin()) {
+                this.switchView('systemAdmin');
+                setTimeout(() => Admin.openAdminSection('poc', null), 50);
+            } else {
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('You do not have admin access', 'error');
+                this.switchView('dashboard');
+            }
+            return;
+        }
+
         const accessKey = this.getDashboardVisibilityKey(viewName);
         if (accessKey) {
             if (!this.isFeatureEnabled(accessKey)) {
@@ -1019,12 +1035,7 @@ const App = {
                 }
                 break;
             case 'adminPoc':
-                if (Auth.isAdmin()) {
-                    Admin.loadPOCSandbox(true);
-                } else {
-                    UI.showNotification('You do not have admin access', 'error');
-                    this.switchView('dashboard');
-                }
+                // Handled at top of switchView (redirect to systemAdmin + poc section)
                 break;
             case 'suggestionsBugs':
                 this.loadSuggestionsBugsView();
@@ -1039,6 +1050,45 @@ const App = {
         this.loadCardDashboard();
     },
     
+    // Resolve dashboard view month: 'current' | 'last' | 'YYYY-MM' -> YYYY-MM
+    getDashboardViewMonth() {
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const lastMonth = now.getMonth() === 0
+            ? `${now.getFullYear() - 1}-12`
+            : `${now.getFullYear()}-${String(now.getMonth()).padStart(2, '0')}`;
+        const setting = (this.dashboardMonth || 'last').trim().toLowerCase();
+        if (setting === 'current') return currentMonth;
+        if (setting === 'last') return lastMonth;
+        if (/^\d{4}-\d{2}$/.test(setting)) return setting;
+        return lastMonth;
+    },
+
+    // Admin: set dashboard month and reload (persists via API)
+    async setDashboardMonthAndReload(value) {
+        if (typeof Auth === 'undefined' || !Auth.isAdmin || !Auth.isAdmin()) return;
+        try {
+            const response = await fetch('/api/admin/config/dashboard-month', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-User': Auth.getCurrentUser()?.username || '' },
+                body: JSON.stringify({ dashboardMonth: value })
+            });
+            if (!response.ok) throw new Error(`Failed to update: ${response.status}`);
+            const data = await response.json();
+            this.dashboardMonth = data.dashboardMonth || value;
+            await this.loadAppConfig();
+            this.loadCardDashboard();
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Dashboard month updated.', 'success');
+            }
+        } catch (error) {
+            console.error('Failed to set dashboard month', error);
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Could not update dashboard month.', 'error');
+            }
+        }
+    },
+
     // Load card-based dashboard
     loadCardDashboard() {
         const dashboardView = document.getElementById('dashboardView');
@@ -1055,15 +1105,25 @@ const App = {
         
         const stats = this.updateStats() || {};
         
-        // Get current month and week activities
         const activities = DataManager.getAllActivities();
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const viewMonth = this.getDashboardViewMonth();
+        const isViewingCurrentMonth = viewMonth === currentMonth;
         
-        // Calculate week start (Monday)
+        // Previous month (for "last month" comparison card)
+        const [vy, vm] = viewMonth.split('-').map(Number);
+        const prevMonth = vm === 1 ? `${vy - 1}-12` : `${vy}-${String(vm - 1).padStart(2, '0')}`;
+        const lastMonthActivities = activities.filter(a => {
+            const date = a.date || a.createdAt;
+            if (!date) return false;
+            return date.substring(0, 7) === prevMonth;
+        });
+        
+        // Calculate week start (Monday) — only meaningful when viewing current month
         const weekStart = new Date(now);
         const dayOfWeek = now.getDay();
-        const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+        const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
         weekStart.setDate(diff);
         weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
@@ -1073,15 +1133,17 @@ const App = {
         const monthActivities = activities.filter(a => {
             const date = a.date || a.createdAt;
             if (!date) return false;
-            return date.substring(0, 7) === currentMonth;
+            return date.substring(0, 7) === viewMonth;
         });
         
-        const weekActivities = activities.filter(a => {
-            const date = a.date || a.createdAt;
-            if (!date) return false;
-            const activityDate = new Date(date);
-            return activityDate >= weekStart && activityDate <= weekEnd;
-        });
+        const weekActivities = isViewingCurrentMonth
+            ? activities.filter(a => {
+                const date = a.date || a.createdAt;
+                if (!date) return false;
+                const activityDate = new Date(date);
+                return activityDate >= weekStart && activityDate <= weekEnd;
+            })
+            : [];
         
         // Internal vs External breakdown
         const internalCount = monthActivities.filter(a => a.isInternal).length;
@@ -1122,7 +1184,7 @@ const App = {
         // Top 3 Presales Reps by activity count
         const topPresalesReps = this.getTopPresalesReps(monthActivities, 3);
         
-        // Wins and Losses this month
+        // Wins and Losses for view month
         const accounts = DataManager.getAccounts();
         let winsThisMonth = 0;
         let lossesThisMonth = 0;
@@ -1130,7 +1192,7 @@ const App = {
             account.projects?.forEach(project => {
                 if (project.status === 'won' || project.status === 'lost') {
                     const winLossDate = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                    if (winLossDate && winLossDate.substring(0, 7) === currentMonth) {
+                    if (winLossDate && winLossDate.substring(0, 7) === viewMonth) {
                         if (project.status === 'won') winsThisMonth++;
                         else if (project.status === 'lost') lossesThisMonth++;
                     }
@@ -1140,7 +1202,28 @@ const App = {
         
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                            'July', 'August', 'September', 'October', 'November', 'December'];
-        const currentMonthName = monthNames[now.getMonth()];
+        const [viewYear, viewMonthNum] = viewMonth.split('-').map(Number);
+        const viewMonthName = `${monthNames[viewMonthNum - 1]} ${viewYear}`;
+        const prevMonthName = prevMonth.split('-').map(Number);
+        const lastMonthLabel = `${monthNames[prevMonthName[1] - 1]} ${prevMonthName[0]}`;
+        
+        const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
+        const monthOptions = (() => {
+            const opts = [
+                { value: 'last', label: 'Last month (default)' },
+                { value: 'current', label: 'Current month' }
+            ];
+            for (let i = 0; i < 12; i++) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0');
+                const v = `${y}-${m}`;
+                if (opts.some(o => o.value === v)) continue;
+                opts.push({ value: v, label: `${monthNames[d.getMonth()]} ${y}` });
+            }
+            return opts;
+        })();
+        const currentValue = (this.dashboardMonth || 'last').trim().toLowerCase();
+        const selectorValue = /^\d{4}-\d{2}$/.test(currentValue) ? currentValue : currentValue;
         
         let totalProjects = 0;
         let customerActivities = 0;
@@ -1154,32 +1237,45 @@ const App = {
         });
         
         let html = `
-            <!-- Log Activity Button -->
-            <div style="margin-bottom: 2rem; display: flex; justify-content: flex-start;">
+            <!-- Log Activity + Admin month selector -->
+            <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                 <button class="btn btn-primary" onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
                     + Log Activity
                 </button>
+                ${isAdmin ? `
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <label for="dashboardMonthSelect" style="font-size: 0.875rem; color: var(--gray-600); white-space: nowrap;">Dashboard month:</label>
+                    <select id="dashboardMonthSelect" onchange="App.setDashboardMonthAndReload(this.value)" style="padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--gray-300); font-size: 0.875rem;">
+                        ${monthOptions.map(o => `<option value="${o.value}" ${o.value === selectorValue ? 'selected' : ''}>${o.label}</option>`).join('')}
+                    </select>
+                </div>
+                ` : ''}
             </div>
             
             <!-- Quick Stats Row -->
             <div class="dashboard-stats-row">
                 <div class="dashboard-stat-card">
-                    <div class="dashboard-stat-card-title">Activities This Month</div>
+                    <div class="dashboard-stat-card-title">Activities for ${viewMonthName}</div>
                     <div class="dashboard-stat-card-value">${monthActivities.length}</div>
-                    <div class="dashboard-stat-card-detail">${currentMonthName} ${now.getFullYear()}</div>
+                    <div class="dashboard-stat-card-detail">Selected month</div>
                 </div>
                 <div class="dashboard-stat-card">
-                    <div class="dashboard-stat-card-title">Activities This Week</div>
-                    <div class="dashboard-stat-card-value">${weekActivities.length}</div>
-                    <div class="dashboard-stat-card-detail">Current week</div>
+                    <div class="dashboard-stat-card-title">${isViewingCurrentMonth ? 'Activities This Week' : 'This week'}</div>
+                    <div class="dashboard-stat-card-value">${isViewingCurrentMonth ? weekActivities.length : '—'}</div>
+                    <div class="dashboard-stat-card-detail">${isViewingCurrentMonth ? 'Current week' : 'Only when viewing current month'}</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #805AD5;">
+                    <div class="dashboard-stat-card-title">Activities last month</div>
+                    <div class="dashboard-stat-card-value" style="color: #805AD5;">${lastMonthActivities.length}</div>
+                    <div class="dashboard-stat-card-detail">${lastMonthLabel}</div>
                 </div>
                 <div class="dashboard-stat-card" style="border-left-color: #48BB78;">
-                    <div class="dashboard-stat-card-title">Wins This Month</div>
+                    <div class="dashboard-stat-card-title">Wins (${viewMonthName})</div>
                     <div class="dashboard-stat-card-value" style="color: #48BB78;">${winsThisMonth}</div>
                     <div class="dashboard-stat-card-detail">Projects won</div>
                 </div>
                 <div class="dashboard-stat-card" style="border-left-color: #F56565;">
-                    <div class="dashboard-stat-card-title">Losses This Month</div>
+                    <div class="dashboard-stat-card-title">Losses (${viewMonthName})</div>
                     <div class="dashboard-stat-card-value" style="color: #F56565;">${lossesThisMonth}</div>
                     <div class="dashboard-stat-card-detail">Projects lost</div>
                 </div>
@@ -1190,7 +1286,7 @@ const App = {
                 <div class="dashboard-chart-card">
                     <div class="dashboard-chart-header">
                         <h3>Internal vs External</h3>
-                        <span class="text-muted">This Month</span>
+                        <span class="text-muted">${viewMonthName}</span>
                     </div>
                     <canvas id="internalExternalChart" style="max-height: 200px;"></canvas>
                 </div>
@@ -1208,7 +1304,7 @@ const App = {
                 <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
                     <div class="dashboard-chart-header">
                         <h3>Region Activity</h3>
-                        <span class="text-muted">${defaultRegion ? `Default: ${defaultRegion}` : 'All Regions'} - This Month (External Only)</span>
+                        <span class="text-muted">${defaultRegion ? `Default: ${defaultRegion}` : 'All Regions'} - ${viewMonthName} (External Only)</span>
                     </div>
                     <canvas id="regionActivityChart" style="max-height: 200px;"></canvas>
                 </div>
@@ -1220,7 +1316,7 @@ const App = {
                 <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
                     <div class="dashboard-chart-header">
                         <h3>Missing SFDC Opportunities</h3>
-                        <span class="text-muted">This Month</span>
+                        <span class="text-muted">${viewMonthName}</span>
                     </div>
                     <div style="padding: 1rem 0;">
                         <div style="margin-bottom: 1.5rem;">
@@ -1262,7 +1358,7 @@ const App = {
                 <div class="dashboard-chart-card">
                     <div class="dashboard-chart-header">
                         <h3>Top 3 Presales Reps</h3>
-                        <span class="text-muted">This Month</span>
+                        <span class="text-muted">${viewMonthName}</span>
                     </div>
                     <div style="padding: 1rem 0;">
                         ${topPresalesReps.map((rep, index) => `

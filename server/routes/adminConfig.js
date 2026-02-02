@@ -16,6 +16,11 @@ const {
   setDashboardVisibility,
   defaultDashboardVisibility
 } = require('../services/dashboardVisibility');
+const {
+  getDashboardMonth,
+  setDashboardMonth,
+  DEFAULT_DASHBOARD_MONTH
+} = require('../services/dashboardMonth');
 
 router.get('/feature-flags', async (req, res) => {
   try {
@@ -70,6 +75,27 @@ router.put('/dashboard-visibility', async (req, res) => {
     res
       .status(500)
       .json({ message: 'Failed to update dashboard visibility' });
+  }
+});
+
+router.get('/dashboard-month', async (req, res) => {
+  try {
+    const dashboardMonth = await getDashboardMonth();
+    res.json({ dashboardMonth, default: DEFAULT_DASHBOARD_MONTH });
+  } catch (error) {
+    console.error('Failed to fetch dashboard month', error);
+    res.status(500).json({ message: 'Failed to fetch dashboard month' });
+  }
+});
+
+router.put('/dashboard-month', async (req, res) => {
+  try {
+    const value = req.body?.dashboardMonth;
+    const updated = await setDashboardMonth(value);
+    res.json({ dashboardMonth: updated });
+  } catch (error) {
+    console.error('Failed to update dashboard month', error);
+    res.status(500).json({ message: 'Failed to update dashboard month' });
   }
 });
 

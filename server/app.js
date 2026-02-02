@@ -13,6 +13,7 @@ const { getFeatureFlags } = require('./services/featureFlags');
 const {
   getDashboardVisibility
 } = require('./services/dashboardVisibility');
+const { getDashboardMonth } = require('./services/dashboardMonth');
 const {
   requireStorageAuth,
   requireAdminAuth
@@ -129,6 +130,7 @@ const createApp = (options = {}) => {
   app.use('/api/storage', requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLogsRouter);
   app.use('/api/admin/config', requireAdminAuth, adminConfigRouter);
+  app.use('/api/admin/users', requireAdminAuth, require('./routes/adminUsers'));
   app.use('/api/admin/activity', activityLogsRouter);
 
   app.get('/api/health', async (req, res) => {
@@ -144,11 +146,13 @@ const createApp = (options = {}) => {
     try {
       const featureFlags = await getFeatureFlags();
       const dashboardVisibility = await getDashboardVisibility();
+      const dashboardMonth = await getDashboardMonth();
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         featureFlags,
-        dashboardVisibility
+        dashboardVisibility,
+        dashboardMonth
       });
     } catch (error) {
       logger.error('config_fetch_failed', { message: error.message });
@@ -156,7 +160,8 @@ const createApp = (options = {}) => {
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         featureFlags: {},
-        dashboardVisibility: {}
+        dashboardVisibility: {},
+        dashboardMonth: 'last'
       });
     }
   });

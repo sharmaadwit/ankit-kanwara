@@ -1,5 +1,18 @@
 # Admin Split & Reports Review
 
+## Deployment status (dashboard & admin updates)
+
+The following are **in the codebase**; if you don’t see them in production, deploy the latest code and do a **hard refresh** (Ctrl+Shift+R / Cmd+Shift+R):
+
+- **Dashboard:** “Dashboard month” selector (admin-only), “Activities for [month]”, “Activities last month” card, “This week” only when viewing current month. Backend: `/api/config` returns `dashboardMonth` (default `last`); `GET/PUT /api/admin/config/dashboard-month` for admin.
+- **Admin:** Configuration → Reports (simplified copy, no “Open Reports View” button); System Admin → System Users (Status: Active/Inactive/All); System Admin → Sales Users (Status filter); System Admin → POC Sandbox (inline content, no separate “Open POC Sandbox Manager” button).
+
+Ensure production serves the latest `pams-app` and `server` so these routes and UI are live.
+
+**User password reset:** In **System Admin → System Users**, each user row has a **Reset password** button. It sets that user’s password to the default **Welcome@Gupshup1** and clears “require password change,” so they can log in immediately. Use this if a user (e.g. Nikhil Sharma) cannot log in or password reset isn’t working. Backend: `POST /api/admin/users/reset-password` with body `{ "username": "nikhil.sharma" }` (or the exact username shown in the list).
+
+---
+
 ## Implementation Plan: Split Admin & Settings
 
 ### Structure
@@ -250,3 +263,40 @@
 - Provide empty states with helpful messages
 - Include export options on all reports
 - Add tooltips/help text for complex metrics
+
+---
+
+## Admin & Configuration Pages – Changes & Suggestions
+
+### Implemented (this pass)
+
+1. **Configuration → Reports**
+   - Removed the “Open Reports View” button; section now only explains that Reports are in the main sidebar.
+
+2. **System Admin → System Users**
+   - Added **Status** filter: **Active only** (default), **Inactive only**, **All**. List is filtered by `user.isActive`.
+
+3. **System Admin → Sales Users**
+   - Added **Status** filter: **Active only** (default), **Inactive only**, **All**. Works with existing Region and Search filters.
+
+4. **System Admin → POC Sandbox**
+   - POC Sandbox content (filters + table) is now rendered **inline** in the System Admin panel. Removed the “Open POC Sandbox Manager” button. Opening “POC Sandbox” loads the section and calls `loadPOCSandbox()`. The standalone `adminPocView` redirects to System Admin → POC Sandbox.
+
+### Further suggestions for Admin & Configuration
+
+1. **System Admin**
+   - **Regions**: Add “Active only” count in summary (regions in use vs unused). “Remove Unused” already exists; consider a short explanation/tooltip.
+   - **Login Activity**: Consider a date-range quick filter (e.g. Last 7 / 14 / 30 days) in addition to paging.
+   - **Audit Log**: Same as Login Activity: optional date filter and/or “Refresh” label to match other sections.
+   - **Project Health**: Section is settings-only; consider a one-line note that the actual Project Health view is in the main sidebar.
+
+2. **Configuration**
+   - **Interface**: Section is empty (`interface: () => {}`). Either add a short “Interface settings are applied from the main Interface selector” message or wire real options (e.g. theme, default view) here.
+   - **Reports**: Already simplified; no further change unless you want a direct “Open Reports” link that switches view.
+   - **Monthly Export**: Consider presetting the month input to the current month on open.
+   - **Feature Flags**: Consider grouping by category (e.g. “Access”, “Import”, “Analytics”) and adding short help text per flag.
+
+3. **General**
+   - **Consistency**: Ensure every section that loads data has a visible “Refresh” or “Reload” where it makes sense (e.g. Audit Log, Login Activity already do).
+   - **Empty states**: Standardise “No X match the current filter” / “No X yet” messages and optional primary action (e.g. “Add first user”).
+   - **Breadcrumb / context**: In card interface, when deep in System Admin or Configuration, a “Back to Dashboard” or “Back to [System Admin / Configuration]” can reduce disorientation.
