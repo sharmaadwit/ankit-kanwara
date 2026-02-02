@@ -275,6 +275,16 @@
     height: auto !important;
 }
 
+/* Pie charts (e.g. Internal vs External): fixed height so Chart.js gets valid dimensions (height: auto can yield 0 and blank chart) */
+.reports-v2-pie-chart,
+#internalExternalChart {
+    height: 200px !important;
+    min-height: 200px !important;
+    max-width: 320px;
+    margin: 0 auto;
+    display: block;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .reports-v2-container {

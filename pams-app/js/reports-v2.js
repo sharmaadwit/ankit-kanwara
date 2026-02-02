@@ -577,16 +577,14 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Internal vs External Activity (simple pie chart) -->
-                    <div class="reports-v2-card reports-v2-card-internal-external">
+                    <!-- Internal vs External Activity – same setup as dashboard (explicit canvas size) -->
+                    <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Internal vs External Activity</h3>
                             <span class="text-muted">${this.formatPeriod(this.currentPeriod)}</span>
                         </div>
-                        <div class="reports-v2-card-body" style="min-height: 260px; display: flex; align-items: center; justify-content: center;">
-                            <div class="reports-v2-pie-wrap" style="width: 280px; height: 240px; position: relative;">
-                                <canvas id="internalExternalChart"></canvas>
-                            </div>
+                        <div class="reports-v2-card-body">
+                            <canvas id="internalExternalChart" class="reports-v2-pie-chart" width="300" height="200"></canvas>
                         </div>
                     </div>
 
@@ -952,7 +950,7 @@ const ReportsV2 = {
         const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External – simple pie chart (reliable render in Reports)
+            // Internal vs External – exact same config as dashboard (pie, explicit size, always draw when canvas exists)
             if (this.activeTab === 'presales') {
                 const internalExternalCanvas = document.getElementById('internalExternalChart');
                 if (internalExternalCanvas) {
@@ -963,14 +961,20 @@ const ReportsV2 = {
                     if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
                         try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
                     }
+                    // Force canvas to have size so Chart.js always has dimensions (fixes blank chart)
+                    if (internalExternalCanvas.offsetWidth === 0 || internalExternalCanvas.offsetHeight === 0) {
+                        internalExternalCanvas.setAttribute('width', '300');
+                        internalExternalCanvas.setAttribute('height', '200');
+                    }
                     const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
+                    // Same config as dashboard initDashboardCharts (type: pie, legend bottom, tooltip %)
                     this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
                         type: 'pie',
                         data: {
                             labels: ['Internal', 'External'],
                             datasets: [{
                                 data: dataValues,
-                                backgroundColor: ['#3182CE', '#38A169'],
+                                backgroundColor: ['#805AD5', '#4299E1'],
                                 borderWidth: 2,
                                 borderColor: '#fff'
                             }]
@@ -979,13 +983,16 @@ const ReportsV2 = {
                             responsive: true,
                             maintainAspectRatio: true,
                             plugins: {
-                                legend: { display: true, position: 'bottom' },
+                                legend: {
+                                    display: true,
+                                    position: 'bottom'
+                                },
                                 tooltip: {
                                     callbacks: {
-                                        label: function(ctx) {
-                                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                            const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0;
-                                            return ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                                        label: function(context) {
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = total > 0 ? ((context.parsed / total) * 100).toFixed(1) : '0';
+                                            return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
                                         }
                                     }
                                 }
