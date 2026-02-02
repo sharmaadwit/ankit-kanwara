@@ -109,17 +109,23 @@ const Auth = {
 
         if (loginForm && !passwordResetVisible) {
             loginForm.classList.toggle('hidden', normalized === 'analytics');
-            if (normalized === 'presales' && !options.skipFocus) {
-                const usernameInput = document.getElementById('username');
-                if (usernameInput) {
-                    setTimeout(() => usernameInput.focus(), 50);
+            if (normalized === 'presales') {
+                loginForm.removeAttribute('novalidate');
+                if (!options.skipFocus) {
+                    const usernameInput = document.getElementById('username');
+                    if (usernameInput) {
+                        setTimeout(() => usernameInput.focus(), 50);
+                    }
                 }
+            } else {
+                loginForm.setAttribute('novalidate', 'novalidate');
             }
         }
 
         if (analyticsForm) {
             if (!passwordResetVisible && normalized === 'analytics') {
                 analyticsForm.classList.remove('hidden');
+                analyticsForm.removeAttribute('novalidate');
                 if (!options.skipFocus) {
                     const passwordInput = document.getElementById('analyticsAccessPassword');
                     if (passwordInput) {
@@ -128,6 +134,7 @@ const Auth = {
                 }
             } else {
                 analyticsForm.classList.add('hidden');
+                analyticsForm.setAttribute('novalidate', 'novalidate');
             }
         }
 
@@ -320,6 +327,11 @@ const Auth = {
             
             loginScreen.classList.add('hidden');
             mainApp.classList.remove('hidden');
+            // Prevent hidden login forms from triggering "invalid form control not focusable"
+            ['loginForm', 'passwordResetForm', 'analyticsAccessForm'].forEach(id => {
+                const form = document.getElementById(id);
+                if (form) form.setAttribute('novalidate', 'novalidate');
+            });
             this.updateUserInfo();
             this.updateNavigation();
             if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
@@ -343,10 +355,12 @@ const Auth = {
 
         if (loginForm) {
             loginForm.classList.remove('hidden');
+            loginForm.removeAttribute('novalidate');
             loginForm.reset();
         }
         if (resetForm) {
             resetForm.classList.add('hidden');
+            resetForm.setAttribute('novalidate', 'novalidate');
             resetForm.reset();
         }
         if (banner) {
@@ -365,6 +379,7 @@ const Auth = {
         const analyticsForm = document.getElementById('analyticsAccessForm');
         if (analyticsForm) {
             analyticsForm.classList.add('hidden');
+            analyticsForm.setAttribute('novalidate', 'novalidate');
             analyticsForm.reset();
         }
         this.currentLoginTab = 'presales';
@@ -387,9 +402,11 @@ const Auth = {
 
         if (loginForm) {
             loginForm.classList.add('hidden');
+            loginForm.setAttribute('novalidate', 'novalidate');
         }
         if (resetForm) {
             resetForm.classList.remove('hidden');
+            resetForm.removeAttribute('novalidate');
             resetForm.reset();
         }
         if (banner) {

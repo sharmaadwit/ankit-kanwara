@@ -954,6 +954,11 @@ const App = {
             view.classList.add('active');
         }
 
+        // Prevent "invalid form control not focusable": disable validation on forms inside hidden views only
+        document.querySelectorAll('.view.hidden form').forEach(form => {
+            form.setAttribute('novalidate', 'novalidate');
+        });
+
         // Update sidebar active state
         document.querySelectorAll('.sidebar-link').forEach(link => {
             link.classList.remove('active');
