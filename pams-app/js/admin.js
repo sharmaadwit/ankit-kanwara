@@ -1337,9 +1337,9 @@ const Admin = {
             if (statusFilter === 'active' && rep.isActive === false) return false;
             if (statusFilter === 'inactive' && rep.isActive !== false) return false;
 
-            const repRegion = rep.region || 'India West';
-            if (region && region !== 'all' && repRegion !== region) {
-                return false;
+            const repRegion = rep.region || '';
+            if (region && region !== 'all') {
+                if (repRegion !== region) return false;
             }
 
             if (normalizedSearch) {
@@ -1466,11 +1466,12 @@ const Admin = {
 
         const modalRegionSelect = document.getElementById('salesRepRegion');
         if (modalRegionSelect) {
+            // Only pre-select region if admin has a region filter set; otherwise leave as "Select Region" so they must choose (avoids defaulting inside sales to India West)
             const preferredRegion = this.salesRepFilters.region && this.salesRepFilters.region !== 'all'
                 ? this.salesRepFilters.region
-                : 'India West';
-            const hasPreferred = Array.from(modalRegionSelect.options).some(option => option.value === preferredRegion);
-            modalRegionSelect.value = hasPreferred ? preferredRegion : modalRegionSelect.value;
+                : '';
+            const hasPreferred = preferredRegion && Array.from(modalRegionSelect.options).some(option => option.value === preferredRegion);
+            modalRegionSelect.value = hasPreferred ? preferredRegion : '';
         }
     },
 

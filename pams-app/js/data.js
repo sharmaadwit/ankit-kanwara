@@ -1253,11 +1253,12 @@ const DataManager = {
         const reps = stored ? JSON.parse(stored) : [];
         const normalized = reps.map(rep => {
             const fxValue = Number(rep.fxToInr);
+            const regionTrimmed = (rep.region != null && String(rep.region).trim()) ? String(rep.region).trim() : '';
             return {
                 ...rep,
                 currency: rep.currency || 'INR',
                 fxToInr: Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null,
-                region: rep.region || 'India West'
+                region: regionTrimmed
             };
         });
         this.cache.globalSalesReps = normalized;
@@ -1284,7 +1285,7 @@ const DataManager = {
             return [...reps].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         }
         return reps
-            .filter(rep => (rep.region || 'India West') === normalizedRegion)
+            .filter(rep => (rep.region || '') === normalizedRegion)
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
@@ -1317,7 +1318,8 @@ const DataManager = {
         salesRep.id = this.generateId();
         salesRep.createdAt = new Date().toISOString();
         salesRep.isActive = salesRep.isActive !== undefined ? salesRep.isActive : true;
-        salesRep.region = salesRep.region || 'India West';
+        const regionTrimmed = (salesRep.region != null && String(salesRep.region).trim()) ? String(salesRep.region).trim() : '';
+        salesRep.region = regionTrimmed || (this.getRegions()[0] || '');
         salesReps.push(salesRep);
         this.saveGlobalSalesReps(salesReps);
         this.recordAudit('salesRep.create', 'salesRep', salesRep.id, {
@@ -1343,7 +1345,8 @@ const DataManager = {
             merged.currency = merged.currency || 'INR';
             const fxValue = Number(merged.fxToInr);
             merged.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
-            merged.region = merged.region || 'India West';
+            const regionTrimmed = (merged.region != null && String(merged.region).trim()) ? String(merged.region).trim() : '';
+            merged.region = regionTrimmed || (current.region || this.getRegions()[0] || '');
             salesReps[index] = merged;
             this.saveGlobalSalesReps(salesReps);
             this.recordAudit('salesRep.update', 'salesRep', salesRepId, updates);
