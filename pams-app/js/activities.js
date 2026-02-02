@@ -647,9 +647,15 @@ const Activities = {
         }
 
         const targetRegion = region || this.currentSalesRepRegion || this.getDefaultSalesRepRegion();
-        const reps = typeof DataManager.getSalesRepsByRegion === 'function'
+        let reps = typeof DataManager.getSalesRepsByRegion === 'function'
             ? DataManager.getSalesRepsByRegion(targetRegion || 'all')
             : DataManager.getGlobalSalesReps();
+
+        // If this region has no reps (e.g. "Inside Sales"), fall back to all reps so user can still select someone
+        const usedAllReps = reps.length === 0 && targetRegion && targetRegion.toLowerCase() !== 'all' && typeof DataManager.getSalesRepsByRegion === 'function';
+        if (usedAllReps) {
+            reps = DataManager.getSalesRepsByRegion('all');
+        }
 
         let options = '<option value="">Select Sales Rep...</option>';
         if (!reps.length) {
@@ -659,6 +665,9 @@ const Activities = {
             return;
         }
 
+        if (usedAllReps) {
+            options += '<option value="" disabled>— No reps in this region; showing all —</option>';
+        }
         salesRepSelect.disabled = false;
         reps.forEach(rep => {
             options += `<option value="${rep.email}" data-name="${rep.name}">${rep.name}</option>`;

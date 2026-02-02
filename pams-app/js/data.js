@@ -8,7 +8,8 @@ const DEFAULT_SALES_REGIONS = [
     'SEA',
     'MENA',
     'LATAM',
-    'ROW'
+    'ROW',
+    'Inside Sales'
 ];
 
 const DEFAULT_SALES_REPS = [
@@ -262,6 +263,7 @@ const DataManager = {
             });
             let mutated = false;
 
+            const configuredRegionsSet = new Set(this.getRegions());
             DEFAULT_SALES_REPS.forEach(rep => {
                 const emailKey = rep.email.toLowerCase();
                 if (!emailIndex.has(emailKey)) {
@@ -291,7 +293,9 @@ const DataManager = {
                     changed = true;
                 }
 
-                if ((current.region || 'India West') !== rep.region) {
+                const currentRegion = (current.region || '').trim();
+                const preserveRegion = currentRegion && configuredRegionsSet.has(currentRegion);
+                if (!preserveRegion && (currentRegion || 'India West') !== rep.region) {
                     updated.region = rep.region;
                     changed = true;
                 }
@@ -1141,6 +1145,80 @@ const DataManager = {
         const pending = this.getPendingUseCases().filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
         this.savePendingUseCases(pending);
         return true;
+    },
+
+    /**
+     * Merge a pending industry into an existing approved industry.
+     * Updates all accounts that have the pending value as industry to use the existing industry.
+     * Reject does NOT change existing data; merge does.
+     * @param {string} pendingValue - The pending industry to merge away (e.g. "Fintech")
+     * @param {string} existingIndustry - Approved industry to merge into (e.g. "BFSI")
+     * @returns {{ success: boolean, accountsUpdated?: number, message?: string }}
+     */
+    mergePendingIndustryInto(pendingValue, existingIndustry) {
+        const fromVal = (pendingValue && typeof pendingValue === 'string' ? pendingValue.trim() : '') || '';
+        const toVal = (existingIndustry && typeof existingIndustry === 'string' ? existingIndustry.trim() : '') || '';
+        if (!fromVal || !toVal) return { success: false, message: 'Both values are required.' };
+        const industries = this.getIndustries();
+        if (!industries.includes(toVal)) return { success: false, message: 'Target industry is not in the approved list.' };
+        const pending = this.getPendingIndustries();
+        if (!pending.some(p => (p.value || p).toString().trim() === fromVal)) return { success: false, message: 'Pending industry not found.' };
+
+        const accounts = this.getAccounts();
+        let count = 0;
+        accounts.forEach(acc => {
+            const accInd = (acc.industry && typeof acc.industry === 'string' ? acc.industry.trim() : '') || '';
+            if (accInd === fromVal) {
+                acc.industry = toVal;
+                count++;
+            }
+        });
+        if (count > 0) this.saveAccounts(accounts);
+        this.rejectPendingIndustry(fromVal);
+        return { success: true, accountsUpdated: count };
+    },
+
+    /**
+     * Merge a pending use case into an existing approved use case for the same industry.
+     * Updates all projects that have the pending value in useCases to use the existing use case.
+     * @param {string} pendingValue - The pending use case to merge away
+     * @param {string} pendingIndustry - Industry of the pending use case
+     * @param {string} existingUseCase - Approved use case to merge into
+     * @returns {{ success: boolean, projectsUpdated?: number, message?: string }}
+     */
+    mergePendingUseCaseInto(pendingValue, pendingIndustry, existingUseCase) {
+        const fromVal = (pendingValue && typeof pendingValue === 'string' ? pendingValue.trim() : '') || '';
+        const ind = (pendingIndustry && typeof pendingIndustry === 'string' ? pendingIndustry.trim() : '') || '';
+        const toVal = (existingUseCase && typeof existingUseCase === 'string' ? existingUseCase.trim() : '') || '';
+        if (!fromVal || !toVal) return { success: false, message: 'Both values are required.' };
+        const existingList = this.getUseCasesForIndustry(ind);
+        if (!existingList.includes(toVal)) return { success: false, message: 'Target use case is not in the list for this industry.' };
+        const pending = this.getPendingUseCases();
+        if (!pending.some(p => (p.value || p).toString().trim() === fromVal && (p.industry || '') === ind)) return { success: false, message: 'Pending use case not found.' };
+
+        const accounts = this.getAccounts();
+        let projectsUpdated = 0;
+        accounts.forEach(account => {
+            (account.projects || []).forEach(project => {
+                const useCases = project.useCases || [];
+                let changed = false;
+                const newUseCases = useCases.map(uc => {
+                    const u = (uc && typeof uc === 'string' ? uc.trim() : '') || '';
+                    if (u === fromVal || u === `Other: ${fromVal}`) {
+                        changed = true;
+                        return toVal;
+                    }
+                    return uc;
+                });
+                if (changed) {
+                    project.useCases = newUseCases;
+                    projectsUpdated++;
+                }
+            });
+        });
+        if (projectsUpdated > 0) this.saveAccounts(accounts);
+        this.rejectPendingUseCase(fromVal, ind);
+        return { success: true, projectsUpdated };
     },
 
     // Region Management
@@ -2542,19 +2620,18 @@ const DataManager = {
         const salesReps = this.getGlobalSalesReps();
         if (!salesReps.length) return;
 
-        const alreadyMigrated = localStorage.getItem(SALES_REGION_MIGRATION_FLAG) === 'true';
-        const allowed = new Set(DEFAULT_SALES_REGIONS);
+        // Use admin-configured regions (includes "Inside Sales" and any custom regions), not just DEFAULT_SALES_REGIONS
+        const configuredRegions = this.getRegions();
+        const allowed = new Set(configuredRegions.length ? configuredRegions : DEFAULT_SALES_REGIONS);
+        const fallbackRegion = configuredRegions[0] || DEFAULT_SALES_REGIONS[0] || 'India West';
         let mutated = false;
 
         const normalized = salesReps.map(rep => {
-            const existingRegion = rep.region;
-            let nextRegion = existingRegion;
-
-            if (!alreadyMigrated) {
-                nextRegion = 'India West';
-            } else if (!existingRegion || !allowed.has(existingRegion)) {
-                nextRegion = 'India West';
-            }
+            const existingRegion = (rep.region && typeof rep.region === 'string' ? rep.region.trim() : '') || '';
+            // Preserve region if it is in the allowed (configured) list; otherwise set fallback
+            const nextRegion = existingRegion && allowed.has(existingRegion)
+                ? existingRegion
+                : fallbackRegion;
 
             if (nextRegion !== existingRegion) {
                 mutated = true;
@@ -2562,16 +2639,12 @@ const DataManager = {
 
             return {
                 ...rep,
-                region: nextRegion || 'India West'
+                region: nextRegion || fallbackRegion
             };
         });
 
         if (mutated) {
             this.saveGlobalSalesReps(normalized);
-        }
-
-        if (!alreadyMigrated) {
-            localStorage.setItem(SALES_REGION_MIGRATION_FLAG, 'true');
         }
     },
 
@@ -2604,7 +2677,7 @@ const DataManager = {
                 matched = byName.get(account.salesRep.toLowerCase());
             }
 
-            const resolvedRegion = matched?.region || account.salesRepRegion || 'India West';
+            const resolvedRegion = matched?.region || account.salesRepRegion || this.getRegions()[0] || 'India West';
             const resolvedEmail = matched?.email || account.salesRepEmail || '';
             const resolvedName = matched?.name || account.salesRep;
 
@@ -2655,7 +2728,7 @@ const DataManager = {
                 matched = byName.get(activity.salesRep.toLowerCase());
             }
 
-            const resolvedRegion = matched?.region || activity.salesRepRegion || 'India West';
+            const resolvedRegion = matched?.region || activity.salesRepRegion || this.getRegions()[0] || 'India West';
             const resolvedEmail = matched?.email || activity.salesRepEmail || '';
             const resolvedName = matched?.name || activity.salesRep;
 
@@ -2691,7 +2764,7 @@ const DataManager = {
 
         const resolvedName = rep?.name || name || '';
         const resolvedEmail = rep?.email || email || '';
-        const resolvedRegion = rep?.region || fallbackRegion || 'India West';
+        const resolvedRegion = rep?.region || fallbackRegion || this.getRegions()[0] || 'India West';
 
         return {
             name: resolvedName,

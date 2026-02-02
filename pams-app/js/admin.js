@@ -475,17 +475,29 @@ const Admin = {
         const container = document.getElementById('adminPendingIndustriesList') || document.getElementById('adminPendingIndustriesListConfig');
         if (!container) return;
         const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
+        const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
         container.innerHTML = pending.length === 0
             ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>'
             : pending.map(p => {
                 const val = (p.value != null ? p.value : p).toString().trim();
                 const dataVal = val.replace(/"/g, '&quot;');
                 const meta = p.suggestedBy ? ` <small class="text-muted">(${p.suggestedBy})</small>` : '';
-                return `<div class="admin-list-row">
+                const mergeOptions = industries.filter(i => i && i !== val).map(ind => {
+                    const optVal = (ind || '').replace(/"/g, '&quot;');
+                    return `<option value="${optVal}">${ind}</option>`;
+                }).join('');
+                return `<div class="admin-list-row admin-list-row-pending">
                     <span>${val}${meta}</span>
-                    <span style="display: flex; gap: 0.5rem;">
+                    <span style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary btn-xs" data-pending-industry="${dataVal}" onclick="Admin.acceptPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Accept</button>
                         <button type="button" class="btn btn-secondary btn-xs" data-pending-industry="${dataVal}" onclick="Admin.rejectPendingIndustryFromAdmin(this.getAttribute('data-pending-industry'))">Reject</button>
+                        <span class="admin-merge-inline" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                            <label class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Merge into:</label>
+                            <select class="form-control form-control-sm merge-industry-select" data-pending-industry="${dataVal}" style="min-width: 120px; max-width: 160px;">
+                                <option value="">Select…</option>${mergeOptions}
+                            </select>
+                            <button type="button" class="btn btn-outline btn-xs" data-pending-industry="${dataVal}" onclick="Admin.mergePendingIndustryFromAdmin(this)">Merge</button>
+                        </span>
                     </span>
                 </div>`;
             }).join('');
@@ -513,6 +525,31 @@ const Admin = {
         this.renderAdminPendingIndustries();
         this.updatePendingBadges();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
+    },
+
+    mergePendingIndustryFromAdmin(buttonEl) {
+        if (typeof DataManager === 'undefined') return;
+        const pendingValue = buttonEl?.getAttribute?.('data-pending-industry');
+        if (!pendingValue) return;
+        const row = buttonEl?.closest?.('.admin-list-row-pending');
+        const select = row?.querySelector?.('.merge-industry-select');
+        const targetIndustry = select?.value?.trim();
+        if (!targetIndustry) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Select an industry to merge into.', 'error');
+            return;
+        }
+        const result = DataManager.mergePendingIndustryInto(pendingValue, targetIndustry);
+        if (!result.success) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Merge failed.', 'error');
+            return;
+        }
+        this.renderAdminIndustriesList();
+        this.renderAdminPendingIndustries();
+        this.updatePendingBadges();
+        const msg = result.accountsUpdated > 0
+            ? `Merged into "${targetIndustry}". ${result.accountsUpdated} account(s) updated.`
+            : `Merged into "${targetIndustry}".`;
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
     renderUseCasesForIndustry() {
@@ -586,11 +623,23 @@ const Admin = {
                 const dataInd = ind.replace(/"/g, '&quot;');
                 const meta = p.suggestedBy ? ` <small class="text-muted">(${p.suggestedBy})</small>` : '';
                 const indLabel = ind || 'Unassigned';
-                return `<div class="admin-list-row">
+                const useCasesForIndustry = (typeof DataManager !== 'undefined' && ind) ? DataManager.getUseCasesForIndustry(ind) : [];
+                const mergeOptions = useCasesForIndustry.filter(uc => uc && uc !== val).map(uc => {
+                    const optVal = (uc || '').replace(/"/g, '&quot;');
+                    return `<option value="${optVal}">${uc}</option>`;
+                }).join('');
+                return `<div class="admin-list-row admin-list-row-pending-uc">
                     <span>${val} <small class="text-muted">→ ${indLabel}</small>${meta}</span>
-                    <span style="display: flex; gap: 0.5rem;">
+                    <span style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.acceptPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Accept</button>
                         <button type="button" class="btn btn-secondary btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.rejectPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Reject</button>
+                        <span class="admin-merge-inline" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                            <label class="text-muted" style="font-size: 0.75rem; white-space: nowrap;">Merge into:</label>
+                            <select class="form-control form-control-sm merge-usecase-select" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" style="min-width: 120px; max-width: 160px;">
+                                <option value="">Select…</option>${mergeOptions}
+                            </select>
+                            <button type="button" class="btn btn-outline btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.mergePendingUseCaseFromAdmin(this)">Merge</button>
+                        </span>
                     </span>
                 </div>`;
             }).join('');
@@ -612,6 +661,32 @@ const Admin = {
         this.renderAdminPendingUseCases();
         this.updatePendingBadges();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
+    },
+
+    mergePendingUseCaseFromAdmin(buttonEl) {
+        if (typeof DataManager === 'undefined') return;
+        const pendingValue = buttonEl?.getAttribute?.('data-pending-value');
+        const pendingIndustry = buttonEl?.getAttribute?.('data-pending-industry');
+        if (!pendingValue) return;
+        const row = buttonEl?.closest?.('.admin-list-row-pending-uc');
+        const select = row?.querySelector?.('.merge-usecase-select');
+        const targetUseCase = select?.value?.trim();
+        if (!targetUseCase) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Select a use case to merge into.', 'error');
+            return;
+        }
+        const result = DataManager.mergePendingUseCaseInto(pendingValue, pendingIndustry, targetUseCase);
+        if (!result.success) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Merge failed.', 'error');
+            return;
+        }
+        this.renderUseCasesForIndustry();
+        this.renderAdminPendingUseCases();
+        this.updatePendingBadges();
+        const msg = result.projectsUpdated > 0
+            ? `Merged into "${targetUseCase}". ${result.projectsUpdated} project(s) updated.`
+            : `Merged into "${targetUseCase}".`;
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
     loadAnalyticsSettings() {
