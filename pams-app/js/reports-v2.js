@@ -394,10 +394,10 @@ const ReportsV2 = {
             }
         });
 
-        // Call type (details.callType: Demo, Discovery, etc.) – external activities only
+        // Call type (details.callType: Demo, Discovery, etc.) – external Customer Call activities only
         data.callTypeData = {};
         activities.forEach(activity => {
-            if (!activity.isInternal) {
+            if (!activity.isInternal && activity.type === 'customerCall') {
                 const callType = (activity.details && activity.details.callType) ? activity.details.callType : 'Not specified';
                 data.callTypeData[callType] = (data.callTypeData[callType] || 0) + 1;
             }
@@ -590,13 +590,14 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Call Type (what kind of calls: Demo, Discovery, etc.) -->
+                    <!-- Call Type (Demo, Discovery, etc.) – external Customer Call activities only -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Call Types</h3>
-                            <span class="text-muted">External activities by call type</span>
+                            <span class="text-muted">External Customer Call activities only (SOW, POC, RFx, Pricing excluded)</span>
                         </div>
                         <div class="reports-v2-card-body">
+                            <p class="reports-v2-card-hint">Not specified = Customer Call activities where Call Type was not set (e.g. older or imported records).</p>
                             ${Object.keys(this.cachedData.callTypeData || {}).length > 0 ? `
                                 <canvas id="callTypeChart" height="280"></canvas>
                             ` : `
