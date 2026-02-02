@@ -5,15 +5,26 @@
  *
  * Usage:
  *   REMOTE_STORAGE_BASE="https://<service>.up.railway.app/api/storage" node server/scripts/export-storage-snapshot.js
+ *   Or set REMOTE_STORAGE_BASE in .env at project root and run: npm run backup
  *
  * Optional environment variables:
  *   REMOTE_STORAGE_USER    -> value for X-Admin-User header
  *   REMOTE_STORAGE_HEADERS -> JSON object of extra headers to send with each request
  *   SNAPSHOT_DIR           -> override output directory (defaults to backups/)
+ *   SNAPSHOT_FILE          -> override full output path (e.g. backups/storage-snapshot-latest.json)
  */
 
 const fs = require('fs');
 const path = require('path');
+
+// Load .env from project root so REMOTE_STORAGE_BASE can be set there
+try {
+    const dotenv = require('dotenv');
+    const projectRoot = path.join(__dirname, '..', '..');
+    dotenv.config({ path: path.join(projectRoot, '.env') });
+} catch (_) {
+    // dotenv optional
+}
 const zlib = require('zlib');
 
 const {
@@ -47,6 +58,10 @@ const buildHeaders = () => {
     };
     if (process.env.REMOTE_STORAGE_USER) {
         headers['X-Admin-User'] = process.env.REMOTE_STORAGE_USER;
+    }
+    const apiKey = (process.env.REMOTE_STORAGE_API_KEY || process.env.STORAGE_API_KEY || '').trim();
+    if (apiKey) {
+        headers['X-Api-Key'] = apiKey;
     }
     if (process.env.REMOTE_STORAGE_HEADERS) {
         try {
@@ -169,11 +184,19 @@ const main = async () => {
         }
     }
 
-    const outputDir = process.env.SNAPSHOT_DIR
-        ? path.resolve(process.env.SNAPSHOT_DIR)
-        : path.join(__dirname, '..', '..', 'backups');
-    const fileName = `storage-snapshot-${new Date().toISOString().replace(/[:.]/g, '').slice(0, 15)}.json`;
-    const outputPath = path.join(outputDir, fileName);
+    let outputPath;
+    const outArg = process.argv[3]; // optional: node script.js [base] <outputPath>
+    if (outArg) {
+        outputPath = path.resolve(process.cwd(), outArg);
+    } else if (process.env.SNAPSHOT_FILE) {
+        outputPath = path.resolve(process.cwd(), process.env.SNAPSHOT_FILE);
+    } else {
+        const outputDir = process.env.SNAPSHOT_DIR
+            ? path.resolve(process.env.SNAPSHOT_DIR)
+            : path.join(__dirname, '..', '..', 'backups');
+        const fileName = `storage-snapshot-${new Date().toISOString().replace(/[:.]/g, '').slice(0, 15)}.json`;
+        outputPath = path.join(outputDir, fileName);
+    }
 
     writeSnapshot(outputPath, snapshot);
     console.log(`✅ Snapshot written to ${path.relative(process.cwd(), outputPath)}`);

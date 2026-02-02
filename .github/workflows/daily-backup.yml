@@ -31,9 +31,10 @@ jobs:
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          SNAPSHOT_FILE: backups/storage-snapshot-latest.json
         run: |
           mkdir -p backups
-          SNAPSHOT_FILE="$GITHUB_WORKSPACE/backups/storage-snapshot-latest.json" node server/scripts/export-storage-snapshot.js
+          node server/scripts/export-storage-snapshot.js "" "backups/storage-snapshot-latest.json"
 
       - name: List backups (debug)
         run: |
