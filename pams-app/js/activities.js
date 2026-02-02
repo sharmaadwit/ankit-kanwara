@@ -710,6 +710,8 @@ const Activities = {
                 html = this.getSOWFields();
             } else if (type === 'poc') {
                 html = this.getPOCFields();
+                // Sync visibility and required so hidden POC date fields don't trigger "not focusable"
+                setTimeout(() => this.togglePOCFields(), 0);
             } else if (type === 'rfx') {
                 html = this.getRFxFields();
             } else if (type === 'pricing') {
@@ -790,21 +792,24 @@ const Activities = {
         `;
     },
 
-    // Toggle POC fields based on Access Type
+    // Toggle POC fields based on Access Type (and required on date fields to avoid "invalid form control not focusable")
     togglePOCFields() {
-        const accessType = document.getElementById('accessType').value;
+        const accessType = document.getElementById('accessType')?.value;
         const sandboxFields = document.getElementById('pocSandboxFields');
         const customFields = document.getElementById('pocCustomFields');
-        
+        const pocStartDate = document.getElementById('pocStartDate');
+        const pocEndDate = document.getElementById('pocEndDate');
+
         if (accessType === 'Sandbox') {
             if (sandboxFields) sandboxFields.classList.remove('hidden');
             if (customFields) customFields.classList.add('hidden');
-        } else if (accessType && accessType.startsWith('Custom POC')) {
-            if (sandboxFields) sandboxFields.classList.add('hidden');
-            if (customFields) customFields.classList.remove('hidden');
+            if (pocStartDate) pocStartDate.setAttribute('required', 'required');
+            if (pocEndDate) pocEndDate.setAttribute('required', 'required');
         } else {
             if (sandboxFields) sandboxFields.classList.add('hidden');
-            if (customFields) customFields.classList.add('hidden');
+            if (customFields) customFields.classList.toggle('hidden', !(accessType && accessType.startsWith('Custom POC')));
+            if (pocStartDate) pocStartDate.removeAttribute('required');
+            if (pocEndDate) pocEndDate.removeAttribute('required');
         }
     },
 
