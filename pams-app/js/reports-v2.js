@@ -4,7 +4,7 @@ const ReportsV2 = {
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
-    activeTab: 'presales', // 'presales', 'sales', 'regional'
+    activeTab: 'presales', // 'presales', 'sales', 'regional', 'ai'
     activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
 
     // Initialize Reports V2
@@ -253,6 +253,10 @@ const ReportsV2 = {
                         onclick="ReportsV2.switchTab('regional')">
                     Regional Data
                 </button>
+                <button class="reports-v2-tab ${this.activeTab === 'ai' ? 'active' : ''}" 
+                        onclick="ReportsV2.switchTab('ai')">
+                    AI Intelligence
+                </button>
             </div>
         `;
     },
@@ -271,9 +275,29 @@ const ReportsV2 = {
                 `;
             case 'regional':
                 return this.renderRegionalData(activities);
+            case 'ai':
+                return this.renderAIIntelligencePlaceholder();
             default:
                 return this.renderPresalesReports(activities);
         }
+    },
+
+    // AI Intelligence tab – placeholder; data/analysis will be wired later
+    renderAIIntelligencePlaceholder() {
+        const periodLabel = this.formatPeriod(this.currentPeriod);
+        return `
+            <div class="reports-v2-section">
+                <h2 class="reports-v2-section-title">AI Intelligence</h2>
+                <div class="reports-v2-card reports-v2-card-wide" style="text-align: center; padding: 3rem 2rem;">
+                    <p class="text-muted" style="font-size: 1.125rem; margin-bottom: 1rem;">
+                        AI-driven insights will run on your submitted data (e.g. for ${periodLabel}) and appear here.
+                    </p>
+                    <p class="text-muted" style="font-size: 0.9375rem;">
+                        This tab will show summaries, trends, and recommendations based on activities, regions, and sales data once the pipeline is connected.
+                    </p>
+                </div>
+            </div>
+        `;
     },
 
     // Compute all report data
