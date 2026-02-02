@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # No cache: package-lock.json is not in repo; backup script needs only Node + repo files
 
       - name: Run storage snapshot export
         env:
