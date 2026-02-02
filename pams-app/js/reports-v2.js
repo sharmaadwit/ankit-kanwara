@@ -170,9 +170,10 @@ const ReportsV2 = {
             
             // Also destroy any Chart.js instances that might be lingering on canvases
             if (typeof Chart !== 'undefined' && Chart.getChart) {
-                const chartCanvases = [
+                const                 chartCanvases = [
                     'internalExternalChart',
                     'activityBreakdownChart',
+                    'callTypeChart',
                     'presalesActivityChart',
                     'missingSfdcRegionalChart',
                     'industryRegionalChart',
@@ -318,6 +319,15 @@ const ReportsV2 = {
             if (!activity.isInternal && activity.salesRep) {
                 const repName = activity.salesRep;
                 data.salesRepRequests[repName] = (data.salesRepRequests[repName] || 0) + 1;
+            }
+        });
+
+        // Call type (details.callType: Demo, Discovery, etc.) – external activities only
+        data.callTypeData = {};
+        activities.forEach(activity => {
+            if (!activity.isInternal) {
+                const callType = (activity.details && activity.details.callType) ? activity.details.callType : 'Not specified';
+                data.callTypeData[callType] = (data.callTypeData[callType] || 0) + 1;
             }
         });
 
@@ -507,7 +517,7 @@ const ReportsV2 = {
                             <h3>Internal vs External Activity</h3>
                         </div>
                         <div class="reports-v2-card-body">
-                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; height: auto;"></canvas>
+                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; min-height: 200px; height: 200px;"></canvas>
                             <div class="reports-v2-legend">
                                 <span class="reports-v2-legend-item">
                                     <span class="reports-v2-legend-color" style="background: #3182CE;"></span>
@@ -518,6 +528,21 @@ const ReportsV2 = {
                                     External: ${externalCount} (${externalPercent}%)
                                 </span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Call Type (what kind of calls: Demo, Discovery, etc.) -->
+                    <div class="reports-v2-card">
+                        <div class="reports-v2-card-header">
+                            <h3>Call Types</h3>
+                            <span class="text-muted">External activities by call type</span>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            ${Object.keys(this.cachedData.callTypeData || {}).length > 0 ? `
+                                <canvas id="callTypeChart" height="280"></canvas>
+                            ` : `
+                                <p class="reports-v2-empty">No call type data for this period.</p>
+                            `}
                         </div>
                     </div>
 
@@ -612,6 +637,24 @@ const ReportsV2 = {
             }))
             .sort((a, b) => b.missingCount - a.missingCount);
 
+        // Region-wise missing SFDC opps by reps (group by region, then rep) for this month
+        const regionRepMissingMap = new Map();
+        salesRepMissingData.forEach(item => {
+            const region = item.region || 'Unknown';
+            if (!regionRepMissingMap.has(region)) {
+                regionRepMissingMap.set(region, []);
+            }
+            regionRepMissingMap.get(region).push({
+                salesRep: item.name,
+                missingCount: item.missingCount,
+                accountCount: item.accountCount
+            });
+        });
+        regionRepMissingMap.forEach((reps) => reps.sort((a, b) => b.missingCount - a.missingCount));
+        const regionRepMissingData = Array.from(regionRepMissingMap.entries())
+            .map(([region, reps]) => ({ region, reps }))
+            .sort((a, b) => (a.region || '').localeCompare(b.region || ''));
+
         // Industry Wise Regional Traffic
         const regionIndustryMap = new Map();
         activities.forEach(activity => {
@@ -676,7 +719,44 @@ const ReportsV2 = {
                 <h2 class="reports-v2-section-title">Regional Data</h2>
                 
                 <div class="reports-v2-grid">
-                    <!-- Sales Rep Missing Opportunities -->
+                    <!-- Region-wise missing SFDC opps by reps (this month) -->
+                    <div class="reports-v2-card reports-v2-card-wide">
+                        <div class="reports-v2-card-header">
+                            <h3>Region-wise missing SFDC opps by reps</h3>
+                            <span class="text-muted">${this.formatPeriod(this.currentPeriod)} – external activities missing SFDC link</span>
+                        </div>
+                        <div class="reports-v2-card-body">
+                            ${regionRepMissingData.length > 0 ? regionRepMissingData.map(({ region, reps }) => `
+                                <div class="reports-v2-region-block" style="margin-bottom: 1.25rem;">
+                                    <h4 class="reports-v2-region-heading" style="font-size: 1rem; margin-bottom: 0.5rem; color: var(--gray-700);">${region}</h4>
+                                    <div class="reports-v2-table-container">
+                                        <table class="reports-v2-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Sales Rep</th>
+                                                    <th># Missing Opps</th>
+                                                    <th># Accounts</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${reps.map(r => `
+                                                    <tr>
+                                                        <td>${r.salesRep}</td>
+                                                        <td>${r.missingCount}</td>
+                                                        <td>${r.accountCount}</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            `).join('') : `
+                                <p class="reports-v2-empty">No missing SFDC opps by region for this period.</p>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- Sales Rep Missing Opportunities (flat table) -->
                     <div class="reports-v2-card reports-v2-card-wide">
                         <div class="reports-v2-card-header">
                             <h3>Sales Rep Missing Opportunities</h3>
@@ -807,46 +887,35 @@ const ReportsV2 = {
 
     // Initialize all charts
     initCharts(activities) {
-        if (!activities || activities.length === 0) {
-            console.warn('ReportsV2: No activities to chart');
-            return;
-        }
+        const safeActivities = activities && Array.isArray(activities) ? activities : [];
+        const internalCount = safeActivities.filter(a => a.isInternal === true).length;
+        const externalCount = safeActivities.filter(a => !a.isInternal).length;
+        const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External Pie Chart
-            const internalCount = activities.filter(a => a.isInternal).length;
-            const externalCount = activities.filter(a => !a.isInternal).length;
-            
-            // Internal vs External Pie Chart - use donut chart approach like Activity Breakdown
-            if (this.activeTab === 'presales' && (internalCount > 0 || externalCount > 0)) {
+            // Internal vs External – always render when on Presales and canvas exists (even if 0/0)
+            if (this.activeTab === 'presales') {
                 const internalExternalCanvas = document.getElementById('internalExternalChart');
                 if (internalExternalCanvas) {
-                    // Destroy existing chart if it exists
                     if (this.charts['internalExternalChart']) {
-                        try {
-                            this.charts['internalExternalChart'].destroy();
-                        } catch (e) {
-                            console.warn('Error destroying existing internalExternalChart:', e);
-                        }
+                        try { this.charts['internalExternalChart'].destroy(); } catch (e) { /* ignore */ }
                         delete this.charts['internalExternalChart'];
                     }
-                    
-                    // Also check Chart.js registry
                     if (Chart.getChart && Chart.getChart(internalExternalCanvas)) {
-                        try {
-                            Chart.getChart(internalExternalCanvas).destroy();
-                        } catch (e) {
-                            console.warn('Error destroying Chart.js instance:', e);
-                        }
+                        try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
                     }
-                    
+                    // Ensure canvas has room to draw
+                    if (!internalExternalCanvas.style.minHeight) {
+                        internalExternalCanvas.style.minHeight = '200px';
+                    }
+                    const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
                     try {
                         this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
                             type: 'doughnut',
                             data: {
                                 labels: ['Internal', 'External'],
                                 datasets: [{
-                                    data: [internalCount, externalCount],
+                                    data: dataValues,
                                     backgroundColor: ['#3182CE', '#38A169'],
                                     borderWidth: 2,
                                     borderColor: '#fff'
@@ -857,17 +926,15 @@ const ReportsV2 = {
                                 maintainAspectRatio: false,
                                 cutout: '60%',
                                 plugins: {
-                                    legend: {
-                                        display: false
-                                    },
+                                    legend: { display: false },
                                     tooltip: {
                                         callbacks: {
                                             label: function(context) {
                                                 const label = context.label || '';
                                                 const value = context.parsed || 0;
                                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
-                                                return `${label}: ${value} (${percentage}%)`;
+                                                const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+                                                return `${label}: ${value} (${pct}%)`;
                                             }
                                         }
                                     }
@@ -876,17 +943,16 @@ const ReportsV2 = {
                             plugins: [{
                                 id: 'centerText',
                                 beforeDraw: function(chart) {
+                                    if (!chart.chartArea) return;
                                     const ctx = chart.ctx;
-                                    const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-                                    const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
-                                    
+                                    const centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
+                                    const centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
                                     ctx.save();
                                     ctx.font = 'bold 20px Arial';
                                     ctx.fillStyle = '#111827';
                                     ctx.textAlign = 'center';
                                     ctx.textBaseline = 'middle';
-                                    ctx.fillText((internalCount + externalCount).toString(), centerX, centerY - 8);
-                                    
+                                    ctx.fillText(totalCount > 0 ? totalCount.toString() : 'No data', centerX, centerY - 8);
                                     ctx.font = '12px Arial';
                                     ctx.fillStyle = '#6b7280';
                                     ctx.fillText('Total', centerX, centerY + 12);
@@ -894,9 +960,8 @@ const ReportsV2 = {
                                 }
                             }]
                         });
-                        console.log('Successfully created Internal vs External chart');
-                    } catch (error) {
-                        console.error('Error creating Internal vs External chart:', error);
+                    } catch (err) {
+                        console.error('ReportsV2: Internal vs External chart error', err);
                     }
                 }
             }
@@ -906,7 +971,7 @@ const ReportsV2 = {
                 const presalesActivityCanvas = document.getElementById('presalesActivityChart');
                 if (presalesActivityCanvas) {
                     const userActivityMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         const userId = activity.userId || activity.assignedUserEmail || 'unknown';
                         const userName = activity.userName || 'Unknown';
                         if (!userActivityMap.has(userId)) {
@@ -946,7 +1011,31 @@ const ReportsV2 = {
 
             // Activity Breakdown - Donut Chart with Filter (only if Presales tab)
             if (this.activeTab === 'presales') {
-                this.initActivityBreakdownChart(activities);
+                this.initActivityBreakdownChart(safeActivities);
+            }
+
+            // Call Type chart (Demo, Discovery, etc.) - Presales tab
+            if (this.activeTab === 'presales') {
+                const callTypeCanvas = document.getElementById('callTypeChart');
+                if (callTypeCanvas && this.cachedData && this.cachedData.callTypeData) {
+                    const callTypeEntries = Object.entries(this.cachedData.callTypeData)
+                        .filter(([, count]) => count > 0)
+                        .sort((a, b) => b[1] - a[1]);
+                    if (callTypeEntries.length > 0) {
+                        if (this.charts['callTypeChart']) {
+                            try { this.charts['callTypeChart'].destroy(); } catch (e) { /* ignore */ }
+                            delete this.charts['callTypeChart'];
+                        }
+                        if (Chart.getChart && Chart.getChart(callTypeCanvas)) {
+                            try { Chart.getChart(callTypeCanvas).destroy(); } catch (e) { /* ignore */ }
+                        }
+                        this.renderHorizontalBarChart('callTypeChart', {
+                            labels: callTypeEntries.map(([name]) => name),
+                            data: callTypeEntries.map(([, count]) => count),
+                            label: 'Activities'
+                        });
+                    }
+                }
             }
 
             // Missing SFDC Links - Regional Bar Chart (Sales View)
@@ -955,7 +1044,7 @@ const ReportsV2 = {
                 if (missingSfdcCanvas) {
                     const accounts = DataManager.getAccounts();
                     const regionMissingMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
                             const account = accounts.find(a => a.id === activity.accountId);
                             if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
@@ -1003,7 +1092,7 @@ const ReportsV2 = {
                 const industryRegionalCanvas = document.getElementById('industryRegionalChart');
                 if (industryRegionalCanvas) {
                     const regionIndustryMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
                             const account = accounts.find(a => a.id === activity.accountId);
                             if (account && account.industry) {
@@ -1055,7 +1144,7 @@ const ReportsV2 = {
                             }
                         }
                         
-                        this.renderStackedBarChart('industryRegionalChart', {
+                        this.renderHorizontalStackedBarChart('industryRegionalChart', {
                             labels: regionLabels,
                             datasets: datasets
                         });
@@ -1066,7 +1155,7 @@ const ReportsV2 = {
                 const missingSfdcSalesRepCanvas = document.getElementById('missingSfdcSalesRepChart');
                 if (missingSfdcSalesRepCanvas) {
                     const salesRepSfdcMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.salesRep && activity.accountId) {
                             const account = accounts.find(a => a.id === activity.accountId);
                             if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
@@ -1110,7 +1199,7 @@ const ReportsV2 = {
             // Sales Rep Most Requests (only in Regional Data tab)
             if (this.activeTab === 'regional') {
                 const salesRepMap = new Map();
-                activities.forEach(activity => {
+                safeActivities.forEach(activity => {
                     if (!activity.isInternal && activity.salesRep) {
                         const repName = activity.salesRep;
                         if (!salesRepMap.has(repName)) {
@@ -1139,7 +1228,7 @@ const ReportsV2 = {
                 
                 if (industryTotalCanvas) {
                     const industryActivityMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
                             const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
                             if (account && account.industry) {
@@ -1180,7 +1269,7 @@ const ReportsV2 = {
                 // Industry Average Activities
                 if (industryAverageCanvas) {
                     const industryAvgMap = new Map();
-                    activities.forEach(activity => {
+                    safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
                             const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
                             if (account && account.industry) {
@@ -1643,6 +1732,53 @@ const ReportsV2 = {
         });
         } catch (error) {
             console.error(`Error creating stacked bar chart ${canvasId}:`, error);
+        }
+    },
+
+    // Render horizontal stacked bar chart (regions/industries on Y, count on X)
+    renderHorizontalStackedBarChart(canvasId, { labels, datasets }) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
+        }
+        if (!datasets || !Array.isArray(datasets) || datasets.length === 0) {
+            console.warn(`Invalid datasets for chart ${canvasId}`);
+            return;
+        }
+        if (this.charts[canvasId]) {
+            try { this.charts[canvasId].destroy(); } catch (e) { /* ignore */ }
+            delete this.charts[canvasId];
+        }
+        if (Chart.getChart && Chart.getChart(canvas)) {
+            try { Chart.getChart(canvas).destroy(); } catch (e) { /* ignore */ }
+        }
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'bottom' }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error(`Error creating horizontal stacked bar chart ${canvasId}:`, error);
         }
     }
 };

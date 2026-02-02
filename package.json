@@ -1,6 +1,6 @@
 {
   "name": "pams-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Presales activity management system backend and static UI bundle",
   "main": "server/index.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "dev": "nodemon server/index.js",
     "migrate": "node server/scripts/migrate.js",
     "test": "jest",
-    "uptime": "node server/scripts/uptime.js"
+    "uptime": "node server/scripts/uptime.js",
+    "backup": "node server/scripts/export-storage-snapshot.js"
   },
   "engines": {
     "node": ">=18"
