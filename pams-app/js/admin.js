@@ -289,6 +289,10 @@ const Admin = {
 
         this.markActiveSectionButton(sectionId);
         this.ensureSectionLoaded(sectionId);
+        // Always refresh POC Sandbox data when section is shown so it displays correctly
+        if (sectionId === 'poc') {
+            this.loadPOCSandbox();
+        }
         this.activeSection = sectionId;
     },
 

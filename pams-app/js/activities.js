@@ -8,6 +8,8 @@ const COMMON_PRODUCTS = [
     'Journey Builder',
     'Personalize',
     'Voice AI',
+    'WA Voice',
+    'Advertise',
     'Other'
 ];
 
@@ -527,9 +529,6 @@ const Activities = {
                                                 <input type="checkbox" value="${p}"> ${p}
                                             </div>
                                         `).join('')}
-                                        <div class="multi-select-option" onclick="Activities.toggleOption('projectProducts', 'Other')">
-                                            <input type="checkbox" value="Other"> Other
-                                        </div>
                                     </div>
                                 </div>
                                 <input type="text" class="form-control" id="projectProductsOtherText" placeholder="Specify other product..." style="margin-top: 0.5rem; display: none;">
@@ -1201,8 +1200,21 @@ const Activities = {
                 }
             }
             if (industrySelect && account.industry) {
-                industrySelect.value = account.industry;
-                this.handleIndustryChange(account.industry);
+                const standardIndustries = (typeof DataManager.getIndustries === 'function' ? DataManager.getIndustries() : []) || [];
+                const isCustomIndustry = !standardIndustries.includes(account.industry);
+                if (isCustomIndustry) {
+                    industrySelect.value = 'Other';
+                    const industryOtherText = document.getElementById('industryOtherText');
+                    if (industryOtherText) {
+                        industryOtherText.value = account.industry;
+                        industryOtherText.style.display = 'block';
+                        industryOtherText.required = true;
+                    }
+                    this.handleIndustryChange('Other');
+                } else {
+                    industrySelect.value = account.industry;
+                    this.handleIndustryChange(account.industry);
+                }
             }
         }
         

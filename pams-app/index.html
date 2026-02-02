@@ -440,7 +440,17 @@
                                     <h3>System Users</h3>
                                 </div>
                                 <div class="card-body">
-                                    <button id="addUserBtn" class="btn btn-primary mb-4" onclick="Admin.showAddUserModal()">Add New User</button>
+                                    <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem;">
+                                        <div class="form-group" style="margin-bottom:0; min-width: 160px;">
+                                            <label class="form-label">Status</label>
+                                            <select id="usersFilterStatus" class="form-control" onchange="Admin.loadUsers()">
+                                                <option value="active">Active only</option>
+                                                <option value="inactive">Inactive only</option>
+                                                <option value="all">All</option>
+                                            </select>
+                                        </div>
+                                        <button id="addUserBtn" class="btn btn-primary" onclick="Admin.showAddUserModal()">Add New User</button>
+                                    </div>
                                     <div id="usersList" class="space-y-2"></div>
                                 </div>
                             </div>
@@ -454,6 +464,14 @@
                                 </div>
                                 <div class="card-body">
                                     <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+                                        <div class="form-group" style="min-width: 140px;">
+                                            <label class="form-label">Status</label>
+                                            <select id="salesRepFilterStatus" class="form-control">
+                                                <option value="active">Active only</option>
+                                                <option value="inactive">Inactive only</option>
+                                                <option value="all">All</option>
+                                            </select>
+                                        </div>
                                         <div class="form-group" style="min-width: 200px;">
                                             <label class="form-label">Region</label>
                                             <select id="salesRepFilterRegion" class="form-control">
@@ -548,10 +566,41 @@
                         <!-- POC Sandbox Access -->
                         <div class="admin-section hidden" data-admin-section="poc">
                             <div class="card">
+                                <div class="card-header">
+                                    <h3>POC Sandbox Manager</h3>
+                                </div>
                                 <div class="card-body">
-                                    <h3 class="card-title" style="margin-bottom:0.5rem;">POC Sandbox Manager</h3>
-                                    <p class="text-muted" style="margin-bottom:1rem;">Review sandbox allocations, update statuses, and capture POC progress from the dedicated admin workspace.</p>
-                                    <button class="btn btn-outline" onclick="App.switchView('adminPoc')">Open POC Sandbox Manager</button>
+                                    <div class="form-grid" style="margin-bottom:1rem;">
+                                        <div class="form-group">
+                                            <label class="form-label">Status</label>
+                                            <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                <option value="">All Status</option>
+                                                <option value="Assigned">Assigned</option>
+                                                <option value="Unassigned">Unassigned</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Account</label>
+                                            <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                <option value="">All Accounts</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">From Date</label>
+                                            <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">To Date</label>
+                                            <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                        </div>
+                                    </div>
+                                    <div class="admin-config-toolbar" style="justify-content:flex-end; margin-bottom:1rem;">
+                                        <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
+                                        <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
+                                    </div>
+                                    <div id="pocSandboxTable">
+                                        <div class="text-muted">Loading sandbox assignments…</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -664,26 +713,26 @@
                                             <!-- Pending Tab -->
                                             <div class="admin-tab-content" data-tab-content="pending">
                                                 <div class="admin-collapsible">
-                                                    <div class="admin-collapsible-header" onclick="Admin.toggleCollapsible('pendingIndustriesConfig')">
+                                                    <div class="admin-collapsible-header expanded" onclick="Admin.toggleCollapsible('pendingIndustriesConfig')">
                                                         <h4>
                                                             Pending Industries
                                                             <span id="adminPendingIndustriesBadgeConfig" class="admin-collapsible-badge" style="display: none;">0</span>
                                                         </h4>
                                                         <span class="admin-collapsible-icon">▼</span>
                                                     </div>
-                                                    <div class="admin-collapsible-content" id="pendingIndustriesContentConfig">
+                                                    <div class="admin-collapsible-content expanded" id="pendingIndustriesConfigContent">
                                                         <div id="adminPendingIndustriesListConfig" class="space-y-compact"></div>
                                                     </div>
                                                 </div>
                                                 <div class="admin-collapsible" style="margin-top: 1rem;">
-                                                    <div class="admin-collapsible-header" onclick="Admin.toggleCollapsible('pendingUseCasesConfig')">
+                                                    <div class="admin-collapsible-header expanded" onclick="Admin.toggleCollapsible('pendingUseCasesConfig')">
                                                         <h4>
                                                             Pending Use Cases
                                                             <span id="adminPendingUseCasesBadgeConfig" class="admin-collapsible-badge" style="display: none;">0</span>
                                                         </h4>
                                                         <span class="admin-collapsible-icon">▼</span>
                                                     </div>
-                                                    <div class="admin-collapsible-content" id="pendingUseCasesContentConfig">
+                                                    <div class="admin-collapsible-content expanded" id="pendingUseCasesConfigContent">
                                                         <div id="adminPendingUseCasesListConfig" class="space-y-compact"></div>
                                                     </div>
                                                 </div>
@@ -768,8 +817,7 @@
                                     <div class="card">
                                         <div class="card-body">
                                             <h3 class="card-title" style="margin-bottom:0.5rem;">Reports</h3>
-                                            <p class="text-muted" style="margin-bottom:1rem;">Open the dedicated reports workspace to explore activity analytics, saved filters, and monthly summaries.</p>
-                                            <button class="btn btn-outline" onclick="App.navigateToCardView('reports')">Open Reports View</button>
+                                            <p class="text-muted" style="margin-bottom:0;">Use <strong>Reports</strong> in the main sidebar to explore activity analytics, saved filters, and monthly summaries.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -876,56 +924,10 @@
                     </div>
                 </div>
 
-                <!-- POC Sandbox View -->
+                <!-- POC Sandbox: data is shown in System Admin → POC Management → POC Sandbox (this view redirects there) -->
                 <div id="adminPocView" class="view hidden">
                     <div class="page-header">
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                            <button class="btn btn-outline btn-sm" onclick="App.switchView('admin')" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
-                                </svg>
-                                Back to Admin
-                            </button>
-                        </div>
-                        <h1 class="page-title">POC Sandbox Manager</h1>
-                        <p class="page-subtitle">Track sandbox allocations, update statuses, and maintain context for ongoing proof-of-concept work.</p>
-                    </div>
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <div class="form-grid" style="margin-bottom:1rem;">
-                                <div class="form-group">
-                                    <label class="form-label">Status</label>
-                                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                        <option value="">All Status</option>
-                                        <option value="Assigned">Assigned</option>
-                                        <option value="Unassigned">Unassigned</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Account</label>
-                                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                        <option value="">All Accounts</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">From Date</label>
-                                    <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">To Date</label>
-                                    <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                </div>
-                            </div>
-                            <div class="admin-config-toolbar" style="justify-content:flex-end;">
-                                <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
-                                <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-body" id="pocSandboxTable">
-                            <div class="text-muted">Loading sandbox assignments…</div>
-                        </div>
+                        <p class="text-muted">POC Sandbox data is in <strong>System Admin</strong> → <strong>POC Management</strong> → <strong>POC Sandbox</strong>. Redirecting…</p>
                     </div>
                 </div>
 
