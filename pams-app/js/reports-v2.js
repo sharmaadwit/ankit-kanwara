@@ -209,6 +209,7 @@ const ReportsV2 = {
             container.innerHTML = `
                 <div class="reports-v2-container">
                     ${this.renderHeader(periodLabel)}
+                    ${this.renderReportsTotalActivityRow(activities, periodLabel)}
                     ${this.renderTabNavigation()}
                     ${this.renderTabContent(activities)}
                 </div>
@@ -235,6 +236,58 @@ const ReportsV2 = {
             console.error('ReportsV2: Error in render():', error);
             container.innerHTML = `<div class="error-message">Error loading reports: ${error.message}</div>`;
         }
+    },
+
+    // Total Activity – one row, horizontal with insights (Reports only)
+    renderReportsTotalActivityRow(activities, periodLabel) {
+        const safe = activities && Array.isArray(activities) ? activities : [];
+        const total = safe.length;
+        const internal = safe.filter(a => a.isInternal === true).length;
+        const external = safe.filter(a => !a.isInternal).length;
+        const accounts = typeof DataManager !== 'undefined' ? DataManager.getAccounts() : [];
+        const regionCounts = {};
+        safe.filter(a => !a.isInternal).forEach(a => {
+            const account = accounts.find(ac => ac.id === a.accountId);
+            const region = a.salesRepRegion || a.region || (account && account.region) || 'Unassigned';
+            regionCounts[region] = (regionCounts[region] || 0) + 1;
+        });
+        const topRegionEntry = Object.entries(regionCounts).sort((a, b) => b[1] - a[1])[0];
+        const topRegionName = topRegionEntry ? topRegionEntry[0] : '—';
+        const topRegionCount = topRegionEntry ? topRegionEntry[1] : 0;
+        let winsPeriod = 0;
+        let lossesPeriod = 0;
+        const periodMonth = this.currentPeriodType === 'month' ? this.currentPeriod : null;
+        if (periodMonth) {
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    if (project.status === 'won' || project.status === 'lost') {
+                        const d = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
+                        if (d && String(d).substring(0, 7) === periodMonth) {
+                            if (project.status === 'won') winsPeriod++;
+                            else if (project.status === 'lost') lossesPeriod++;
+                        }
+                    }
+                });
+            });
+        }
+        return `
+            <div class="reports-total-activity-row">
+                <div class="reports-total-activity-main">
+                    <span class="reports-total-activity-label">Total Activity</span>
+                    <span class="reports-total-activity-value">${total.toLocaleString()}</span>
+                    <span class="reports-total-activity-period">${periodLabel}</span>
+                </div>
+                <div class="reports-total-activity-insights">
+                    <span class="reports-total-insight"><strong>Internal</strong> ${internal}</span>
+                    <span class="reports-total-insight"><strong>External</strong> ${external}</span>
+                    ${periodMonth && (winsPeriod > 0 || lossesPeriod > 0) ? `
+                    <span class="reports-total-insight reports-total-insight--win"><strong>Wins</strong> ${winsPeriod}</span>
+                    <span class="reports-total-insight reports-total-insight--loss"><strong>Losses</strong> ${lossesPeriod}</span>
+                    ` : ''}
+                    ${topRegionName !== '—' ? `<span class="reports-total-insight"><strong>Top region</strong> ${topRegionName} (${topRegionCount})</span>` : ''}
+                </div>
+            </div>
+        `;
     },
 
     // Render tab navigation
@@ -524,24 +577,16 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Total Activities -->
-                    <div class="reports-v2-card">
-                        <div class="reports-v2-card-header">
-                            <h3>Total Activities</h3>
-                        </div>
-                        <div class="reports-v2-card-body">
-                            <div class="reports-v2-stat-large">${totalActivities.toLocaleString()}</div>
-                            <p class="reports-v2-stat-label">All activities for ${this.formatPeriod(this.currentPeriod)}</p>
-                        </div>
-                    </div>
-
-                    <!-- Internal vs External (donut chart with legend at bottom) -->
-                    <div class="reports-v2-card">
+                    <!-- Internal vs External Activity (simple pie chart) -->
+                    <div class="reports-v2-card reports-v2-card-internal-external">
                         <div class="reports-v2-card-header">
                             <h3>Internal vs External Activity</h3>
+                            <span class="text-muted">${this.formatPeriod(this.currentPeriod)}</span>
                         </div>
-                        <div class="reports-v2-card-body" style="min-height: 240px;">
-                            <canvas id="internalExternalChart" width="300" height="200" style="width: 100%; max-width: 300px; height: 200px; display: block;"></canvas>
+                        <div class="reports-v2-card-body" style="min-height: 260px; display: flex; align-items: center; justify-content: center;">
+                            <div class="reports-v2-pie-wrap" style="width: 280px; height: 240px; position: relative;">
+                                <canvas id="internalExternalChart"></canvas>
+                            </div>
                         </div>
                     </div>
 
@@ -907,7 +952,7 @@ const ReportsV2 = {
         const totalCount = internalCount + externalCount;
 
         try {
-            // Internal vs External – use same donut helper as Activity Breakdown so it renders reliably
+            // Internal vs External – simple pie chart (reliable render in Reports)
             if (this.activeTab === 'presales') {
                 const internalExternalCanvas = document.getElementById('internalExternalChart');
                 if (internalExternalCanvas) {
@@ -919,10 +964,33 @@ const ReportsV2 = {
                         try { Chart.getChart(internalExternalCanvas).destroy(); } catch (e) { /* ignore */ }
                     }
                     const dataValues = totalCount > 0 ? [internalCount, externalCount] : [0, 0];
-                    this.renderDonutChart('internalExternalChart', {
-                        labels: ['Internal', 'External'],
-                        data: dataValues,
-                        colors: ['#3182CE', '#38A169']
+                    this.charts['internalExternalChart'] = new Chart(internalExternalCanvas, {
+                        type: 'pie',
+                        data: {
+                            labels: ['Internal', 'External'],
+                            datasets: [{
+                                data: dataValues,
+                                backgroundColor: ['#3182CE', '#38A169'],
+                                borderWidth: 2,
+                                borderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { display: true, position: 'bottom' },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(ctx) {
+                                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                            const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0;
+                                            return ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     });
                 }
             }

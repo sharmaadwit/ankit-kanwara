@@ -1257,32 +1257,34 @@ const App = {
                 ` : ''}
             </div>
             
-            <!-- Total Activity – one row, horizontal with insights -->
-            ${(function() {
-                const topRegionEntry = Object.entries(regionBreakdown).sort((a, b) => b[1] - a[1])[0];
-                const topRegionName = topRegionEntry ? topRegionEntry[0] : '—';
-                const topRegionCount = topRegionEntry ? topRegionEntry[1] : 0;
-                const internalMonth = monthActivities.filter(a => a.isInternal).length;
-                const externalMonth = monthActivities.filter(a => !a.isInternal).length;
-                return `
-            <div class="dashboard-total-activity-row">
-                <div class="dashboard-total-activity-main">
-                    <span class="dashboard-total-activity-label">Total Activity</span>
-                    <span class="dashboard-total-activity-value">${monthActivities.length}</span>
-                    <span class="dashboard-total-activity-period">${viewMonthName}</span>
+            <!-- Quick Stats Row -->
+            <div class="dashboard-stats-row">
+                <div class="dashboard-stat-card">
+                    <div class="dashboard-stat-card-title">Activities for ${viewMonthName}</div>
+                    <div class="dashboard-stat-card-value">${monthActivities.length}</div>
+                    <div class="dashboard-stat-card-detail">Selected month</div>
                 </div>
-                <div class="dashboard-total-activity-insights">
-                    <span class="dashboard-total-insight"><strong>Internal</strong> ${internalMonth}</span>
-                    <span class="dashboard-total-insight"><strong>External</strong> ${externalMonth}</span>
-                    ${isViewingCurrentMonth ? `<span class="dashboard-total-insight"><strong>This week</strong> ${weekActivities.length}</span>` : ''}
-                    <span class="dashboard-total-insight"><strong>Last month</strong> ${lastMonthActivities.length}</span>
-                    <span class="dashboard-total-insight dashboard-total-insight--win"><strong>Wins</strong> ${winsThisMonth}</span>
-                    <span class="dashboard-total-insight dashboard-total-insight--loss"><strong>Losses</strong> ${lossesThisMonth}</span>
-                    ${topRegionName !== '—' ? `<span class="dashboard-total-insight"><strong>Top region</strong> ${topRegionName} (${topRegionCount})</span>` : ''}
+                <div class="dashboard-stat-card">
+                    <div class="dashboard-stat-card-title">${isViewingCurrentMonth ? 'Activities This Week' : 'This week'}</div>
+                    <div class="dashboard-stat-card-value">${isViewingCurrentMonth ? weekActivities.length : '—'}</div>
+                    <div class="dashboard-stat-card-detail">${isViewingCurrentMonth ? 'Current week' : 'Only when viewing current month'}</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #805AD5;">
+                    <div class="dashboard-stat-card-title">Activities last month</div>
+                    <div class="dashboard-stat-card-value" style="color: #805AD5;">${lastMonthActivities.length}</div>
+                    <div class="dashboard-stat-card-detail">${lastMonthLabel}</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #48BB78;">
+                    <div class="dashboard-stat-card-title">Wins (${viewMonthName})</div>
+                    <div class="dashboard-stat-card-value" style="color: #48BB78;">${winsThisMonth}</div>
+                    <div class="dashboard-stat-card-detail">Projects won</div>
+                </div>
+                <div class="dashboard-stat-card" style="border-left-color: #F56565;">
+                    <div class="dashboard-stat-card-title">Losses (${viewMonthName})</div>
+                    <div class="dashboard-stat-card-value" style="color: #F56565;">${lossesThisMonth}</div>
+                    <div class="dashboard-stat-card-detail">Projects lost</div>
                 </div>
             </div>
-                `;
-            })()}
             
             <!-- Charts Row 1: Pie Charts -->
             <div class="dashboard-charts-row">
