@@ -411,20 +411,6 @@
                                         <a href="#" class="admin-nav-item" data-admin-nav="audit" onclick="Admin.openAdminSection('audit', event)">
                                             <span>Audit Log</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="projectHealth" onclick="Admin.openAdminSection('projectHealth', event)">
-                                            <span>Project Health</span>
-                                        </a>
-                                    </div>
-                                </div>
-                                <div class="admin-nav-group">
-                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
-                                        <span>POC Management</span>
-                                        <span class="admin-nav-group-icon">▼</span>
-                                    </div>
-                                    <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="poc" onclick="Admin.openAdminSection('poc', event)">
-                                            <span>POC Sandbox</span>
-                                        </a>
                                     </div>
                                 </div>
                             </nav>
@@ -507,16 +493,6 @@
                             </div>
                         </div>
 
-                        <!-- Project Health Settings -->
-                        <div class="admin-section hidden" data-admin-section="projectHealth">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3>Project Health Filters</h3>
-                                </div>
-                                <div class="card-body" id="projectHealthAdminControls"></div>
-                            </div>
-                        </div>
-
                         <!-- Login Activity & Usage -->
                         <div class="admin-section hidden" data-admin-section="login">
                             <div class="card">
@@ -563,47 +539,6 @@
                             </div>
                         </div>
 
-                        <!-- POC Sandbox Access -->
-                        <div class="admin-section hidden" data-admin-section="poc">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3>POC Sandbox Manager</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="form-grid" style="margin-bottom:1rem;">
-                                        <div class="form-group">
-                                            <label class="form-label">Status</label>
-                                            <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                                <option value="">All Status</option>
-                                                <option value="Assigned">Assigned</option>
-                                                <option value="Unassigned">Unassigned</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">Account</label>
-                                            <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                                <option value="">All Accounts</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">From Date</label>
-                                            <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                        </div>
-                                        <div class="form-group">
-                                            <label class="form-label">To Date</label>
-                                            <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
-                                        </div>
-                                    </div>
-                                    <div class="admin-config-toolbar" style="justify-content:flex-end; margin-bottom:1rem;">
-                                        <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
-                                        <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
-                                    </div>
-                                    <div id="pocSandboxTable">
-                                        <div class="text-muted">Loading sandbox assignments…</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                             </div>
                         </div>
                     </div>
@@ -627,6 +562,9 @@
                                         <a href="#" class="admin-nav-item" data-admin-nav="industryUseCases" onclick="Admin.openAdminSection('industryUseCases', event)">
                                             <span>Industry & Use Cases</span>
                                         </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="sandboxAccess" onclick="Admin.openAdminSection('sandboxAccess', event)">
+                                            <span>Sandbox Access</span>
+                                        </a>
                                     </div>
                                 </div>
                                 <div class="admin-nav-group">
@@ -649,8 +587,8 @@
                                         <a href="#" class="admin-nav-item" data-admin-nav="analytics" onclick="Admin.openAdminSection('analytics', event)">
                                             <span>Targets</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="reports" onclick="Admin.openAdminSection('reports', event)">
-                                            <span>Reports</span>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="projectHealth" onclick="Admin.openAdminSection('projectHealth', event)">
+                                            <span>Project Health</span>
                                         </a>
                                         <a href="#" class="admin-nav-item" data-admin-nav="monthly" onclick="Admin.openAdminSection('monthly', event)">
                                             <span>Export</span>
@@ -773,6 +711,52 @@
                                     </div>
                                 </div>
 
+                                <!-- Sandbox Access (ex-POC Sandbox) -->
+                                <div class="admin-section hidden" data-admin-section="sandboxAccess">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>Sandbox Access</h3>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="admin-tabs" style="margin-bottom: 1rem;">
+                                                <button type="button" class="admin-tab active" data-sandbox-tab="active" onclick="Admin.switchSandboxTab('active')">Active</button>
+                                                <button type="button" class="admin-tab" data-sandbox-tab="closed" onclick="Admin.switchSandboxTab('closed')">Closed / Archive</button>
+                                            </div>
+                                            <div class="form-grid" style="margin-bottom:1rem;">
+                                                <div class="form-group">
+                                                    <label class="form-label">Status</label>
+                                                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                        <option value="">All Status</option>
+                                                        <option value="Assigned">Assigned</option>
+                                                        <option value="Unassigned">Unassigned</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label">Account</label>
+                                                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                        <option value="">All Accounts</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label">From Date</label>
+                                                    <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label">To Date</label>
+                                                    <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                </div>
+                                            </div>
+                                            <div class="admin-config-toolbar" style="justify-content:flex-end; margin-bottom:1rem;">
+                                                <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
+                                                <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
+                                            </div>
+                                            <div id="pocSandboxTable">
+                                                <div class="text-muted">Loading sandbox assignments…</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Analytics Settings -->
                                 <div class="admin-section hidden" data-admin-section="analytics">
                                     <div class="card">
@@ -813,13 +797,13 @@
                                     </div>
                                 </div>
 
-                                <!-- Reports -->
-                                <div class="admin-section hidden" data-admin-section="reports">
+                                <!-- Project Health (Configuration → Analytics) -->
+                                <div class="admin-section hidden" data-admin-section="projectHealth">
                                     <div class="card">
-                                        <div class="card-body">
-                                            <h3 class="card-title" style="margin-bottom:0.5rem;">Reports</h3>
-                                            <p class="text-muted" style="margin-bottom:0;">Use <strong>Reports</strong> in the main sidebar to explore activity analytics, saved filters, and monthly summaries.</p>
+                                        <div class="card-header">
+                                            <h3>Project Health Filters</h3>
                                         </div>
+                                        <div class="card-body" id="projectHealthAdminControls"></div>
                                     </div>
                                 </div>
 
@@ -925,7 +909,7 @@
                     </div>
                 </div>
 
-                <!-- POC Sandbox: data is shown in System Admin → POC Management → POC Sandbox (this view redirects there) -->
+                <!-- Sandbox Access: data is shown in Configuration → Sandbox Access -->
                 <div id="adminPocView" class="view hidden">
                     <div class="page-header">
                         <p class="text-muted">POC Sandbox data is in <strong>System Admin</strong> → <strong>POC Management</strong> → <strong>POC Sandbox</strong>. Redirecting…</p>

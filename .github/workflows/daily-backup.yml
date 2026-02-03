@@ -4,8 +4,8 @@ name: Daily storage backup
 
 on:
   schedule:
-    # Daily at 02:00 UTC
-    - cron: '0 2 * * *'
+    # Daily at 6 AM IST (00:30 UTC) – safe for LATAM and India
+    - cron: '30 0 * * *'
   workflow_dispatch:
 
 env:

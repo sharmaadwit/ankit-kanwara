@@ -70,7 +70,7 @@ const Admin = {
             description: 'Expose the detailed login activity workspace to administrators.'
         },
         adminPoc: {
-            label: 'POC Sandbox',
+            label: 'Sandbox Access',
             description: 'Provide access to the sandbox assignment manager for admins.'
         }
     },
@@ -289,12 +289,10 @@ const Admin = {
 
         this.markActiveSectionButton(sectionId);
         this.ensureSectionLoaded(sectionId);
-        // Always refresh POC Sandbox data when section is shown so it displays correctly
-        if (sectionId === 'poc') {
-            const section = container && container.querySelector(`[data-admin-section="poc"]`);
-            if (section) {
-                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+        // Refresh Sandbox Access data when section is shown (Configuration only)
+        if (sectionId === 'sandboxAccess') {
+            const section = container && container.querySelector('[data-admin-section="sandboxAccess"]');
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
             requestAnimationFrame(() => this.loadPOCSandbox());
         }
         this.activeSection = sectionId;
@@ -332,7 +330,7 @@ const Admin = {
             audit: () => this.loadActivityLogs(),
             monthly: () => {},
             reports: () => {},
-            poc: () => this.loadPOCSandbox()
+            sandboxAccess: () => this.loadPOCSandbox()
         };
     },
 
@@ -753,9 +751,9 @@ const Admin = {
         accessMetaElements.forEach(meta => {
             if (meta) {
                 meta.textContent = accessConfig.updatedAt
-                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
-                    : 'Using default analytics password.';
-            }
+                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
+                : 'Using default analytics password.';
+        }
         });
     },
 
@@ -792,11 +790,11 @@ const Admin = {
             document.getElementById('analyticsAccessMetaConfig')
         ].filter(Boolean);
         metaElements.forEach(meta => {
-            if (meta) {
-                meta.textContent = config.updatedAt
-                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
-                    : '';
-            }
+        if (meta) {
+            meta.textContent = config.updatedAt
+                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
+                : '';
+        }
         });
         UI.showNotification('Analytics password updated.', 'success');
     },
@@ -1846,8 +1844,8 @@ const Admin = {
                             <span>${usage.users || 0} users</span>
                             <span class="text-muted">• ${statusLabel}</span>
                         </div>
-                    </div>
-                    ${deleteButton}
+                        </div>
+                        ${deleteButton}
                 </div>
             `;
         });
@@ -1888,13 +1886,31 @@ const Admin = {
     },
 
 
-    // POC Sandbox Access Management – show all POC activities (Sandbox + Custom POC)
+    // Sandbox Access (ex-POC Sandbox) – submission date + 7 days = end date; active from Jan 2026, closed/archive with Migrated data tag
     loadPOCSandbox() {
         const activities = DataManager.getAllActivities();
-        const pocSandboxActivities = (activities || []).filter(a => a.type === 'poc');
+        const allPoc = (activities || []).filter(a => a.type === 'poc');
+        const submissionToEnd = (a) => {
+            const sub = a.date || a.createdAt || '';
+            if (!sub) return null;
+            const d = new Date(sub);
+            d.setDate(d.getDate() + 7);
+            return d.toISOString().substring(0, 10);
+        };
+        const cutoff = '2026-01-01';
+        const active = allPoc.filter(a => {
+            const end = submissionToEnd(a);
+            return end && end >= cutoff;
+        });
+        const closed = allPoc.filter(a => {
+            const end = submissionToEnd(a);
+            return !end || end < cutoff;
+        });
 
-        // Populate account filter
-        const accounts = [...new Set(pocSandboxActivities.map(a => a.accountName).filter(Boolean))];
+        this.pocActiveActivities = active;
+        this.pocClosedActivities = closed;
+
+        const accounts = [...new Set(allPoc.map(a => a.accountName).filter(Boolean))];
         const accountFilter = document.getElementById('pocAccountFilter');
         if (accountFilter) {
             let html = '<option value="">All Accounts</option>';
@@ -1904,10 +1920,25 @@ const Admin = {
             accountFilter.innerHTML = html;
         }
 
-        this.filterPOCSandbox(pocSandboxActivities);
+        this.filterPOCSandbox(active);
     },
 
-    filterPOCSandbox(activities = null) {
+    pocSandboxView: 'active', // 'active' | 'closed'
+
+    switchSandboxTab(tab) {
+        this.pocSandboxView = tab === 'closed' ? 'closed' : 'active';
+        document.querySelectorAll('[data-sandbox-tab]').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-sandbox-tab') === tab);
+        });
+        const activities = tab === 'closed' ? (this.pocClosedActivities || []) : (this.pocActiveActivities || []);
+        this.filterPOCSandbox(activities, tab === 'closed');
+    },
+
+    filterPOCSandbox(activities = null, showClosed = null) {
+        const isClosed = showClosed === true || (showClosed === null && this.pocSandboxView === 'closed');
+        if (!activities) {
+            activities = isClosed ? (this.pocClosedActivities || []) : (this.pocActiveActivities || []);
+        }
         if (!activities) {
             const allActivities = DataManager.getAllActivities();
             activities = (allActivities || []).filter(a => a.type === 'poc');
@@ -1947,15 +1978,16 @@ const Admin = {
 
         this.pocFilteredActivities = filtered;
 
-        // Display in table
         const container = document.getElementById('pocSandboxTable');
         if (!container) return;
 
+        const showClosedTag = isClosed;
         if (filtered.length === 0) {
-            container.innerHTML = '<p class="text-muted">No POC Sandbox requests found</p>';
+            container.innerHTML = '<p class="text-muted">' + (showClosedTag ? 'No closed/archived sandbox requests.' : 'No Sandbox Access requests found.') + '</p>';
             return;
         }
 
+        const tagCol = showClosedTag ? '<th style="padding: 0.75rem; text-align: left;">Tag</th>' : '';
         let html = `
             <table class="admin-table" style="width: 100%; border-collapse: collapse;">
                 <thead>
@@ -1965,6 +1997,7 @@ const Admin = {
                         <th style="padding: 0.75rem; text-align: left;">Access Type</th>
                         <th style="padding: 0.75rem; text-align: left;">Start Date</th>
                         <th style="padding: 0.75rem; text-align: left;">End Date</th>
+                        ${tagCol}
                         <th style="padding: 0.75rem; text-align: left;">POC Environment Name</th>
                         <th style="padding: 0.75rem; text-align: left;">Status</th>
                     </tr>
@@ -1978,6 +2011,7 @@ const Admin = {
             const status = activity.details?.assignedStatus || 'Unassigned';
             const envNameId = `pocEnv_${activity.id}`;
             const statusId = `pocStatus_${activity.id}`;
+            const tagCell = showClosedTag ? '<td style="padding: 0.75rem;"><span class="badge" style="background: #718096; color: #fff;">Migrated data</span></td>' : '';
 
             html += `
                 <tr style="border-bottom: 1px solid #eee;">
@@ -1986,6 +2020,7 @@ const Admin = {
                     <td style="padding: 0.75rem;">${accessType}</td>
                     <td style="padding: 0.75rem;">${UI.formatDate(activity.details?.startDate || '')}</td>
                     <td style="padding: 0.75rem;">${UI.formatDate(activity.details?.endDate || '')}</td>
+                    ${tagCell}
                     <td style="padding: 0.75rem;">
                         <input type="text" 
                                id="${envNameId}" 

@@ -592,22 +592,15 @@ const Activities = {
 
     getDefaultSalesRepRegion() {
         if (typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
-            return 'India West';
-        }
-        const regions = Array.from(new Set((DataManager.getRegions() || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-        if (!regions.length) {
             return '';
         }
+        const regions = Array.from(new Set((DataManager.getRegions() || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        if (!regions.length) return '';
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
         const preferred = currentUser?.defaultRegion;
-        if (preferred && regions.includes(preferred)) {
-            return preferred;
-        }
-        if (regions.includes('India West')) {
-            return 'India West';
-        }
+        if (preferred && regions.includes(preferred)) return preferred;
         return regions[0];
     },
 

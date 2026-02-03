@@ -915,8 +915,8 @@ const App = {
         // POC Sandbox is now inline in System Admin; redirect there
         if (viewName === 'adminPoc') {
             if (typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin()) {
-                this.switchView('systemAdmin');
-                setTimeout(() => Admin.openAdminSection('poc', null), 50);
+                this.switchView('configuration');
+                setTimeout(() => Admin.openAdminSection('sandboxAccess', null), 50);
             } else {
                 if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('You do not have admin access', 'error');
                 this.switchView('dashboard');
@@ -1150,6 +1150,15 @@ const App = {
             })
             : [];
         
+        // Last activity submission (who + when, submission timestamp, all activities)
+        const submissionTs = (a) => (a.createdAt || a.date || '').replace(/\.\d{3}Z$/, 'Z');
+        const sortedBySubmission = [...activities].sort((a, b) => new Date(submissionTs(b)) - new Date(submissionTs(a)));
+        const lastActivity = sortedBySubmission[0];
+        const lastActivityWho = lastActivity ? (lastActivity.userName || lastActivity.assignedUserEmail || 'Unknown') : '—';
+        const lastActivityWhen = lastActivity && (lastActivity.createdAt || lastActivity.date)
+            ? (typeof UI !== 'undefined' && UI.formatDate ? UI.formatDate(lastActivity.createdAt || lastActivity.date) : (lastActivity.createdAt || lastActivity.date))
+            : '—';
+        
         // Internal vs External breakdown
         const internalCount = monthActivities.filter(a => a.isInternal).length;
         const externalCount = monthActivities.filter(a => !a.isInternal).length;
@@ -1265,9 +1274,9 @@ const App = {
                     <div class="dashboard-stat-card-detail">Selected month</div>
                 </div>
                 <div class="dashboard-stat-card">
-                    <div class="dashboard-stat-card-title">${isViewingCurrentMonth ? 'Activities This Week' : 'This week'}</div>
-                    <div class="dashboard-stat-card-value">${isViewingCurrentMonth ? weekActivities.length : '—'}</div>
-                    <div class="dashboard-stat-card-detail">${isViewingCurrentMonth ? 'Current week' : 'Only when viewing current month'}</div>
+                    <div class="dashboard-stat-card-title">Last activity submission</div>
+                    <div class="dashboard-stat-card-value" style="font-size: 1rem;">${lastActivityWho}</div>
+                    <div class="dashboard-stat-card-detail">${lastActivityWhen}</div>
                 </div>
                 <div class="dashboard-stat-card" style="border-left-color: #805AD5;">
                     <div class="dashboard-stat-card-title">Activities last month</div>
@@ -5739,8 +5748,12 @@ const App = {
             accounts[accountIndex].industry = industry.trim();
             accounts[accountIndex].salesRep = salesRepName;
             accounts[accountIndex].salesRepEmail = selectedSalesRep?.email || '';
-            accounts[accountIndex].salesRepRegion = selectedSalesRep?.region || 'India West';
+            const newRegion = selectedSalesRep?.region || accounts[accountIndex].salesRepRegion || (DataManager.getRegions()[0] || '');
+            accounts[accountIndex].salesRepRegion = newRegion;
             accounts[accountIndex].updatedAt = new Date().toISOString();
+            if (typeof console !== 'undefined' && console.log) {
+                console.log('PAMS: Account region set', { accountId, accountName: name, salesRepRegion: newRegion, fromRep: selectedSalesRep?.name });
+            }
             DataManager.saveAccounts(accounts);
             
             UI.showNotification('Account updated successfully', 'success');
@@ -5946,7 +5959,7 @@ const App = {
                 ? DataManager.getGlobalSalesReps().find(rep => rep.name === finalSalesRep)
                 : null;
             accounts[targetIndex].salesRepEmail = finalRepRecord?.email || accounts[targetIndex].salesRepEmail || '';
-            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || 'India West';
+            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || (typeof DataManager !== 'undefined' && DataManager.getRegions && DataManager.getRegions()[0]) || '';
             accounts[targetIndex].industry = finalIndustry;
             accounts[targetIndex].projects = mergedProjects;
             accounts[targetIndex].updatedAt = new Date().toISOString();

@@ -293,9 +293,9 @@ const DataManager = {
                     changed = true;
                 }
 
+                // Preserve existing region (e.g. Inside sales) – never overwrite with default list so admins' choices stick
                 const currentRegion = (current.region || '').trim();
-                const preserveRegion = currentRegion && configuredRegionsSet.has(currentRegion);
-                if (!preserveRegion && (currentRegion || 'India West') !== rep.region) {
+                if (!currentRegion && rep.region) {
                     updated.region = rep.region;
                     changed = true;
                 }
