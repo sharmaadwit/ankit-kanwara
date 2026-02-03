@@ -5748,7 +5748,56 @@ const App = {
         }
     },
     
-    // Show merge account modal
+    // Ensure merge account modal exists (search + checkbox list, then Merge button)
+    ensureMergeAccountModal() {
+        const modalId = 'mergeAccountModal';
+        if (document.getElementById(modalId)) return;
+        const container = document.getElementById('modalsContainer');
+        if (!container) return;
+        const modalHTML = `
+            <div id="${modalId}" class="modal" data-merge-source-id="">
+                <div class="modal-content" style="max-width: 520px;">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="mergeAccountModalTitle">Merge account into...</h2>
+                        <button class="modal-close" onclick="UI.hideModal('${modalId}')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted" style="margin-bottom: 0.75rem; font-size: 0.9rem;">Select the account to merge into (search and choose one).</p>
+                        <input type="text" id="mergeAccountSearch" class="form-control" placeholder="Search by name, industry, sales rep..." style="margin-bottom: 1rem;" autocomplete="off">
+                        <div id="mergeAccountList" class="merge-account-list" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px; padding: 0.25rem;"></div>
+                        <p id="mergeAccountNoResults" class="text-muted" style="display: none; margin-top: 0.5rem; font-size: 0.9rem;">No accounts match your search.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="UI.hideModal('${modalId}')">Cancel</button>
+                        <button type="button" class="btn btn-primary" id="mergeAccountConfirmBtn" disabled onclick="App.confirmMergeAccount()">Merge</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', modalHTML);
+        const searchInput = document.getElementById('mergeAccountSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => this.filterMergeAccountList());
+        }
+    },
+
+    filterMergeAccountList() {
+        const query = (document.getElementById('mergeAccountSearch')?.value || '').toLowerCase().trim();
+        const list = document.getElementById('mergeAccountList');
+        const noResults = document.getElementById('mergeAccountNoResults');
+        if (!list) return;
+        const rows = list.querySelectorAll('.merge-account-row');
+        let visible = 0;
+        rows.forEach(row => {
+            const searchText = (row.getAttribute('data-search') || '').toLowerCase();
+            const show = !query || searchText.includes(query);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (noResults) noResults.style.display = visible === 0 && rows.length > 0 ? 'block' : 'none';
+    },
+
+    // Show merge account modal with search + select list
     showMergeAccountModal(accountId) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can merge accounts.', 'error');
@@ -5759,25 +5808,66 @@ const App = {
             UI.showNotification('Account not found', 'error');
             return;
         }
-        
-        const accounts = DataManager.getAccounts().filter(a => a.id !== accountId);
-        if (accounts.length === 0) {
+        const others = DataManager.getAccounts().filter(a => a.id !== accountId);
+        if (others.length === 0) {
             UI.showNotification('No other accounts to merge with', 'error');
             return;
         }
-        
-        const options = accounts.map((a, i) => `${i + 1}. ${a.name} (${a.industry || 'N/A'})`).join('\n');
-        const selected = prompt(`Select account to merge "${account.name}" into:\n${options}\n\nEnter number or cancel:`);
-        if (!selected) return;
-        
-        const index = parseInt(selected) - 1;
-        if (index < 0 || index >= accounts.length) {
-            UI.showNotification('Invalid selection', 'error');
+
+        this.ensureMergeAccountModal();
+        const modalId = 'mergeAccountModal';
+        const modal = document.getElementById(modalId);
+        const titleEl = document.getElementById('mergeAccountModalTitle');
+        const listEl = document.getElementById('mergeAccountList');
+        const searchInput = document.getElementById('mergeAccountSearch');
+        const confirmBtn = document.getElementById('mergeAccountConfirmBtn');
+        const noResults = document.getElementById('mergeAccountNoResults');
+
+        if (modal) modal.dataset.mergeSourceId = accountId;
+        if (titleEl) titleEl.textContent = `Merge "${account.name}" into...`;
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.placeholder = 'Search by name, industry, sales rep...';
+        }
+        if (noResults) noResults.style.display = 'none';
+
+        const searchable = (a) => [a.name, a.industry, a.salesRep, a.salesRepRegion].filter(Boolean).join(' ').toLowerCase();
+        const rowHTML = others.map(a => `
+            <label class="merge-account-row" data-search="${searchable(a)}" style="display: block; padding: 0.5rem 0.75rem; margin: 0; cursor: pointer; border-radius: 4px;">
+                <input type="radio" name="mergeTargetAccount" value="${a.id}" style="margin-right: 0.5rem;">
+                <strong>${a.name}</strong>
+                <span class="text-muted" style="font-size: 0.9rem;"> · ${a.industry || 'N/A'} · ${a.salesRep || 'N/A'}</span>
+            </label>
+        `).join('');
+        if (listEl) {
+            listEl.innerHTML = rowHTML;
+            listEl.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (confirmBtn) confirmBtn.disabled = false;
+                });
+            });
+        }
+        if (confirmBtn) confirmBtn.disabled = true;
+
+        UI.showModal(modalId);
+    },
+
+    confirmMergeAccount() {
+        const modal = document.getElementById('mergeAccountModal');
+        const sourceId = modal?.dataset?.mergeSourceId;
+        const selected = document.querySelector('input[name="mergeTargetAccount"]:checked');
+        if (!sourceId) {
+            UI.showNotification('Merge session expired. Please try again.', 'error');
+            UI.hideModal('mergeAccountModal');
             return;
         }
-        
-        const targetAccount = accounts[index];
-        this.mergeAccounts(accountId, targetAccount.id);
+        if (!selected) {
+            UI.showNotification('Please select an account to merge into.', 'error');
+            return;
+        }
+        const targetId = selected.value;
+        UI.hideModal('mergeAccountModal');
+        this.mergeAccounts(sourceId, targetId);
     },
     
     // Merge accounts

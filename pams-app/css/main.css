@@ -2209,3 +2209,11 @@ body {
     flex: 1;
     min-width: 0;
 }
+
+/* Merge account modal – search + select list */
+.merge-account-list .merge-account-row:hover {
+    background: var(--gray-50, #f9fafb);
+}
+.merge-account-list .merge-account-row:has(input:checked) {
+    background: var(--gray-100, #f3f4f6);
+}
