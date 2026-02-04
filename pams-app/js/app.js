@@ -1136,9 +1136,8 @@ const App = {
         weekEnd.setHours(23, 59, 59, 999);
         
         const monthActivities = activities.filter(a => {
-            const date = a.date || a.createdAt;
-            if (!date) return false;
-            return date.substring(0, 7) === viewMonth;
+            const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || a.createdAt || '').substring(0, 7);
+            return month === viewMonth;
         });
         
         const weekActivities = isViewingCurrentMonth
@@ -1856,11 +1855,10 @@ const App = {
             : null;
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         
-        // Group by month
+        // Group by month (use monthOfActivity when present so hosted data counts correctly)
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }
@@ -3834,16 +3832,17 @@ const App = {
                 if (activityType !== activityTypeFilter) return false;
             }
 
-            // Date range filter
+            // Date range filter (use resolveActivityMonth for month filters so hosted data is consistent)
+            const activityMonthKey = DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity);
             const activityDate = new Date(activity.date || activity.createdAt);
-            if (!Number.isNaN(activityDate.getTime())) {
+            if (!Number.isNaN(activityDate.getTime()) || activityMonthKey) {
                 if (timeframe === 'thisMonth') {
-                    const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                    const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
                     const currentMonth = now.toISOString().substring(0, 7);
                     if (monthKey !== currentMonth) return false;
                 } else if (timeframe === 'lastMonth') {
                     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                    const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
                     const lastMonthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
                     if (monthKey !== lastMonthKey) return false;
                 } else if (timeframe === 'thisWeek') {
@@ -3871,7 +3870,7 @@ const App = {
                     // Legacy timeframe support
                     const diffDays = (now - activityDate) / (1000 * 60 * 60 * 24);
                     if (timeframe === 'month') {
-                        const monthKey = (activity.date || activity.createdAt || '').substring(0, 7);
+                        const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
                         const currentMonth = now.toISOString().substring(0, 7);
                         if (monthKey !== currentMonth) return false;
                     } else if (timeframe === '30' && diffDays > 30) {
@@ -5964,22 +5963,34 @@ const App = {
             accounts[targetIndex].projects = mergedProjects;
             accounts[targetIndex].updatedAt = new Date().toISOString();
             
-            // Update all activities to point to target account
-            const activities = DataManager.getAllActivities();
-            activities.forEach(activity => {
+            // Update only external (customer) activities – internal activities stay in internalActivities key
+            const externalActivities = DataManager.getActivities();
+            let activitiesUpdated = 0;
+            externalActivities.forEach(activity => {
                 if (activity.accountId === sourceAccountId) {
                     activity.accountId = targetAccountId;
                     activity.accountName = targetAccount.name;
+                    activitiesUpdated++;
                 }
             });
-            DataManager.saveActivities(activities);
+            try {
+                DataManager.saveActivities(externalActivities);
+            } catch (err) {
+                console.error('Merge: saveActivities failed', err);
+                UI.showNotification('Merge failed: could not save activities. Try again or refresh.', 'error');
+                return;
+            }
             
-            // Delete source account
-            DataManager.deleteAccount(sourceAccountId);
+            // Remove source account and persist (deleteAccount saves activities + accounts)
+            try {
+                DataManager.deleteAccount(sourceAccountId);
+            } catch (err) {
+                console.error('Merge: deleteAccount/save failed', err);
+                UI.showNotification('Merge failed: could not save. Activities were moved – please refresh and try merging again.', 'error');
+                return;
+            }
             
-            DataManager.saveAccounts(accounts);
-            
-            UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${targetAccount.name}"`, 'success');
+            UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${targetAccount.name}"${activitiesUpdated ? ` (${activitiesUpdated} activities moved)` : ''}.`, 'success');
             this.loadAccountsView();
         }
     },
@@ -6102,8 +6113,7 @@ const App = {
         
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }
@@ -6216,8 +6226,7 @@ const App = {
         
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const date = activity.date || activity.createdAt;
-            const month = date ? date.substring(0, 7) : 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }

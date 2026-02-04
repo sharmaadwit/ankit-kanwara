@@ -2384,6 +2384,25 @@ const DataManager = {
             .sort((a, b) => a.localeCompare(b));
     },
 
+    /**
+     * Resolve the activity's month key (YYYY-MM) for grouping/counting.
+     * Uses monthOfActivity when present and valid, else date or createdAt.
+     * Use this everywhere monthly counts are shown so hosted data (which may
+     * have monthOfActivity set to activity month and createdAt to submission time) is correct.
+     * @param {Object} activity - Activity object
+     * @returns {string|null} 'YYYY-MM' or null
+     */
+    resolveActivityMonth(activity) {
+        if (!activity) return null;
+        const explicit = typeof activity.monthOfActivity === 'string'
+            ? activity.monthOfActivity.trim()
+            : '';
+        if (explicit && /^\d{4}-\d{2}$/.test(explicit)) return explicit;
+        const raw = activity.date || activity.createdAt;
+        if (typeof raw === 'string' && raw.length >= 7) return raw.substring(0, 7);
+        return null;
+    },
+
     // Utility
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
