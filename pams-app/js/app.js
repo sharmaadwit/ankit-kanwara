@@ -1120,9 +1120,8 @@ const App = {
         const [vy, vm] = viewMonth.split('-').map(Number);
         const prevMonth = vm === 1 ? `${vy - 1}-12` : `${vy}-${String(vm - 1).padStart(2, '0')}`;
         const lastMonthActivities = activities.filter(a => {
-            const date = a.date || a.createdAt;
-            if (!date) return false;
-            return date.substring(0, 7) === prevMonth;
+            const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
+            return month === prevMonth;
         });
         
         // Calculate week start (Monday) — only meaningful when viewing current month
@@ -1136,7 +1135,7 @@ const App = {
         weekEnd.setHours(23, 59, 59, 999);
         
         const monthActivities = activities.filter(a => {
-            const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || a.createdAt || '').substring(0, 7);
+            const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
             return month === viewMonth;
         });
         
@@ -1858,7 +1857,7 @@ const App = {
         // Group by month (use monthOfActivity when present so hosted data counts correctly)
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }
@@ -3832,17 +3831,17 @@ const App = {
                 if (activityType !== activityTypeFilter) return false;
             }
 
-            // Date range filter (use resolveActivityMonth for month filters so hosted data is consistent)
+            // Date range filter: use only user-given activity date (monthOfActivity / date) for month; custom uses date when set
             const activityMonthKey = DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity);
             const activityDate = new Date(activity.date || activity.createdAt);
             if (!Number.isNaN(activityDate.getTime()) || activityMonthKey) {
                 if (timeframe === 'thisMonth') {
-                    const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
+                    const monthKey = activityMonthKey || (activity.date || '').substring(0, 7);
                     const currentMonth = now.toISOString().substring(0, 7);
                     if (monthKey !== currentMonth) return false;
                 } else if (timeframe === 'lastMonth') {
                     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
+                    const monthKey = activityMonthKey || (activity.date || '').substring(0, 7);
                     const lastMonthKey = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
                     if (monthKey !== lastMonthKey) return false;
                 } else if (timeframe === 'thisWeek') {
@@ -3870,7 +3869,7 @@ const App = {
                     // Legacy timeframe support
                     const diffDays = (now - activityDate) / (1000 * 60 * 60 * 24);
                     if (timeframe === 'month') {
-                        const monthKey = activityMonthKey || (activity.date || activity.createdAt || '').substring(0, 7);
+                        const monthKey = activityMonthKey || (activity.date || '').substring(0, 7);
                         const currentMonth = now.toISOString().substring(0, 7);
                         if (monthKey !== currentMonth) return false;
                     } else if (timeframe === '30' && diffDays > 30) {
@@ -6113,7 +6112,7 @@ const App = {
         
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }
@@ -6226,7 +6225,7 @@ const App = {
         
         const activitiesByMonth = {};
         activities.forEach(activity => {
-            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').substring(0, 7) || 'Unknown';
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
             if (!activitiesByMonth[month]) {
                 activitiesByMonth[month] = [];
             }

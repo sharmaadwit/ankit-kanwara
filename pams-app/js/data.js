@@ -2279,7 +2279,8 @@ const DataManager = {
         };
     },
 
-    // Get all activities (customer + internal) with user info
+    // Get all activities (customer + internal) with user info. Deduplicates by id so merge
+    // corruption (internal saved into activities key) and duplicate ids don't double-count.
     getAllActivities() {
         if (this.cache.allActivities) {
             return this.cache.allActivities.map(activity => ({ ...activity }));
@@ -2288,9 +2289,18 @@ const DataManager = {
         const activities = this.getActivities();
         const internalActivities = this.getInternalActivities();
         const users = this.getUsers();
-        
+
+        const internalIds = new Set(internalActivities.map(a => a.id));
+        const externalOnly = activities.filter(a => !internalIds.has(a.id));
+        const seenIds = new Set();
+        const externalDeduped = externalOnly.filter(a => {
+            if (seenIds.has(a.id)) return false;
+            seenIds.add(a.id);
+            return true;
+        });
+
         const allActivities = [
-            ...activities.map(a => {
+            ...externalDeduped.map(a => {
                 const user = users.find(u => u.id === a.userId);
                 return {
                     ...a,
@@ -2386,9 +2396,8 @@ const DataManager = {
 
     /**
      * Resolve the activity's month key (YYYY-MM) for grouping/counting.
-     * Uses monthOfActivity when present and valid, else date or createdAt.
-     * Use this everywhere monthly counts are shown so hosted data (which may
-     * have monthOfActivity set to activity month and createdAt to submission time) is correct.
+     * Uses only user-given activity date: monthOfActivity first, then activity.date.
+     * Does NOT use createdAt (submission time) so Jan count = activities where user said Jan.
      * @param {Object} activity - Activity object
      * @returns {string|null} 'YYYY-MM' or null
      */
@@ -2398,7 +2407,7 @@ const DataManager = {
             ? activity.monthOfActivity.trim()
             : '';
         if (explicit && /^\d{4}-\d{2}$/.test(explicit)) return explicit;
-        const raw = activity.date || activity.createdAt;
+        const raw = activity.date;
         if (typeof raw === 'string' && raw.length >= 7) return raw.substring(0, 7);
         return null;
     },
