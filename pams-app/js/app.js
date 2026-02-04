@@ -1576,8 +1576,8 @@ const App = {
         // Internal vs External Pie Chart
         const internalExternalCtx = document.getElementById('internalExternalChart');
         if (internalExternalCtx && (internalCount > 0 || externalCount > 0)) {
-            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
-                Chart.register(this.chartValueLabelsPlugin);
+            if (typeof Chart !== 'undefined') {
+                try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
             this.dashboardCharts.internalExternal = new Chart(internalExternalCtx, {
                 type: 'pie',
@@ -1628,8 +1628,8 @@ const App = {
             const values = Object.values(callTypes);
             const colors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#F56565', '#38B2AC', '#ECC94B'];
             
-            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
-                Chart.register(this.chartValueLabelsPlugin);
+            if (typeof Chart !== 'undefined') {
+                try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
             this.dashboardCharts.callTypes = new Chart(callTypesCtx, {
                 type: 'pie',
@@ -1669,8 +1669,8 @@ const App = {
             const regions = Object.keys(regionBreakdown).sort((a, b) => regionBreakdown[b] - regionBreakdown[a]);
             const counts = regions.map(r => regionBreakdown[r]);
             
-            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
-                Chart.register(this.chartValueLabelsPlugin);
+            if (typeof Chart !== 'undefined') {
+                try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
             this.dashboardCharts.regionActivity = new Chart(regionActivityCtx, {
                 type: 'bar',

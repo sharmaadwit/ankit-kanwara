@@ -982,8 +982,8 @@ const ReportsV2 = {
         const safeActivities = activities && Array.isArray(activities) ? activities : [];
 
         try {
-            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
-                Chart.register(this.chartValueLabelsPlugin);
+            if (typeof Chart !== 'undefined') {
+                try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
             // Presales Activity Report (only in Presales tab)
             if (this.activeTab === 'presales') {
@@ -1805,4 +1805,8 @@ const ReportsV2 = {
 // Expose globally (only once)
 if (typeof window !== 'undefined' && !window.ReportsV2) {
     window.ReportsV2 = ReportsV2;
+    // Register value-labels plugin as soon as Chart is available (avoids "not a registered plugin" when Reports loads first)
+    if (typeof Chart !== 'undefined') {
+        try { Chart.register(ReportsV2.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
+    }
 }
