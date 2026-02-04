@@ -2706,25 +2706,49 @@ const Admin = {
             return;
         }
 
-        const monthInput = document.getElementById('adminReportMonth');
+        const monthInput = document.getElementById('adminReportMonthConfig') || document.getElementById('adminReportMonth');
         const selectedMonth = monthInput && monthInput.value
             ? monthInput.value
             : new Date().toISOString().substring(0, 7);
 
-        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, App.reportFilters || {});
-        if (!analytics) {
-            UI.showNotification('No analytics data available for the selected month.', 'error');
-            return;
-        }
+        const allActivities = DataManager.getAllActivities();
+        const resolveMonth = DataManager.resolveActivityMonth
+            ? (a) => DataManager.resolveActivityMonth(a)
+            : (a) => (a.date || '').substring(0, 7);
+        const activitiesInMonth = allActivities.filter(a => resolveMonth(a) === selectedMonth);
 
-        const rows = App.buildReportsCsvRows(analytics);
-        const filename = `pams_reports_${selectedMonth}_admin.csv`;
-        App.downloadCsv(filename, rows);
-        UI.showNotification('Monthly analytics CSV downloaded.', 'success');
+        const header = ['Activity Date', 'Submitted At', 'User', 'Account', 'Project', 'Type', 'Internal/External', 'Summary'];
+        const rows = activitiesInMonth.map(a => [
+            a.date || '',
+            a.createdAt || '',
+            a.userName || a.assignedUserEmail || 'Unknown',
+            a.accountName || '',
+            a.projectName || '',
+            a.type || '',
+            a.isInternal ? 'Internal' : 'External',
+            (a.summary || a.description || '').replace(/[\r\n]+/g, ' ')
+        ]);
+        const csvRows = [header, ...rows];
+        const filename = `pams_activities_${selectedMonth}.csv`;
+        if (typeof App !== 'undefined' && typeof App.downloadCsv === 'function') {
+            App.downloadCsv(filename, csvRows);
+        } else {
+            const csv = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        UI.showNotification(`Exported ${rows.length} activities for ${selectedMonth}.`, 'success');
         if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
             Audit.log({
                 action: 'report.export',
-                entity: 'monthlyAnalytics',
+                entity: 'monthlyActivities',
                 entityId: selectedMonth,
                 detail: { rowCount: rows.length }
             });

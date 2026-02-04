@@ -72,6 +72,13 @@ const Activities = {
             });
         }
 
+        const addAnotherBtn = document.getElementById('addAnotherActivityBtn');
+        if (addAnotherBtn) {
+            addAnotherBtn.style.display = isEdit ? 'none' : '';
+            addAnotherBtn.onclick = () => this.addAnotherActivityRow();
+        }
+        this.removeExtraActivityRows();
+
         UI.showModal(modalId);
 
         // Initialize use case dropdown after modal is shown
@@ -82,7 +89,63 @@ const Activities = {
                 // Initialize use case dropdown with defaults for new activities
                 this.refreshUseCaseOptions('');
             }
+            this.updateAddAnotherActivityButtonVisibility();
         }, 100);
+    },
+
+    updateAddAnotherActivityButtonVisibility() {
+        const btn = document.getElementById('addAnotherActivityBtn');
+        if (!btn) return;
+        const externalChecked = document.querySelector('input[name="activityCategory"][value="external"]')?.checked;
+        const isEditing = !!this.editingContext;
+        btn.style.display = externalChecked && !isEditing ? 'inline-block' : 'none';
+    },
+
+    removeExtraActivityRows() {
+        const container = document.getElementById('newActivityRowsContainer');
+        if (!container) return;
+        const rows = container.querySelectorAll('.activity-detail-row');
+        rows.forEach((row, i) => { if (i > 0) row.remove(); });
+    },
+
+    addAnotherActivityRow() {
+        const container = document.getElementById('newActivityRowsContainer');
+        if (!container) return;
+        const rows = container.querySelectorAll('.activity-detail-row');
+        const nextIndex = rows.length;
+        const externalTypeOptions = `
+            <option value="">Select Activity Type</option>
+            <option value="customerCall">Customer Call</option>
+            <option value="sow">SOW</option>
+            <option value="poc">POC</option>
+            <option value="rfx">RFx</option>
+            <option value="pricing">Pricing</option>
+            <option value="other">Other</option>
+        `;
+        const rowHtml = `
+            <div class="activity-detail-row" data-row="${nextIndex}" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label required">Date</label>
+                        <input type="date" class="form-control" id="activityDate_${nextIndex}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label required">Activity Type</label>
+                        <select class="form-control" id="activityTypeSelect_${nextIndex}" required>
+                            ${externalTypeOptions}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Details / notes</label>
+                    <textarea class="form-control" id="activityDetailsExtra_${nextIndex}" rows="2" placeholder="Optional notes for this activity"></textarea>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', rowHtml);
+        const today = new Date().toISOString().split('T')[0];
+        const dateEl = document.getElementById(`activityDate_${nextIndex}`);
+        if (dateEl) dateEl.value = today;
     },
 
     formatDateForInput(value) {
@@ -497,6 +560,13 @@ const Activities = {
                                     <input type="url" class="form-control" id="sfdcLink" placeholder="https://..." style="margin-top: 0.5rem;">
                                 </div>
                             </div>
+                            <!-- Past activities for selected project (external only) -->
+                            <div id="pastActivitiesSection" class="form-section hidden" style="margin-top: 1rem;">
+                                <h3 class="past-activities-header" style="cursor: pointer; user-select: none; display: flex; align-items: center; gap: 0.5rem;" onclick="Activities.togglePastActivities()">
+                                    <span class="past-activities-arrow">▼</span> Past activities for this project
+                                </h3>
+                                <div id="pastActivitiesList" class="past-activities-list" style="display: none; margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
+                            </div>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label required">Primary Use Case</label>
@@ -555,20 +625,25 @@ const Activities = {
                         <!-- SECTION 4: Activity Details -->
                         <div class="form-section">
                             <h3>Activity Details</h3>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label class="form-label required">Date</label>
-                                    <input type="date" class="form-control" id="activityDate" required>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label required">Activity Type</label>
-                                    <select class="form-control" id="activityTypeSelect" onchange="Activities.showActivityFields()" required>
-                                        <option value="">Select Activity Type</option>
-                                        <!-- Options will be populated based on Internal/External -->
-                                    </select>
+                            <div id="newActivityRowsContainer">
+                                <div class="activity-detail-row" data-row="0">
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label class="form-label required">Date</label>
+                                            <input type="date" class="form-control" id="activityDate" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label required">Activity Type</label>
+                                            <select class="form-control" id="activityTypeSelect" onchange="Activities.showActivityFields()" required>
+                                                <option value="">Select Activity Type</option>
+                                                <!-- Options will be populated based on Internal/External -->
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div id="activityFields"></div>
                                 </div>
                             </div>
-                            <div id="activityFields"></div>
+                            <button type="button" class="btn btn-secondary" id="addAnotherActivityBtn" style="margin-top: 0.5rem; display: none;" onclick="Activities.addAnotherActivityRow()">+ Add another activity</button>
                         </div>
 
                         <div class="modal-footer">
@@ -1236,6 +1311,10 @@ const Activities = {
         if (projectDisplay) projectDisplay.textContent = 'Select project...';
         const selectedProjectId = document.getElementById('selectedProjectId');
         if (selectedProjectId) selectedProjectId.value = '';
+        const pastSection = document.getElementById('pastActivitiesSection');
+        if (pastSection) pastSection.classList.add('hidden');
+        const pastList = document.getElementById('pastActivitiesList');
+        if (pastList) { pastList.innerHTML = ''; pastList.style.display = 'none'; }
         // Show all projects immediately
         this.loadProjectDropdown();
     },
@@ -1386,10 +1465,101 @@ const Activities = {
         // Load and pre-populate project data if existing project
         if (id && id !== 'new') {
             this.loadProjectData(id);
+            const pastSection = document.getElementById('pastActivitiesSection');
+            if (pastSection) pastSection.classList.remove('hidden');
+            this.renderPastActivitiesForProject(id);
         } else {
             // Clear project fields for new project
             this.clearProjectFields();
+            const pastSection = document.getElementById('pastActivitiesSection');
+            if (pastSection) pastSection.classList.add('hidden');
+            const list = document.getElementById('pastActivitiesList');
+            if (list) { list.innerHTML = ''; list.style.display = 'none'; }
         }
+    },
+
+    togglePastActivities() {
+        const list = document.getElementById('pastActivitiesList');
+        const arrow = document.querySelector('.past-activities-arrow');
+        if (!list) return;
+        const isExpanded = list.style.display !== 'none';
+        list.style.display = isExpanded ? 'none' : 'block';
+        if (arrow) arrow.textContent = isExpanded ? '▼' : '▶';
+    },
+
+    renderPastActivitiesForProject(projectId) {
+        const list = document.getElementById('pastActivitiesList');
+        if (!list || typeof DataManager === 'undefined' || !DataManager.getActivitiesByProject) return;
+        const activities = DataManager.getActivitiesByProject(projectId);
+        const sorted = [...activities].sort((a, b) => {
+            const dA = a.date || a.createdAt || '';
+            const dB = b.date || b.createdAt || '';
+            return dB.localeCompare(dA);
+        });
+        const typeLabels = { customerCall: 'Customer Call', sow: 'SOW', poc: 'POC', rfx: 'RFx', pricing: 'Pricing', other: 'Other' };
+        if (sorted.length === 0) {
+            list.innerHTML = '<p class="text-muted" style="margin: 0.5rem 0;">No past activities for this project.</p>';
+        } else {
+            list.innerHTML = sorted.map(a => {
+                const dateStr = (a.date || a.createdAt || '').slice(0, 10);
+                const typeLabel = typeLabels[a.type] || a.type || 'Activity';
+                const safeId = String(a.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                return `<div class="past-activity-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #e2e8f0;">
+                    <span>${dateStr} – ${typeLabel}</span>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="Activities.openActivityModal({ mode: 'edit', activity: Activities._getActivityById('${safeId}'), isInternal: false })">Edit</button>
+                </div>`;
+            }).join('');
+        }
+        list.style.display = 'none';
+        const arrow = document.querySelector('.past-activities-arrow');
+        if (arrow) arrow.textContent = '▶';
+    },
+
+    _getActivityById(activityId) {
+        const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? DataManager.getActivities() : [];
+        return activities.find(a => a.id === activityId) || null;
+    },
+
+    getDetailsFromRow(rowIndex) {
+        if (rowIndex > 0) {
+            return { notes: document.getElementById('activityDetailsExtra_' + rowIndex)?.value || '' };
+        }
+        const activityType = document.getElementById('activityTypeSelect')?.value || '';
+        if (activityType === 'customerCall') {
+            return {
+                callType: document.getElementById('callType')?.value || '',
+                description: document.getElementById('callDescription')?.value || ''
+            };
+        }
+        if (activityType === 'sow') {
+            return { sowLink: document.getElementById('sowLink')?.value || '' };
+        }
+        if (activityType === 'poc') {
+            const accessType = document.getElementById('accessType')?.value || '';
+            const details = {
+                accessType: accessType,
+                useCaseDescription: document.getElementById('useCaseDescription')?.value || ''
+            };
+            if (accessType === 'Sandbox') {
+                details.startDate = document.getElementById('pocStartDate')?.value || '';
+                details.endDate = document.getElementById('pocEndDate')?.value || '';
+                details.pocEnvironmentName = '';
+                details.assignedStatus = 'Unassigned';
+            } else if (accessType && accessType.startsWith('Custom POC')) {
+                details.demoEnvironment = document.getElementById('demoEnvironment')?.value || '';
+                details.botTriggerUrl = document.getElementById('botTriggerUrl')?.value || '';
+            }
+            return details;
+        }
+        if (activityType === 'rfx') {
+            return {
+                rfxType: document.getElementById('rfxType')?.value || '',
+                submissionDeadline: document.getElementById('submissionDeadline')?.value || '',
+                googleFolderLink: document.getElementById('googleFolderLink')?.value || '',
+                notes: document.getElementById('rfxNotes')?.value || ''
+            };
+        }
+        return {};
     },
     
     // Load project data and pre-populate fields
@@ -2004,16 +2174,66 @@ const Activities = {
             this.closeActivityModal();
             UI.showNotification('Activity updated successfully!', 'success');
         } else {
-            const created = DataManager.addActivity(activity);
+            const rows = document.querySelectorAll('.activity-detail-row');
+            if (rows.length > 1) {
+                for (let i = 0; i < rows.length; i++) {
+                    const dateVal = i === 0 ? date : document.getElementById('activityDate_' + i)?.value;
+                    const typeVal = i === 0 ? activityType : document.getElementById('activityTypeSelect_' + i)?.value;
+                    if (!dateVal || !typeVal) {
+                        UI.showNotification('Please fill date and activity type for all activities.', 'error');
+                        return;
+                    }
+                    if (i === 0 && activityType === 'customerCall') {
+                        const callDescription = document.getElementById('callDescription')?.value || '';
+                        if (!callDescription.trim()) {
+                            UI.showNotification('Description / MOM is required for Customer Call activities', 'error');
+                            return;
+                        }
+                    }
+                }
+                let createdCount = 0;
+                for (let i = 0; i < rows.length; i++) {
+                    const dateVal = i === 0 ? date : document.getElementById('activityDate_' + i)?.value;
+                    const typeVal = i === 0 ? activityType : document.getElementById('activityTypeSelect_' + i)?.value;
+                    const detailsVal = this.getDetailsFromRow(i);
+                    const rowActivity = {
+                        userId: currentUser.id,
+                        userName: currentUser.username,
+                        accountId: finalAccountId,
+                        accountName: accountName,
+                        projectId: finalProjectId || null,
+                        projectName: projectName || null,
+                        date: dateVal,
+                        type: typeVal,
+                        salesRep: salesRep,
+                        salesRepEmail: salesRepEmail,
+                        salesRepRegion: salesRepRegion,
+                        industry: industry,
+                        details: detailsVal,
+                        isInternal: false
+                    };
+                    const created = DataManager.addActivity(rowActivity);
+                    this.syncProjectActivityReference({
+                        activity: created,
+                        targetAccountId: created.accountId,
+                        targetProjectId: created.projectId
+                    });
+                    createdCount++;
+                }
+                this.closeActivityModal();
+                UI.showNotification('Logged ' + createdCount + ' activities!', 'success');
+            } else {
+                const created = DataManager.addActivity(activity);
 
-            this.syncProjectActivityReference({
-                activity: created,
-                targetAccountId: created.accountId,
-                targetProjectId: created.projectId
-            });
+                this.syncProjectActivityReference({
+                    activity: created,
+                    targetAccountId: created.accountId,
+                    targetProjectId: created.projectId
+                });
 
-            this.closeActivityModal();
-            UI.showNotification('Activity logged successfully!', 'success');
+                this.closeActivityModal();
+                UI.showNotification('Activity logged successfully!', 'success');
+            }
         }
         
         if (window.app) {
@@ -2131,6 +2351,7 @@ const Activities = {
                     field.setAttribute('data-was-required', 'true');
                 });
             }
+            this.updateAddAnotherActivityButtonVisibility();
             
             // Populate Internal activity types
             if (activityTypeSelect) {
@@ -2166,8 +2387,18 @@ const Activities = {
                     field.setAttribute('required', 'required');
                 });
             }
+            const selectedProjectId = document.getElementById('selectedProjectId')?.value;
+            if (selectedProjectId && selectedProjectId !== 'new') {
+                const pastSection = document.getElementById('pastActivitiesSection');
+                if (pastSection) pastSection.classList.remove('hidden');
+                this.renderPastActivitiesForProject(selectedProjectId);
+            } else {
+                const pastSection = document.getElementById('pastActivitiesSection');
+                if (pastSection) pastSection.classList.add('hidden');
+            }
             const industrySelect = document.getElementById('industry');
             this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '');
+            this.updateAddAnotherActivityButtonVisibility();
             
             // Populate External activity types
             if (activityTypeSelect) {
@@ -2303,6 +2534,7 @@ const Activities = {
         
         const activityFields = document.getElementById('activityFields');
         if (activityFields) activityFields.innerHTML = '';
+        this.removeExtraActivityRows();
         
         // Reset radio buttons
         const radios = document.querySelectorAll('input[name="activityCategory"]');

@@ -35,7 +35,9 @@ const App = {
     activitySortBy: 'dateDesc',
     activitiesViewMode: 'cards',
     winLossFilters: {
-        owner: 'all'
+        owner: 'all',
+        month: '',
+        statusFilter: 'all'
     },
     pendingDuplicateAlerts: [],
     projectHealthFilters: {
@@ -1153,8 +1155,9 @@ const App = {
         const sortedBySubmission = [...activities].sort((a, b) => new Date(submissionTs(b)) - new Date(submissionTs(a)));
         const lastActivity = sortedBySubmission[0];
         const lastActivityWho = lastActivity ? (lastActivity.userName || lastActivity.assignedUserEmail || 'Unknown') : '—';
-        const lastActivityWhen = lastActivity && (lastActivity.createdAt || lastActivity.date)
-            ? (typeof UI !== 'undefined' && UI.formatDate ? UI.formatDate(lastActivity.createdAt || lastActivity.date) : (lastActivity.createdAt || lastActivity.date))
+        const lastActivityWhenRaw = lastActivity && (lastActivity.createdAt || lastActivity.date);
+        const lastActivityWhen = lastActivityWhenRaw
+            ? (() => { const d = new Date(lastActivityWhenRaw); return Number.isNaN(d.getTime()) ? lastActivityWhenRaw : d.toLocaleString(); })()
             : '—';
         
         // Internal vs External breakdown
@@ -1271,9 +1274,9 @@ const App = {
                     <div class="dashboard-stat-card-value">${monthActivities.length}</div>
                     <div class="dashboard-stat-card-detail">Selected month</div>
                 </div>
-                <div class="dashboard-stat-card">
+                <div class="dashboard-stat-card dashboard-stat-card-last-activity">
                     <div class="dashboard-stat-card-title">Last activity submission</div>
-                    <div class="dashboard-stat-card-value" style="font-size: 1rem;">${lastActivityWho}</div>
+                    <div class="dashboard-stat-card-value dashboard-stat-card-value-wrap" style="font-size: 1rem;">${lastActivityWho}</div>
                     <div class="dashboard-stat-card-detail">${lastActivityWhen}</div>
                 </div>
                 <div class="dashboard-stat-card" style="border-left-color: #805AD5;">
@@ -1520,6 +1523,40 @@ const App = {
     },
     
     dashboardCharts: {},
+
+    // Plugin to show value on pie segments and bar tops (no extra dependency)
+    chartValueLabelsPlugin: {
+        id: 'chartValueLabels',
+        afterDatasetsDraw(chart) {
+            const ctx = chart.ctx;
+            if (!ctx) return;
+            chart.data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (!meta.data || meta.data.length === 0) return;
+                const total = dataset.data.reduce((a, b) => a + b, 0);
+                meta.data.forEach((element, index) => {
+                    const value = dataset.data[index];
+                    if (value == null || value === 0) return;
+                    const label = chart.data.labels && chart.data.labels[index] ? String(chart.data.labels[index]).slice(0, 12) : '';
+                    ctx.save();
+                    ctx.font = '12px sans-serif';
+                    ctx.fillStyle = '#1a202c';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (chart.config.type === 'pie' || chart.config.type === 'doughnut') {
+                        const { x, y } = element.tooltipPosition();
+                        const pct = total > 0 ? ((value / total) * 100).toFixed(0) : '';
+                        ctx.fillText(value, x, y - 6);
+                        if (pct) ctx.fillText(pct + '%', x, y + 8);
+                    } else if (chart.config.type === 'bar') {
+                        const { x, y } = element.tooltipPosition();
+                        ctx.fillText(value, x, y - 8);
+                    }
+                    ctx.restore();
+                });
+            });
+        }
+    },
     
     destroyDashboardCharts() {
         Object.values(this.dashboardCharts).forEach(chart => {
@@ -1539,6 +1576,9 @@ const App = {
         // Internal vs External Pie Chart
         const internalExternalCtx = document.getElementById('internalExternalChart');
         if (internalExternalCtx && (internalCount > 0 || externalCount > 0)) {
+            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
+                Chart.register(this.chartValueLabelsPlugin);
+            }
             this.dashboardCharts.internalExternal = new Chart(internalExternalCtx, {
                 type: 'pie',
                 data: {
@@ -1588,6 +1628,9 @@ const App = {
             const values = Object.values(callTypes);
             const colors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#F56565', '#38B2AC', '#ECC94B'];
             
+            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
+                Chart.register(this.chartValueLabelsPlugin);
+            }
             this.dashboardCharts.callTypes = new Chart(callTypesCtx, {
                 type: 'pie',
                 data: {
@@ -1626,6 +1669,9 @@ const App = {
             const regions = Object.keys(regionBreakdown).sort((a, b) => regionBreakdown[b] - regionBreakdown[a]);
             const counts = regions.map(r => regionBreakdown[r]);
             
+            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
+                Chart.register(this.chartValueLabelsPlugin);
+            }
             this.dashboardCharts.regionActivity = new Chart(regionActivityCtx, {
                 type: 'bar',
                 data: {
@@ -1990,6 +2036,17 @@ const App = {
             }
             return true;
         });
+        const monthFilter = (this.winLossFilters.month || '').trim();
+        if (monthFilter) {
+            projects = projects.filter(project => {
+                const monthOfWin = project.winLossData?.monthOfWin;
+                return monthOfWin === monthFilter || (!monthOfWin && (project.status === 'active' || project.status === ''));
+            });
+        }
+        const statusFilter = (this.winLossFilters.statusFilter || 'all').trim();
+        if (statusFilter === 'won' || statusFilter === 'lost') {
+            projects = projects.filter(p => p.status === statusFilter);
+        }
 
         const wonProjects = projects.filter(project => project.status === 'won').length;
         const lostProjects = projects.filter(project => project.status === 'lost').length;
@@ -2389,6 +2446,30 @@ const App = {
         });
     },
 
+    populateWinLossMonthFilter() {
+        const select = document.getElementById('winlossMonthFilter');
+        if (!select) return;
+        const allProjects = this.getWinLossProjectsDataset();
+        const months = new Set();
+        allProjects.forEach(project => {
+            const m = project.winLossData?.monthOfWin;
+            if (m && /^\d{4}-\d{2}$/.test(m)) months.add(m);
+        });
+        const sorted = Array.from(months).sort((a, b) => b.localeCompare(a));
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const label = (ym) => {
+            const [y, m] = ym.split('-').map(Number);
+            return `${monthNames[m - 1]} ${y}`;
+        };
+        select.innerHTML = '<option value="">All months</option>' + sorted.map(ym => `<option value="${ym}">${label(ym)}</option>`).join('');
+        const current = (this.winLossFilters.month || '').trim();
+        if (current && select.querySelector(`option[value="${current}"]`)) {
+            select.value = current;
+        } else {
+            select.value = '';
+        }
+    },
+
     handleWinLossOwnerChange(value = '', variant = 'standard') {
         const selectedValue = value || this.getDefaultRecordOwnerFilter();
         this.winLossFilters.owner = selectedValue;
@@ -2396,6 +2477,16 @@ const App = {
         if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
             this.loadCardWinLossView();
         }
+    },
+
+    handleWinLossMonthChange(value) {
+        this.winLossFilters.month = value || '';
+        this.loadWinLossView();
+    },
+
+    handleWinLossStatusFilterChange(value) {
+        this.winLossFilters.statusFilter = value || 'all';
+        this.loadWinLossView();
     },
 
     // Load win/loss view
@@ -2434,6 +2525,17 @@ const App = {
                 }
                 return true;
             });
+            const monthFilter = (this.winLossFilters.month || '').trim();
+            if (monthFilter) {
+                visibleProjects = visibleProjects.filter(project => {
+                    const monthOfWin = project.winLossData?.monthOfWin;
+                    return monthOfWin === monthFilter || (!monthOfWin && (project.status === 'active' || project.status === ''));
+                });
+            }
+            const statusFilter = (this.winLossFilters.statusFilter || 'all').trim();
+            if (statusFilter === 'won' || statusFilter === 'lost') {
+                visibleProjects = visibleProjects.filter(p => p.status === statusFilter);
+            }
 
             const wins = visibleProjects.filter(p => p.status === 'won').length;
             const losses = visibleProjects.filter(p => p.status === 'lost').length;
@@ -2493,6 +2595,7 @@ const App = {
 
             container.innerHTML = html;
             this.populateWinLossOwnerFilter();
+            this.populateWinLossMonthFilter();
         } catch (error) {
             console.error('Error loading win/loss view:', error);
             const container = document.getElementById('winlossContent');
@@ -6577,6 +6680,12 @@ const App = {
         const otdInput = document.getElementById('winLossOtd');
         const currencySelect = document.getElementById('winLossCurrency');
         
+        const monthOfWinInput = document.getElementById('winLossMonthOfWin');
+        const now = new Date();
+        const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (monthOfWinInput) {
+            monthOfWinInput.value = project.winLossData?.monthOfWin || defaultMonth;
+        }
         if (project.winLossData) {
             if (reasonInput) reasonInput.value = project.winLossData.reason || '';
             if (competitorInput) competitorInput.value = project.winLossData.competitors || '';
@@ -6680,6 +6789,10 @@ const App = {
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label class="form-label required">Month of Win/Loss</label>
+                                <input type="month" class="form-control" id="winLossMonthOfWin" data-winloss-required="true" required title="Which month does this win/loss belong to?">
+                            </div>
+                            <div class="form-group">
                                 <label class="form-label">OTD / Delivery Notes</label>
                                 <textarea class="form-control" id="winLossOtd" rows="2" placeholder="Implementation commitments, next steps, delivery dates, etc."></textarea>
                             </div>
@@ -6764,6 +6877,8 @@ const App = {
             const mrrInInr = currency === 'INR' ? mrrRounded : (fxToInr ? Number((mrrRounded * fxToInr).toFixed(2)) : null);
 
             project.sfdcLink = sfdcLinkValue;
+            const monthOfWinEl = document.getElementById('winLossMonthOfWin');
+            const monthOfWin = monthOfWinEl && monthOfWinEl.value ? monthOfWinEl.value : null;
             project.winLossData = {
                 reason: document.getElementById('winLossReason').value,
                 competitors: document.getElementById('competitorAnalysis').value,
@@ -6773,6 +6888,7 @@ const App = {
                 fxToInr,
                 mrrInInr,
                 otd: otdInput ? otdInput.value : '',
+                monthOfWin: monthOfWin || undefined,
                 updatedAt: new Date().toISOString()
             };
         } else {

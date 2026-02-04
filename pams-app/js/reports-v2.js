@@ -7,6 +7,40 @@ const ReportsV2 = {
     activeTab: 'presales', // 'presales', 'sales', 'regional', 'ai'
     activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
 
+    // Plugin to show value on pie/doughnut segments and bar tops (matches dashboard)
+    chartValueLabelsPlugin: {
+        id: 'chartValueLabels',
+        afterDatasetsDraw(chart) {
+            const ctx = chart.ctx;
+            if (!ctx) return;
+            chart.data.datasets.forEach((dataset, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (!meta.data || meta.data.length === 0) return;
+                const total = dataset.data.reduce((a, b) => a + b, 0);
+                meta.data.forEach((element, index) => {
+                    const value = dataset.data[index];
+                    if (value == null || value === 0) return;
+                    const label = chart.data.labels && chart.data.labels[index] ? String(chart.data.labels[index]).slice(0, 12) : '';
+                    ctx.save();
+                    ctx.font = '12px sans-serif';
+                    ctx.fillStyle = '#1a202c';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    if (chart.config.type === 'pie' || chart.config.type === 'doughnut') {
+                        const { x, y } = element.tooltipPosition();
+                        const pct = total > 0 ? ((value / total) * 100).toFixed(0) : '';
+                        ctx.fillText(value, x, y - 6);
+                        if (pct) ctx.fillText(pct + '%', x, y + 8);
+                    } else if (chart.config.type === 'bar') {
+                        const { x, y } = element.tooltipPosition();
+                        ctx.fillText(value, x, y - 8);
+                    }
+                    ctx.restore();
+                });
+            });
+        }
+    },
+
     // Initialize Reports V2
     init(period, periodType = 'month') {
         this.currentPeriod = period;
@@ -590,14 +624,12 @@ const ReportsV2 = {
                         </div>
                     </div>
 
-                    <!-- Call Type (Demo, Discovery, etc.) – external Customer Call activities only -->
+                    <!-- Call Type (Demo, Discovery, etc.) -->
                     <div class="reports-v2-card">
                         <div class="reports-v2-card-header">
                             <h3>Call Types</h3>
-                            <span class="text-muted">External Customer Call activities only (SOW, POC, RFx, Pricing excluded)</span>
                         </div>
                         <div class="reports-v2-card-body">
-                            <p class="reports-v2-card-hint">Not specified = Customer Call activities where Call Type was not set (e.g. older or imported records).</p>
                             ${Object.keys(this.cachedData.callTypeData || {}).length > 0 ? `
                                 <canvas id="callTypeChart" height="280"></canvas>
                             ` : `
@@ -950,6 +982,9 @@ const ReportsV2 = {
         const safeActivities = activities && Array.isArray(activities) ? activities : [];
 
         try {
+            if (typeof Chart !== 'undefined' && !Chart.registry.getPlugin('chartValueLabels')) {
+                Chart.register(this.chartValueLabelsPlugin);
+            }
             // Presales Activity Report (only in Presales tab)
             if (this.activeTab === 'presales') {
                 const presalesActivityCanvas = document.getElementById('presalesActivityChart');

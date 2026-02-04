@@ -296,6 +296,20 @@
                             <input type="text" class="form-control" placeholder="Search projects..." id="winlossSearch" onkeyup="App.filterWinLoss()">
                         </div>
                         <div class="filter-group">
+                            <label class="form-label" style="font-size: 0.75rem;">Month of win/loss</label>
+                            <select id="winlossMonthFilter" class="form-control" onchange="App.handleWinLossMonthChange(this.value)">
+                                <option value="">All months</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="form-label" style="font-size: 0.75rem;">Status</label>
+                            <select id="winlossStatusFilter" class="form-control" onchange="App.handleWinLossStatusFilterChange(this.value)">
+                                <option value="all">Wins &amp; Losses</option>
+                                <option value="won">Wins only</option>
+                                <option value="lost">Losses only</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
                             <select id="winlossOwnerFilter" class="form-control" onchange="App.handleWinLossOwnerChange(this.value)">
                                 <option value="all">All Projects</option>
                             </select>

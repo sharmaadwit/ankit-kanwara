@@ -1538,6 +1538,9 @@ const DataManager = {
                 name: project.name,
                 status: project.status
             });
+            if (project.name && account.name && String(project.name).trim() === String(account.name).trim() && typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Project name should describe the use case, not repeat the account name.', 'warning');
+            }
             return project;
         }
         return null;
@@ -1555,6 +1558,10 @@ const DataManager = {
                     accountId,
                     ...updates
                 });
+                const projectName = project.name || updates.name;
+                if (projectName && account.name && String(projectName).trim() === String(account.name).trim() && typeof UI !== 'undefined' && UI.showNotification) {
+                    UI.showNotification('Project name should describe the use case, not repeat the account name.', 'warning');
+                }
                 return project;
             }
         }
@@ -1570,6 +1577,11 @@ const DataManager = {
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.activities = activities;
         return activities;
+    },
+
+    getActivitiesByProject(projectId) {
+        if (!projectId) return [];
+        return this.getActivities().filter(a => a.projectId === projectId);
     },
 
     saveActivities(activities) {

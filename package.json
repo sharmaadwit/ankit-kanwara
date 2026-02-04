@@ -9,7 +9,8 @@
     "migrate": "node server/scripts/migrate.js",
     "test": "jest",
     "uptime": "node server/scripts/uptime.js",
-    "backup": "node server/scripts/export-storage-snapshot.js"
+    "backup": "node server/scripts/export-storage-snapshot.js",
+    "snapshot-before-deploy": "node scripts/snapshot-before-deploy.js"
   },
   "engines": {
     "node": ">=18"
