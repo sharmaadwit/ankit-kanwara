@@ -89,6 +89,15 @@
         }
     };
 
+    /** Merge two JSON arrays by id: server items not in ours are kept, ours win for same id. For parallel-safe updates. */
+    const mergeArrayById = (serverJson, ourJson) => {
+        const serverArr = Array.isArray(safeJsonParse(serverJson)) ? safeJsonParse(serverJson) : [];
+        const ourArr = Array.isArray(safeJsonParse(ourJson)) ? safeJsonParse(ourJson) : [];
+        const ourIds = new Set(ourArr.map((item) => item.id).filter(Boolean));
+        const merged = [...serverArr.filter((s) => !ourIds.has(s.id)), ...ourArr];
+        return JSON.stringify(merged);
+    };
+
     const normalizeIsoString = (value) => {
         if (!value) return null;
         if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -283,9 +292,13 @@
         return `${API_BASE}/${suffix}`;
     };
 
-    const buildHeaders = () => {
+    /** Per-key version cache for optimistic locking (parallel / multi-tab safe). */
+    const lastVersion = {};
+
+    const buildHeaders = (extraHeaders) => {
         const headers = {
-            'X-Admin-User': window.__REMOTE_STORAGE_USER__ || 'storage-proxy'
+            'X-Admin-User': window.__REMOTE_STORAGE_USER__ || 'storage-proxy',
+            ...extraHeaders
         };
         const extra = window.__REMOTE_STORAGE_HEADERS__;
         if (extra && typeof extra === 'object') {
@@ -304,7 +317,15 @@
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false);
         xhr.setRequestHeader('Accept', 'application/json');
-        const headers = buildHeaders();
+
+        let requestHeaders = {};
+        if (method === 'PUT' && suffix && suffix.startsWith('/')) {
+            const key = decodeURIComponent(suffix.replace(/^\//, ''));
+            if (key && lastVersion[key] != null) {
+                requestHeaders['If-Match'] = lastVersion[key];
+            }
+        }
+        const headers = buildHeaders(requestHeaders);
         Object.keys(headers).forEach((key) => {
             xhr.setRequestHeader(key, headers[key]);
         });
@@ -321,11 +342,30 @@
 
         if (xhr.status >= 200 && xhr.status < 300) {
             try {
-                return xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                const result = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                if (result && result.key != null && result.updated_at != null) {
+                    lastVersion[result.key] = result.updated_at;
+                }
+                return result;
             } catch (error) {
                 console.warn('Remote storage parse error', error);
                 return null;
             }
+        }
+
+        if (xhr.status === 409) {
+            let conflictBody = null;
+            try {
+                conflictBody = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+            } catch (_) {}
+            const error = new Error(
+                conflictBody?.message || `Remote storage conflict: ${method} ${url} -> 409`
+            );
+            error.status = 409;
+            error.conflict = true;
+            error.value = conflictBody?.value;
+            error.updated_at = conflictBody?.updated_at;
+            throw error;
         }
 
         const error = new Error(
@@ -391,27 +431,62 @@
             if (!key) {
                 throw new Error('Key is required for setItem');
             }
-            const serializedValue =
+            let serializedValue =
                 value === null || value === undefined ? '' : String(value);
-            try {
-                if (key === ACTIVITIES_KEY && shardActivities(serializedValue)) {
-                    return serializedValue;
-                }
+            const MERGE_KEYS = ['accounts', 'internalActivities', ACTIVITIES_KEY];
+            const canMergeOnConflict = MERGE_KEYS.indexOf(key) !== -1;
+
+            const doPut = (payload) => {
                 performRequest(
                     'PUT',
                     `/${encodeURIComponent(key)}`,
-                    {
-                        value: maybeCompressValue(serializedValue)
-                    }
+                    { value: maybeCompressValue(payload) }
                 );
+            };
+
+            const doActivitiesSave = () => {
+                if (shardActivities(serializedValue)) {
+                    return serializedValue;
+                }
+                return null;
+            };
+
+            try {
                 if (key === ACTIVITIES_KEY) {
+                    doActivitiesSave();
                     shardCache[ACTIVITIES_KEY] = {
                         version: null,
                         value: serializedValue
                     };
+                    return serializedValue;
                 }
+                doPut(serializedValue);
                 return serializedValue;
             } catch (error) {
+                if (error.status === 409 && error.conflict && canMergeOnConflict) {
+                    let merged;
+                    if (key === ACTIVITIES_KEY) {
+                        const serverJson = loadActivitiesValue();
+                        merged = mergeArrayById(serverJson, serializedValue);
+                        serializedValue = merged;
+                        doActivitiesSave();
+                    } else {
+                        const serverValue = this.getItem(key);
+                        merged = mergeArrayById(
+                            typeof serverValue === 'string' ? serverValue : JSON.stringify(serverValue || []),
+                            serializedValue
+                        );
+                        doPut(merged);
+                        serializedValue = merged;
+                    }
+                    if (key === ACTIVITIES_KEY) {
+                        shardCache[ACTIVITIES_KEY] = {
+                            version: null,
+                            value: serializedValue
+                        };
+                    }
+                    return serializedValue;
+                }
                 console.error('Remote storage setItem error', error);
                 throw error;
             }

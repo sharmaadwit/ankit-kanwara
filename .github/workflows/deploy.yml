@@ -1,0 +1,86 @@
+# Deploy – backup runs automatically first, then deploy
+# Run this when you want to deploy. Step 1 is always a full storage backup; step 2 merges your branch to main (triggering Railway).
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy (merge into main). Use "main" for backup-only.'
+        required: true
+        default: 'main'
+
+env:
+  SNAPSHOT_DIR: backups
+
+jobs:
+  backup:
+    name: Backup (pre-deploy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create backups directory
+        run: mkdir -p backups
+
+      - name: Run pre-deploy storage snapshot
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+        run: |
+          ts=$(date -u +%Y%m%dT%H%M%S)
+          export SNAPSHOT_FILE="backups/pre-deploy-${ts}.json"
+          node server/scripts/export-storage-snapshot.js "" "$SNAPSHOT_FILE"
+          echo "SNAPSHOT_PATH=$SNAPSHOT_FILE" >> $GITHUB_ENV
+
+      - name: Verify backup file
+        run: |
+          f=$(ls -t backups/pre-deploy-*.json 2>/dev/null | head -1)
+          if [ -z "$f" ] || [ ! -f "$f" ]; then echo "No snapshot file"; exit 1; fi
+          echo "Backup: $f"
+
+      - name: Commit and push pre-deploy snapshot
+        run: |
+          f=$(ls -t backups/pre-deploy-*.json 2>/dev/null | head -1)
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$f"
+          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: pre-deploy backup [skip ci]" && git push)
+
+  deploy:
+    name: Deploy (merge to main)
+    needs: backup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge branch and push (trigger Railway)
+        if: ${{ github.event.inputs.branch != 'main' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin ${{ github.event.inputs.branch }}
+          git merge origin/${{ github.event.inputs.branch }} -m "Deploy: merge ${{ github.event.inputs.branch }} into main"
+          git push origin main
+
+      - name: No merge (main only)
+        if: ${{ github.event.inputs.branch == 'main' }}
+        run: |
+          echo "Branch is main – backup already pushed. Push your commits to main to deploy."

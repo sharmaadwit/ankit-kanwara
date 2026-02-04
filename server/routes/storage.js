@@ -43,6 +43,22 @@ const getValue = async (key) => {
   return rows[0].value;
 };
 
+/** Returns { value, updated_at } for optimistic locking. updated_at is ISO string. */
+const getValueWithVersion = async (key) => {
+  const { rows } = await getPool().query(
+    'SELECT value, updated_at FROM storage WHERE key = $1;',
+    [key]
+  );
+  if (!rows.length) {
+    return null;
+  }
+  const row = rows[0];
+  return {
+    value: row.value,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null
+  };
+};
+
 const setValue = async (key, value) => {
   await getPool().query(
     `
@@ -53,6 +69,49 @@ const setValue = async (key, value) => {
     `,
     [key, value]
   );
+};
+
+/** Conditional update: only if current updated_at matches ifMatch. Returns { updated_at } or null on conflict. */
+const setValueIfMatch = async (key, value, ifMatch) => {
+  const client = await getPool().connect();
+  try {
+    const existing = await client.query(
+      'SELECT updated_at FROM storage WHERE key = $1;',
+      [key]
+    );
+    const now = new Date().toISOString();
+    if (existing.rows.length === 0) {
+      if (ifMatch != null && ifMatch !== '') {
+        return { conflict: true };
+      }
+      await client.query(
+        `INSERT INTO storage (key, value, updated_at) VALUES ($1, $2, NOW());`,
+        [key, value]
+      );
+      return { updated_at: now };
+    }
+    if (ifMatch != null && ifMatch !== '') {
+      const current = new Date(existing.rows[0].updated_at).toISOString();
+      if (current !== ifMatch) {
+        const { rows } = await client.query(
+          'SELECT value, updated_at FROM storage WHERE key = $1;',
+          [key]
+        );
+        return {
+          conflict: true,
+          value: rows[0].value,
+          updated_at: new Date(rows[0].updated_at).toISOString()
+        };
+      }
+    }
+    await client.query(
+      `UPDATE storage SET value = $2, updated_at = NOW() WHERE key = $1;`,
+      [key, value]
+    );
+    return { updated_at: now };
+  } finally {
+    client.release();
+  }
 };
 
 const deleteValue = async (key) => {
@@ -78,13 +137,17 @@ router.get('/', async (req, res) => {
 
 router.get('/:key', async (req, res) => {
   try {
-    const storedValue = await getValue(req.params.key);
-    const value = maybeDecompressValue(storedValue);
-    if (value === null || value === undefined) {
+    const row = await getValueWithVersion(req.params.key);
+    if (!row) {
       res.status(404).json({ message: 'Key not found' });
       return;
     }
-    res.json({ key: req.params.key, value });
+    const value = maybeDecompressValue(row.value);
+    res.json({
+      key: req.params.key,
+      value,
+      updated_at: row.updated_at
+    });
   } catch (error) {
     logger.error('storage_read_failed', {
       message: error.message,
@@ -105,6 +168,27 @@ router.put('/:key', async (req, res) => {
 
     const serializedValue =
       value === null || value === undefined ? '' : String(value);
+    const ifMatch = req.get('If-Match') || req.get('if-match');
+
+    if (ifMatch !== undefined && ifMatch !== '') {
+      const result = await setValueIfMatch(
+        req.params.key,
+        serializedValue,
+        ifMatch
+      );
+      if (result.conflict) {
+        const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
+        return res.status(409).json({
+          message: 'Conflict: key was updated by another request',
+          value: conflictValue,
+          updated_at: result.updated_at
+        });
+      }
+      return res.status(200).json({
+        key: req.params.key,
+        updated_at: result.updated_at
+      });
+    }
 
     await setValue(req.params.key, serializedValue);
     res.status(204).send();

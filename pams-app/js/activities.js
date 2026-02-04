@@ -131,12 +131,13 @@ const Activities = {
                     </div>
                     <div class="form-group">
                         <label class="form-label required">Activity Type</label>
-                        <select class="form-control" id="activityTypeSelect_${nextIndex}" required>
+                        <select class="form-control" id="activityTypeSelect_${nextIndex}" required onchange="Activities.showActivityFieldsForRow(${nextIndex})">
                             ${externalTypeOptions}
                         </select>
                     </div>
                 </div>
-                <div class="form-group">
+                <div id="activityFields_${nextIndex}" class="activity-fields-extra" style="margin-top: 0.5rem;"></div>
+                <div class="form-group" style="margin-top: 0.5rem;">
                     <label class="form-label">Details / notes</label>
                     <textarea class="form-control" id="activityDetailsExtra_${nextIndex}" rows="2" placeholder="Optional notes for this activity"></textarea>
                 </div>
@@ -146,6 +147,29 @@ const Activities = {
         const today = new Date().toISOString().split('T')[0];
         const dateEl = document.getElementById(`activityDate_${nextIndex}`);
         if (dateEl) dateEl.value = today;
+    },
+
+    // Show type-specific fields for an extra activity row (e.g. POC → Access Type, Customer Call → Call Type)
+    showActivityFieldsForRow(rowIndex) {
+        const typeSelect = document.getElementById('activityTypeSelect_' + rowIndex);
+        const container = document.getElementById('activityFields_' + rowIndex);
+        if (!typeSelect || !container) return;
+        const type = typeSelect.value;
+        const suffix = '_' + rowIndex;
+        let html = '';
+        if (type === 'customerCall') {
+            html = this.getCustomerCallFields(suffix);
+        } else if (type === 'sow') {
+            html = this.getSOWFields(suffix);
+        } else if (type === 'poc') {
+            html = this.getPOCFields(suffix);
+            setTimeout(() => this.togglePOCFields(suffix), 0);
+        } else if (type === 'rfx') {
+            html = this.getRFxFields(suffix);
+        } else if (type === 'pricing' || type === 'other') {
+            html = '';
+        }
+        container.innerHTML = html;
     },
 
     formatDateForInput(value) {
@@ -773,15 +797,14 @@ const Activities = {
             html = this.getInternalActivityFields();
         } else if (this.activityType === 'external') {
             if (type === 'customerCall') {
-                html = this.getCustomerCallFields();
+                html = this.getCustomerCallFields('');
             } else if (type === 'sow') {
-                html = this.getSOWFields();
+                html = this.getSOWFields('');
             } else if (type === 'poc') {
-                html = this.getPOCFields();
-                // Sync visibility and required so hidden POC date fields don't trigger "not focusable"
-                setTimeout(() => this.togglePOCFields(), 0);
+                html = this.getPOCFields('');
+                setTimeout(() => this.togglePOCFields(''), 0);
             } else if (type === 'rfx') {
-                html = this.getRFxFields();
+                html = this.getRFxFields('');
             } else if (type === 'pricing') {
                 html = ''; // No fields for pricing
             }
@@ -790,12 +813,12 @@ const Activities = {
         container.innerHTML = html;
     },
 
-    // Get customer call fields
-    getCustomerCallFields() {
+    // Get customer call fields (suffix = '' for main row, '_1', '_2' for extra rows)
+    getCustomerCallFields(suffix = '') {
         return `
             <div class="form-group">
                 <label class="form-label required">Call Type</label>
-                <select class="form-control" id="callType" required>
+                <select class="form-control" id="callType${suffix}" required>
                     <option value="">Select Type</option>
                     <option value="Demo">Demo</option>
                     <option value="Discovery">Discovery</option>
@@ -808,17 +831,17 @@ const Activities = {
             </div>
             <div class="form-group">
                 <label class="form-label required">Description / MOM</label>
-                <textarea class="form-control" id="callDescription" rows="4" required placeholder="Enter description or minutes of meeting..."></textarea>
+                <textarea class="form-control" id="callDescription${suffix}" rows="4" required placeholder="Enter description or minutes of meeting..."></textarea>
             </div>
         `;
     },
 
-    // Get POC fields
-    getPOCFields() {
+    // Get POC fields (suffix = '' for main row, '_1', '_2' for extra rows)
+    getPOCFields(suffix = '') {
         return `
             <div class="form-group">
                 <label class="form-label required">Access Type</label>
-                <select class="form-control" id="accessType" required onchange="Activities.togglePOCFields()">
+                <select class="form-control" id="accessType${suffix}" required onchange="Activities.togglePOCFields('${suffix}')">
                     <option value="">Select Access Type</option>
                     <option value="Sandbox">Sandbox</option>
                     <option value="Custom POC - Structured Journey">Custom POC - Structured Journey</option>
@@ -829,44 +852,44 @@ const Activities = {
             </div>
             <div class="form-group">
                 <label class="form-label required">Use Case Description</label>
-                <textarea class="form-control" id="useCaseDescription" rows="3" required></textarea>
+                <textarea class="form-control" id="useCaseDescription${suffix}" rows="3" required></textarea>
             </div>
             <!-- Sandbox Fields -->
-            <div id="pocSandboxFields" class="hidden">
+            <div id="pocSandboxFields${suffix}" class="hidden">
                 <div class="form-grid">
                     <div class="form-group">
                         <label class="form-label required">Start Date</label>
-                        <input type="date" class="form-control" id="pocStartDate" required onchange="Activities.setPOCEndDate()">
+                        <input type="date" class="form-control" id="pocStartDate${suffix}" required onchange="Activities.setPOCEndDate('${suffix}')">
                     </div>
                     <div class="form-group">
                         <label class="form-label required">End Date</label>
-                        <input type="date" class="form-control" id="pocEndDate" required>
+                        <input type="date" class="form-control" id="pocEndDate${suffix}" required>
                     </div>
                 </div>
             </div>
             <!-- Custom POC Fields -->
-            <div id="pocCustomFields" class="hidden">
+            <div id="pocCustomFields${suffix}" class="hidden">
                 <div class="form-grid">
                     <div class="form-group">
                         <label class="form-label">Demo Environment</label>
-                        <input type="text" class="form-control" id="demoEnvironment">
+                        <input type="text" class="form-control" id="demoEnvironment${suffix}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Bot Trigger URL/Number</label>
-                        <input type="text" class="form-control" id="botTriggerUrl" placeholder="URL or number">
+                        <input type="text" class="form-control" id="botTriggerUrl${suffix}" placeholder="URL or number">
                     </div>
                 </div>
             </div>
         `;
     },
 
-    // Toggle POC fields based on Access Type (and required on date fields to avoid "invalid form control not focusable")
-    togglePOCFields() {
-        const accessType = document.getElementById('accessType')?.value;
-        const sandboxFields = document.getElementById('pocSandboxFields');
-        const customFields = document.getElementById('pocCustomFields');
-        const pocStartDate = document.getElementById('pocStartDate');
-        const pocEndDate = document.getElementById('pocEndDate');
+    // Toggle POC fields based on Access Type (suffix = '' for main row, '_1', '_2' for extra rows)
+    togglePOCFields(suffix = '') {
+        const accessType = document.getElementById('accessType' + suffix)?.value;
+        const sandboxFields = document.getElementById('pocSandboxFields' + suffix);
+        const customFields = document.getElementById('pocCustomFields' + suffix);
+        const pocStartDate = document.getElementById('pocStartDate' + suffix);
+        const pocEndDate = document.getElementById('pocEndDate' + suffix);
 
         if (accessType === 'Sandbox') {
             if (sandboxFields) sandboxFields.classList.remove('hidden');
@@ -881,12 +904,12 @@ const Activities = {
         }
     },
 
-    // Get SOW fields
-    getSOWFields() {
+    // Get SOW fields (suffix = '' for main row, '_1', '_2' for extra rows)
+    getSOWFields(suffix = '') {
         return `
             <div class="form-group">
                 <label class="form-label required">SOW Document Link</label>
-                <input type="url" class="form-control" id="sowLink" placeholder="https://..." required>
+                <input type="url" class="form-control" id="sowLink${suffix}" placeholder="https://..." required>
             </div>
         `;
     },
@@ -939,13 +962,13 @@ const Activities = {
         }
     },
 
-    // Get RFx fields
-    getRFxFields() {
+    // Get RFx fields (suffix = '' for main row, '_1', '_2' for extra rows)
+    getRFxFields(suffix = '') {
         return `
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label required">RFx Type</label>
-                    <select class="form-control" id="rfxType" required>
+                    <select class="form-control" id="rfxType${suffix}" required>
                         <option value="">Select Type</option>
                         <option value="RFP">RFP (Request for Proposal)</option>
                         <option value="RFI">RFI (Request for Information)</option>
@@ -955,16 +978,16 @@ const Activities = {
                 </div>
                 <div class="form-group">
                     <label class="form-label required">Submission Deadline</label>
-                    <input type="date" class="form-control" id="submissionDeadline" required>
+                    <input type="date" class="form-control" id="submissionDeadline${suffix}" required>
                 </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Google Folder Link</label>
-                <input type="url" class="form-control" id="googleFolderLink" placeholder="https://drive.google.com/...">
+                <input type="url" class="form-control" id="googleFolderLink${suffix}" placeholder="https://drive.google.com/...">
             </div>
             <div class="form-group">
                 <label class="form-label">Additional Notes</label>
-                <textarea class="form-control" id="rfxNotes" rows="3"></textarea>
+                <textarea class="form-control" id="rfxNotes${suffix}" rows="3"></textarea>
             </div>
         `;
     },
@@ -1521,43 +1544,47 @@ const Activities = {
     },
 
     getDetailsFromRow(rowIndex) {
-        if (rowIndex > 0) {
-            return { notes: document.getElementById('activityDetailsExtra_' + rowIndex)?.value || '' };
-        }
-        const activityType = document.getElementById('activityTypeSelect')?.value || '';
+        const suffix = rowIndex > 0 ? '_' + rowIndex : '';
+        const typeSelectId = rowIndex === 0 ? 'activityTypeSelect' : 'activityTypeSelect_' + rowIndex;
+        const activityType = document.getElementById(typeSelectId)?.value || '';
+
         if (activityType === 'customerCall') {
             return {
-                callType: document.getElementById('callType')?.value || '',
-                description: document.getElementById('callDescription')?.value || ''
+                callType: document.getElementById('callType' + suffix)?.value || '',
+                description: document.getElementById('callDescription' + suffix)?.value || ''
             };
         }
         if (activityType === 'sow') {
-            return { sowLink: document.getElementById('sowLink')?.value || '' };
+            return { sowLink: document.getElementById('sowLink' + suffix)?.value || '' };
         }
         if (activityType === 'poc') {
-            const accessType = document.getElementById('accessType')?.value || '';
+            const accessType = document.getElementById('accessType' + suffix)?.value || '';
             const details = {
                 accessType: accessType,
-                useCaseDescription: document.getElementById('useCaseDescription')?.value || ''
+                useCaseDescription: document.getElementById('useCaseDescription' + suffix)?.value || ''
             };
             if (accessType === 'Sandbox') {
-                details.startDate = document.getElementById('pocStartDate')?.value || '';
-                details.endDate = document.getElementById('pocEndDate')?.value || '';
+                details.startDate = document.getElementById('pocStartDate' + suffix)?.value || '';
+                details.endDate = document.getElementById('pocEndDate' + suffix)?.value || '';
                 details.pocEnvironmentName = '';
                 details.assignedStatus = 'Unassigned';
             } else if (accessType && accessType.startsWith('Custom POC')) {
-                details.demoEnvironment = document.getElementById('demoEnvironment')?.value || '';
-                details.botTriggerUrl = document.getElementById('botTriggerUrl')?.value || '';
+                details.demoEnvironment = document.getElementById('demoEnvironment' + suffix)?.value || '';
+                details.botTriggerUrl = document.getElementById('botTriggerUrl' + suffix)?.value || '';
             }
             return details;
         }
         if (activityType === 'rfx') {
             return {
-                rfxType: document.getElementById('rfxType')?.value || '',
-                submissionDeadline: document.getElementById('submissionDeadline')?.value || '',
-                googleFolderLink: document.getElementById('googleFolderLink')?.value || '',
-                notes: document.getElementById('rfxNotes')?.value || ''
+                rfxType: document.getElementById('rfxType' + suffix)?.value || '',
+                submissionDeadline: document.getElementById('submissionDeadline' + suffix)?.value || '',
+                googleFolderLink: document.getElementById('googleFolderLink' + suffix)?.value || '',
+                notes: document.getElementById('rfxNotes' + suffix)?.value || ''
             };
+        }
+        if (rowIndex > 0) {
+            const notes = document.getElementById('activityDetailsExtra_' + rowIndex)?.value || '';
+            return notes ? { notes: notes } : {};
         }
         return {};
     },
@@ -2183,10 +2210,11 @@ const Activities = {
                         UI.showNotification('Please fill date and activity type for all activities.', 'error');
                         return;
                     }
-                    if (i === 0 && activityType === 'customerCall') {
-                        const callDescription = document.getElementById('callDescription')?.value || '';
+                    const suffix = i === 0 ? '' : '_' + i;
+                    if (typeVal === 'customerCall') {
+                        const callDescription = document.getElementById('callDescription' + suffix)?.value || '';
                         if (!callDescription.trim()) {
-                            UI.showNotification('Description / MOM is required for Customer Call activities', 'error');
+                            UI.showNotification('Description / MOM is required for Customer Call in activity ' + (i + 1), 'error');
                             return;
                         }
                     }
@@ -2555,12 +2583,12 @@ const Activities = {
         }
     },
 
-    setPOCEndDate() {
-        const startDate = document.getElementById('pocStartDate').value;
+    setPOCEndDate(suffix = '') {
+        const startDate = document.getElementById('pocStartDate' + suffix)?.value;
         if (startDate) {
             const endDate = new Date(startDate);
             endDate.setDate(endDate.getDate() + 7);
-            const endDateInput = document.getElementById('pocEndDate');
+            const endDateInput = document.getElementById('pocEndDate' + suffix);
             if (endDateInput) {
                 endDateInput.value = endDate.toISOString().split('T')[0];
             }

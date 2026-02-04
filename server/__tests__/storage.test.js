@@ -87,7 +87,9 @@ describe('Storage API', () => {
 
     const res = await request(app).get('/api/storage/test-key');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ key: 'test-key', value: 'hello-world' });
+    expect(res.body.key).toBe('test-key');
+    expect(res.body.value).toBe('hello-world');
+    expect(res.body).toHaveProperty('updated_at');
   });
 
   test('deletes a single key', async () => {
@@ -100,6 +102,33 @@ describe('Storage API', () => {
 
     const res = await request(app).get('/api/storage/delete-me');
     expect(res.status).toBe(404);
+  });
+
+  test('conditional PUT returns 409 on conflict and 200 with updated_at on success', async () => {
+    await request(app)
+      .put('/api/storage/cond-key')
+      .send({ value: 'v1' })
+      .expect(204);
+
+    const getRes = await request(app).get('/api/storage/cond-key');
+    expect(getRes.status).toBe(200);
+    const etag = getRes.body.updated_at;
+    expect(etag).toBeDefined();
+
+    const putRes = await request(app)
+      .put('/api/storage/cond-key')
+      .set('If-Match', etag)
+      .send({ value: 'v2' });
+    expect(putRes.status).toBe(200);
+    expect(putRes.body).toHaveProperty('updated_at');
+
+    const conflictRes = await request(app)
+      .put('/api/storage/cond-key')
+      .set('If-Match', etag)
+      .send({ value: 'v3' });
+    expect(conflictRes.status).toBe(409);
+    expect(conflictRes.body.value).toBe('v2');
+    expect(conflictRes.body.updated_at).toBeDefined();
   });
 
   test('clears all keys', async () => {

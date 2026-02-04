@@ -1591,6 +1591,10 @@ const DataManager = {
     },
 
     addActivity(activity) {
+        // Re-fetch from remote so we merge with latest (avoids overwriting other users' or today's entries)
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            this.cache.activities = null;
+        }
         const activities = this.getActivities();
         const timestamp = new Date().toISOString();
         const normalized = {
@@ -1626,6 +1630,9 @@ const DataManager = {
     },
 
     updateActivity(activityId, updates) {
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            this.cache.activities = null;
+        }
         const activities = this.getActivities();
         const index = activities.findIndex(a => a.id === activityId);
         if (index !== -1) {
@@ -1638,6 +1645,9 @@ const DataManager = {
     },
 
     deleteActivity(activityId) {
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            this.cache.activities = null;
+        }
         const activities = this.getActivities().filter(a => a.id !== activityId);
         this.saveActivities(activities);
         this.recordAudit('activity.delete', 'activity', activityId);
@@ -2466,6 +2476,7 @@ const DataManager = {
             }
         };
 
+        pushCandidate(account.salesRepRegion);
         pushCandidate(account.region);
         pushCandidate(account.salesRegion);
         pushCandidate(account.salesTerritory);
@@ -2506,6 +2517,7 @@ const DataManager = {
         };
 
         if (activity) {
+            pushCandidate(activity.salesRepRegion);
             pushCandidate(activity.region);
             pushCandidate(activity.salesRegion);
             if (activity.metadata && typeof activity.metadata === 'object') {

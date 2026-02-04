@@ -1,0 +1,54 @@
+# Pre-deploy backup – MANDATORY before every deployment
+# Run this workflow first, then deploy (e.g. push to main).
+# Captures activities and all storage data to a timestamped file so you can restore if the deploy causes data loss.
+name: Pre-deploy backup
+
+on:
+  workflow_dispatch:
+
+env:
+  SNAPSHOT_DIR: backups
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create backups directory
+        run: mkdir -p backups
+
+      - name: Run pre-deploy storage snapshot
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+        run: |
+          ts=$(date -u +%Y%m%dT%H%M%S)
+          export SNAPSHOT_FILE="backups/pre-deploy-${ts}.json"
+          node server/scripts/export-storage-snapshot.js "" "$SNAPSHOT_FILE"
+          echo "SNAPSHOT_PATH=$SNAPSHOT_FILE" >> $GITHUB_ENV
+
+      - name: List backup file
+        run: |
+          ls -la backups/pre-deploy-*.json 2>/dev/null || true
+          for f in backups/pre-deploy-*.json; do [ -f "$f" ] && break; done
+          [ -f "$f" ] || (echo "No backup file found" && exit 1)
+
+      - name: Commit and push pre-deploy snapshot
+        run: |
+          f=$(ls -t backups/pre-deploy-*.json 2>/dev/null | head -1)
+          if [ -z "$f" ] || [ ! -f "$f" ]; then echo "No snapshot file"; exit 1; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$f"
+          git status
+          git diff --staged --quiet && echo "No changes (empty or same content)" || (git commit -m "chore: pre-deploy backup [skip ci]" && git push)

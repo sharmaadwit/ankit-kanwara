@@ -41,5 +41,7 @@ build/
 *.bak
 *.backup
 *~
+# Local insurance copies (do not push; keep on machine only)
+backups/local-insurance-*.json
 
 
