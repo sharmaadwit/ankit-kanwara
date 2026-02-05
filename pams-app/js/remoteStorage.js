@@ -540,6 +540,13 @@
             '[RemoteStorage] Falling back to browser localStorage:',
             error.message
         );
+        if (error.status === 429) {
+            setTimeout(function () {
+                if (typeof UI !== 'undefined' && typeof UI.showNotification === 'function') {
+                    UI.showNotification('Server is busy (too many requests). Please wait a few minutes and refresh the page.', 'error');
+                }
+            }, 500);
+        }
         window.__REMOTE_STORAGE_ENABLED__ = false;
         return;
     }

@@ -145,21 +145,21 @@ const createApp = (options = {}) => {
     next();
   });
 
+  // Rate limit by client IP. With trust proxy enabled, req.ip is from X-Forwarded-For (real client).
+  // Without trusting proxy, all users behind Railway would share one IP and hit the limit together (lockout).
   const storageLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: Number(process.env.RATE_LIMIT_STORAGE_MAX) || 150,
-    message: { message: 'Too many storage requests; try again later.' },
+    max: Number(process.env.RATE_LIMIT_STORAGE_MAX) || 300,
+    message: { message: 'Too many requests; please wait a few minutes and try again.' },
     standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false }
+    legacyHeaders: false
   });
   const adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: Number(process.env.RATE_LIMIT_ADMIN_MAX) || 100,
     message: { message: 'Too many admin requests; try again later.' },
     standardHeaders: true,
-    legacyHeaders: false,
-    validate: { trustProxy: false }
+    legacyHeaders: false
   });
 
   app.use('/api/storage', storageLimiter, requireStorageAuth, storageRouter);
