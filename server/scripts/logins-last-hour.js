@@ -1,26 +1,32 @@
 #!/usr/bin/env node
 /**
- * List who logged in during the last hour (for correlating with 404/unknown in storage logs).
- * Usage: node server/scripts/logins-last-hour.js [exclude_username]
- * Example: node server/scripts/logins-last-hour.js ankit.kanwara
- *   → lists all logins in last hour except ankit.kanwara (so you can correlate "unknown" 404 with other users).
+ * List who logged in during the last N hours (for correlating with 404/unknown in storage logs).
+ * Usage: node server/scripts/logins-last-hour.js [hours] [exclude_username]
+ * Example: node server/scripts/logins-last-hour.js 2 ankit.kanwara
+ *   → lists all logins in last 2 hours except ankit.kanwara.
+ * Example: node server/scripts/logins-last-hour.js ankit.kanwara  (default 1 hour)
  * Requires: DATABASE_URL (or PG* env) set.
  */
-
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+const path = require('path');
+const projectRoot = path.resolve(__dirname, '..', '..');
+require('dotenv').config({ path: path.join(projectRoot, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { getPool } = require('../db');
 
-const excludeUsername = process.argv[2] ? process.argv[2].trim().toLowerCase() : null;
+const arg1 = process.argv[2] ? process.argv[2].trim() : null;
+const arg2 = process.argv[3] ? process.argv[3].trim() : null;
+const hoursNum = /^\d+$/.test(arg1) ? parseInt(arg1, 10) : 1;
+const excludeUsername = (arg1 && !/^\d+$/.test(arg1) ? arg1 : arg2) ? (arg1 && !/^\d+$/.test(arg1) ? arg1 : arg2).toLowerCase() : null;
 
 async function run() {
   const pool = getPool();
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - hoursNum * 60 * 60 * 1000).toISOString();
 
-  console.log('\nLogin activity in the last hour (UTC):');
+  console.log('\nLogin activity in the last ' + hoursNum + ' hour(s) (UTC):');
   if (excludeUsername) {
-    console.log(`  (excluding username containing "${excludeUsername}")\n`);
+    console.log('  (excluding username containing "' + excludeUsername + '")\n');
   } else {
-    console.log('  (pass exclude_username as first arg to exclude yourself, e.g. logins-last-hour.js ankit.kanwara)\n');
+    console.log('  (pass hours then exclude_username, e.g. logins-last-hour.js 2 ankit.kanwara)\n');
   }
 
   const { rows } = await pool.query(
@@ -43,9 +49,9 @@ async function run() {
     : rows;
 
   if (filtered.length === 0) {
-    console.log('  No logins in the last hour.');
+    console.log('  No logins in the last ' + hoursNum + ' hour(s).');
     if (rows.length > 0 && excludeUsername) {
-      console.log(`  (${rows.length} login(s) were excluded by filter.)`);
+      console.log('  (' + rows.length + ' login(s) were excluded by filter.)');
     }
     console.log('');
     process.exit(0);

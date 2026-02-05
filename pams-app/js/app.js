@@ -635,6 +635,9 @@ const App = {
                 window.__REMOTE_STORAGE_HEADERS__ = {
                     'X-Admin-User': currentUser.username
                 };
+                if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
+                    setTimeout(function () { window.__REMOTE_STORAGE_RECONCILE__(); }, 500);
+                }
             }
 
             const defaultActivityOwner = this.getDefaultActivityOwnerFilter();

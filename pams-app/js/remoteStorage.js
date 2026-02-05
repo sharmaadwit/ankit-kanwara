@@ -173,6 +173,35 @@
         return JSON.stringify(merged);
     };
 
+    /** Pick later of two date strings (updatedAt or createdAt). */
+    const getItemTimestamp = (item) => {
+        if (!item || typeof item !== 'object') return '';
+        const t = item.updatedAt || item.createdAt;
+        return t ? String(t) : '';
+    };
+
+    /** Merge two arrays by id: add missing from both, for same id keep the one with newer updatedAt/createdAt. */
+    const mergeArrayByIdNewerWins = (serverArr, localArr) => {
+        if (!Array.isArray(serverArr)) serverArr = [];
+        if (!Array.isArray(localArr)) localArr = [];
+        const byId = new Map();
+        serverArr.forEach((s) => {
+            if (s && s.id) byId.set(s.id, s);
+        });
+        localArr.forEach((l) => {
+            if (!l || !l.id) return;
+            const existing = byId.get(l.id);
+            const lTs = getItemTimestamp(l);
+            if (!existing) {
+                byId.set(l.id, l);
+                return;
+            }
+            const sTs = getItemTimestamp(existing);
+            if (lTs > sTs) byId.set(l.id, l);
+        });
+        return Array.from(byId.values());
+    };
+
     /**
      * Merge accounts so User B's save does not wipe User A's changes (e.g. new project on same account).
      * For each account id: deep-merge server + ours (ours wins for fields we send, server projects kept and merged by project id).
@@ -748,6 +777,60 @@
         }
     };
 
+    /** On login: merge server + local backup (newer wins), add missing, dedupe, then PUT so drift is fixed. */
+    const reconcileOnLogin = () => {
+        try {
+            const keys = ['internalActivities', 'accounts'];
+            keys.forEach((key) => {
+                const serverRaw = remoteStorage.getItem(key);
+                const localRaw = getLocalBackup(key);
+                const serverArr = safeJsonParse(serverRaw);
+                const localArr = safeJsonParse(localRaw);
+                const serverA = Array.isArray(serverArr) ? serverArr : [];
+                const localA = Array.isArray(localArr) ? localArr : [];
+                let merged = mergeArrayByIdNewerWins(serverA, localA);
+                if (key === 'internalActivities' && merged.length) {
+                    merged = dedupeInternalBySignature(merged);
+                }
+                if (merged.length === 0 && serverA.length === 0 && localA.length === 0) return;
+                const payload = JSON.stringify(merged);
+                performRequest('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) });
+                saveLocalBackup(key, payload);
+                if (typeof console !== 'undefined' && console.log) {
+                    console.log('[RemoteStorage] Reconcile on login: ' + key + ' merged to ' + merged.length + ' items.');
+                }
+            });
+            const serverActivities = loadActivitiesValue();
+            const localActivitiesRaw = getLocalBackup(ACTIVITIES_KEY);
+            const serverAct = safeJsonParse(serverActivities);
+            const localAct = safeJsonParse(localActivitiesRaw);
+            const serverArr = Array.isArray(serverAct) ? serverAct : [];
+            const localArr = Array.isArray(localAct) ? localAct : [];
+            let mergedAct = mergeArrayByIdNewerWins(serverArr, localArr);
+            if (mergedAct.length) mergedAct = dedupeActivitiesBySignature(mergedAct);
+            if (mergedAct.length > 0) {
+                const mergedStr = JSON.stringify(mergedAct);
+                if (shardActivities(mergedStr)) {
+                    saveLocalBackup(ACTIVITIES_KEY, mergedStr);
+                    shardCache[ACTIVITIES_KEY] = { version: null, value: mergedStr };
+                    if (typeof console !== 'undefined' && console.log) {
+                        console.log('[RemoteStorage] Reconcile on login: activities merged to ' + mergedAct.length + ' items.');
+                    }
+                }
+            }
+            if (typeof DataManager !== 'undefined' && DataManager.cache) {
+                DataManager.cache.activities = null;
+                DataManager.cache.accounts = null;
+                DataManager.cache.internalActivities = null;
+                DataManager.cache.allActivities = null;
+            }
+        } catch (err) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[RemoteStorage] Reconcile on login failed:', err.message);
+            }
+        }
+    };
+
     try {
         Object.defineProperty(window, 'localStorage', {
             value: remoteStorage,
@@ -757,6 +840,7 @@
         });
         window.__REMOTE_STORAGE_ENABLED__ = true;
         window.__BROWSER_LOCAL_STORAGE__ = originalLocalStorage;
+        window.__REMOTE_STORAGE_RECONCILE__ = reconcileOnLogin;
     } catch (error) {
         console.error(
             '[RemoteStorage] Failed to install remote storage proxy:',
