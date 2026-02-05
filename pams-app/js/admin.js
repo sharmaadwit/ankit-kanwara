@@ -328,10 +328,179 @@ const Admin = {
             features: () => this.loadControls(),
             login: () => this.loadLoginLogs(),
             audit: () => this.loadActivityLogs(),
+            storageDrafts: () => this.loadStorageDraftsSection(),
             monthly: () => {},
             reports: () => {},
             sandboxAccess: () => this.loadPOCSandbox()
         };
+    },
+
+    getStorageAuthHeaders() {
+        const user = typeof Auth !== 'undefined' && Auth.getCurrentUser && Auth.getCurrentUser();
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        if (user && user.username) headers['X-Admin-User'] = user.username;
+        return headers;
+    },
+
+    async loadStorageDraftsSection() {
+        const container = document.getElementById('adminStorageDraftsList');
+        if (!container) return;
+        container.innerHTML = '<div class="text-muted">Loading…</div>';
+        try {
+            const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' && window.__REMOTE_STORAGE_BASE__
+                ? window.__REMOTE_STORAGE_BASE__.replace(/\/$/, '')
+                : (window.location.origin + '/api/storage');
+            const res = await fetch(base + '/pending', { headers: this.getStorageAuthHeaders() });
+            if (!res.ok) {
+                if (res.status === 401) {
+                    container.innerHTML = '<div class="text-warning">Admin access required to view server drafts.</div>';
+                    return;
+                }
+                throw new Error(res.statusText || 'Failed to load');
+            }
+            const data = await res.json();
+            const pending = (data && data.pending) || [];
+            if (pending.length === 0) {
+                container.innerHTML = '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No server drafts</p></div>';
+                return;
+            }
+            const rows = pending.map((p) => {
+                const key = (p.storage_key || '').toString();
+                const reason = (p.reason || '').toString();
+                const user = (p.username || '').toString();
+                const created = (p.created_at || '').toString().slice(0, 19).replace('T', ' ');
+                const keyAttr = key.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                return (
+                    '<div class="admin-list-row" data-pending-id="' + p.id + '" data-storage-key="' + keyAttr + '">' +
+                    '<div><strong>' + key.replace(/</g, '&lt;') + '</strong><br><span class="text-muted small">' + reason.replace(/</g, '&lt;') + (user ? ' · ' + user.replace(/</g, '&lt;') : '') + ' · ' + created + '</span></div>' +
+                    '<div style="display: flex; gap: 0.25rem; align-items: center;">' +
+                    '<button type="button" class="btn btn-primary btn-xs storage-draft-apply-btn" data-pending-id="' + p.id + '">Apply</button> ' +
+                    '<button type="button" class="btn btn-outline btn-xs btn-danger" onclick="Admin.storageDraftDelete(' + p.id + ')">Delete</button>' +
+                    '</div></div>'
+                );
+            }).join('');
+            container.innerHTML = '<div class="space-y-2">' + rows + '</div>';
+            container.querySelectorAll('.storage-draft-apply-btn').forEach((btn) => {
+                btn.addEventListener('click', function () {
+                    const row = this.closest('[data-pending-id]');
+                    const id = row && parseInt(row.getAttribute('data-pending-id'), 10);
+                    const key = row && row.getAttribute('data-storage-key');
+                    if (id && key != null) Admin.storageDraftApply(id, key);
+                });
+            });
+        } catch (e) {
+            console.error('loadStorageDraftsSection', e);
+            container.innerHTML = '<div class="text-danger">Failed to load drafts: ' + (e.message || 'Unknown error') + '</div>';
+        }
+    },
+
+    async storageDraftApply(id, storageKey) {
+        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' && window.__REMOTE_STORAGE_BASE__
+            ? window.__REMOTE_STORAGE_BASE__.replace(/\/$/, '')
+            : (window.location.origin + '/api/storage');
+        const headers = this.getStorageAuthHeaders();
+        try {
+            const listRes = await fetch(base + '/pending', { headers });
+            if (!listRes.ok) throw new Error('Could not load pending list');
+            const listData = await listRes.json();
+            const pending = (listData.pending || []).find((p) => p.id === id);
+            if (!pending) {
+                UI.showNotification('Draft no longer found.', 'warning');
+                this.loadStorageDraftsSection();
+                return;
+            }
+            const key = pending.storage_key;
+            const getRes = await fetch(base + '/' + encodeURIComponent(key), { headers });
+            let valueToPut = pending.value;
+            if (getRes.status === 200) {
+                const current = await getRes.json();
+                const currentVal = current.value;
+                const pendingVal = pending.value;
+                if (typeof currentVal === 'string' && typeof pendingVal === 'string') {
+                    const merged = this.mergeStorageValueForApply(key, currentVal, pendingVal);
+                    if (merged !== undefined) valueToPut = merged;
+                }
+            }
+            const putRes = await fetch(base + '/' + encodeURIComponent(key), {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ value: valueToPut })
+            });
+            if (!putRes.ok) {
+                UI.showNotification('Apply failed: ' + (putRes.status === 409 ? 'conflict' : putRes.status), 'error');
+                return;
+            }
+            const delRes = await fetch(base + '/pending/' + id, { method: 'DELETE', headers });
+            if (delRes.ok || delRes.status === 204) {
+                UI.showNotification('Applied and removed from drafts.', 'success');
+            } else {
+                UI.showNotification('Applied but could not remove from list. Refresh to update.', 'warning');
+            }
+            this.loadStorageDraftsSection();
+        } catch (e) {
+            console.error('storageDraftApply', e);
+            UI.showNotification('Apply failed: ' + (e.message || 'Unknown error'), 'error');
+        }
+    },
+
+    mergeStorageValueForApply(storageKey, currentSerialized, pendingSerialized) {
+        try {
+            const current = typeof currentSerialized === 'string' ? JSON.parse(currentSerialized) : currentSerialized;
+            const pending = typeof pendingSerialized === 'string' ? JSON.parse(pendingSerialized) : pendingSerialized;
+            if (!Array.isArray(current) || !Array.isArray(pending)) return undefined;
+            const byId = new Map();
+            (current || []).forEach((item) => { if (item && item.id) byId.set(item.id, item); });
+            (pending || []).forEach((item) => { if (item && item.id) byId.set(item.id, item); });
+            return JSON.stringify(Array.from(byId.values()));
+        } catch (e) {
+            return undefined;
+        }
+    },
+
+    async storageDraftDelete(id) {
+        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' && window.__REMOTE_STORAGE_BASE__
+            ? window.__REMOTE_STORAGE_BASE__.replace(/\/$/, '')
+            : (window.location.origin + '/api/storage');
+        const headers = this.getStorageAuthHeaders();
+        try {
+            const res = await fetch(base + '/pending/' + id, { method: 'DELETE', headers });
+            if (res.ok || res.status === 204) {
+                UI.showNotification('Draft removed.', 'success');
+                this.loadStorageDraftsSection();
+            } else {
+                UI.showNotification('Delete failed.', 'error');
+            }
+        } catch (e) {
+            UI.showNotification('Delete failed: ' + (e.message || 'Unknown error'), 'error');
+        }
+    },
+
+    async storageDraftsSubmitAll() {
+        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' && window.__REMOTE_STORAGE_BASE__
+            ? window.__REMOTE_STORAGE_BASE__.replace(/\/$/, '')
+            : (window.location.origin + '/api/storage');
+        const headers = this.getStorageAuthHeaders();
+        try {
+            const listRes = await fetch(base + '/pending', { headers });
+            if (!listRes.ok) throw new Error('Could not load pending list');
+            const listData = await listRes.json();
+            const pending = (listData.pending || []) || [];
+            let applied = 0;
+            let failed = 0;
+            for (const p of pending) {
+                try {
+                    await this.storageDraftApply(p.id, p.storage_key);
+                    applied++;
+                } catch (e) {
+                    failed++;
+                }
+            }
+            UI.showNotification(applied + ' applied.' + (failed > 0 ? ' ' + failed + ' failed.' : ''), failed > 0 ? 'warning' : 'success');
+            this.loadStorageDraftsSection();
+        } catch (e) {
+            console.error('storageDraftsSubmitAll', e);
+            UI.showNotification('Submit all failed: ' + (e.message || 'Unknown error'), 'error');
+        }
     },
 
     loadIndustryUseCasesSection() {
@@ -2802,15 +2971,17 @@ const Admin = {
         }
     },
 
-    loadActivityLogs(force) {
+    loadActivityLogs(force, hours) {
         const container = document.getElementById('activityLogsTable');
         if (!container) return;
 
+        this._activityLogsHoursFilter = typeof hours === 'number' ? hours : undefined;
         if (!force) {
             container.innerHTML = '<div class="text-muted">Loading activity logs…</div>';
         }
 
-        fetch('/api/admin/activity?limit=200', {
+        const query = hours ? `limit=200&hours=${hours}` : 'limit=200';
+        fetch(`/api/admin/activity?${query}`, {
             cache: 'no-store',
             headers: this.getAdminHeaders()
         })
@@ -2867,7 +3038,9 @@ const Admin = {
     },
 
     exportActivityLogsCsv() {
-        fetch('/api/admin/activity?limit=500', {
+        const hours = this._activityLogsHoursFilter;
+        const query = hours ? `limit=500&hours=${hours}` : 'limit=500';
+        fetch(`/api/admin/activity?${query}`, {
             cache: 'no-store',
             headers: this.getAdminHeaders()
         })

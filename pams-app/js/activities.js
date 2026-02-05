@@ -31,7 +31,8 @@ const Activities = {
         const {
             mode = 'create',
             activity = null,
-            isInternal = false
+            isInternal = false,
+            fromDraftId = null
         } = context || {};
 
         const isEdit = mode === 'edit' && activity;
@@ -43,7 +44,7 @@ const Activities = {
                 originalAccountId: activity.accountId || null,
                 originalProjectId: activity.projectId || null
             }
-            : null;
+            : (fromDraftId ? { fromDraftId } : null);
 
         const modalId = 'activityModal';
         const modalTitle = document.querySelector(`#${modalId} .modal-title`);
@@ -83,7 +84,7 @@ const Activities = {
 
         // Initialize use case dropdown after modal is shown
         setTimeout(() => {
-            if (isEdit && activity) {
+            if ((isEdit || fromDraftId) && activity) {
                 this.populateEditForm(activity, !!isInternal);
             } else {
                 // Initialize use case dropdown with defaults for new activities
@@ -1892,14 +1893,23 @@ const Activities = {
             this.closeActivityModal();
             UI.showNotification('Internal activity updated successfully!', 'success');
         } else {
-            DataManager.addInternalActivity(payload);
-            this.closeActivityModal();
-            UI.showNotification('Internal activity logged successfully!', 'success');
+            try {
+                DataManager.addInternalActivity(payload);
+                if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
+                    Drafts.removeDraft(this.editingContext.fromDraftId);
+                }
+                this.closeActivityModal();
+                UI.showNotification('Internal activity logged successfully!', 'success');
+            } catch (err) {
+                UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
+                if (window.app) window.app.loadDraftsView && window.app.loadDraftsView();
+            }
         }
 
         if (window.app) {
             window.app.loadDashboard();
             window.app.loadActivitiesView();
+            if (window.app.loadDraftsView) window.app.loadDraftsView();
         }
     },
 
@@ -2220,6 +2230,7 @@ const Activities = {
                     }
                 }
                 let createdCount = 0;
+                let draftsCount = 0;
                 for (let i = 0; i < rows.length; i++) {
                     const dateVal = i === 0 ? date : document.getElementById('activityDate_' + i)?.value;
                     const typeVal = i === 0 ? activityType : document.getElementById('activityTypeSelect_' + i)?.value;
@@ -2240,33 +2251,49 @@ const Activities = {
                         details: detailsVal,
                         isInternal: false
                     };
-                    const created = DataManager.addActivity(rowActivity);
+                    try {
+                        const created = DataManager.addActivity(rowActivity);
+                        this.syncProjectActivityReference({
+                            activity: created,
+                            targetAccountId: created.accountId,
+                            targetProjectId: created.projectId
+                        });
+                        createdCount++;
+                    } catch (err) {
+                        draftsCount++;
+                    }
+                }
+                this.closeActivityModal();
+                if (draftsCount > 0) {
+                    UI.showNotification('Logged ' + createdCount + ' activities. ' + draftsCount + ' could not be saved and were added to Drafts.', 'warning');
+                    if (window.app && window.app.loadDraftsView) window.app.loadDraftsView();
+                } else {
+                    UI.showNotification('Logged ' + createdCount + ' activities!', 'success');
+                }
+            } else {
+                try {
+                    const created = DataManager.addActivity(activity);
                     this.syncProjectActivityReference({
                         activity: created,
                         targetAccountId: created.accountId,
                         targetProjectId: created.projectId
                     });
-                    createdCount++;
+                    if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
+                        Drafts.removeDraft(this.editingContext.fromDraftId);
+                    }
+                    this.closeActivityModal();
+                    UI.showNotification('Activity logged successfully!', 'success');
+                } catch (err) {
+                    UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
+                    if (window.app && window.app.loadDraftsView) window.app.loadDraftsView();
                 }
-                this.closeActivityModal();
-                UI.showNotification('Logged ' + createdCount + ' activities!', 'success');
-            } else {
-                const created = DataManager.addActivity(activity);
-
-                this.syncProjectActivityReference({
-                    activity: created,
-                    targetAccountId: created.accountId,
-                    targetProjectId: created.projectId
-                });
-
-                this.closeActivityModal();
-                UI.showNotification('Activity logged successfully!', 'success');
             }
         }
         
         if (window.app) {
             window.app.loadDashboard();
             window.app.loadActivitiesView();
+            if (window.app.loadDraftsView) window.app.loadDraftsView();
         }
     },
 

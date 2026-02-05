@@ -11,6 +11,10 @@ Ensure production serves the latest `pams-app` and `server` so these routes and 
 
 **User password reset:** In **System Admin → System Users**, each user row has a **Reset password** button. It sets that user’s password to the default **Welcome@Gupshup1** and clears “require password change,” so they can log in immediately. Use this if a user (e.g. Nikhil Sharma) cannot log in or password reset isn’t working. Backend: `POST /api/admin/users/reset-password` with body `{ "username": "nikhil.sharma" }` (or the exact username shown in the list).
 
+**Industry & Use Cases – Pending (Reject vs Merge):**
+- **Reject** only removes the suggestion from the pending list. It does **not** change any existing accounts, projects, or activities. Data that already uses that industry or use case (e.g. from "Other") stays as-is.
+- **Merge into** maps a pending value to an existing approved industry or use case and **updates all data**: for industries, all accounts with that industry are updated to the target industry; for use cases, all projects that have that use case are updated to the target use case. The pending item is then removed.
+
 ---
 
 ## Implementation Plan: Split Admin & Settings

@@ -980,6 +980,9 @@ const App = {
             case 'activities':
                 this.loadActivitiesView();
                 break;
+            case 'drafts':
+                this.loadDraftsView();
+                break;
             case 'winloss':
                 this.loadWinLossView();
                 break;
@@ -1055,6 +1058,7 @@ const App = {
         // Always use the new card-based dashboard
         // The old dashboard (updateStats/loadRecentActivities) is deprecated
         this.loadCardDashboard();
+        this.updateDraftsBadge();
     },
     
     // Resolve dashboard view month: 'current' | 'last' | 'YYYY-MM' -> YYYY-MM
@@ -2360,6 +2364,186 @@ const App = {
             this.setActivitiesViewMode(this.activitiesViewMode);
         }, 50);
         this.renderActivitiesList('activitiesContent');
+    },
+
+    updateDraftsBadge() {
+        const badge = document.getElementById('draftsNavBadge');
+        if (!badge) return;
+        const count = typeof Drafts !== 'undefined' ? Drafts.getDrafts().length : 0;
+        badge.textContent = count;
+        badge.classList.toggle('hidden', count === 0);
+    },
+
+    loadDraftsView() {
+        const container = document.getElementById('draftsListContainer');
+        const badge = document.getElementById('draftsNavBadge');
+        if (!container) return;
+
+        const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        this.updateDraftsBadge();
+
+        const headerActions = document.getElementById('draftsHeaderActions');
+        if (headerActions) headerActions.style.display = drafts.length > 0 ? '' : 'none';
+
+        if (drafts.length === 0) {
+            container.innerHTML = '<p class="text-muted">No drafts. Your failed activities on this device appear here. Use <strong>Submit all</strong> to retry or <strong>Delete all</strong> to clear them.</p>';
+            return;
+        }
+
+        const cards = drafts.map(function (d) {
+            const isInternal = d.type === 'internal';
+            const p = d.payload;
+            const isFullList = Array.isArray(p) && p.length > 0;
+            const storageKey = d.storageKey || (isInternal ? 'internalActivities' : 'activities');
+            const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || d.attemptedAt || '')).toString().slice(0, 10);
+            const listLabel = storageKey === 'accounts'
+                ? 'Accounts (win/loss) (' + p.length + ' items)'
+                : isInternal ? 'Internal (' + p.length + ' items)' : 'Activities (' + p.length + ' items)';
+            const label = isFullList
+                ? listLabel + ' – ' + dateStr
+                : isInternal
+                    ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
+                    : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+            const err = (d.errorMessage || '').slice(0, 80);
+            return (
+                '<div class="draft-card" data-draft-id="' + (d.id || '') + '">' +
+                '<div class="draft-card-body">' +
+                '<span class="draft-type">' + (storageKey === 'accounts' ? 'Accounts' : (isInternal ? 'Internal' : 'External')) + '</span>' +
+                '<p class="draft-label">' + (label || 'Activity') + '</p>' +
+                (err ? '<p class="draft-error text-muted small">' + err + '</p>' : '') +
+                '<div class="draft-actions">' +
+                '<button type="button" class="btn btn-primary btn-sm draft-submit">Submit again</button> ' +
+                (!isFullList ? '<button type="button" class="btn btn-outline btn-sm draft-edit">Edit</button> ' : '') +
+                '<button type="button" class="btn btn-outline btn-sm draft-discard">Discard</button>' +
+                '</div></div></div>'
+            );
+        }).join('');
+
+        container.innerHTML = '<div class="drafts-grid">' + cards + '</div>';
+
+        container.querySelectorAll('.draft-submit').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const card = btn.closest('.draft-card');
+                const id = card && card.getAttribute('data-draft-id');
+                const draft = drafts.find(function (d) { return d.id === id; });
+                if (!draft) return;
+                try {
+                    var isFullList = Array.isArray(draft.payload) && draft.payload.length > 0;
+                    var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
+                    if (isFullList) {
+                        if (keyToSave === 'accounts') {
+                            localStorage.setItem('accounts', JSON.stringify(draft.payload));
+                            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache('accounts');
+                        } else if (keyToSave === 'internalActivities') {
+                            localStorage.setItem('internalActivities', JSON.stringify(draft.payload));
+                        } else {
+                            localStorage.setItem('activities', JSON.stringify(draft.payload));
+                        }
+                    } else if (draft.type === 'internal') {
+                        DataManager.addInternalActivity(draft.payload);
+                    } else {
+                        DataManager.addActivity(draft.payload);
+                    }
+                    if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
+                    App.loadDraftsView();
+                    App.loadDashboard();
+                    if (App.loadActivitiesView) App.loadActivitiesView();
+                    if (keyToSave === 'accounts' && typeof App.loadWinLossView === 'function') App.loadWinLossView();
+                } catch (e) {
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Still could not save. Try again or edit the draft.', 'error');
+                }
+            });
+        });
+
+        container.querySelectorAll('.draft-edit').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const card = btn.closest('.draft-card');
+                const id = card && card.getAttribute('data-draft-id');
+                const draft = drafts.find(function (d) { return d.id === id; });
+                if (!draft || Array.isArray(draft.payload)) return;
+                if (typeof Activities === 'undefined' || !Activities.openActivityModal) return;
+                Activities.openActivityModal({
+                    mode: 'create',
+                    activity: draft.payload,
+                    isInternal: draft.type === 'internal',
+                    fromDraftId: draft.id
+                });
+            });
+        });
+
+        container.querySelectorAll('.draft-discard').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                const card = btn.closest('.draft-card');
+                const id = card && card.getAttribute('data-draft-id');
+                if (id && typeof Drafts !== 'undefined') Drafts.removeDraft(id);
+                App.loadDraftsView();
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Draft discarded.', 'info');
+            });
+        });
+
+        const submitAllBtn = document.getElementById('draftsSubmitAllBtn');
+        const deleteAllBtn = document.getElementById('draftsDeleteAllBtn');
+        if (submitAllBtn && !submitAllBtn._wired) {
+            submitAllBtn._wired = true;
+            submitAllBtn.addEventListener('click', function () {
+                App.draftsSubmitAll();
+            });
+        }
+        if (deleteAllBtn && !deleteAllBtn._wired) {
+            deleteAllBtn._wired = true;
+            deleteAllBtn.addEventListener('click', function () {
+                App.draftsDeleteAll();
+            });
+        }
+    },
+
+    draftsSubmitAll() {
+        const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        if (drafts.length === 0) return;
+        let submitted = 0;
+        let failed = 0;
+        drafts.forEach(function (draft) {
+            try {
+                const isFullList = Array.isArray(draft.payload) && draft.payload.length > 0;
+                const keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
+                if (isFullList) {
+                    if (keyToSave === 'accounts') {
+                        localStorage.setItem('accounts', JSON.stringify(draft.payload));
+                        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache('accounts');
+                    } else if (keyToSave === 'internalActivities') {
+                        localStorage.setItem('internalActivities', JSON.stringify(draft.payload));
+                    } else {
+                        localStorage.setItem('activities', JSON.stringify(draft.payload));
+                    }
+                } else if (draft.type === 'internal') {
+                    DataManager.addInternalActivity(draft.payload);
+                } else {
+                    DataManager.addActivity(draft.payload);
+                }
+                if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                submitted++;
+            } catch (e) {
+                failed++;
+            }
+        });
+        App.loadDraftsView();
+        App.loadDashboard();
+        if (App.loadActivitiesView) App.loadActivitiesView();
+        if (typeof App.loadWinLossView === 'function') App.loadWinLossView();
+        if (typeof UI !== 'undefined' && UI.showNotification) {
+            UI.showNotification(submitted + ' submitted.' + (failed > 0 ? ' ' + failed + ' failed – check remaining drafts.' : ''), failed > 0 ? 'warning' : 'success');
+        }
+    },
+
+    draftsDeleteAll() {
+        if (typeof Drafts === 'undefined') return;
+        const count = Drafts.getDrafts().length;
+        if (count === 0) return;
+        if (typeof window.confirm !== 'undefined' && !window.confirm('Delete all ' + count + ' draft(s)? This cannot be undone.')) return;
+        Drafts.clearDrafts();
+        App.loadDraftsView();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('All drafts deleted.', 'info');
     },
 
     getWinLossProjectsDataset() {

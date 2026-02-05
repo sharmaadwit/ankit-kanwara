@@ -152,6 +152,35 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at
       ON activity_logs (created_at DESC);
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pending_storage_saves (
+        id SERIAL PRIMARY KEY,
+        storage_key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        username TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pending_storage_saves_created_at
+      ON pending_storage_saves (created_at DESC);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS storage_history (
+        id SERIAL PRIMARY KEY,
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ,
+        archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_storage_history_key_archived
+      ON storage_history (key, archived_at DESC);
+    `);
   } finally {
     client.release();
   }

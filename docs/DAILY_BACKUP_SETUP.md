@@ -179,6 +179,53 @@ After you click **Run workflow**, the page shows a list of workflow runs. Follow
 
 ---
 
+## Auto run (schedule)
+
+- **Enabled:** The workflow is triggered on a **schedule** as well as manually.
+- **When:** **Every day at 02:00 UTC** (`cron: '0 2 * * *'` in `.github/workflows/daily-backup.yml`).
+- **What runs:** The same job as a manual run: export all storage keys from your live app → write `backups/storage-snapshot-latest.json` → commit and push to the branch (usually `main`).
+- You do not need to do anything for auto run once the workflow and secrets are in place.
+
+---
+
+## What the backup contains
+
+The snapshot file **backups/storage-snapshot-latest.json** includes:
+
+- **generatedAt** – ISO timestamp of the export.
+- **source** – Storage API base URL that was backed up.
+- **totalKeys** – Number of keys exported.
+- **data** – Object mapping **every storage key** to its **decoded value** (JSON where applicable).
+
+**How it’s built:** The script calls your live app’s storage API: (1) `GET /api/storage` to list all keys, (2) `GET /api/storage/:key` for each key. Values stored with `__lz__` (LZString) or `__gz__` (gzip) are decompressed before being written to the snapshot.
+
+**What the PAMS app stores (all are captured if present):**
+
+| Key | Purpose |
+|-----|--------|
+| `accounts` | Account/project list |
+| `activities` | Legacy single-key activities (if still used) |
+| `activities:YYYY-MM` | Activity shards by month (e.g. `activities:2026-01`) |
+| `__shard_manifest:activities__` | Manifest for activity shards |
+| `internalActivities` | Internal activities |
+| `users` | User list |
+| `globalSalesReps` | Sales reps |
+| `regions` | Regions |
+| `industries` | Industries |
+| `industryUseCases` | Industry → use cases mapping |
+| `pendingIndustries` | Pending industry suggestions |
+| `pendingUseCases` | Pending use case suggestions |
+| `suggestionsAndBugs` | Suggestions/bugs list |
+| `presalesActivityTarget` | Presales activity target |
+| `analyticsAccessConfig` | Analytics access config |
+| `analyticsTablePresets` | Analytics table presets |
+| `interfacePreference` | UI preference |
+| `colorSchemePreference` | Theme preference |
+
+The backup does **not** filter keys: it exports **every key** returned by the storage API. So anything your app writes to remote storage (including any future keys) is included. The only data not in this backup is anything that lives **outside** the storage API (e.g. other DB tables or external services); for PAMS, app state is in storage, so the snapshot is a full backup of that state.
+
+---
+
 ## Prerequisites
 
 - **REMOTE_STORAGE_BASE** – Your app’s storage API base URL (e.g. `https://your-app.up.railway.app/api/storage`).

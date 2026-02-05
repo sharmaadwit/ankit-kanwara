@@ -33,7 +33,8 @@ router.post('/', async (req, res) => {
 router.get('/', requireAdminAuth, async (req, res) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 200;
-    const logs = await getActivityLogs({ limit });
+    const hours = req.query.hours ? Number(req.query.hours) : undefined;
+    const logs = await getActivityLogs({ limit, hours });
     res.json({ logs });
   } catch (error) {
     logger.error('activity_log_fetch_failed', {

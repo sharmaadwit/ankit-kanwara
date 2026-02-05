@@ -71,11 +71,15 @@ const logActivity = async ({
   );
 };
 
-const getActivityLogs = async ({ limit = 200 }) => {
+const getActivityLogs = async ({ limit = 200, hours } = {}) => {
   const pool = getPool();
   const parsedLimit = Number.isFinite(Number(limit))
     ? Math.min(Math.max(parseInt(limit, 10), 1), 500)
     : 200;
+  const parsedHours = Number.isFinite(Number(hours)) && Number(hours) > 0
+    ? Math.min(Math.max(parseInt(Number(hours), 10), 1), 24 * RETENTION_DAYS)
+    : null;
+  const interval = parsedHours ? `${parsedHours} hours` : `${RETENTION_DAYS} days`;
 
   const { rows } = await pool.query(
     `
@@ -94,7 +98,7 @@ const getActivityLogs = async ({ limit = 200 }) => {
       ORDER BY created_at DESC
       LIMIT $1;
     `,
-    [parsedLimit, `${RETENTION_DAYS} days`]
+    [parsedLimit, interval]
   );
 
   return rows.map((row) => ({

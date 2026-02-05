@@ -1618,13 +1618,32 @@ const DataManager = {
             }
         }
 
+        const dateDay = (normalized.date || normalized.createdAt || '').toString().slice(0, 10);
+        const duplicate = activities.find(function (a) {
+            return (a.accountId || '') === (normalized.accountId || '') &&
+                (a.projectId || '') === (normalized.projectId || '') &&
+                (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
+                (a.type || '') === (normalized.type || '');
+        });
+        if (duplicate) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('An activity with the same account, project, date and type already exists. Skipping duplicate.', 'warning');
+            }
+            return duplicate;
+        }
+
         activities.push(normalized);
-        this.saveActivities(activities);
+        try {
+            this.saveActivities(activities);
+        } catch (err) {
+            throw err;
+        }
         this.recordAudit('activity.create', 'activity', normalized.id, {
             accountId: normalized.accountId || null,
             projectId: normalized.projectId || null,
             type: normalized.type || '',
-            category: normalized.isInternal ? 'internal' : 'external'
+            category: normalized.isInternal ? 'internal' : 'external',
+            fullSnapshot: normalized
         });
         return normalized;
     },
@@ -1721,14 +1740,31 @@ const DataManager = {
 
     addInternalActivity(activity) {
         const activities = this.getInternalActivities();
+        const dateDay = (activity.date || activity.createdAt || '').toString().slice(0, 10);
+        const duplicate = activities.find(function (a) {
+            return (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
+                (a.type || '') === (activity.type || '') &&
+                (a.activityName || '') === (activity.activityName || '');
+        });
+        if (duplicate) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('An internal activity with the same date, type and name already exists. Skipping duplicate.', 'warning');
+            }
+            return duplicate;
+        }
         activity.id = this.generateId();
         activity.createdAt = new Date().toISOString();
         activity.updatedAt = new Date().toISOString();
         activities.push(activity);
-        this.saveInternalActivities(activities);
+        try {
+            this.saveInternalActivities(activities);
+        } catch (err) {
+            throw err;
+        }
         this.recordAudit('activity.create', 'internalActivity', activity.id, {
             type: activity.type || '',
-            name: activity.activityName || ''
+            name: activity.activityName || '',
+            fullSnapshot: activity
         });
         return activity;
     },

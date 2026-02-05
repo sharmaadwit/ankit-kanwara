@@ -121,6 +121,16 @@
                         </svg>
                         <span>Win/Loss</span>
                     </a></li>
+                    <li data-dashboard="drafts" id="draftsNavItem"><a href="#" data-view="drafts" class="sidebar-link">
+                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
+                        </svg>
+                        <span>My drafts</span>
+                        <span id="draftsNavBadge" class="drafts-badge hidden" aria-hidden="true">0</span>
+                    </a></li>
                     <li data-feature="csvImport" data-dashboard="csvImport"><a href="#" data-view="import" class="sidebar-link">
                         <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
@@ -167,6 +177,23 @@
                 <!-- Dashboard View -->
                 <div id="dashboardView" class="view active">
                     <!-- Dashboard content is dynamically loaded by loadCardDashboard() -->
+                </div>
+
+                <!-- My Drafts (per-user: failed activities on this device; Submit all or Delete) -->
+                <div id="draftsView" class="view hidden">
+                    <div class="drafts-layout">
+                        <div class="drafts-header">
+                            <h1 class="page-title">My drafts</h1>
+                            <p class="page-subtitle">Your failed activities on this device. Use <strong>Submit all</strong> to retry saving, or <strong>Delete</strong> to clear drafts you no longer need.</p>
+                            <div class="drafts-header-actions" id="draftsHeaderActions" style="display: none;">
+                                <button type="button" class="btn btn-primary" id="draftsSubmitAllBtn">Submit all</button>
+                                <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete all</button>
+                            </div>
+                        </div>
+                        <div id="draftsListContainer" class="drafts-list-container">
+                            <!-- Populated by loadDraftsView() -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Activities View -->
@@ -425,6 +452,9 @@
                                         <a href="#" class="admin-nav-item" data-admin-nav="audit" onclick="Admin.openAdminSection('audit', event)">
                                             <span>Audit Log</span>
                                         </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="storageDrafts" onclick="Admin.openAdminSection('storageDrafts', event)">
+                                            <span>All drafts</span>
+                                        </a>
                                     </div>
                                 </div>
                             </nav>
@@ -541,14 +571,34 @@
                             <div class="card">
                                 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                     <h3>Activity Audit Log</h3>
-                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end;">
+                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
+                                        <span class="text-muted" style="font-size: 0.9rem;">Show:</span>
+                                        <button type="button" class="btn btn-outline btn-sm" id="auditFilter24h" onclick="Admin.loadActivityLogs(true, 24)">Last 24 hours</button>
+                                        <button type="button" class="btn btn-outline btn-sm" id="auditFilter14d" onclick="Admin.loadActivityLogs(true)">Last 14 days</button>
                                         <button class="btn btn-danger btn-sm" onclick="Admin.promptClearAllActivities()">Clear All Activities</button>
                                         <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
                                         <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
                                     </div>
                                 </div>
                                 <div class="card-body" id="activityLogsTable">
-                                    <div class="text-muted">Click &ldquo;Refresh&rdquo; to load activity audit records.</div>
+                                    <div class="text-muted">Click &ldquo;Last 24 hours&rdquo; or &ldquo;Refresh&rdquo; to load activity audit records.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- All drafts (server-side pending saves after 409; admin only) -->
+                        <div class="admin-section hidden" data-admin-section="storageDrafts">
+                            <div class="card">
+                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                    <h3>All drafts</h3>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button type="button" class="btn btn-primary btn-sm" id="adminStorageDraftsSubmitAllBtn" onclick="Admin.storageDraftsSubmitAll()">Submit all</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="Admin.loadStorageDraftsSection()">Refresh</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small">Drafts stored on the server after a save conflict (409). Apply them to merge into current data, or delete to discard.</p>
+                                    <div id="adminStorageDraftsList"></div>
                                 </div>
                             </div>
                         </div>
@@ -1046,6 +1096,7 @@
     <script src="js/vendor/lz-string.js"></script>
     <script src="js/remoteStorage.js"></script>
     <script src="js/audit.js"></script>
+    <script src="js/drafts.js"></script>
     <script src="js/data.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/ui.js"></script>

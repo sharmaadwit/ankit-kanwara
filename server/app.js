@@ -3,6 +3,7 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { rateLimit } = require('express-rate-limit');
 
 const storageRouter = require('./routes/storage');
 const adminLogsRouter = require('./routes/adminLogs');
@@ -127,11 +128,28 @@ const createApp = (options = {}) => {
     next();
   });
 
-  app.use('/api/storage', requireStorageAuth, storageRouter);
-  app.use('/api/admin/logs', adminLogsRouter);
-  app.use('/api/admin/config', requireAdminAuth, adminConfigRouter);
-  app.use('/api/admin/users', requireAdminAuth, require('./routes/adminUsers'));
-  app.use('/api/admin/activity', activityLogsRouter);
+  const storageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_STORAGE_MAX) || 150,
+    message: { message: 'Too many storage requests; try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { trustProxy: false }
+  });
+  const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_ADMIN_MAX) || 100,
+    message: { message: 'Too many admin requests; try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { trustProxy: false }
+  });
+
+  app.use('/api/storage', storageLimiter, requireStorageAuth, storageRouter);
+  app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
+  app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
+  app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
+  app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
 
   app.get('/api/health', async (req, res) => {
     res.json({ status: 'ok' });

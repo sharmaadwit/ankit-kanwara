@@ -58,6 +58,81 @@
 
     const ACTIVITIES_KEY = 'activities';
     const ACTIVITIES_MANIFEST_KEY = '__shard_manifest:activities__';
+    const LOCAL_BACKUP_PREFIX = '__pams_backup__';
+
+    /** Write last-good payload to browser localStorage so we can recover if overwrite happens. */
+    const saveLocalBackup = (storageKey, serializedValue) => {
+        try {
+            if (typeof originalLocalStorage.setItem !== 'function' || !serializedValue) return;
+            originalLocalStorage.setItem(LOCAL_BACKUP_PREFIX + storageKey, serializedValue);
+            originalLocalStorage.setItem(LOCAL_BACKUP_PREFIX + storageKey + '_at', String(Date.now()));
+        } catch (e) {
+            // ignore quota or disabled storage
+        }
+    };
+
+    /** Read local backup for a key (last-good value from this device). */
+    const getLocalBackup = (storageKey) => {
+        try {
+            if (typeof originalLocalStorage.getItem !== 'function') return null;
+            const raw = originalLocalStorage.getItem(LOCAL_BACKUP_PREFIX + storageKey);
+            return raw || null;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    /** Backup timestamp (ms); used to avoid merging very stale backup. */
+    const getLocalBackupAt = (storageKey) => {
+        try {
+            if (typeof originalLocalStorage.getItem !== 'function') return null;
+            const raw = originalLocalStorage.getItem(LOCAL_BACKUP_PREFIX + storageKey + '_at');
+            if (!raw) return null;
+            const n = parseInt(raw, 10);
+            return Number.isNaN(n) ? null : n;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    /** Max age for backup recovery: don't merge backup older than this (avoid stale/wrong device data). */
+    const MAX_BACKUP_AGE_MS = 72 * 60 * 60 * 1000;
+
+    /** Basic sanity: for accounts, items should be objects with id. */
+    const looksLikeValidAccountsArray = (arr) => {
+        if (!Array.isArray(arr) || !arr.length) return false;
+        return arr.slice(0, 5).every(function (item) {
+            return item && typeof item === 'object' && (item.id != null || item.accountName != null);
+        });
+    };
+
+    /** Basic sanity: for internalActivities, items should be objects. */
+    const looksLikeValidInternalArray = (arr) => {
+        if (!Array.isArray(arr)) return false;
+        return arr.length === 0 || (arr[0] && typeof arr[0] === 'object');
+    };
+
+    /**
+     * If server has fewer items than our local backup, merge server with backup so we don't overwrite with stale data.
+     * Safety: backup max age 72h, valid shape (accounts: objects with id; internalActivities: objects), only when backup has more items.
+     */
+    const applyBackupRecovery = (key, serverStr) => {
+        const backupRaw = getLocalBackup(key);
+        if (!backupRaw) return serverStr;
+        const backupAt = getLocalBackupAt(key);
+        if (backupAt != null && (Date.now() - backupAt) > MAX_BACKUP_AGE_MS) return serverStr;
+        const serverArr = safeJsonParse(serverStr);
+        const backupArr = safeJsonParse(backupRaw);
+        if (!Array.isArray(serverArr) || !Array.isArray(backupArr)) return serverStr;
+        if (backupArr.length <= serverArr.length) return serverStr;
+        if (key === 'accounts' && !looksLikeValidAccountsArray(backupArr)) return serverStr;
+        if (key === 'internalActivities' && !looksLikeValidInternalArray(backupArr)) return serverStr;
+        const merged = mergeArrayById(serverStr, backupRaw);
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[RemoteStorage] Server had fewer ' + key + ' than local backup (' + serverArr.length + ' vs ' + backupArr.length + '). Merged backup into server before save.');
+        }
+        return merged;
+    };
     const ACTIVITY_BUCKET_PREFIX = 'activities:';
     const SHARD_POINTER_TOKEN = '__shards__:activities';
 
@@ -96,6 +171,30 @@
         const ourIds = new Set(ourArr.map((item) => item.id).filter(Boolean));
         const merged = [...serverArr.filter((s) => !ourIds.has(s.id)), ...ourArr];
         return JSON.stringify(merged);
+    };
+
+    /** Remove duplicate activities by (accountId, projectId, date day, type). Keeps last occurrence so newer/ours wins. */
+    const dedupeActivitiesBySignature = (arr) => {
+        if (!Array.isArray(arr) || !arr.length) return arr;
+        const seen = new Map();
+        arr.forEach(function (a) {
+            const dateDay = (a.date || a.createdAt || '').toString().slice(0, 10);
+            const sig = (a.accountId || '') + '|' + (a.projectId || '') + '|' + dateDay + '|' + (a.type || '');
+            seen.set(sig, a);
+        });
+        return Array.from(seen.values());
+    };
+
+    /** Remove duplicate internal activities by (date day, type, activityName). */
+    const dedupeInternalBySignature = (arr) => {
+        if (!Array.isArray(arr) || !arr.length) return arr;
+        const seen = new Map();
+        arr.forEach(function (a) {
+            const dateDay = (a.date || a.createdAt || '').toString().slice(0, 10);
+            const sig = dateDay + '|' + (a.type || '') + '|' + (a.activityName || '');
+            seen.set(sig, a);
+        });
+        return Array.from(seen.values());
     };
 
     const normalizeIsoString = (value) => {
@@ -444,21 +543,77 @@
                 );
             };
 
-            const doActivitiesSave = () => {
-                if (shardActivities(serializedValue)) {
-                    return serializedValue;
+            const doActivitiesSave = (payloadToSave) => {
+                const toSave = payloadToSave != null ? payloadToSave : serializedValue;
+                if (shardActivities(toSave)) {
+                    return toSave;
                 }
                 return null;
             };
 
             try {
                 if (key === ACTIVITIES_KEY) {
-                    doActivitiesSave();
-                    shardCache[ACTIVITIES_KEY] = {
-                        version: null,
-                        value: serializedValue
-                    };
-                    return serializedValue;
+                    // Always merge with server first so a partial/stale client list never overwrites
+                    const serverJson = loadActivitiesValue();
+                    if (serverJson == null || serverJson === '') {
+                        const err = new Error('Could not load current activities from server. Refresh the page and try again.');
+                        err.code = 'REMOTE_ACTIVITIES_LOAD_FAILED';
+                        throw err;
+                    }
+                    let merged = mergeArrayById(serverJson, serializedValue);
+                    var mergedArr = safeJsonParse(merged);
+                    if (Array.isArray(mergedArr)) {
+                        mergedArr = dedupeActivitiesBySignature(mergedArr);
+                        merged = JSON.stringify(mergedArr);
+                    }
+                    serializedValue = merged;
+                    var draft = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
+                        type: 'external',
+                        payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
+                        errorMessage: 'Saving…',
+                        storageKey: ACTIVITIES_KEY
+                    }) : null;
+                    try {
+                        doActivitiesSave(merged);
+                        saveLocalBackup(ACTIVITIES_KEY, merged);
+                        shardCache[ACTIVITIES_KEY] = { version: null, value: serializedValue };
+                        if (draft && Drafts.removeDraft) Drafts.removeDraft(draft.id);
+                        return serializedValue;
+                    } catch (e) {
+                        if (draft && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: (e && e.message) || String(e) });
+                        throw e;
+                    }
+                }
+                if (canMergeOnConflict) {
+                    const serverValue = this.getItem(key);
+                    let serverStr = typeof serverValue === 'string' ? serverValue : JSON.stringify(serverValue || []);
+                    if (key === 'accounts' || key === 'internalActivities') {
+                        serverStr = applyBackupRecovery(key, serverStr);
+                    }
+                    let merged = mergeArrayById(serverStr, serializedValue);
+                    var mergedArr = safeJsonParse(merged);
+                    if (Array.isArray(mergedArr) && key === 'internalActivities') {
+                        mergedArr = dedupeInternalBySignature(mergedArr);
+                        merged = JSON.stringify(mergedArr);
+                    } else if (Array.isArray(mergedArr)) {
+                        merged = JSON.stringify(mergedArr);
+                    }
+                    serializedValue = merged;
+                    var draftAcc = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
+                        type: key === 'internalActivities' ? 'internal' : 'external',
+                        payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
+                        errorMessage: 'Saving…',
+                        storageKey: key
+                    }) : null;
+                    try {
+                        doPut(merged);
+                        saveLocalBackup(key, merged);
+                        if (draftAcc && Drafts.removeDraft) Drafts.removeDraft(draftAcc.id);
+                        return serializedValue;
+                    } catch (e) {
+                        if (draftAcc && Drafts.updateDraft) Drafts.updateDraft(draftAcc.id, { errorMessage: (e && e.message) || String(e) });
+                        throw e;
+                    }
                 }
                 doPut(serializedValue);
                 return serializedValue;
@@ -469,15 +624,18 @@
                         const serverJson = loadActivitiesValue();
                         merged = mergeArrayById(serverJson, serializedValue);
                         serializedValue = merged;
-                        doActivitiesSave();
+                        doActivitiesSave(merged);
+                        saveLocalBackup(ACTIVITIES_KEY, serializedValue);
                     } else {
-                        const serverValue = this.getItem(key);
-                        merged = mergeArrayById(
-                            typeof serverValue === 'string' ? serverValue : JSON.stringify(serverValue || []),
-                            serializedValue
-                        );
+                        const serverVal409 = this.getItem(key);
+                        let serverStr409 = typeof serverVal409 === 'string' ? serverVal409 : JSON.stringify(serverVal409 || []);
+                        if (key === 'accounts' || key === 'internalActivities') {
+                            serverStr409 = applyBackupRecovery(key, serverStr409);
+                        }
+                        merged = mergeArrayById(serverStr409, serializedValue);
                         doPut(merged);
                         serializedValue = merged;
+                        saveLocalBackup(key, serializedValue);
                     }
                     if (key === ACTIVITIES_KEY) {
                         shardCache[ACTIVITIES_KEY] = {

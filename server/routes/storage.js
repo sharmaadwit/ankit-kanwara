@@ -4,8 +4,30 @@ const router = express.Router();
 
 const { getPool } = require('../db');
 const logger = require('../logger');
+const { requireAdminAuth } = require('../middleware/auth');
 
 const GZIP_PREFIX = '__gz__';
+
+/** Archive current value to storage_history before overwrite (The Insurance). */
+const archiveCurrentValue = async (client, key) => {
+  const { rows } = await client.query(
+    'SELECT value, updated_at FROM storage WHERE key = $1;',
+    [key]
+  );
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ($1, $2, $3, NOW());`,
+    [key, rows[0].value, rows[0].updated_at]
+  );
+};
+
+/** Store rejected payload in pending_storage_saves (Lost & Found on 409). */
+const savePendingDraft = async (storageKey, value, reason, username) => {
+  await getPool().query(
+    `INSERT INTO pending_storage_saves (storage_key, value, reason, username, created_at) VALUES ($1, $2, $3, $4, NOW());`,
+    [storageKey, value, reason, username || null]
+  );
+};
 
 const maybeDecompressValue = (value) => {
   if (typeof value !== 'string') {
@@ -59,16 +81,26 @@ const getValueWithVersion = async (key) => {
   };
 };
 
+/** Unconditional upsert. Archives old value first, then updates. Returns { updated_at }. */
 const setValue = async (key, value) => {
-  await getPool().query(
-    `
+  const client = await getPool().connect();
+  try {
+    await archiveCurrentValue(client, key);
+    const { rows } = await client.query(
+      `
       INSERT INTO storage (key, value, updated_at)
       VALUES ($1, $2, NOW())
       ON CONFLICT (key)
-      DO UPDATE SET value = excluded.value, updated_at = NOW();
+      DO UPDATE SET value = excluded.value, updated_at = NOW()
+      RETURNING updated_at;
     `,
-    [key, value]
-  );
+      [key, value]
+    );
+    const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
+    return { updated_at: updatedAt };
+  } finally {
+    client.release();
+  }
 };
 
 /** Conditional update: only if current updated_at matches ifMatch. Returns { updated_at } or null on conflict. */
@@ -104,11 +136,13 @@ const setValueIfMatch = async (key, value, ifMatch) => {
         };
       }
     }
-    await client.query(
-      `UPDATE storage SET value = $2, updated_at = NOW() WHERE key = $1;`,
+    await archiveCurrentValue(client, key);
+    const { rows } = await client.query(
+      `UPDATE storage SET value = $2, updated_at = NOW() WHERE key = $1 RETURNING updated_at;`,
       [key, value]
     );
-    return { updated_at: now };
+    const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : now;
+    return { updated_at: updatedAt };
   } finally {
     client.release();
   }
@@ -116,6 +150,34 @@ const setValueIfMatch = async (key, value, ifMatch) => {
 
 const deleteValue = async (key) => {
   await getPool().query('DELETE FROM storage WHERE key = $1;', [key]);
+};
+
+/** Log storage PUT for Railway/in-app diagnostics (key, conditional, approximate count for list keys). */
+const logStorageWrite = (key, serializedValue, conditional, transactionId) => {
+  const meta = {
+    key,
+    conditional: !!conditional,
+    transactionId
+  };
+  if (key === 'activities' || key === 'accounts' || key === 'internalActivities') {
+    try {
+      const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
+      if (Array.isArray(parsed)) {
+        meta.count = parsed.length;
+      }
+    } catch (_) {
+      // ignore parse errors
+    }
+  }
+  if (/^activities:\d{4}-\d{2}$/.test(key)) {
+    try {
+      const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
+      if (Array.isArray(parsed)) {
+        meta.count = parsed.length;
+      }
+    } catch (_) {}
+  }
+  logger.info('storage_write', meta);
 };
 
 const clearAll = async () => {
@@ -135,10 +197,66 @@ router.get('/', async (req, res) => {
   }
 });
 
+/** Lost & Found: list pending/draft saves (e.g. after 409 conflict). Admin only. */
+router.get('/pending', requireAdminAuth, async (req, res) => {
+  try {
+    const { rows } = await getPool().query(
+      `SELECT id, storage_key, value, reason, username, created_at
+       FROM pending_storage_saves
+       ORDER BY created_at DESC
+       LIMIT 200;`
+    );
+    const pending = rows.map((r) => ({
+      id: r.id,
+      storage_key: r.storage_key,
+      value: r.value,
+      reason: r.reason,
+      username: r.username,
+      created_at: r.created_at ? new Date(r.created_at).toISOString() : null
+    }));
+    res.json({ pending });
+  } catch (error) {
+    logger.error('storage_pending_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
+    res.status(500).json({ message: 'Failed to list pending saves' });
+  }
+});
+
+/** Remove a pending save after it has been applied (or discarded). Admin only. */
+router.delete('/pending/:id', requireAdminAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id) || id < 1) {
+      return res.status(400).json({ message: 'Invalid pending id' });
+    }
+    const { rowCount } = await getPool().query(
+      'DELETE FROM pending_storage_saves WHERE id = $1',
+      [id]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Pending save not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    logger.error('storage_pending_delete_failed', {
+      message: error.message,
+      transactionId: req.transactionId,
+      id: req.params.id
+    });
+    res.status(500).json({ message: 'Failed to delete pending save' });
+  }
+});
+
 router.get('/:key', async (req, res) => {
   try {
     const row = await getValueWithVersion(req.params.key);
     if (!row) {
+      logger.warn('storage_get_404', {
+        key: req.params.key,
+        transactionId: req.transactionId
+      });
       res.status(404).json({ message: 'Key not found' });
       return;
     }
@@ -177,6 +295,21 @@ router.put('/:key', async (req, res) => {
         ifMatch
       );
       if (result.conflict) {
+        logger.warn('storage_conflict', {
+          key: req.params.key,
+          transactionId: req.transactionId,
+          message: 'Key was updated by another request; client should merge and retry'
+        });
+        try {
+          await savePendingDraft(
+            req.params.key,
+            serializedValue,
+            'conflict',
+            req.get('X-Admin-User') || req.get('x-admin-user')
+          );
+        } catch (archiveErr) {
+          logger.warn('storage_pending_draft_failed', { message: archiveErr.message, key: req.params.key });
+        }
         const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
         return res.status(409).json({
           message: 'Conflict: key was updated by another request',
@@ -184,14 +317,19 @@ router.put('/:key', async (req, res) => {
           updated_at: result.updated_at
         });
       }
+      logStorageWrite(req.params.key, serializedValue, true, req.transactionId);
       return res.status(200).json({
         key: req.params.key,
         updated_at: result.updated_at
       });
     }
 
-    await setValue(req.params.key, serializedValue);
-    res.status(204).send();
+    const setResult = await setValue(req.params.key, serializedValue);
+    logStorageWrite(req.params.key, serializedValue, false, req.transactionId);
+    return res.status(200).json({
+      key: req.params.key,
+      updated_at: setResult.updated_at
+    });
   } catch (error) {
     logger.error('storage_write_failed', {
       message: error.message,

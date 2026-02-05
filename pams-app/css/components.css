@@ -847,3 +847,63 @@ textarea.form-control {
     user-select: none;
 }
 
+/* Drafts view */
+.drafts-layout {
+    padding: 1rem;
+    max-width: 900px;
+}
+.drafts-header {
+    margin-bottom: 1.5rem;
+}
+.drafts-header .page-subtitle {
+    margin-top: 0.25rem;
+}
+.drafts-header-actions {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.drafts-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.draft-card {
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    background: var(--gray-50, #f9fafb);
+}
+.draft-card-body .draft-type {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gray-500, #6b7280);
+}
+.draft-card-body .draft-label {
+    margin: 0.5rem 0 0.25rem;
+    font-weight: 500;
+}
+.draft-card-body .draft-error {
+    margin: 0.25rem 0 0.75rem;
+}
+.draft-actions {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.drafts-badge {
+    margin-left: 0.35rem;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 999px;
+    background: var(--primary-color, #5E34F1);
+    color: white;
+}
+.drafts-badge.hidden {
+    display: none;
+}
+
