@@ -1210,8 +1210,9 @@ const App = {
         accounts.forEach(account => {
             account.projects?.forEach(project => {
                 if (project.status === 'won' || project.status === 'lost') {
-                    const winLossDate = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                    if (winLossDate && winLossDate.substring(0, 7) === viewMonth) {
+                    const monthForWinLoss = project.winLossData?.monthOfWin ||
+                        (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                    if (monthForWinLoss && monthForWinLoss === viewMonth) {
                         if (project.status === 'won') winsThisMonth++;
                         else if (project.status === 'lost') lossesThisMonth++;
                     }
@@ -2561,6 +2562,9 @@ const App = {
                 }
                 if (account.createdBy) {
                     ownerIdsSet.add(account.createdBy);
+                }
+                if (project.winLossData?.wonByUserId) {
+                    ownerIdsSet.add(project.winLossData.wonByUserId);
                 }
                 const ownerIds = Array.from(ownerIdsSet);
                 const ownerNames = ownerIds
@@ -4490,6 +4494,9 @@ const App = {
                 }
                 if (account.createdBy) {
                     ownerIdsSet.add(account.createdBy);
+                }
+                if (project.winLossData?.wonByUserId) {
+                    ownerIdsSet.add(project.winLossData.wonByUserId);
                 }
                 const ownerIds = Array.from(ownerIdsSet);
                 const ownerNames = ownerIds
@@ -6870,12 +6877,22 @@ const App = {
         if (monthOfWinInput) {
             monthOfWinInput.value = project.winLossData?.monthOfWin || defaultMonth;
         }
+        const wonBySelect = document.getElementById('winLossWonBy');
+        if (wonBySelect) {
+            const presalesUsers = (typeof DataManager !== 'undefined' && DataManager.getUsers)
+                ? DataManager.getUsers().filter(u => u && Array.isArray(u.roles) && u.roles.includes('Presales User'))
+                : [];
+            wonBySelect.innerHTML = '<option value="">Select presales</option>' +
+                presalesUsers.map(u => `<option value="${u.id}">${u.username || u.name || u.id}</option>`).join('');
+            wonBySelect.value = project.winLossData?.wonByUserId || '';
+        }
         if (project.winLossData) {
             if (reasonInput) reasonInput.value = project.winLossData.reason || '';
             if (competitorInput) competitorInput.value = project.winLossData.competitors || '';
             if (mrrInput) mrrInput.value = project.winLossData.mrr ?? '';
             if (accountTypeSelect) accountTypeSelect.value = project.winLossData.accountType || 'existing';
             if (otdInput) otdInput.value = project.winLossData.otd || '';
+            if (wonBySelect) wonBySelect.value = project.winLossData.wonByUserId || '';
             if (sfdcInput) {
                 sfdcInput.value = project.sfdcLink || '';
             }
@@ -6885,6 +6902,7 @@ const App = {
             if (mrrInput) mrrInput.value = '';
             if (accountTypeSelect) accountTypeSelect.value = 'existing';
             if (otdInput) otdInput.value = '';
+            if (wonBySelect) wonBySelect.value = '';
             if (sfdcInput) sfdcInput.value = project.sfdcLink || '';
         }
 
@@ -6977,6 +6995,12 @@ const App = {
                                 <input type="month" class="form-control" id="winLossMonthOfWin" data-winloss-required="true" required title="Which month does this win/loss belong to?">
                             </div>
                             <div class="form-group">
+                                <label class="form-label" id="winLossWonByLabel">Presales who won</label>
+                                <select class="form-control" id="winLossWonBy" title="Select the presales user who won this project">
+                                    <option value="">Select presales</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label class="form-label">OTD / Delivery Notes</label>
                                 <textarea class="form-control" id="winLossOtd" rows="2" placeholder="Implementation commitments, next steps, delivery dates, etc."></textarea>
                             </div>
@@ -7004,9 +7028,24 @@ const App = {
         if (requiresDetail) {
             fields.classList.remove('d-none');
             requiredInputs.forEach(input => input.setAttribute('required', 'required'));
+            const wonBySelect = document.getElementById('winLossWonBy');
+            const wonByLabel = document.getElementById('winLossWonByLabel');
+            if (wonBySelect && wonByLabel) {
+                if (status === 'won') {
+                    wonBySelect.setAttribute('required', 'required');
+                    wonByLabel.classList.add('required');
+                } else {
+                    wonBySelect.removeAttribute('required');
+                    wonByLabel.classList.remove('required');
+                }
+            }
         } else {
             fields.classList.add('d-none');
             requiredInputs.forEach(input => input.removeAttribute('required'));
+            const wonBySelect = document.getElementById('winLossWonBy');
+            const wonByLabel = document.getElementById('winLossWonByLabel');
+            if (wonBySelect) wonBySelect.removeAttribute('required');
+            if (wonByLabel) wonByLabel.classList.remove('required');
         }
         this.updateWinLossMrrHelper();
     },
@@ -7063,6 +7102,16 @@ const App = {
             project.sfdcLink = sfdcLinkValue;
             const monthOfWinEl = document.getElementById('winLossMonthOfWin');
             const monthOfWin = monthOfWinEl && monthOfWinEl.value ? monthOfWinEl.value : null;
+            const wonByEl = document.getElementById('winLossWonBy');
+            const wonByUserId = wonByEl && wonByEl.value ? wonByEl.value : null;
+            if (status === 'won' && !wonByUserId) {
+                UI.showNotification('Please select the presales user who won this project.', 'error');
+                if (wonByEl) { wonByEl.focus(); UI.setFieldError(wonByEl, 'Required for wins'); }
+                return;
+            }
+            const wonByUserName = wonByUserId && typeof DataManager !== 'undefined' && DataManager.getUsers
+                ? (DataManager.getUsers().find(u => u.id === wonByUserId)?.username || null)
+                : null;
             project.winLossData = {
                 reason: document.getElementById('winLossReason').value,
                 competitors: document.getElementById('competitorAnalysis').value,
@@ -7073,6 +7122,8 @@ const App = {
                 mrrInInr,
                 otd: otdInput ? otdInput.value : '',
                 monthOfWin: monthOfWin || undefined,
+                wonByUserId: wonByUserId || undefined,
+                wonByUserName: wonByUserName || undefined,
                 updatedAt: new Date().toISOString()
             };
         } else {

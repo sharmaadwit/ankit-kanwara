@@ -64,7 +64,10 @@ const ReportsV2 = {
         this.initActivityBreakdownChart(activities);
     },
 
-    // Get activities for the selected period
+    // Cutoff: only show activities from Jan 2026 onwards (pre-Dec/Jan cleanup)
+    REPORTS_ACTIVITY_CUTOFF: '2026-01',
+
+    // Get activities for the selected period (only Jan 2026+)
     getPeriodActivities() {
         if (!this.currentPeriod) {
             console.warn('ReportsV2: currentPeriod is not set');
@@ -79,10 +82,12 @@ const ReportsV2 = {
 
         const period = this.currentPeriod;
         const isYear = this.currentPeriodType === 'year';
+        const cutoff = this.REPORTS_ACTIVITY_CUTOFF || '2026-01';
 
         const filtered = allActivities.filter(activity => {
             const activityDate = activity.date || activity.createdAt;
             if (!activityDate) return false;
+            if (activityDate < cutoff) return false;
 
             if (isYear) {
                 const activityYear = activityDate.substring(0, 4);
@@ -290,8 +295,9 @@ const ReportsV2 = {
             accounts.forEach(account => {
                 account.projects?.forEach(project => {
                     if (project.status === 'won' || project.status === 'lost') {
-                        const d = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                        if (d && String(d).substring(0, 7) === periodMonth) {
+                        const monthForWinLoss = project.winLossData?.monthOfWin ||
+                            (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                        if (monthForWinLoss && monthForWinLoss === periodMonth) {
                             if (project.status === 'won') winsPeriod++;
                             else if (project.status === 'lost') lossesPeriod++;
                         }

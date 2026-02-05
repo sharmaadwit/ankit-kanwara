@@ -1834,9 +1834,9 @@ const DataManager = {
         accounts.forEach(account => {
             account.projects?.forEach(project => {
                 if (project.status !== 'won' && project.status !== 'lost') return;
-                const updatedAt = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                if (!updatedAt) return;
-                const month = updatedAt.substring(0, 7);
+                const month = project.winLossData?.monthOfWin ||
+                    (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                if (!month) return;
                 if (!trendMap[month]) {
                     trendMap[month] = { won: 0, lost: 0 };
                 }
@@ -1863,8 +1863,9 @@ const DataManager = {
             account.projects?.forEach(project => {
                 if (!project.channels || !project.channels.length) return;
                 if (project.status !== 'won' && project.status !== 'lost') return;
-                const updatedAt = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                if (targetMonth && updatedAt && updatedAt.substring(0, 7) !== targetMonth) return;
+                const monthForWinLoss = project.winLossData?.monthOfWin ||
+                    (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                if (targetMonth && (!monthForWinLoss || monthForWinLoss !== targetMonth)) return;
 
                 const outcome = project.status === 'won' ? 'won' : 'lost';
                 project.channels.forEach(rawChannel => {
@@ -1917,8 +1918,9 @@ const DataManager = {
             account.projects?.forEach(project => {
                 if (!projectTypeMap[project.id]) return;
                 if (project.status !== 'won' && project.status !== 'lost') return;
-                const updatedAt = project.winLossData?.updatedAt || project.updatedAt || project.createdAt;
-                if (targetMonth && updatedAt && updatedAt.substring(0, 7) !== targetMonth) return;
+                const monthForWinLoss = project.winLossData?.monthOfWin ||
+                    (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                if (targetMonth && (!monthForWinLoss || monthForWinLoss !== targetMonth)) return;
 
                 const outcome = project.status === 'won' ? 'wins' : 'losses';
                 projectTypeMap[project.id].forEach(typeKey => {
@@ -2416,6 +2418,7 @@ const DataManager = {
 
         return Array.from(months)
             .filter(Boolean)
+            .filter((m) => m >= '2026-01')
             .sort((a, b) => a.localeCompare(b));
     },
 
@@ -2449,6 +2452,7 @@ const DataManager = {
 
         return Array.from(years)
             .filter(Boolean)
+            .filter((y) => y >= '2026')
             .sort((a, b) => a.localeCompare(b));
     },
 
