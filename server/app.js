@@ -65,21 +65,38 @@ const createApp = (options = {}) => {
   });
 
   app.set('trust proxy', true);
+  // Use CORS options delegate so we can allow same-origin (request host === origin host) when APP_PUBLIC_URL is unset (e.g. Railway).
   app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin) {
-          callback(null, true);
-          return;
+    cors((req, callback) => {
+      const requestOrigin = req.headers && req.headers.origin;
+      let originsForRequest = allowedOrigins.slice();
+      if (requestOrigin) {
+        try {
+          const originHost = new URL(requestOrigin).hostname;
+          const requestHost = (req.hostname || '').split(':')[0];
+          if (originHost && requestHost && originHost === requestHost) {
+            originsForRequest.push(requestOrigin);
+          }
+        } catch (_) {
+          // ignore invalid origin URL
         }
-        if (allowAllOrigins || allowedOrigins.includes(origin)) {
-          callback(null, true);
-          return;
-        }
-        logger.warn('cors_origin_blocked', { origin });
-        callback(new Error('Not allowed by CORS'));
-      },
-      credentials: true
+      }
+      const allowAll = allowAllOrigins || originsForRequest.includes('*');
+      return callback(null, {
+        origin: (origin, cb) => {
+          if (!origin) {
+            cb(null, true);
+            return;
+          }
+          if (allowAll || originsForRequest.includes(origin)) {
+            cb(null, origin);
+            return;
+          }
+          logger.warn('cors_origin_blocked', { origin });
+          cb(new Error('Not allowed by CORS'));
+        },
+        credentials: true
+      });
     })
   );
   const jsonBodyLimit = process.env.API_JSON_LIMIT || '20mb';

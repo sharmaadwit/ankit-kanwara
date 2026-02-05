@@ -2,6 +2,8 @@
 
 Automated daily backup of hosted storage using **GitHub Actions** (recommended) or **Railway cron**. The script `server/scripts/export-storage-snapshot.js` exports all storage keys from your live app into a JSON snapshot.
 
+**Snapshot on each deploy:** A workflow (`.github/workflows/snapshot-on-deploy.yml`) runs on every **push to `main`**. It takes a full storage snapshot and commits `backups/storage-snapshot-latest.json` with `[skip ci]` so every Railway deploy has a snapshot. Requires the same repo secrets as daily backup (`REMOTE_STORAGE_BASE`, `REMOTE_STORAGE_USER`).
+
 ---
 
 ## What is the “live app storage API URL”? Where do I find it?

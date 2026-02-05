@@ -1,0 +1,52 @@
+# Snapshot on every deploy (push to main)
+# Runs a storage backup after each push to main so every Railway deploy has a snapshot.
+# Uses [skip ci] on the snapshot commit to avoid a deploy loop.
+name: Snapshot on deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  SNAPSHOT_DIR: backups
+
+jobs:
+  snapshot:
+    name: Storage snapshot (post-deploy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Create backups directory
+        run: mkdir -p backups
+
+      - name: Run storage snapshot
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+        run: |
+          export SNAPSHOT_FILE="backups/storage-snapshot-latest.json"
+          node server/scripts/export-storage-snapshot.js "" "$SNAPSHOT_FILE"
+
+      - name: Commit and push snapshot
+        if: success()
+        run: |
+          if [ ! -f backups/storage-snapshot-latest.json ]; then
+            echo "Snapshot file not found"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backups/storage-snapshot-latest.json
+          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: snapshot on deploy [skip ci]" && git push)
