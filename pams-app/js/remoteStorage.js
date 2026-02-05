@@ -469,14 +469,15 @@
         return headers;
     };
 
-    const performRequest = (method, suffix, body) => {
+    const performRequest = (method, suffix, body, opts) => {
         const url = buildUrl(suffix);
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false);
         xhr.setRequestHeader('Accept', 'application/json');
 
         let requestHeaders = {};
-        if (method === 'PUT' && suffix && suffix.startsWith('/')) {
+        const skipIfMatch = (opts && opts.skipIfMatch === true) || (typeof window !== 'undefined' && window.__REMOTE_STORAGE_RECONCILE_PUT__ === true);
+        if (method === 'PUT' && suffix && suffix.startsWith('/') && !skipIfMatch) {
             const key = decodeURIComponent(suffix.replace(/^\//, ''));
             if (key && lastVersion[key] != null) {
                 requestHeaders['If-Match'] = lastVersion[key];
@@ -785,10 +786,19 @@
     };
 
     /** On login: merge server + local backup (newer wins), add missing, dedupe, then PUT so drift is fixed. */
+    /** Uses skipIfMatch so reconcile PUTs don't get 409 (intent is to push merged state). Per-key try/catch so one failure doesn't block the rest. */
     const reconcileOnLogin = () => {
+        if (typeof window !== 'undefined') window.__REMOTE_STORAGE_RECONCILE_PUT__ = true;
         try {
-            const keys = ['internalActivities', 'accounts'];
-            keys.forEach((key) => {
+            reconcileOnLoginImpl();
+        } finally {
+            if (typeof window !== 'undefined') window.__REMOTE_STORAGE_RECONCILE_PUT__ = false;
+        }
+    };
+    const reconcileOnLoginImpl = () => {
+        const keys = ['internalActivities', 'accounts'];
+        keys.forEach((key) => {
+            try {
                 const serverRaw = remoteStorage.getItem(key);
                 const localRaw = getLocalBackup(key);
                 const serverArr = safeJsonParse(serverRaw);
@@ -806,7 +816,13 @@
                 if (typeof console !== 'undefined' && console.log) {
                     console.log('[RemoteStorage] Reconcile on login: ' + key + ' merged to ' + merged.length + ' items.');
                 }
-            });
+            } catch (err) {
+                if (typeof console !== 'undefined' && console.warn) {
+                    console.warn('[RemoteStorage] Reconcile on login failed for ' + key + ':', err.message);
+                }
+            }
+        });
+        try {
             const serverActivities = loadActivitiesValue();
             const localActivitiesRaw = getLocalBackup(ACTIVITIES_KEY);
             const serverAct = safeJsonParse(serverActivities);
@@ -825,16 +841,16 @@
                     }
                 }
             }
-            if (typeof DataManager !== 'undefined' && DataManager.cache) {
-                DataManager.cache.activities = null;
-                DataManager.cache.accounts = null;
-                DataManager.cache.internalActivities = null;
-                DataManager.cache.allActivities = null;
-            }
         } catch (err) {
             if (typeof console !== 'undefined' && console.warn) {
-                console.warn('[RemoteStorage] Reconcile on login failed:', err.message);
+                console.warn('[RemoteStorage] Reconcile on login failed for activities:', err.message);
             }
+        }
+        if (typeof DataManager !== 'undefined' && DataManager.cache) {
+            DataManager.cache.activities = null;
+            DataManager.cache.accounts = null;
+            DataManager.cache.internalActivities = null;
+            DataManager.cache.allActivities = null;
         }
     };
 

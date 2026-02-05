@@ -145,14 +145,15 @@ const createApp = (options = {}) => {
     next();
   });
 
-  // Rate limit by client IP. With trust proxy enabled, req.ip is from X-Forwarded-For (real client).
-  // Without trusting proxy, all users behind Railway would share one IP and hit the limit together (lockout).
+  // Rate limit by client IP. Only PUT/DELETE count – GET (page load, login, loading data) is not limited.
+  // So normal use never hits 429; only excessive saves are limited. No 15‑minute wait for simple operations.
   const storageLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: Number(process.env.RATE_LIMIT_STORAGE_MAX) || 300,
-    message: { message: 'Too many requests; please wait a few minutes and try again.' },
+    message: { message: 'Too many save requests; please wait a few minutes and try again.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: (req) => req.method === 'GET' || req.method === 'HEAD'
   });
   const adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
