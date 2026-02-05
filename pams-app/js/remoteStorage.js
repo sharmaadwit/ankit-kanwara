@@ -173,6 +173,35 @@
         return JSON.stringify(merged);
     };
 
+    /**
+     * Merge accounts so User B's save does not wipe User A's changes (e.g. new project on same account).
+     * For each account id: deep-merge server + ours (ours wins for fields we send, server projects kept and merged by project id).
+     */
+    const mergeAccountsDeep = (serverJson, ourJson) => {
+        const serverArr = Array.isArray(safeJsonParse(serverJson)) ? safeJsonParse(serverJson) : [];
+        const ourArr = Array.isArray(safeJsonParse(ourJson)) ? safeJsonParse(ourJson) : [];
+        const serverById = new Map(serverArr.filter((a) => a && a.id).map((a) => [a.id, a]));
+        const ourIds = new Set(ourArr.map((a) => a && a.id).filter(Boolean));
+        const mergedAccounts = serverArr.filter((s) => !ourIds.has(s.id));
+        ourArr.forEach((ourAcc) => {
+            if (!ourAcc || !ourAcc.id) return;
+            const serverAcc = serverById.get(ourAcc.id);
+            const serverProjects = Array.isArray(serverAcc && serverAcc.projects) ? serverAcc.projects : [];
+            const ourProjects = Array.isArray(ourAcc.projects) ? ourAcc.projects : [];
+            const ourProjectIds = new Set(ourProjects.map((p) => p && p.id).filter(Boolean));
+            const projectsMerged = [
+                ...serverProjects.filter((p) => p && !ourProjectIds.has(p.id)),
+                ...ourProjects
+            ];
+            mergedAccounts.push({
+                ...serverAcc,
+                ...ourAcc,
+                projects: projectsMerged
+            });
+        });
+        return JSON.stringify(mergedAccounts);
+    };
+
     /** Remove duplicate activities by (accountId, projectId, date day, type). Keeps last occurrence so newer/ours wins. */
     const dedupeActivitiesBySignature = (arr) => {
         if (!Array.isArray(arr) || !arr.length) return arr;
@@ -551,6 +580,24 @@
                 return null;
             };
 
+            const logSaveToActivityLog = (storageKey, payloadStr) => {
+                try {
+                    if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
+                        var count = null;
+                        try {
+                            var arr = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+                            if (Array.isArray(arr)) count = arr.length;
+                        } catch (_) {}
+                        Audit.log({
+                            action: 'storage.save',
+                            entity: 'storage',
+                            entityId: storageKey,
+                            detail: { key: storageKey, count: count }
+                        });
+                    }
+                } catch (_) {}
+            };
+
             try {
                 if (key === ACTIVITIES_KEY) {
                     // Always merge with server first so a partial/stale client list never overwrites
@@ -578,6 +625,7 @@
                         saveLocalBackup(ACTIVITIES_KEY, merged);
                         shardCache[ACTIVITIES_KEY] = { version: null, value: serializedValue };
                         if (draft && Drafts.removeDraft) Drafts.removeDraft(draft.id);
+                        logSaveToActivityLog(ACTIVITIES_KEY, merged);
                         return serializedValue;
                     } catch (e) {
                         if (draft && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: (e && e.message) || String(e) });
@@ -590,7 +638,9 @@
                     if (key === 'accounts' || key === 'internalActivities') {
                         serverStr = applyBackupRecovery(key, serverStr);
                     }
-                    let merged = mergeArrayById(serverStr, serializedValue);
+                    let merged = key === 'accounts'
+                        ? mergeAccountsDeep(serverStr, serializedValue)
+                        : mergeArrayById(serverStr, serializedValue);
                     var mergedArr = safeJsonParse(merged);
                     if (Array.isArray(mergedArr) && key === 'internalActivities') {
                         mergedArr = dedupeInternalBySignature(mergedArr);
@@ -609,6 +659,7 @@
                         doPut(merged);
                         saveLocalBackup(key, merged);
                         if (draftAcc && Drafts.removeDraft) Drafts.removeDraft(draftAcc.id);
+                        logSaveToActivityLog(key, merged);
                         return serializedValue;
                     } catch (e) {
                         if (draftAcc && Drafts.updateDraft) Drafts.updateDraft(draftAcc.id, { errorMessage: (e && e.message) || String(e) });
@@ -616,6 +667,7 @@
                     }
                 }
                 doPut(serializedValue);
+                logSaveToActivityLog(key, serializedValue);
                 return serializedValue;
             } catch (error) {
                 if (error.status === 409 && error.conflict && canMergeOnConflict) {
@@ -632,7 +684,9 @@
                         if (key === 'accounts' || key === 'internalActivities') {
                             serverStr409 = applyBackupRecovery(key, serverStr409);
                         }
-                        merged = mergeArrayById(serverStr409, serializedValue);
+                        merged = key === 'accounts'
+                            ? mergeAccountsDeep(serverStr409, serializedValue)
+                            : mergeArrayById(serverStr409, serializedValue);
                         doPut(merged);
                         serializedValue = merged;
                         saveLocalBackup(key, serializedValue);
@@ -643,6 +697,7 @@
                             value: serializedValue
                         };
                     }
+                    logSaveToActivityLog(key === ACTIVITIES_KEY ? ACTIVITIES_KEY : key, serializedValue);
                     return serializedValue;
                 }
                 console.error('Remote storage setItem error', error);

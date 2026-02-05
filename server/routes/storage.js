@@ -152,12 +152,13 @@ const deleteValue = async (key) => {
   await getPool().query('DELETE FROM storage WHERE key = $1;', [key]);
 };
 
-/** Log storage PUT for Railway/in-app diagnostics (key, conditional, approximate count for list keys). */
-const logStorageWrite = (key, serializedValue, conditional, transactionId) => {
+/** Log storage PUT for Railway/in-app diagnostics and retrieval (key, who, count). */
+const logStorageWrite = (key, serializedValue, conditional, transactionId, username) => {
   const meta = {
     key,
     conditional: !!conditional,
-    transactionId
+    transactionId,
+    username: username || null
   };
   if (key === 'activities' || key === 'accounts' || key === 'internalActivities') {
     try {
@@ -317,7 +318,8 @@ router.put('/:key', async (req, res) => {
           updated_at: result.updated_at
         });
       }
-      logStorageWrite(req.params.key, serializedValue, true, req.transactionId);
+      const username = req.get('X-Admin-User') || req.get('x-admin-user');
+      logStorageWrite(req.params.key, serializedValue, true, req.transactionId, username);
       return res.status(200).json({
         key: req.params.key,
         updated_at: result.updated_at
@@ -325,7 +327,8 @@ router.put('/:key', async (req, res) => {
     }
 
     const setResult = await setValue(req.params.key, serializedValue);
-    logStorageWrite(req.params.key, serializedValue, false, req.transactionId);
+    const username = req.get('X-Admin-User') || req.get('x-admin-user');
+    logStorageWrite(req.params.key, serializedValue, false, req.transactionId, username);
     return res.status(200).json({
       key: req.params.key,
       updated_at: setResult.updated_at
