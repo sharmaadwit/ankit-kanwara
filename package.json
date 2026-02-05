@@ -14,7 +14,8 @@
     "snapshot-before-deploy": "node scripts/snapshot-before-deploy.js",
     "restore": "node server/scripts/restore-storage-from-snapshot.js",
     "push-january": "node scripts/push-january-merged.js",
-    "compare-backups": "node scripts/compare-backups-winloss.js"
+    "compare-backups": "node scripts/compare-backups-winloss.js",
+    "logins-last-hour": "node server/scripts/logins-last-hour.js"
   },
   "engines": {
     "node": ">=18"

@@ -254,9 +254,11 @@ router.get('/:key', async (req, res) => {
   try {
     const row = await getValueWithVersion(req.params.key);
     if (!row) {
+      const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
       logger.warn('storage_get_404', {
         key: req.params.key,
-        transactionId: req.transactionId
+        transactionId: req.transactionId,
+        username: username || 'unknown'
       });
       res.status(404).json({ message: 'Key not found' });
       return;

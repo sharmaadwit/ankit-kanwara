@@ -635,6 +635,17 @@
                 if (canMergeOnConflict) {
                     const serverValue = this.getItem(key);
                     let serverStr = typeof serverValue === 'string' ? serverValue : JSON.stringify(serverValue || []);
+                    if (key === 'internalActivities') {
+                        const serverArr = safeJsonParse(serverStr);
+                        const ourArr = safeJsonParse(serializedValue);
+                        const serverEmpty = !serverArr || !Array.isArray(serverArr) || serverArr.length === 0;
+                        const ourHasItems = Array.isArray(ourArr) && ourArr.length > 0;
+                        if (serverEmpty && ourHasItems) {
+                            const err = new Error('Could not load internal activities from server. Refresh the page and try again.');
+                            err.code = 'REMOTE_INTERNAL_ACTIVITIES_LOAD_FAILED';
+                            throw err;
+                        }
+                    }
                     if (key === 'accounts' || key === 'internalActivities') {
                         serverStr = applyBackupRecovery(key, serverStr);
                     }

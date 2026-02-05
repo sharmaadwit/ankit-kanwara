@@ -65,11 +65,11 @@ const main = async () => {
     const raw = fs.readFileSync(snapshotPath, 'utf8');
     const snapshot = JSON.parse(raw);
     const data = snapshot.data || snapshot;
-    const restoreKeysEnv = (process.env.RESTORE_KEYS || 'all').trim().toLowerCase();
+    const rawRestoreKeys = (process.env.RESTORE_KEYS || 'all').trim();
     const keysToRestore =
-        restoreKeysEnv === 'all' || restoreKeysEnv === '*'
+        rawRestoreKeys.toLowerCase() === 'all' || rawRestoreKeys === '*'
             ? Object.keys(data).filter((k) => !(data[k] && typeof data[k] === 'object' && data[k].error))
-            : restoreKeysEnv.split(',').map((k) => k.trim()).filter(Boolean);
+            : rawRestoreKeys.split(',').map((k) => k.trim()).filter(Boolean);
 
     const fetchImpl = typeof fetch === 'function' ? fetch : (await import('node-fetch')).default;
     const headers = buildHeaders();
