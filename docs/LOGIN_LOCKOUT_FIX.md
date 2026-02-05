@@ -22,14 +22,19 @@ Many users (including you) were getting **locked out** or **unable to log in** b
 1. **Trust the proxy for rate limiting**  
    We removed `validate: { trustProxy: false }` from the storage (and admin) rate limiters.  
    With `app.set('trust proxy', true)` already set, the app now uses the **real client IP** from `X-Forwarded-For`.  
-   So **each user has their own quota** (e.g. 300 storage requests per 15 minutes per user), and one user or office no longer exhausts the limit for everyone.
+   So **each user has their own quota**, and one user or office no longer exhausts the limit for everyone.
 
-2. **Slightly higher default storage limit**  
-   Default storage limit was raised from 150 to **300** requests per 15 minutes per IP, so normal use (including login and loading the app) is less likely to hit the limit even for heavy users.
+2. **Only PUT/DELETE count toward the limit (storage and admin)**  
+   Both the **storage** and **admin** limiters now **skip GET and HEAD** requests.  
+   So **page load, login, loading data, admin logs, and admin activity (all GETs) are never rate limited**. Only **writes (PUT/POST/DELETE)** count.  
+   You no longer need to wait 15 minutes for “simple” operations – only excessive write traffic can hit 429.
 
-3. **Clearer 429 message**  
+3. **Higher default write limit**  
+   Default limit for writes is **300** PUT/DELETE requests per 15 minutes per user.
+
+4. **Clearer 429 message**  
    The message returned on 429 was updated to:  
-   `"Too many requests; please wait a few minutes and try again."`
+   `"Too many save requests; please wait a few minutes and try again."`
 
 ## What you should do
 

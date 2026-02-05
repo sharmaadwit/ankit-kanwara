@@ -155,12 +155,14 @@ const createApp = (options = {}) => {
     legacyHeaders: false,
     skip: (req) => req.method === 'GET' || req.method === 'HEAD'
   });
+  // Admin: only count writes (POST/PUT/DELETE); GET/HEAD (logs, activity list) never hit 429.
   const adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: Number(process.env.RATE_LIMIT_ADMIN_MAX) || 100,
     message: { message: 'Too many admin requests; try again later.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: (req) => req.method === 'GET' || req.method === 'HEAD'
   });
 
   app.use('/api/storage', storageLimiter, requireStorageAuth, storageRouter);
