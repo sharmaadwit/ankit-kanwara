@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-05T15:19:29.469Z",
+  "generatedAt": "2026-02-05T15:57:25.808Z",
   "source": "https://ankit-kanwara-production.up.railway.app/api/storage",
   "totalKeys": 36,
   "data": {
@@ -12136,20 +12136,109 @@
         "id": "50f221ad-6d53-4b12-8400-ecfc33efab73",
         "name": "Canara Bank",
         "industry": "BFSI",
-        "salesRep": "Rupam",
-        "salesRepEmail": "",
-        "salesRepRegion": "India West",
+        "salesRep": "Rupam Nandi",
+        "salesRepEmail": "rupam.nandi@gupshup.io",
+        "salesRepRegion": "India South",
         "projects": [
           {
             "id": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
             "name": "Canara Bank",
             "sfdcLink": "",
             "stage": "",
-            "status": "inactive",
-            "activities": [],
-            "isMigrated": true
+            "status": "active",
+            "activities": [
+              {
+                "userId": "mj3yfahvtjc4auo046n",
+                "userName": "ankit.kanwara@gupshup.io",
+                "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+                "accountName": "Canara Bank",
+                "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+                "projectName": "Canara Bank",
+                "date": "2026-01-06T00:00:00.000Z",
+                "type": "customerCall",
+                "salesRep": "Rupam Nandi",
+                "salesRepEmail": "rupam.nandi@gupshup.io",
+                "salesRepRegion": "India South",
+                "industry": "BFSI",
+                "details": {
+                  "callType": "Q&A",
+                  "description": "POC Kickoff for WITI bot that will be used by Canara Bank Staff and is suggested as a upgrade to the current bot. "
+                },
+                "isInternal": false,
+                "id": "ml9mj0kd18ov610igiv",
+                "createdAt": "2026-02-05T15:41:13.501Z",
+                "updatedAt": "2026-02-05T15:41:13.501Z",
+                "source": "manual",
+                "isMigrated": false,
+                "monthOfActivity": "2026-01"
+              },
+              {
+                "userId": "mj3yfahvtjc4auo046n",
+                "userName": "ankit.kanwara@gupshup.io",
+                "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+                "accountName": "Canara Bank",
+                "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+                "projectName": "Canara Bank",
+                "date": "2026-01-06T00:00:00.000Z",
+                "type": "poc",
+                "salesRep": "Rupam Nandi",
+                "salesRepEmail": "rupam.nandi@gupshup.io",
+                "salesRepRegion": "India South",
+                "industry": "BFSI",
+                "details": {
+                  "accessType": "Custom POC - Agentic",
+                  "useCaseDescription": "WITI Bot for Internal Staff learning and Q&A",
+                  "demoEnvironment": "",
+                  "botTriggerUrl": ""
+                },
+                "isInternal": false,
+                "id": "ml9mj4yxo6g5vhwkbdq",
+                "createdAt": "2026-02-05T15:41:19.209Z",
+                "updatedAt": "2026-02-05T15:41:19.209Z",
+                "source": "manual",
+                "isMigrated": false,
+                "monthOfActivity": "2026-01"
+              },
+              {
+                "userId": "mj3yfahvtjc4auo046n",
+                "userName": "ankit.kanwara@gupshup.io",
+                "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+                "accountName": "Canara Bank",
+                "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+                "projectName": "Canara Bank",
+                "date": "2026-01-12T00:00:00.000Z",
+                "type": "customerCall",
+                "salesRep": "Rupam Nandi",
+                "salesRepEmail": "rupam.nandi@gupshup.io",
+                "salesRepRegion": "India South",
+                "industry": "BFSI",
+                "details": {
+                  "callType": "Follow-up",
+                  "description": "Followup of Bot Feedback"
+                },
+                "isInternal": false,
+                "id": "ml9mj9b5n9pxelcfpc",
+                "createdAt": "2026-02-05T15:41:24.833Z",
+                "updatedAt": "2026-02-05T15:41:24.833Z",
+                "source": "manual",
+                "isMigrated": false,
+                "monthOfActivity": "2026-01"
+              }
+            ],
+            "useCases": [
+              "Other: Internal Ai Assistant"
+            ],
+            "productsInterested": [
+              "AI Agents"
+            ],
+            "channels": [
+              "WhatsApp"
+            ],
+            "location": "",
+            "lastManualActivityAt": "2026-01-12T00:00:00.000Z"
           }
-        ]
+        ],
+        "updatedAt": "2026-02-05T15:41:10.376Z"
       },
       {
         "id": "fb312f28-fb1e-4a83-9798-1b8a648a4f62",
@@ -87771,6 +87860,83 @@
         "source": "manual",
         "isMigrated": false,
         "monthOfActivity": "2026-01"
+      },
+      {
+        "userId": "mj3yfahvtjc4auo046n",
+        "userName": "ankit.kanwara@gupshup.io",
+        "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+        "accountName": "Canara Bank",
+        "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+        "projectName": "Canara Bank",
+        "date": "2026-01-06T00:00:00.000Z",
+        "type": "customerCall",
+        "salesRep": "Rupam Nandi",
+        "salesRepEmail": "rupam.nandi@gupshup.io",
+        "salesRepRegion": "India South",
+        "industry": "BFSI",
+        "details": {
+          "callType": "Q&A",
+          "description": "POC Kickoff for WITI bot that will be used by Canara Bank Staff and is suggested as a upgrade to the current bot. "
+        },
+        "isInternal": false,
+        "id": "ml9mj0kd18ov610igiv",
+        "createdAt": "2026-02-05T15:41:13.501Z",
+        "updatedAt": "2026-02-05T15:41:13.501Z",
+        "source": "manual",
+        "isMigrated": false,
+        "monthOfActivity": "2026-01"
+      },
+      {
+        "userId": "mj3yfahvtjc4auo046n",
+        "userName": "ankit.kanwara@gupshup.io",
+        "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+        "accountName": "Canara Bank",
+        "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+        "projectName": "Canara Bank",
+        "date": "2026-01-06T00:00:00.000Z",
+        "type": "poc",
+        "salesRep": "Rupam Nandi",
+        "salesRepEmail": "rupam.nandi@gupshup.io",
+        "salesRepRegion": "India South",
+        "industry": "BFSI",
+        "details": {
+          "accessType": "Custom POC - Agentic",
+          "useCaseDescription": "WITI Bot for Internal Staff learning and Q&A",
+          "demoEnvironment": "",
+          "botTriggerUrl": ""
+        },
+        "isInternal": false,
+        "id": "ml9mj4yxo6g5vhwkbdq",
+        "createdAt": "2026-02-05T15:41:19.209Z",
+        "updatedAt": "2026-02-05T15:41:19.209Z",
+        "source": "manual",
+        "isMigrated": false,
+        "monthOfActivity": "2026-01"
+      },
+      {
+        "userId": "mj3yfahvtjc4auo046n",
+        "userName": "ankit.kanwara@gupshup.io",
+        "accountId": "50f221ad-6d53-4b12-8400-ecfc33efab73",
+        "accountName": "Canara Bank",
+        "projectId": "94ab2ea4-922a-4da5-a047-bf3132d1e917",
+        "projectName": "Canara Bank",
+        "date": "2026-01-12T00:00:00.000Z",
+        "type": "customerCall",
+        "salesRep": "Rupam Nandi",
+        "salesRepEmail": "rupam.nandi@gupshup.io",
+        "salesRepRegion": "India South",
+        "industry": "BFSI",
+        "details": {
+          "callType": "Follow-up",
+          "description": "Followup of Bot Feedback"
+        },
+        "isInternal": false,
+        "id": "ml9mj9b5n9pxelcfpc",
+        "createdAt": "2026-02-05T15:41:24.833Z",
+        "updatedAt": "2026-02-05T15:41:24.833Z",
+        "source": "manual",
+        "isMigrated": false,
+        "monthOfActivity": "2026-01"
       }
     ],
     "activities:2026-02": [
@@ -88838,7 +89004,12 @@
       "mergedProjects": true
     },
     "industries": [
-      "Real Estate"
+      "Real Estate",
+      "Events",
+      "Electronics",
+      "Services",
+      "NBFC",
+      "FGCM"
     ],
     "industryUseCases": {
       "BFSI": [
@@ -88994,6 +89165,31 @@
         "Support"
       ],
       "Utility : energy, gas": [
+        "Marketing",
+        "Commerce",
+        "Support"
+      ],
+      "Events": [
+        "Marketing",
+        "Commerce",
+        "Support"
+      ],
+      "Electronics": [
+        "Marketing",
+        "Commerce",
+        "Support"
+      ],
+      "Services": [
+        "Marketing",
+        "Commerce",
+        "Support"
+      ],
+      "NBFC": [
+        "Marketing",
+        "Commerce",
+        "Support"
+      ],
+      "FGCM": [
         "Marketing",
         "Commerce",
         "Support"
@@ -90588,31 +90784,6 @@
     "__pams_drafts__": [],
     "pendingIndustries": [
       {
-        "value": "Events",
-        "suggestedBy": "siddharth.singh@gupshup.io",
-        "createdAt": "2026-02-04T15:23:23.924Z"
-      },
-      {
-        "value": "Electronics",
-        "suggestedBy": "siddharth.singh@gupshup.io",
-        "createdAt": "2026-02-04T15:28:15.440Z"
-      },
-      {
-        "value": "Services",
-        "suggestedBy": "siddharth.singh@gupshup.io",
-        "createdAt": "2026-02-04T15:41:04.757Z"
-      },
-      {
-        "value": "NBFC",
-        "suggestedBy": "siddharth.singh@gupshup.io",
-        "createdAt": "2026-02-04T15:44:59.276Z"
-      },
-      {
-        "value": "FGCM",
-        "suggestedBy": "ankit.kanwara@gupshup.io",
-        "createdAt": "2026-02-04T15:57:17.094Z"
-      },
-      {
         "value": "Goverment",
         "suggestedBy": "gargi.upadhyay@gupshup.io",
         "createdAt": "2026-02-04T18:36:42.773Z"
@@ -90621,6 +90792,11 @@
         "value": "Food and Beverage",
         "suggestedBy": "mauricio.martins@gupshup.io",
         "createdAt": "2026-02-05T02:30:02.123Z"
+      },
+      {
+        "value": "BFSI",
+        "suggestedBy": "ankit.kanwara@gupshup.io",
+        "createdAt": "2026-02-05T15:41:10.305Z"
       }
     ],
     "pendingUseCases": [
@@ -90698,7 +90874,7 @@
     ],
     "salesRepRegionNormalized": true,
     "__shard_manifest:activities__": {
-      "version": 1770304323349,
+      "version": 1770306086872,
       "buckets": [
         "activities:2026-01",
         "activities:2025-12",
