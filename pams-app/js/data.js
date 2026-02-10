@@ -110,6 +110,9 @@ const MIGRATION_DUPLICATE_PATTERNS = [
 
 const ANALYTICS_ACCESS_CONFIG_KEY = 'analyticsAccessConfig';
 const ANALYTICS_TABLE_PRESETS_KEY = 'analyticsTablePresets';
+const INDUSTRY_USE_CASES_KEY = 'industryUseCases';
+const PENDING_INDUSTRIES_KEY = 'pendingIndustries';
+const UNIVERSAL_USE_CASES_KEY = 'universalUseCases';
 
 const DEFAULT_INDUSTRY_USE_CASES = {
     'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Customer Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
@@ -232,7 +235,8 @@ const DataManager = {
             }
 
             // Initialize Industry-Use Case map if empty
-            if (!store.getItem(INDUSTRY_USE_CASES_KEY)) {
+            const storage = typeof this.getLocalStorage === 'function' ? this.getLocalStorage() : (typeof localStorage !== 'undefined' ? localStorage : null);
+            if (storage && !storage.getItem(INDUSTRY_USE_CASES_KEY)) {
                 this.saveIndustryUseCases(DEFAULT_INDUSTRY_USE_CASES);
                 const industries = Object.keys(DEFAULT_INDUSTRY_USE_CASES).sort();
                 this.saveIndustries(industries);
