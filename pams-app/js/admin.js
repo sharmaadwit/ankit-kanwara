@@ -128,7 +128,7 @@ const Admin = {
     loadAdminPanel() {
         this.loadSystemAdminPanel();
     },
-    
+
     // Load System Admin panel
     loadSystemAdminPanel() {
         try {
@@ -157,7 +157,7 @@ const Admin = {
             UI.showNotification('Error loading system admin panel', 'error');
         }
     },
-    
+
     // Load Configuration panel
     loadConfigurationPanel() {
         try {
@@ -217,7 +217,7 @@ const Admin = {
         if (event) {
             event.preventDefault();
         }
-        
+
         // Determine view type from context if not provided
         if (!viewType) {
             const systemAdminView = document.getElementById('systemAdminView');
@@ -230,9 +230,9 @@ const Admin = {
                 viewType = 'systemAdmin'; // Default
             }
         }
-        
+
         this.openSection(sectionId, viewType);
-        
+
         // Update active nav item in the current view
         const navId = viewType === 'configuration' ? '#configurationSectionsNav' : '#systemAdminSectionsNav';
         const nav = document.querySelector(navId);
@@ -252,7 +252,7 @@ const Admin = {
         }
     },
 
-    openSection(sectionId, viewType = 'systemAdmin') {
+    async openSection(sectionId, viewType = 'systemAdmin') {
         if (!sectionId) {
             return;
         }
@@ -260,7 +260,7 @@ const Admin = {
         // Hide all sections in both views first
         const systemAdminContainer = document.getElementById('systemAdminSectionsContainer');
         const configurationContainer = document.getElementById('configurationSectionsContainer');
-        
+
         if (systemAdminContainer) {
             systemAdminContainer.querySelectorAll('[data-admin-section]').forEach((section) => {
                 section.classList.add('hidden');
@@ -288,7 +288,7 @@ const Admin = {
         }
 
         this.markActiveSectionButton(sectionId);
-        this.ensureSectionLoaded(sectionId);
+        await this.ensureSectionLoaded(sectionId);
         // Refresh Sandbox Access data when section is shown (Configuration only)
         if (sectionId === 'sandboxAccess') {
             const section = container && container.querySelector('[data-admin-section="sandboxAccess"]');
@@ -303,7 +303,7 @@ const Admin = {
         // This method kept for compatibility but sidebar handles it differently
     },
 
-    ensureSectionLoaded(sectionId) {
+    async ensureSectionLoaded(sectionId) {
         if (this.loadedSections.has(sectionId)) {
             return;
         }
@@ -311,7 +311,7 @@ const Admin = {
         const loaders = this.getSectionLoaders();
         const loader = loaders[sectionId];
         if (typeof loader === 'function') {
-            loader.call(this);
+            await loader.call(this);
         }
         this.loadedSections.add(sectionId);
     },
@@ -322,15 +322,15 @@ const Admin = {
             sales: () => this.loadSalesReps(),
             regions: () => this.renderRegionsPanel(),
             industryUseCases: () => this.loadIndustryUseCasesSection(),
-            interface: () => {},
+            interface: () => { },
             analytics: () => this.loadAnalyticsSettings(),
             projectHealth: () => this.renderProjectHealthSettings(),
             features: () => this.loadControls(),
             login: () => this.loadLoginLogs(),
             audit: () => this.loadActivityLogs(),
             storageDrafts: () => this.loadStorageDraftsSection(),
-            monthly: () => {},
-            reports: () => {},
+            monthly: () => { },
+            reports: () => { },
             sandboxAccess: () => this.loadPOCSandbox()
         };
     },
@@ -503,20 +503,21 @@ const Admin = {
         }
     },
 
-    loadIndustryUseCasesSection() {
+    async loadIndustryUseCasesSection() {
         // Ensure industries tab is active by default
         this.switchIndustryUseCaseTab('industries');
-        this.renderAdminIndustriesList();
-        this.renderAdminPendingIndustries();
+        await this.renderAdminIndustriesList();
+        await this.renderAdminPendingIndustries();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
-            const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
+            const rawIndustries = typeof DataManager !== 'undefined' ? await DataManager.getIndustries() : [];
+            const industries = Array.isArray(rawIndustries) ? rawIndustries : [];
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
-            this.renderUseCasesForIndustry();
+            await this.renderUseCasesForIndustry();
         }
-        this.renderAdminPendingUseCases();
-        this.updatePendingBadges();
+        await this.renderAdminPendingUseCases();
+        await this.updatePendingBadges();
     },
 
     switchIndustryUseCaseTab(tabName) {
@@ -542,11 +543,11 @@ const Admin = {
         }
     },
 
-    updatePendingBadges() {
-        const pendingIndustries = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
-        const pendingUseCases = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
+    async updatePendingBadges() {
+        const pendingIndustries = typeof DataManager !== 'undefined' ? await DataManager.getPendingIndustries() : [];
+        const pendingUseCases = typeof DataManager !== 'undefined' ? await DataManager.getPendingUseCases() : [];
         const totalPending = pendingIndustries.length + pendingUseCases.length;
-        
+
         // Update badges in both views
         const pendingBadges = [
             document.getElementById('adminPendingBadge'),
@@ -560,7 +561,7 @@ const Admin = {
             document.getElementById('adminPendingUseCasesBadge'),
             document.getElementById('adminPendingUseCasesBadgeConfig')
         ].filter(Boolean);
-        
+
         pendingBadges.forEach(badge => {
             if (totalPending > 0) {
                 badge.textContent = totalPending;
@@ -569,7 +570,7 @@ const Admin = {
                 badge.style.display = 'none';
             }
         });
-        
+
         industriesBadges.forEach(badge => {
             if (pendingIndustries.length > 0) {
                 badge.textContent = pendingIndustries.length;
@@ -578,7 +579,7 @@ const Admin = {
                 badge.style.display = 'none';
             }
         });
-        
+
         useCasesBadges.forEach(badge => {
             if (pendingUseCases.length > 0) {
                 badge.textContent = pendingUseCases.length;
@@ -589,10 +590,11 @@ const Admin = {
         });
     },
 
-    renderAdminIndustriesList() {
+    async renderAdminIndustriesList() {
         const container = document.getElementById('adminIndustriesList') || document.getElementById('adminIndustriesListConfig');
         if (!container) return;
-        const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
+        const raw = typeof DataManager !== 'undefined' ? await DataManager.getIndustries() : [];
+        const industries = Array.isArray(raw) ? raw : [];
         container.innerHTML = industries.length === 0
             ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">📋</div><p>No industries yet. Add one above.</p></div>'
             : industries.map(ind => {
@@ -604,7 +606,7 @@ const Admin = {
             }).join('');
     },
 
-    addIndustryFromAdmin() {
+    async addIndustryFromAdmin() {
         const input = document.getElementById('adminNewIndustry') || document.getElementById('adminNewIndustryConfig');
         if (!input) return;
         const value = (input.value || '').trim();
@@ -613,40 +615,44 @@ const Admin = {
             return;
         }
         if (typeof DataManager === 'undefined') return;
-        DataManager.addIndustry(value);
+        await DataManager.addIndustry(value);
         input.value = '';
-        DataManager.ensureIndustryUseCasesBaseline();
-        this.renderAdminIndustriesList();
+        await DataManager.ensureIndustryUseCasesBaseline();
+        await this.renderAdminIndustriesList();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
         if (industrySelect) {
-            const industries = DataManager.getIndustries();
+            const industries = await DataManager.getIndustries();
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
         }
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry added.', 'success');
     },
 
-    removeIndustryFromAdmin(industry) {
+    async removeIndustryFromAdmin(industry) {
         if (!industry) return;
         if (!window.confirm('Remove industry "' + String(industry).replace(/"/g, '') + '"?')) return;
         if (typeof DataManager === 'undefined') return;
-        const list = DataManager.getIndustries().filter(i => i !== industry);
-        DataManager.saveIndustries(list);
-        this.renderAdminIndustriesList();
+        const rawIndustries = await DataManager.getIndustries();
+        const currentIndustries = Array.isArray(rawIndustries) ? rawIndustries : [];
+        const list = currentIndustries.filter(i => i !== industry);
+        await DataManager.saveIndustries(list);
+        await this.renderAdminIndustriesList();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 list.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
-            this.renderUseCasesForIndustry();
+            await this.renderUseCasesForIndustry();
         }
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry removed.', 'success');
     },
 
-    renderAdminPendingIndustries() {
+    async renderAdminPendingIndustries() {
         const container = document.getElementById('adminPendingIndustriesList') || document.getElementById('adminPendingIndustriesListConfig');
         if (!container) return;
-        const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingIndustries() : [];
-        const industries = typeof DataManager !== 'undefined' ? DataManager.getIndustries() : [];
+        const rawPending = typeof DataManager !== 'undefined' ? await DataManager.getPendingIndustries() : [];
+        const rawIndustries = typeof DataManager !== 'undefined' ? await DataManager.getIndustries() : [];
+        const pending = Array.isArray(rawPending) ? rawPending : [];
+        const industries = Array.isArray(rawIndustries) ? rawIndustries : [];
         container.innerHTML = pending.length === 0
             ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>'
             : pending.map(p => {
@@ -672,33 +678,33 @@ const Admin = {
                     </span>
                 </div>`;
             }).join('');
-        this.updatePendingBadges();
+        await this.updatePendingBadges();
     },
 
-    acceptPendingIndustryFromAdmin(value) {
+    async acceptPendingIndustryFromAdmin(value) {
         if (typeof DataManager === 'undefined') return;
-        DataManager.acceptPendingIndustry(value);
-        this.renderAdminIndustriesList();
-        this.renderAdminPendingIndustries();
-        this.updatePendingBadges();
+        await DataManager.acceptPendingIndustry(value);
+        await this.renderAdminIndustriesList();
+        await this.renderAdminPendingIndustries();
+        await this.updatePendingBadges();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
         if (industrySelect) {
-            const industries = DataManager.getIndustries();
+            const industries = await DataManager.getIndustries();
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
         }
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry accepted.', 'success');
     },
 
-    rejectPendingIndustryFromAdmin(value) {
+    async rejectPendingIndustryFromAdmin(value) {
         if (typeof DataManager === 'undefined') return;
-        DataManager.rejectPendingIndustry(value);
-        this.renderAdminPendingIndustries();
-        this.updatePendingBadges();
+        await DataManager.rejectPendingIndustry(value);
+        await this.renderAdminPendingIndustries();
+        await this.updatePendingBadges();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
     },
 
-    mergePendingIndustryFromAdmin(buttonEl) {
+    async mergePendingIndustryFromAdmin(buttonEl) {
         if (typeof DataManager === 'undefined') return;
         const pendingValue = buttonEl?.getAttribute?.('data-pending-industry');
         if (!pendingValue) return;
@@ -709,21 +715,21 @@ const Admin = {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Select an industry to merge into.', 'error');
             return;
         }
-        const result = DataManager.mergePendingIndustryInto(pendingValue, targetIndustry);
+        const result = await DataManager.mergePendingIndustryInto(pendingValue, targetIndustry);
         if (!result.success) {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Merge failed.', 'error');
             return;
         }
-        this.renderAdminIndustriesList();
-        this.renderAdminPendingIndustries();
-        this.updatePendingBadges();
+        await this.renderAdminIndustriesList();
+        await this.renderAdminPendingIndustries();
+        await this.updatePendingBadges();
         const msg = result.accountsUpdated > 0
             ? `Merged into "${targetIndustry}". ${result.accountsUpdated} account(s) updated.`
             : `Merged into "${targetIndustry}".`;
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
-    renderUseCasesForIndustry() {
+    async renderUseCasesForIndustry() {
         const panel = document.getElementById('adminUseCasesPanel') || document.getElementById('adminUseCasesPanelConfig');
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (!panel || !industrySelect) return;
@@ -732,7 +738,7 @@ const Admin = {
             panel.innerHTML = '<p class="text-muted">Select an industry to manage its use cases.</p>';
             return;
         }
-        const useCases = typeof DataManager !== 'undefined' ? DataManager.getUseCasesForIndustry(industry) : [];
+        const useCases = typeof DataManager !== 'undefined' ? await DataManager.getUseCasesForIndustry(industry) : [];
         const addInputId = 'adminNewUseCaseInput';
         panel.innerHTML = `
             <div class="admin-inline-form">
@@ -756,7 +762,7 @@ const Admin = {
         }
     },
 
-    addUseCaseFromAdmin() {
+    async addUseCaseFromAdmin() {
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         const input = document.getElementById('adminNewUseCaseInput');
         if (!industrySelect || !input) return;
@@ -767,39 +773,41 @@ const Admin = {
             return;
         }
         if (typeof DataManager === 'undefined') return;
-        DataManager.addUseCaseToIndustry(industry, value);
+        await DataManager.addUseCaseToIndustry(industry, value);
         input.value = '';
-        this.renderUseCasesForIndustry();
+        await this.renderUseCasesForIndustry();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case added.', 'success');
     },
 
-    removeUseCaseFromAdmin(industry, useCase) {
+    async removeUseCaseFromAdmin(industry, useCase) {
         if (!industry || !useCase) return;
         if (typeof DataManager === 'undefined') return;
-        DataManager.removeUseCaseFromIndustry(industry, useCase);
-        this.renderUseCasesForIndustry();
+        await DataManager.removeUseCaseFromIndustry(industry, useCase);
+        await this.renderUseCasesForIndustry();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case removed.', 'success');
     },
 
-    renderAdminPendingUseCases() {
+    async renderAdminPendingUseCases() {
         const container = document.getElementById('adminPendingUseCasesList') || document.getElementById('adminPendingUseCasesListConfig');
         if (!container) return;
-        const pending = typeof DataManager !== 'undefined' ? DataManager.getPendingUseCases() : [];
-        container.innerHTML = pending.length === 0
-            ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>'
-            : pending.map(p => {
+        const pending = typeof DataManager !== 'undefined' ? await DataManager.getPendingUseCases() : [];
+        let html = '';
+        if (pending.length === 0) {
+            html = '<div class="admin-empty-state"><div class="admin-empty-state-icon">✓</div><p>No pending suggestions</p></div>';
+        } else {
+            for (const p of pending) {
                 const val = (p.value != null ? p.value : p).toString().trim();
                 const ind = (p.industry != null ? p.industry : '').toString().trim() || '';
                 const dataVal = val.replace(/"/g, '&quot;');
                 const dataInd = ind.replace(/"/g, '&quot;');
                 const meta = p.suggestedBy ? ` <small class="text-muted">(${p.suggestedBy})</small>` : '';
                 const indLabel = ind || 'Unassigned';
-                const useCasesForIndustry = (typeof DataManager !== 'undefined' && ind) ? DataManager.getUseCasesForIndustry(ind) : [];
+                const useCasesForIndustry = (typeof DataManager !== 'undefined' && ind) ? await DataManager.getUseCasesForIndustry(ind) : [];
                 const mergeOptions = useCasesForIndustry.filter(uc => uc && uc !== val).map(uc => {
                     const optVal = (uc || '').replace(/"/g, '&quot;');
                     return `<option value="${optVal}">${uc}</option>`;
                 }).join('');
-                return `<div class="admin-list-row admin-list-row-pending-uc">
+                html += `<div class="admin-list-row admin-list-row-pending-uc">
                     <span>${val} <small class="text-muted">→ ${indLabel}</small>${meta}</span>
                     <span style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn btn-primary btn-xs" data-pending-value="${dataVal}" data-pending-industry="${dataInd}" onclick="Admin.acceptPendingUseCaseFromAdmin(this.getAttribute('data-pending-value'), this.getAttribute('data-pending-industry'))">Accept</button>
@@ -813,28 +821,30 @@ const Admin = {
                         </span>
                     </span>
                 </div>`;
-            }).join('');
-        this.updatePendingBadges();
+            }
+        }
+        container.innerHTML = html;
+        await this.updatePendingBadges();
     },
 
-    acceptPendingUseCaseFromAdmin(value, industry) {
+    async acceptPendingUseCaseFromAdmin(value, industry) {
         if (typeof DataManager === 'undefined') return;
-        DataManager.acceptPendingUseCase(value, industry);
-        this.renderUseCasesForIndustry();
-        this.renderAdminPendingUseCases();
-        this.updatePendingBadges();
+        await DataManager.acceptPendingUseCase(value, industry);
+        await this.renderUseCasesForIndustry();
+        await this.renderAdminPendingUseCases();
+        await this.updatePendingBadges();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case accepted.', 'success');
     },
 
-    rejectPendingUseCaseFromAdmin(value, industry) {
+    async rejectPendingUseCaseFromAdmin(value, industry) {
         if (typeof DataManager === 'undefined') return;
-        DataManager.rejectPendingUseCase(value, industry);
-        this.renderAdminPendingUseCases();
-        this.updatePendingBadges();
+        await DataManager.rejectPendingUseCase(value, industry);
+        await this.renderAdminPendingUseCases();
+        await this.updatePendingBadges();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Rejected.', 'success');
     },
 
-    mergePendingUseCaseFromAdmin(buttonEl) {
+    async mergePendingUseCaseFromAdmin(buttonEl) {
         if (typeof DataManager === 'undefined') return;
         const pendingValue = buttonEl?.getAttribute?.('data-pending-value');
         const pendingIndustry = buttonEl?.getAttribute?.('data-pending-industry');
@@ -846,22 +856,22 @@ const Admin = {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Select a use case to merge into.', 'error');
             return;
         }
-        const result = DataManager.mergePendingUseCaseInto(pendingValue, pendingIndustry, targetUseCase);
+        const result = await DataManager.mergePendingUseCaseInto(pendingValue, pendingIndustry, targetUseCase);
         if (!result.success) {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Merge failed.', 'error');
             return;
         }
-        this.renderUseCasesForIndustry();
-        this.renderAdminPendingUseCases();
-        this.updatePendingBadges();
+        await this.renderUseCasesForIndustry();
+        await this.renderAdminPendingUseCases();
+        await this.updatePendingBadges();
         const msg = result.projectsUpdated > 0
             ? `Merged into "${targetUseCase}". ${result.projectsUpdated} project(s) updated.`
             : `Merged into "${targetUseCase}".`;
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
-    loadAnalyticsSettings() {
-        const targetInfo = DataManager.getPresalesActivityTarget();
+    async loadAnalyticsSettings() {
+        const targetInfo = await DataManager.getPresalesActivityTarget();
         const targetValue = Number(targetInfo.value) >= 0 ? Number(targetInfo.value) : 0;
 
         const inputs = [
@@ -889,7 +899,7 @@ const Admin = {
             if (el) el.textContent = metaText;
         });
 
-        const analytics = DataManager.getMonthlyAnalytics();
+        const analytics = await DataManager.getMonthlyAnalytics();
         const analyticsMonth = UI.formatMonth(analytics.month);
         const summaryText = analytics.totalPresalesUsers > 0
             ? `Team target (${analytics.totalPresalesUsers} presales users): ${analytics.teamTarget} activities • Actual ${analyticsMonth}: ${analytics.totalActivities}`
@@ -904,7 +914,7 @@ const Admin = {
             if (el) el.textContent = summaryText;
         });
 
-        const accessConfig = DataManager.getAnalyticsAccessConfig();
+        const accessConfig = await DataManager.getAnalyticsAccessConfig();
         const accessInputs = [
             document.getElementById('analyticsAccessPasswordInput'),
             document.getElementById('analyticsAccessPasswordInputConfig')
@@ -912,7 +922,7 @@ const Admin = {
         accessInputs.forEach(input => {
             if (input) input.value = accessConfig.password || '';
         });
-        
+
         const accessMetaElements = [
             document.getElementById('analyticsAccessMeta'),
             document.getElementById('analyticsAccessMetaConfig')
@@ -920,13 +930,13 @@ const Admin = {
         accessMetaElements.forEach(meta => {
             if (meta) {
                 meta.textContent = accessConfig.updatedAt
-                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
-                : 'Using default analytics password.';
-        }
+                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(accessConfig.updatedAt) : accessConfig.updatedAt}${accessConfig.updatedBy ? ` by ${accessConfig.updatedBy}` : ''}.`
+                    : 'Using default analytics password.';
+            }
         });
     },
 
-    saveAnalyticsAccessPassword(event) {
+    async saveAnalyticsAccessPassword(event) {
         if (event && typeof event.preventDefault === 'function') {
             event.preventDefault();
         }
@@ -948,7 +958,7 @@ const Admin = {
         }
 
         const currentUser = Auth.getCurrentUser();
-        const config = DataManager.saveAnalyticsAccessConfig({
+        const config = await DataManager.saveAnalyticsAccessConfig({
             password: trimmed,
             updatedBy: currentUser?.username || 'Admin',
             updatedAt: new Date().toISOString()
@@ -959,11 +969,11 @@ const Admin = {
             document.getElementById('analyticsAccessMetaConfig')
         ].filter(Boolean);
         metaElements.forEach(meta => {
-        if (meta) {
-            meta.textContent = config.updatedAt
-                ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
-                : '';
-        }
+            if (meta) {
+                meta.textContent = config.updatedAt
+                    ? `Last updated ${DataManager.formatDate ? DataManager.formatDate(config.updatedAt) : config.updatedAt}${config.updatedBy ? ` by ${config.updatedBy}` : ''}.`
+                    : '';
+            }
         });
         UI.showNotification('Analytics password updated.', 'success');
     },
@@ -1041,7 +1051,7 @@ const Admin = {
         App.syncProjectHealthControls();
     },
 
-    savePresalesTarget(event) {
+    async savePresalesTarget(event) {
         event.preventDefault();
         const form = event.target;
         const input = form.querySelector('input[type="number"]');
@@ -1054,26 +1064,27 @@ const Admin = {
         }
 
         const currentUser = typeof Auth !== 'undefined' ? Auth.getCurrentUser() : null;
-        DataManager.savePresalesActivityTarget(value, {
+        await DataManager.savePresalesActivityTarget(value, {
             updatedBy: currentUser?.username || 'Admin'
         });
 
         UI.showNotification('Presales activity target updated successfully.', 'success');
-        this.loadAnalyticsSettings();
+        await this.loadAnalyticsSettings();
 
         if (typeof App !== 'undefined') {
-            if (App.currentView === 'reports') {
-                App.loadReports();
+            if (App.currentView === 'reports' && typeof App.loadReports === 'function') {
+                await App.loadReports();
             }
-            if (InterfaceManager.getCurrentInterface() === 'card') {
-                App.loadCardReportsView();
+            if (InterfaceManager.getCurrentInterface() === 'card' && typeof App.loadCardReportsView === 'function') {
+                await App.loadCardReportsView();
             }
         }
     },
 
     // User Management
-    loadUsers() {
-        const users = DataManager.getUsers();
+    async loadUsers() {
+        const raw = await DataManager.getUsers();
+        const users = Array.isArray(raw) ? raw : [];
         const container = document.getElementById('usersList');
         const statusEl = document.getElementById('usersFilterStatus');
         if (!container) return;
@@ -1152,19 +1163,19 @@ const Admin = {
         URL.revokeObjectURL(url);
     },
 
-    showAddUserModal() {
-        this.createAddUserModal();
+    async showAddUserModal() {
+        await this.createAddUserModal();
         const defaultRegionSelect = document.getElementById('newUserDefaultRegion');
         if (defaultRegionSelect) {
-            this.populateGenericRegionSelect(defaultRegionSelect, '');
+            await this.populateGenericRegionSelect(defaultRegionSelect, '');
         }
         UI.showModal('addUserModal');
     },
 
-    createAddUserModal() {
+    async createAddUserModal() {
         const container = document.getElementById('modalsContainer');
         const modalId = 'addUserModal';
-        
+
         if (document.getElementById(modalId)) return;
 
         const modalHTML = `
@@ -1224,12 +1235,12 @@ const Admin = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
-        this.populateGenericRegionSelect(document.getElementById('newUserDefaultRegion'), '');
+        await this.populateGenericRegionSelect(document.getElementById('newUserDefaultRegion'), '');
     },
 
-    addUser(event) {
+    async addUser(event) {
         event.preventDefault();
-        
+
         const roles = [];
         document.querySelectorAll('.role-checkbox:checked').forEach(cb => {
             roles.push(cb.value);
@@ -1258,31 +1269,31 @@ const Admin = {
         };
 
         // Check if username already exists
-        if (DataManager.getUserByUsername(user.username)) {
+        if (await DataManager.getUserByUsername(user.username)) {
             UI.showNotification('Username already exists', 'error');
             return;
         }
 
-        DataManager.addUser(user);
+        await DataManager.addUser(user);
         UI.hideModal('addUserModal');
         UI.showNotification('User added successfully', 'success');
-        this.loadUsers();
-        
+        await this.loadUsers();
+
         // Reset form
         document.getElementById('addUserForm').reset();
     },
 
-    editUser(userId) {
-        const user = DataManager.getUserById(userId);
+    async editUser(userId) {
+        const user = await DataManager.getUserById(userId);
         if (!user) {
             UI.showNotification('User not found', 'error');
             return;
         }
-        this.createEditUserModal(user);
+        await this.createEditUserModal(user);
         UI.showModal('editUserModal');
     },
 
-    createEditUserModal(user) {
+    async createEditUserModal(user) {
         const container = document.getElementById('modalsContainer');
         const modalId = 'editUserModal';
 
@@ -1352,10 +1363,10 @@ const Admin = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
-        this.populateGenericRegionSelect(document.getElementById('editUserDefaultRegion'), user.defaultRegion || '');
+        await this.populateGenericRegionSelect(document.getElementById('editUserDefaultRegion'), user.defaultRegion || '');
     },
 
-    updateUser(event, userId) {
+    async updateUser(event, userId) {
         event.preventDefault();
 
         const email = document.getElementById('editUserEmail').value.trim();
@@ -1386,34 +1397,34 @@ const Admin = {
             updates.password = password.trim();
         }
 
-        const updated = DataManager.updateUser(userId, updates);
+        const updated = await DataManager.updateUser(userId, updates);
         if (updated) {
             if (typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function') {
                 const current = Auth.getCurrentUser();
                 if (current?.id === userId) {
                     Auth.currentUser = updated;
                     if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
-                        Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+                        Activities.currentSalesRepRegion = await Activities.getDefaultSalesRepRegion();
                     }
                 }
             }
             UI.hideModal('editUserModal');
             UI.showNotification('User updated successfully', 'success');
-            this.loadUsers();
+            await this.loadUsers();
         } else {
             UI.showNotification('Failed to update user', 'error');
         }
     },
 
-    deleteUser(userId) {
+    async deleteUser(userId) {
         if (!confirm('Are you sure you want to delete this user?')) return;
-        
-        DataManager.deleteUser(userId);
+
+        await DataManager.deleteUser(userId);
         UI.showNotification('User deleted successfully', 'success');
-        this.loadUsers();
+        await this.loadUsers();
     },
 
-    resetUserPassword(username) {
+    async resetUserPassword(username) {
         const raw = typeof username === 'string'
             ? username
             : (username && typeof username.getAttribute === 'function' ? username.getAttribute('data-username') : null) || '';
@@ -1431,33 +1442,66 @@ const Admin = {
             });
         };
 
-        tryApi()
-            .then((response) => {
+        try {
+            const response = await tryApi();
+            if (response.ok) {
+                const data = await response.json();
+                UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
+                return;
+            }
+            const body = await response.json();
+            throw new Error(body.message || 'Reset failed');
+        } catch (err) {
+            console.warn('Reset password API failed, trying local update', err);
+            const user = await DataManager.getUserByUsername(trimmed) || (await DataManager.getUsers()).find((u) =>
+                (u.email || '').toLowerCase() === trimmed.toLowerCase() ||
+                (String(u.username || '').toLowerCase()).replace(/\./g, ' ') === trimmed.toLowerCase()
+            );
+            if (user) {
+                await DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
+                UI.showNotification('Password reset (local). User can log in with ' + defaultPassword + '. If using remote storage, refresh and use Reset password again after deploy.', 'success');
+                await this.loadUsers();
+            } else {
+                UI.showNotification(err.message || 'Failed to reset password. User not found locally.', 'error');
+            }
+        }
+    },
+
+    forcePasswordChangeAll() {
+        if (!confirm('This will force all users with default passwords to change their password on next login. Continue?')) {
+            return;
+        }
+
+        UI.showNotification('Running force password change script...', 'info');
+
+        // Call server endpoint to run the script
+        fetch('/api/admin/force-password-change', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+            credentials: 'same-origin'
+        })
+            .then(response => {
                 if (response.ok) {
-                    return response.json().then((data) => {
-                        UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
-                    });
+                    return response.json();
                 }
                 return response.json()
-                    .then((b) => { throw new Error(b.message || 'Reset failed'); })
-                    .catch((e) => {
-                        if (e instanceof Error && e.message && e.message !== 'Reset failed') throw e;
-                        throw new Error('Reset failed: ' + response.status);
+                    .then(body => { throw new Error(body.message || 'Force password change failed'); })
+                    .catch(e => {
+                        if (e instanceof Error && e.message && e.message !== 'Force password change failed') throw e;
+                        throw new Error('Force password change failed: ' + response.status);
                     });
             })
-            .catch((err) => {
-                console.warn('Reset password API failed, trying local update', err);
-                const user = DataManager.getUserByUsername(trimmed) || DataManager.getUsers().find((u) =>
-                    (u.email || '').toLowerCase() === trimmed.toLowerCase() ||
-                    (String(u.username || '').toLowerCase()).replace(/\./g, ' ') === trimmed.toLowerCase()
-                );
-                if (user) {
-                    DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
-                    UI.showNotification('Password reset (local). User can log in with ' + defaultPassword + '. If using remote storage, refresh and use Reset password again after deploy.', 'success');
-                    this.loadUsers();
-                } else {
-                    UI.showNotification(err.message || 'Failed to reset password. User not found locally.', 'error');
-                }
+            .then(data => {
+                const count = data.count || 0;
+                const message = count > 0
+                    ? `Successfully set force_password_change for ${count} user(s). They will be prompted to change password on next login.`
+                    : 'No users needed password change enforcement.';
+                UI.showNotification(message, 'success');
+                this.loadUsers(); // Refresh the user list
+            })
+            .catch(err => {
+                console.error('Force password change failed:', err);
+                UI.showNotification(err.message || 'Failed to force password change', 'error');
             });
     },
 
@@ -1527,12 +1571,12 @@ const Admin = {
         this.salesRepFiltersInitialized = true;
     },
 
-    populateSalesRepRegionOptions(selectEl) {
+    async populateSalesRepRegionOptions(selectEl) {
         if (!selectEl || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
             return;
         }
 
-        const regions = DataManager.getRegions();
+        const regions = await DataManager.getRegions();
         const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
         const selectedValue = this.salesRepFilters.region || 'all';
 
@@ -1552,13 +1596,13 @@ const Admin = {
         }
     },
 
-    loadSalesReps() {
+    async loadSalesReps() {
         if (!this.salesRepFiltersInitialized) {
             this.initSalesRepFilters();
         } else {
             const regionSelect = document.getElementById('salesRepFilterRegion');
             if (regionSelect) {
-                this.populateSalesRepRegionOptions(regionSelect);
+                await this.populateSalesRepRegionOptions(regionSelect);
             }
             const searchInput = document.getElementById('salesRepFilterSearch');
             if (searchInput) {
@@ -1566,14 +1610,14 @@ const Admin = {
             }
         }
 
-        const salesReps = DataManager.getGlobalSalesReps();
+        const salesReps = await DataManager.getGlobalSalesReps();
         const container = document.getElementById('salesRepsList');
         const summaryEl = document.getElementById('salesRepsSummary');
         if (!container) return;
 
         const regionSelect = document.getElementById('salesRepFilterRegion');
         if (regionSelect) {
-            this.populateSalesRepRegionOptions(regionSelect);
+            await this.populateSalesRepRegionOptions(regionSelect);
         }
 
         const statusEl = document.getElementById('salesRepFilterStatus');
@@ -1653,15 +1697,16 @@ const Admin = {
         container.innerHTML = html;
     },
 
-    showAddSalesRepModal() {
+    async showAddSalesRepModal() {
         const container = document.getElementById('modalsContainer');
         const modalId = 'addSalesRepModal';
-        
+
         if (document.getElementById(modalId)) {
             UI.showModal(modalId);
             return;
         }
 
+        const regions = await DataManager.getRegions();
         const modalHTML = `
             <div id="${modalId}" class="modal">
                 <div class="modal-content">
@@ -1684,7 +1729,7 @@ const Admin = {
                             <div style="display: flex; gap: 0.5rem;">
                                 <select class="form-control" id="salesRepRegion" required style="flex: 1;">
                                     <option value="">Select Region</option>
-                                    ${DataManager.getRegions().map(r => `<option value="${r}">${r}</option>`).join('')}
+                                    ${regions.map(r => `<option value="${r}">${r}</option>`).join('')}
                                 </select>
                                 <button type="button" class="btn btn-secondary" onclick="Admin.showAddRegionModal()" style="white-space: nowrap;">+ Add New</button>
                             </div>
@@ -1725,9 +1770,9 @@ const Admin = {
         }
     },
 
-    addSalesRep(event) {
+    async addSalesRep(event) {
         event.preventDefault();
-        
+
         const name = document.getElementById('salesRepName').value.trim();
         const email = document.getElementById('salesRepEmail').value.trim();
         const region = document.getElementById('salesRepRegion').value;
@@ -1753,11 +1798,11 @@ const Admin = {
             isActive: true
         };
 
-        const result = DataManager.addGlobalSalesRep(salesRep);
+        const result = await DataManager.addGlobalSalesRep(salesRep);
         if (result && !result.error) {
             UI.hideModal('addSalesRepModal');
             UI.showNotification('Sales user added successfully', 'success');
-            this.loadSalesReps();
+            await this.loadSalesReps();
             document.getElementById('addSalesRepForm').reset();
         } else if (result && result.error) {
             UI.showNotification(result.message || 'Failed to add sales user', 'error');
@@ -1766,17 +1811,19 @@ const Admin = {
         }
     },
 
-    editSalesRep(salesRepId) {
-        const salesRep = DataManager.getGlobalSalesReps().find(r => r.id === salesRepId);
+    async editSalesRep(salesRepId) {
+        const salesReps = await DataManager.getGlobalSalesReps();
+        const salesRep = salesReps.find(r => r.id === salesRepId);
         if (!salesRep) return;
 
         const container = document.getElementById('modalsContainer');
         const modalId = 'editSalesRepModal';
-        
+
         if (document.getElementById(modalId)) {
             document.getElementById(modalId).remove();
         }
 
+        const regions = await DataManager.getRegions();
         const modalHTML = `
             <div id="${modalId}" class="modal">
                 <div class="modal-content">
@@ -1797,9 +1844,9 @@ const Admin = {
                             <label class="form-label required">Region</label>
                             <select class="form-control" id="editSalesRepRegion" required>
                                 <option value="">Select Region</option>
-                                ${DataManager.getRegions().map(r => 
-                                    `<option value="${r}" ${r === salesRep.region ? 'selected' : ''}>${r}</option>`
-                                ).join('')}
+                                ${regions.map(r =>
+            `<option value="${r}" ${r === salesRep.region ? 'selected' : ''}>${r}</option>`
+        ).join('')}
                             </select>
                         </div>
                         <div class="form-group">
@@ -1834,9 +1881,9 @@ const Admin = {
         UI.showModal(modalId);
     },
 
-    updateSalesRep(event, salesRepId) {
+    async updateSalesRep(event, salesRepId) {
         event.preventDefault();
-        
+
         const name = document.getElementById('editSalesRepName').value.trim();
         const email = document.getElementById('editSalesRepEmail').value.trim();
         const region = document.getElementById('editSalesRepRegion').value;
@@ -1855,7 +1902,7 @@ const Admin = {
             return;
         }
 
-        const updated = DataManager.updateGlobalSalesRep(salesRepId, {
+        const updated = await DataManager.updateGlobalSalesRep(salesRepId, {
             name: name,
             email: email,
             region: region,
@@ -1867,37 +1914,37 @@ const Admin = {
         if (updated) {
             UI.hideModal('editSalesRepModal');
             UI.showNotification('Sales rep updated successfully', 'success');
-            this.loadSalesReps();
+            await this.loadSalesReps();
         } else {
             UI.showNotification('Failed to update sales rep', 'error');
         }
     },
 
-    deleteSalesRep(salesRepId) {
+    async deleteSalesRep(salesRepId) {
         if (!confirm('Are you sure you want to delete this sales user?')) return;
-        
-        DataManager.deleteGlobalSalesRep(salesRepId);
+
+        await DataManager.deleteGlobalSalesRep(salesRepId);
         UI.showNotification('Sales user deleted successfully', 'success');
-        this.loadSalesReps();
+        await this.loadSalesReps();
     },
 
     // Show add region modal
-    showAddRegionModal() {
+    async showAddRegionModal() {
         const region = prompt('Enter new region name:');
         if (region && region.trim()) {
-            DataManager.addRegion(region.trim());
+            await DataManager.addRegion(region.trim());
             // Refresh all region dropdowns
-            this.refreshRegionDropdowns();
-            this.loadSalesReps();
+            await this.refreshRegionDropdowns();
+            await this.loadSalesReps();
             if (this.loadedSections.has('regions')) {
-                this.renderRegionsPanel();
+                await this.renderRegionsPanel();
             }
             UI.showNotification('Region added successfully', 'success');
         }
     },
 
-    refreshRegionDropdowns() {
-        const regions = DataManager.getRegions();
+    async refreshRegionDropdowns() {
+        const regions = await DataManager.getRegions();
 
         if (!regions.includes(this.salesRepFilters.region)) {
             this.salesRepFilters.region = 'all';
@@ -1905,28 +1952,28 @@ const Admin = {
 
         const filterSelect = document.getElementById('salesRepFilterRegion');
         if (filterSelect) {
-            this.populateSalesRepRegionOptions(filterSelect);
+            await this.populateSalesRepRegionOptions(filterSelect);
         }
 
         const addUserDefaultSelect = document.getElementById('newUserDefaultRegion');
         if (addUserDefaultSelect) {
-            this.populateGenericRegionSelect(addUserDefaultSelect, addUserDefaultSelect.value || '');
+            await this.populateGenericRegionSelect(addUserDefaultSelect, addUserDefaultSelect.value || '');
         }
 
         const editUserDefaultSelect = document.getElementById('editUserDefaultRegion');
         if (editUserDefaultSelect) {
-            this.populateGenericRegionSelect(editUserDefaultSelect, editUserDefaultSelect.value || '');
+            await this.populateGenericRegionSelect(editUserDefaultSelect, editUserDefaultSelect.value || '');
         }
 
         if (typeof Activities !== 'undefined') {
             if (Activities.currentSalesRepRegion && !regions.includes(Activities.currentSalesRepRegion)) {
-                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+                Activities.currentSalesRepRegion = await Activities.getDefaultSalesRepRegion();
             }
             if (typeof Activities.populateSalesRepRegionOptions === 'function') {
-                Activities.populateSalesRepRegionOptions(Activities.currentSalesRepRegion);
+                await Activities.populateSalesRepRegionOptions(Activities.currentSalesRepRegion);
             }
             if (typeof Activities.populateSalesRepOptions === 'function') {
-                Activities.populateSalesRepOptions(Activities.currentSalesRepRegion);
+                await Activities.populateSalesRepOptions(Activities.currentSalesRepRegion);
             }
         }
 
@@ -1938,7 +1985,7 @@ const Admin = {
 
         if (typeof App !== 'undefined') {
             if (App.currentView === 'reports' && typeof App.populateReportFilters === 'function') {
-                App.populateReportFilters(DataManager.getAllActivities());
+                App.populateReportFilters(await DataManager.getAllActivities());
                 const reportFilterEl = document.getElementById('reportRegionFilter');
                 if (
                     reportFilterEl &&
@@ -1949,16 +1996,16 @@ const Admin = {
                 }
             }
             if (App.currentView === 'activities' && typeof App.loadActivitiesView === 'function') {
-                App.loadActivitiesView();
+                await App.loadActivitiesView();
             }
         }
     },
 
-    populateGenericRegionSelect(selectEl, selectedValue = '', { includeBlank = true, blankLabel = 'No default region' } = {}) {
+    async populateGenericRegionSelect(selectEl, selectedValue = '', { includeBlank = true, blankLabel = 'No default region' } = {}) {
         if (!selectEl || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
             return;
         }
-        const regions = DataManager.getRegions();
+        const regions = await DataManager.getRegions();
         const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
         const requested = (selectedValue || '').trim();
         let options = '';
@@ -1976,19 +2023,19 @@ const Admin = {
         }
     },
 
-    renderRegionsPanel() {
+    async renderRegionsPanel() {
         const container = document.getElementById('regionsList');
         if (!container) return;
 
-        const regions = DataManager.getRegions();
+        const regions = await DataManager.getRegions();
         if (!regions.length) {
             container.innerHTML = '<div class="admin-empty-state"><div class="admin-empty-state-icon">🌍</div><p>No regions configured</p></div>';
             return;
         }
 
         let html = '';
-        regions.forEach(region => {
-            const usage = DataManager.getRegionUsage(region);
+        for (const region of regions) {
+            const usage = await DataManager.getRegionUsage(region);
             const isDefault = DataManager.isDefaultRegion(region);
             const totalUsage =
                 (usage.salesReps || 0) +
@@ -2017,48 +2064,49 @@ const Admin = {
                         ${deleteButton}
                 </div>
             `;
-        });
+        }
 
         container.innerHTML = html;
     },
 
-    handleRegionDelete(event) {
+    async handleRegionDelete(event) {
         const button = event?.currentTarget;
         if (!button) return;
         const encoded = button.dataset?.region;
         if (!encoded) return;
 
         const region = decodeURIComponent(encoded);
-        const result = DataManager.removeRegion(region);
+        const result = await DataManager.removeRegion(region);
         if (!result?.success) {
             UI.showNotification(result?.message || 'Unable to remove region.', (result?.usage ? 'warning' : 'error'));
             return;
         }
 
         UI.showNotification(`Region "${region}" removed.`, 'success');
-        this.renderRegionsPanel();
-        this.refreshRegionDropdowns();
-        this.loadSalesReps();
+        await this.renderRegionsPanel();
+        await this.refreshRegionDropdowns();
+        await this.loadSalesReps();
     },
 
-    pruneUnusedRegions() {
-        const summary = DataManager.pruneUnusedRegions();
+    async pruneUnusedRegions() {
+        const summary = await DataManager.pruneUnusedRegions();
         const removed = summary?.removed || [];
         if (!removed.length) {
             UI.showNotification('No unused regions to remove.', 'info');
         } else {
             UI.showNotification(`Removed ${removed.length} unused region${removed.length > 1 ? 's' : ''}: ${removed.join(', ')}`, 'success');
         }
-        this.renderRegionsPanel();
-        this.refreshRegionDropdowns();
-        this.loadSalesReps();
+        await this.renderRegionsPanel();
+        await this.refreshRegionDropdowns();
+        await this.loadSalesReps();
     },
 
 
     // Sandbox Access (ex-POC Sandbox) – submission date + 7 days = end date; active from Jan 2026, closed/archive with Migrated data tag
-    loadPOCSandbox() {
-        const activities = DataManager.getAllActivities();
-        const allPoc = (activities || []).filter(a => a.type === 'poc');
+    async loadPOCSandbox() {
+        const raw = await DataManager.getAllActivities();
+        const activities = Array.isArray(raw) ? raw : [];
+        const allPoc = activities.filter(a => a.type === 'poc');
         const submissionToEnd = (a) => {
             const sub = a.date || a.createdAt || '';
             if (!sub) return null;
@@ -2089,7 +2137,7 @@ const Admin = {
             accountFilter.innerHTML = html;
         }
 
-        this.filterPOCSandbox(active);
+        await this.filterPOCSandbox(active);
     },
 
     pocSandboxView: 'active', // 'active' | 'closed'
@@ -2103,14 +2151,15 @@ const Admin = {
         this.filterPOCSandbox(activities, tab === 'closed');
     },
 
-    filterPOCSandbox(activities = null, showClosed = null) {
+    async filterPOCSandbox(activities = null, showClosed = null) {
         const isClosed = showClosed === true || (showClosed === null && this.pocSandboxView === 'closed');
-        if (!activities) {
-            activities = isClosed ? (this.pocClosedActivities || []) : (this.pocActiveActivities || []);
+        if (!activities || !Array.isArray(activities)) {
+            activities = isClosed ? (Array.isArray(this.pocClosedActivities) ? this.pocClosedActivities : []) : (Array.isArray(this.pocActiveActivities) ? this.pocActiveActivities : []);
         }
-        if (!activities) {
-            const allActivities = DataManager.getAllActivities();
-            activities = (allActivities || []).filter(a => a.type === 'poc');
+        if (!activities.length) {
+            const allActivities = await DataManager.getAllActivities();
+            const list = Array.isArray(allActivities) ? allActivities : [];
+            activities = list.filter(a => a.type === 'poc');
         }
 
         const statusFilter = document.getElementById('pocStatusFilter')?.value;
@@ -2220,27 +2269,27 @@ const Admin = {
         container.innerHTML = html;
     },
 
-    updatePOCEnvironment(activityId, envName) {
+    async updatePOCEnvironment(activityId, envName) {
         try {
             // Update in external activities
-            const activities = DataManager.getActivities();
+            const activities = await DataManager.getActivities();
             const activity = activities.find(a => a.id === activityId);
             if (activity && activity.details) {
                 activity.details.pocEnvironmentName = envName.trim();
-                DataManager.saveActivities(activities);
+                await DataManager.saveActivities(activities);
                 UI.showNotification('POC Environment Name updated', 'success');
-                this.loadPOCSandbox(); // Refresh table
+                await this.loadPOCSandbox(); // Refresh table
                 return;
             }
-            
+
             // If not found, try internal activities (shouldn't happen for POC, but just in case)
-            const internalActivities = DataManager.getInternalActivities();
+            const internalActivities = await DataManager.getInternalActivities();
             const internalActivity = internalActivities.find(a => a.id === activityId);
             if (internalActivity && internalActivity.details) {
                 internalActivity.details.pocEnvironmentName = envName.trim();
-                DataManager.saveInternalActivities(internalActivities);
+                await DataManager.saveInternalActivities(internalActivities);
                 UI.showNotification('POC Environment Name updated', 'success');
-                this.loadPOCSandbox(); // Refresh table
+                await this.loadPOCSandbox(); // Refresh table
             }
         } catch (error) {
             console.error('Error updating POC environment:', error);
@@ -2248,27 +2297,27 @@ const Admin = {
         }
     },
 
-    updatePOCStatus(activityId, status) {
+    async updatePOCStatus(activityId, status) {
         try {
             // Update in external activities
-            const activities = DataManager.getActivities();
+            const activities = await DataManager.getActivities();
             const activity = activities.find(a => a.id === activityId);
             if (activity && activity.details) {
                 activity.details.assignedStatus = status;
-                DataManager.saveActivities(activities);
+                await DataManager.saveActivities(activities);
                 UI.showNotification('POC Status updated', 'success');
-                this.loadPOCSandbox(); // Refresh table
+                await this.loadPOCSandbox(); // Refresh table
                 return;
             }
-            
+
             // If not found, try internal activities (shouldn't happen for POC, but just in case)
-            const internalActivities = DataManager.getInternalActivities();
+            const internalActivities = await DataManager.getInternalActivities();
             const internalActivity = internalActivities.find(a => a.id === activityId);
             if (internalActivity && internalActivity.details) {
                 internalActivity.details.assignedStatus = status;
-                DataManager.saveInternalActivities(internalActivities);
+                await DataManager.saveInternalActivities(internalActivities);
                 UI.showNotification('POC Status updated', 'success');
-                this.loadPOCSandbox(); // Refresh table
+                await this.loadPOCSandbox(); // Refresh table
             }
         } catch (error) {
             console.error('Error updating POC status:', error);
@@ -2869,7 +2918,7 @@ const Admin = {
         });
     },
 
-    exportMonthlyCsv() {
+    async exportMonthlyCsv() {
         if (typeof App !== 'undefined' && !App.isFeatureEnabled('adminCsvExport')) {
             UI.showNotification('Admin CSV export is currently disabled.', 'info');
             return;
@@ -2880,7 +2929,7 @@ const Admin = {
             ? monthInput.value
             : new Date().toISOString().substring(0, 7);
 
-        const allActivities = DataManager.getAllActivities();
+        const allActivities = await DataManager.getAllActivities();
         const resolveMonth = DataManager.resolveActivityMonth
             ? (a) => DataManager.resolveActivityMonth(a)
             : (a) => (a.date || '').substring(0, 7);
@@ -2900,7 +2949,7 @@ const Admin = {
         const csvRows = [header, ...rows];
         const filename = `pams_activities_${selectedMonth}.csv`;
         if (typeof App !== 'undefined' && typeof App.downloadCsv === 'function') {
-            App.downloadCsv(filename, csvRows);
+            await App.downloadCsv(filename, csvRows);
         } else {
             const csv = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -2915,7 +2964,7 @@ const Admin = {
         }
         UI.showNotification(`Exported ${rows.length} activities for ${selectedMonth}.`, 'success');
         if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
-            Audit.log({
+            await Audit.log({
                 action: 'report.export',
                 entity: 'monthlyActivities',
                 entityId: selectedMonth,
@@ -2924,7 +2973,7 @@ const Admin = {
         }
     },
 
-    promptClearAllActivities() {
+    async promptClearAllActivities() {
         if (this.clearActivitiesInProgress) {
             return;
         }
@@ -2936,31 +2985,31 @@ const Admin = {
 
         try {
             this.clearActivitiesInProgress = true;
-            DataManager.clearAllActivities({ includeInternal: true });
+            await DataManager.clearAllActivities({ includeInternal: true });
             UI.showNotification('All activity records cleared successfully.', 'success');
-            this.loadActivityLogs(true);
+            await this.loadActivityLogs(true);
 
             if (typeof App !== 'undefined') {
                 if (typeof App.loadDashboard === 'function') {
-                    App.loadDashboard();
+                    await App.loadDashboard();
                 }
                 if (App.currentView === 'activities' && typeof App.loadActivitiesView === 'function') {
-                    App.loadActivitiesView();
+                    await App.loadActivitiesView();
                 }
                 if (App.currentView === 'reports' && typeof App.loadReports === 'function') {
-                    App.loadReports();
+                    await App.loadReports();
                 }
                 if (App.currentView === 'projectHealth' && typeof App.loadProjectHealthView === 'function') {
-                    App.loadProjectHealthView();
+                    await App.loadProjectHealthView();
                 }
                 if (App.currentView === 'winloss' && typeof App.loadWinLossView === 'function') {
-                    App.loadWinLossView();
+                    await App.loadWinLossView();
                 }
                 if (App.currentView === 'sfdcCompliance' && typeof App.loadSfdcComplianceView === 'function') {
-                    App.loadSfdcComplianceView();
+                    await App.loadSfdcComplianceView();
                 }
                 if (App.currentView === 'accounts' && typeof App.loadAccountsView === 'function') {
-                    App.loadAccountsView();
+                    await App.loadAccountsView();
                 }
             }
         } catch (error) {

@@ -226,6 +226,43 @@ The snapshot file **backups/storage-snapshot-latest.json** includes:
 
 The backup does **not** filter keys: it exports **every key** returned by the storage API. So anything your app writes to remote storage (including any future keys) is included. The only data not in this backup is anything that lives **outside** the storage API (e.g. other DB tables or external services); for PAMS, app state is in storage, so the snapshot is a full backup of that state.
 
+**Feedback keys in every backup:** The export script explicitly ensures `suggestionsAndBugs`, `pendingIndustries`, and `pendingUseCases` are always fetched and written to the snapshot (even if the server key list omitted them), so user suggestions and bugs are included in daily and pre-deploy backups.
+
+---
+
+## Recovering suggestions and bugs from a backup
+
+If suggestions/bugs or pending industry/use-case suggestions were lost, you can recover them from any snapshot file.
+
+### 1. See what's in a snapshot
+
+From the project root:
+
+```bash
+node server/scripts/extract-feedback-from-snapshot.js backups/storage-snapshot-latest.json
+```
+
+To save the extracted data to a file:
+
+```bash
+node server/scripts/extract-feedback-from-snapshot.js backups/storage-snapshot-latest.json --out recovered-feedback.json
+```
+
+Use any snapshot you have (e.g. `backups/pre-deploy-*.json` or a file from git history).
+
+### 2. Restore only feedback keys to live storage
+
+To push **only** suggestions/bugs and pending items back to the live app (without overwriting activities, users, etc.):
+
+```bash
+set REMOTE_STORAGE_BASE=https://your-app.up.railway.app/api/storage
+set REMOTE_STORAGE_USER=storage-proxy
+set RESTORE_KEYS=suggestionsAndBugs,pendingIndustries,pendingUseCases
+node server/scripts/restore-storage-from-snapshot.js backups/storage-snapshot-latest.json
+```
+
+(On Linux/macOS use `export` instead of `set`.) Then reload the app to see the restored suggestions and pending items.
+
 ---
 
 ## Prerequisites

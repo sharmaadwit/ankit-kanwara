@@ -10,9 +10,12 @@
     "test": "jest",
     "uptime": "node server/scripts/uptime.js",
     "backup": "node server/scripts/export-storage-snapshot.js",
+    "download-january": "node scripts/download-and-refresh-january.js",
     "backup-before-deploy": "node scripts/snapshot-before-deploy.js",
     "snapshot-before-deploy": "node scripts/snapshot-before-deploy.js",
     "restore": "node server/scripts/restore-storage-from-snapshot.js",
+    "extract-feedback": "node server/scripts/extract-feedback-from-snapshot.js",
+    "restore-feedback": "node server/scripts/restore-storage-from-snapshot.js",
     "push-january": "node scripts/push-january-merged.js",
     "compare-backups": "node scripts/compare-backups-winloss.js",
     "logins-last-hour": "node server/scripts/logins-last-hour.js"
@@ -21,7 +24,10 @@
     "node": ">=18"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "docx": "^9.5.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.2.1",

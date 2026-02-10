@@ -184,6 +184,25 @@ const main = async () => {
         }
     }
 
+    // Ensure feedback/config keys are always in backup (fetch if missing or failed)
+    const feedbackKeys = ['suggestionsAndBugs', 'pendingIndustries', 'pendingUseCases'];
+    for (const key of feedbackKeys) {
+        const current = snapshot.data[key];
+        if (current === undefined || (current && typeof current === 'object' && current.error)) {
+            process.stdout.write(`   ↳ ${key} (required) ... `);
+            try {
+                const value = await fetchValue(base, key, fetchImpl, headers);
+                snapshot.data[key] = value;
+                console.log('ok');
+            } catch (error) {
+                console.log(`failed (${error.message})`);
+                snapshot.data[key] = snapshot.data[key] && typeof snapshot.data[key] === 'object' && snapshot.data[key].error
+                    ? snapshot.data[key]
+                    : { error: error.message };
+            }
+        }
+    }
+
     let outputPath;
     const outArg = process.argv[3]; // optional: node script.js [base] <outputPath>
     if (outArg) {

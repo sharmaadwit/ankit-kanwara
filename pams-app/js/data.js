@@ -112,6 +112,8 @@ const ANALYTICS_ACCESS_CONFIG_KEY = 'analyticsAccessConfig';
 const ANALYTICS_TABLE_PRESETS_KEY = 'analyticsTablePresets';
 const INDUSTRY_USE_CASES_KEY = 'industryUseCases';
 const PENDING_INDUSTRIES_KEY = 'pendingIndustries';
+const PENDING_USE_CASES_KEY = 'pendingUseCases';
+const SUGGESTIONS_AND_BUGS_KEY = 'suggestionsAndBugs';
 const UNIVERSAL_USE_CASES_KEY = 'universalUseCases';
 
 const DEFAULT_INDUSTRY_USE_CASES = {
@@ -223,7 +225,8 @@ const DataManager = {
             }
 
             // Initialize industries if none exist
-            if (!this.getIndustries().length) {
+            const existingIndustries = await this.getIndustries();
+            if (!existingIndustries.length) {
                 const defaultIndustries = [
                     'Banking', 'Fintech', 'Insurance', 'IT & Software', 'Retail',
                     'CPG & FMCG', 'Healthcare', 'Pharma & Life Sciences', 'Manufacturing',
@@ -242,14 +245,15 @@ const DataManager = {
                 this.saveIndustries(industries);
             }
             // Initialize regions if none exist
-            if (!this.getRegions().length) {
+            const existingRegions = await this.getRegions();
+            if (!existingRegions.length) {
                 this.saveRegions([...DEFAULT_SALES_REGIONS]);
             } else {
-                this.ensureRegionBaseline();
+                await this.ensureRegionBaseline();
             }
 
             // Initialize / ensure sales rep roster
-            let salesReps = this.getGlobalSalesReps();
+            let salesReps = await this.getGlobalSalesReps();
             if (!salesReps.length) {
                 salesReps = DEFAULT_SALES_REPS.map(rep => ({
                     id: this.generateId(),
@@ -272,7 +276,7 @@ const DataManager = {
                 });
                 let mutated = false;
 
-                const configuredRegionsSet = new Set(this.getRegions());
+                const configuredRegionsSet = new Set(await this.getRegions());
                 DEFAULT_SALES_REPS.forEach(rep => {
                     const emailKey = rep.email.toLowerCase();
                     if (!emailIndex.has(emailKey)) {
@@ -695,7 +699,8 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
-                const rawUsers = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const parsed = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const rawUsers = Array.isArray(parsed) ? parsed : [];
                 const normalized = rawUsers.map(user => {
                     const defaultRegion =
                         typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
@@ -717,7 +722,7 @@ const DataManager = {
         }
         // Sync fallback (for initial load or if async not available)
         const stored = localStorage.getItem('users');
-        const rawUsers = stored ? JSON.parse(stored) : [];
+        const rawUsers = stored ? (() => { try { const p = JSON.parse(stored); return Array.isArray(p) ? p : []; } catch (_) { return []; } })() : [];
         const normalized = rawUsers.map(user => {
             const defaultRegion =
                 typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
@@ -1005,7 +1010,8 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
-                const industries = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const raw = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const industries = Array.isArray(raw) ? raw : [];
                 this.cache.industries = industries;
                 return industries;
             } catch (err) {
@@ -1013,7 +1019,7 @@ const DataManager = {
             }
         }
         const stored = localStorage.getItem(key);
-        const industries = stored ? JSON.parse(stored) : [];
+        let industries = stored ? (() => { try { const p = JSON.parse(stored); return Array.isArray(p) ? p : []; } catch (_) { return []; } })() : [];
         this.cache.industries = industries;
         return industries;
     },
@@ -1049,7 +1055,7 @@ const DataManager = {
 
     // Industry Use Cases (per-industry)
     async getIndustryUseCases() {
-        const key = INDUSTRY_USE_CASES_KEY;
+        const key = (typeof INDUSTRY_USE_CASES_KEY !== 'undefined' ? INDUSTRY_USE_CASES_KEY : 'industryUseCases');
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
@@ -1088,8 +1094,9 @@ const DataManager = {
             }
         }
         try {
-            const store = this.getLocalStorage();
-            const data = store.getItem(key);
+            const storage = typeof this.getLocalStorage === 'function' ? this.getLocalStorage() : (typeof localStorage !== 'undefined' ? localStorage : null);
+            if (!storage) return [];
+            const data = storage.getItem(key);
             return data ? JSON.parse(data) : [];
         } catch (e) {
             return [];
@@ -1109,8 +1116,8 @@ const DataManager = {
             }
         }
         try {
-            const store = this.getLocalStorage();
-            store.setItem(key, payload);
+            const storage = typeof this.getLocalStorage === 'function' ? this.getLocalStorage() : (typeof localStorage !== 'undefined' ? localStorage : null);
+            if (storage) storage.setItem(key, payload);
         } catch (e) {
             console.error('Failed to save universal use cases:', e);
         }
