@@ -512,7 +512,7 @@ const Admin = {
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
             const rawIndustries = typeof DataManager !== 'undefined' ? await DataManager.getIndustries() : [];
-            const industries = Array.isArray(rawIndustries) ? rawIndustries : [];
+            const industries = (Array.isArray(rawIndustries) ? rawIndustries : []).sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
             await this.renderUseCasesForIndustry();
@@ -595,14 +595,17 @@ const Admin = {
         const container = document.getElementById('adminIndustriesList') || document.getElementById('adminIndustriesListConfig');
         if (!container) return;
         const raw = typeof DataManager !== 'undefined' ? await DataManager.getIndustries() : [];
-        const industries = Array.isArray(raw) ? raw : [];
+        const industries = (Array.isArray(raw) ? raw : []).sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
         container.innerHTML = industries.length === 0
             ? '<div class="admin-empty-state"><div class="admin-empty-state-icon">📋</div><p>No industries yet. Add one above.</p></div>'
             : industries.map(ind => {
                 const attrVal = (ind || '').replace(/"/g, '&quot;');
                 return `<div class="admin-list-row">
                     <span>${ind}</span>
-                    <button type="button" class="btn btn-danger btn-xs" data-industry="${attrVal}" onclick="Admin.removeIndustryFromAdmin(this.getAttribute('data-industry'))">Remove</button>
+                    <span style="display: flex; gap: 0.25rem;">
+                        <button type="button" class="btn btn-outline btn-xs" data-industry="${attrVal}" onclick="Admin.editIndustryFromAdmin(this.getAttribute('data-industry'))">Edit</button>
+                        <button type="button" class="btn btn-danger btn-xs" data-industry="${attrVal}" onclick="Admin.removeIndustryFromAdmin(this.getAttribute('data-industry'))">Remove</button>
+                    </span>
                 </div>`;
             }).join('');
     },
@@ -622,11 +625,36 @@ const Admin = {
         await this.renderAdminIndustriesList();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
         if (industrySelect) {
-            const industries = await DataManager.getIndustries();
+            const raw = await DataManager.getIndustries();
+            const industries = (Array.isArray(raw) ? raw : []).sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
         }
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry added.', 'success');
+    },
+
+    async editIndustryFromAdmin(currentName) {
+        if (!currentName) return;
+        const newName = window.prompt('Edit industry name:', currentName);
+        if (newName == null || (newName && newName.trim() === '') || newName.trim() === currentName) return;
+        if (typeof DataManager === 'undefined' || !DataManager.renameIndustry) return;
+        const result = await DataManager.renameIndustry(currentName, newName.trim());
+        if (!result.success) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Rename failed.', 'error');
+            return;
+        }
+        await this.renderAdminIndustriesList();
+        const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
+        if (industrySelect) {
+            const raw = await DataManager.getIndustries();
+            const industries = (Array.isArray(raw) ? raw : []).sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
+            const sel = industrySelect.value;
+            industrySelect.innerHTML = '<option value="">Select industry...</option>' +
+                industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
+            industrySelect.value = (sel === currentName ? newName.trim() : sel) || '';
+        }
+        await this.renderUseCasesForIndustry();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.accountsUpdated > 0 ? `Industry renamed. ${result.accountsUpdated} account(s) updated.` : 'Industry renamed.', 'success');
     },
 
     async removeIndustryFromAdmin(industry) {
@@ -690,7 +718,8 @@ const Admin = {
         await this.updatePendingBadges();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect');
         if (industrySelect) {
-            const industries = await DataManager.getIndustries();
+            const raw = await DataManager.getIndustries();
+            const industries = (Array.isArray(raw) ? raw : []).sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 industries.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
         }
@@ -757,7 +786,10 @@ const Admin = {
                     const indAttr = (industry || '').replace(/"/g, '&quot;');
                     return `<div class="admin-list-row">
                         <span>${uc}</span>
-                        <button type="button" class="btn btn-danger btn-xs" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.removeUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Remove</button>
+                        <span style="display: flex; gap: 0.25rem;">
+                            <button type="button" class="btn btn-outline btn-xs" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.editUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Edit</button>
+                            <button type="button" class="btn btn-danger btn-xs" data-use-case="${ucAttr}" data-industry="${indAttr}" onclick="Admin.removeUseCaseFromAdmin(this.getAttribute('data-industry'), this.getAttribute('data-use-case'))">Remove</button>
+                        </span>
                     </div>`;
                 }).join('');
         }
@@ -778,6 +810,21 @@ const Admin = {
         input.value = '';
         await this.renderUseCasesForIndustry();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Use case added.', 'success');
+    },
+
+    async editUseCaseFromAdmin(industry, currentName) {
+        if (!industry || !currentName) return;
+        const newName = window.prompt('Edit use case name:', currentName);
+        if (newName == null || (newName && newName.trim() === '') || newName.trim() === currentName) return;
+        if (typeof DataManager === 'undefined' || !DataManager.renameUseCaseInIndustry) return;
+        const result = await DataManager.renameUseCaseInIndustry(industry, currentName, newName.trim());
+        if (!result.success) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Rename failed.', 'error');
+            return;
+        }
+        await this.renderUseCasesForIndustry();
+        await this.renderAdminPendingUseCases();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.projectsUpdated > 0 ? `Use case renamed. ${result.projectsUpdated} project(s) updated.` : 'Use case renamed.', 'success');
     },
 
     async removeUseCaseFromAdmin(industry, useCase) {

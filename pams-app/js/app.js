@@ -4626,7 +4626,7 @@ const App = {
         if (value === null || value === undefined || value === '') return '';
         const numericValue = Number(value);
         if (!Number.isFinite(numericValue)) return String(value);
-        const symbol = this.CURRENCY_SYMBOLS[currencyCode] || '';
+        const symbol = this.CURRENCY_SYMBOLS[currencyCode] || (currencyCode === 'BRL' ? 'R$' : '');
         const formatted = numericValue.toLocaleString(undefined, {
             minimumFractionDigits: options.minimumFractionDigits ?? 2,
             maximumFractionDigits: options.maximumFractionDigits ?? 2

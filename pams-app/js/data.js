@@ -1078,9 +1078,17 @@ const DataManager = {
 
     async getUseCasesForIndustry(industry) {
         if (!industry || typeof industry !== 'string') return [];
+        const trimmed = industry.trim();
         const map = await this.getIndustryUseCases();
-        const list = map[industry.trim()];
-        return Array.isArray(list) ? [...list] : [];
+        let list = map[trimmed];
+        if (!Array.isArray(list) || list.length === 0) {
+            const defaults = DEFAULT_INDUSTRY_USE_CASES[trimmed] || ['Marketing', 'Commerce', 'Support', 'Customer Support', 'Other'];
+            const sorted = [...defaults].sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
+            map[trimmed] = sorted;
+            await this.saveIndustryUseCases(map);
+            list = sorted;
+        }
+        return [...list].sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
     },
 
     async getUniversalUseCases() {
@@ -1141,7 +1149,8 @@ const DataManager = {
         const trimmed = industry && typeof industry === 'string' ? industry.trim() : '';
         if (!trimmed) return;
         const map = await this.getIndustryUseCases();
-        map[trimmed] = Array.isArray(useCases) ? useCases : [];
+        const list = Array.isArray(useCases) ? useCases : [];
+        map[trimmed] = [...list].sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
         await this.saveIndustryUseCases(map);
     },
 
@@ -1165,8 +1174,8 @@ const DataManager = {
         let changed = false;
         industries.forEach(ind => {
             if (!Array.isArray(map[ind]) || !map[ind].length) {
-                const defaults = DEFAULT_INDUSTRY_USE_CASES[ind];
-                map[ind] = Array.isArray(defaults) ? [...defaults] : ['Marketing', 'Commerce', 'Support'];
+                const defaults = DEFAULT_INDUSTRY_USE_CASES[ind] || ['Marketing', 'Commerce', 'Support', 'Customer Support', 'Other'];
+                map[ind] = [...defaults];
                 changed = true;
             }
         });
@@ -1418,6 +1427,65 @@ const DataManager = {
         });
         if (projectsUpdated > 0) await this.saveAccounts(accounts);
         await this.rejectPendingUseCase(fromVal, ind);
+        return { success: true, projectsUpdated };
+    },
+
+    /** Rename an industry; updates industries list, industryUseCases map, and all account.industry. */
+    async renameIndustry(oldName, newName) {
+        const fromVal = (oldName && typeof oldName === 'string' ? oldName.trim() : '') || '';
+        const toVal = (newName && typeof newName === 'string' ? newName.trim() : '') || '';
+        if (!fromVal || !toVal || fromVal === toVal) return { success: false, message: 'Different names required.' };
+        const industries = await this.getIndustries();
+        if (!industries.includes(fromVal)) return { success: false, message: 'Industry not found.' };
+        if (industries.includes(toVal)) return { success: false, message: 'Target name already exists.' };
+        const map = await this.getIndustryUseCases();
+        const newIndustries = industries.map((i) => (i === fromVal ? toVal : i)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        await this.saveIndustries(newIndustries);
+        if (map[fromVal]) {
+            map[toVal] = map[fromVal];
+            delete map[fromVal];
+            await this.saveIndustryUseCases(map);
+        }
+        const accounts = await this.getAccounts();
+        let count = 0;
+        accounts.forEach((acc) => {
+            if (acc.industry === fromVal) {
+                acc.industry = toVal;
+                count++;
+            }
+        });
+        if (count > 0) await this.saveAccounts(accounts);
+        return { success: true, accountsUpdated: count };
+    },
+
+    /** Rename a use case within an industry; updates list and all project.useCases for that industry. */
+    async renameUseCaseInIndustry(industry, oldName, newName) {
+        const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
+        const fromVal = (oldName && typeof oldName === 'string' ? oldName.trim() : '') || '';
+        const toVal = (newName && typeof newName === 'string' ? newName.trim() : '') || '';
+        if (!ind || !fromVal || !toVal || fromVal === toVal) return { success: false, message: 'Industry and different use case names required.' };
+        const list = await this.getUseCasesForIndustry(ind);
+        if (!list.includes(fromVal)) return { success: false, message: 'Use case not found.' };
+        if (list.includes(toVal)) return { success: false, message: 'Target use case name already exists.' };
+        const newList = list.map((uc) => (uc === fromVal ? toVal : uc)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        await this.setUseCasesForIndustry(ind, newList);
+        const accounts = await this.getAccounts();
+        let projectsUpdated = 0;
+        accounts.forEach((account) => {
+            (account.projects || []).forEach((project) => {
+                const useCases = project.useCases || [];
+                const changed = useCases.some((uc) => (uc && uc.trim()) === fromVal || uc === `Other: ${fromVal}`);
+                if (changed) {
+                    project.useCases = useCases.map((uc) => {
+                        const u = (uc && typeof uc === 'string' ? uc.trim() : '') || '';
+                        if (u === fromVal || uc === `Other: ${fromVal}`) return toVal;
+                        return uc;
+                    });
+                    projectsUpdated++;
+                }
+            });
+        });
+        if (projectsUpdated > 0) await this.saveAccounts(accounts);
         return { success: true, projectsUpdated };
     },
 
