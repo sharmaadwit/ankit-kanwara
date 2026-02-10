@@ -350,7 +350,7 @@ const Admin = {
             const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' && window.__REMOTE_STORAGE_BASE__
                 ? window.__REMOTE_STORAGE_BASE__.replace(/\/$/, '')
                 : (window.location.origin + '/api/storage');
-            const res = await fetch(base + '/pending', { headers: this.getStorageAuthHeaders() });
+            const res = await fetch(base + '/pending', { credentials: 'include', headers: this.getStorageAuthHeaders() });
             if (!res.ok) {
                 if (res.status === 401) {
                     container.innerHTML = '<div class="text-warning">Admin access required to view server drafts.</div>';
@@ -400,7 +400,7 @@ const Admin = {
             : (window.location.origin + '/api/storage');
         const headers = this.getStorageAuthHeaders();
         try {
-            const listRes = await fetch(base + '/pending', { headers });
+            const listRes = await fetch(base + '/pending', { credentials: 'include', headers });
             if (!listRes.ok) throw new Error('Could not load pending list');
             const listData = await listRes.json();
             const pending = (listData.pending || []).find((p) => p.id === id);
@@ -410,7 +410,7 @@ const Admin = {
                 return;
             }
             const key = pending.storage_key;
-            const getRes = await fetch(base + '/' + encodeURIComponent(key), { headers });
+            const getRes = await fetch(base + '/' + encodeURIComponent(key), { credentials: 'include', headers });
             let valueToPut = pending.value;
             if (getRes.status === 200) {
                 const current = await getRes.json();
@@ -423,6 +423,7 @@ const Admin = {
             }
             const putRes = await fetch(base + '/' + encodeURIComponent(key), {
                 method: 'PUT',
+                credentials: 'include',
                 headers,
                 body: JSON.stringify({ value: valueToPut })
             });
@@ -430,7 +431,7 @@ const Admin = {
                 UI.showNotification('Apply failed: ' + (putRes.status === 409 ? 'conflict' : putRes.status), 'error');
                 return;
             }
-            const delRes = await fetch(base + '/pending/' + id, { method: 'DELETE', headers });
+            const delRes = await fetch(base + '/pending/' + id, { method: 'DELETE', credentials: 'include', headers });
             if (delRes.ok || delRes.status === 204) {
                 UI.showNotification('Applied and removed from drafts.', 'success');
             } else {
@@ -463,7 +464,7 @@ const Admin = {
             : (window.location.origin + '/api/storage');
         const headers = this.getStorageAuthHeaders();
         try {
-            const res = await fetch(base + '/pending/' + id, { method: 'DELETE', headers });
+            const res = await fetch(base + '/pending/' + id, { method: 'DELETE', credentials: 'include', headers });
             if (res.ok || res.status === 204) {
                 UI.showNotification('Draft removed.', 'success');
                 this.loadStorageDraftsSection();
@@ -481,7 +482,7 @@ const Admin = {
             : (window.location.origin + '/api/storage');
         const headers = this.getStorageAuthHeaders();
         try {
-            const listRes = await fetch(base + '/pending', { headers });
+            const listRes = await fetch(base + '/pending', { credentials: 'include', headers });
             if (!listRes.ok) throw new Error('Could not load pending list');
             const listData = await listRes.json();
             const pending = (listData.pending || []) || [];
@@ -1436,9 +1437,9 @@ const Admin = {
         const tryApi = () => {
             return fetch('/api/admin/users/reset-password', {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-                body: JSON.stringify({ username: trimmed, password: defaultPassword }),
-                credentials: 'same-origin'
+                body: JSON.stringify({ username: trimmed, password: defaultPassword })
             });
         };
 
@@ -1477,8 +1478,8 @@ const Admin = {
         // Call server endpoint to run the script
         fetch('/api/admin/force-password-change', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
-            credentials: 'same-origin'
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() }
         })
             .then(response => {
                 if (response.ok) {
@@ -1741,6 +1742,7 @@ const Admin = {
                                 <option value="USD">USD ($)</option>
                                 <option value="EUR">EUR (€)</option>
                                 <option value="GBP">GBP (£)</option>
+                                <option value="BRL">BRL (R$)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -1856,6 +1858,7 @@ const Admin = {
                                 <option value="USD" ${salesRep.currency === 'USD' ? 'selected' : ''}>USD ($)</option>
                                 <option value="EUR" ${salesRep.currency === 'EUR' ? 'selected' : ''}>EUR (€)</option>
                                 <option value="GBP" ${salesRep.currency === 'GBP' ? 'selected' : ''}>GBP (£)</option>
+                                <option value="BRL" ${salesRep.currency === 'BRL' ? 'selected' : ''}>BRL (R$)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -2339,6 +2342,7 @@ const Admin = {
         Promise.all([
             fetch('/api/admin/config/feature-flags', {
                 cache: 'no-store',
+                credentials: 'include',
                 headers: this.getAdminHeaders()
             }).then((response) => {
                 if (!response.ok) {
@@ -2348,6 +2352,7 @@ const Admin = {
             }),
             fetch('/api/admin/config/dashboard-visibility', {
                 cache: 'no-store',
+                credentials: 'include',
                 headers: this.getAdminHeaders()
             }).then((response) => {
                 if (!response.ok) {
@@ -2621,6 +2626,7 @@ const Admin = {
 
         fetch('/api/admin/config/feature-flags', {
             method: 'PUT',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
             body: JSON.stringify({ featureFlags: featurePayload })
         })
@@ -2634,6 +2640,7 @@ const Admin = {
                 this.currentFeatureFlags = featureResult?.featureFlags || this.currentFeatureFlags;
                 return fetch('/api/admin/config/dashboard-visibility', {
                     method: 'PUT',
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
                     body: JSON.stringify({ visibility: visibilityPayload })
                 });
@@ -2682,6 +2689,7 @@ const Admin = {
 
         fetch(`/api/admin/logs?limit=100&offset=0`, {
             cache: 'no-store',
+            credentials: 'include',
             headers: this.getAdminHeaders()
         })
             .then((response) => {
@@ -2807,6 +2815,7 @@ const Admin = {
         const offset = this.loginLogsPage * this.loginLogsLimit;
         fetch(`/api/admin/logs?limit=${this.loginLogsLimit}&offset=${offset}`, {
             cache: 'no-store',
+            credentials: 'include',
             headers: this.getAdminHeaders()
         })
             .then((response) => {
@@ -3032,6 +3041,7 @@ const Admin = {
         const query = hours ? `limit=200&hours=${hours}` : 'limit=200';
         fetch(`/api/admin/activity?${query}`, {
             cache: 'no-store',
+            credentials: 'include',
             headers: this.getAdminHeaders()
         })
             .then(response => {
@@ -3091,6 +3101,7 @@ const Admin = {
         const query = hours ? `limit=500&hours=${hours}` : 'limit=500';
         fetch(`/api/admin/activity?${query}`, {
             cache: 'no-store',
+            credentials: 'include',
             headers: this.getAdminHeaders()
         })
             .then(response => {

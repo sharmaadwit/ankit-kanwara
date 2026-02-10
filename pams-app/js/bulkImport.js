@@ -48,7 +48,7 @@ const BulkImport = {
         }
 
         if (this.confirmBtn) {
-            this.confirmBtn.addEventListener('click', () => this.commitImport());
+            this.confirmBtn.addEventListener('click', () => { void this.commitImport(); });
         }
 
         if (this.downloadErrorsBtn) {
@@ -381,11 +381,11 @@ const BulkImport = {
 
         const reader = new FileReader();
         this.setLoading(true);
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             const text = event.target.result;
             try {
                 this.state.rows = this.parseCsv(text);
-                this.processRows();
+                await this.processRows();
                 this.renderPreview();
             } catch (error) {
                 console.error('Error parsing CSV:', error);
@@ -508,13 +508,15 @@ const BulkImport = {
         return map[cleaned] || cleaned;
     },
 
-    processRows() {
+    async processRows() {
         const [headerRow, ...dataRows] = this.state.rows;
         const headers = headerRow.map(h => this.normalizeHeader(h));
         const results = [];
-        const users = DataManager.getUsers();
-        const accounts = DataManager.getAccounts();
-        const existingActivities = DataManager.getAllActivities();
+        const [users, accounts, existingActivities] = await Promise.all([
+            DataManager.getUsers(),
+            DataManager.getAccounts(),
+            DataManager.getAllActivities()
+        ]);
         const duplicateHash = new Set();
 
         const summary = {
@@ -966,7 +968,7 @@ const BulkImport = {
         URL.revokeObjectURL(url);
     },
 
-    commitImport() {
+    async commitImport() {
         if (!this.isEnabled) {
             this.notifyFeatureDisabled();
             return;
@@ -982,17 +984,17 @@ const BulkImport = {
         let createdAccounts = 0;
         let createdProjects = 0;
 
-        readyRows.forEach(row => {
+        for (const row of readyRows) {
             if (row.category === 'external') {
-                const result = this.commitExternalRow(row.payload);
+                const result = await this.commitExternalRow(row.payload);
                 externalCount++;
                 createdAccounts += result.newAccount ? 1 : 0;
                 createdProjects += result.newProject ? 1 : 0;
             } else if (row.category === 'internal') {
-                this.commitInternalRow(row.payload);
+                await this.commitInternalRow(row.payload);
                 internalCount++;
             }
-        });
+        }
 
         this.state.committed = true;
         this.renderCommitSummary({ externalCount, internalCount, createdAccounts, createdProjects });
@@ -1004,12 +1006,12 @@ const BulkImport = {
         }
     },
 
-    commitExternalRow(payload) {
-        const accounts = DataManager.getAccounts();
+    async commitExternalRow(payload) {
+        const accounts = await DataManager.getAccounts();
         let account = this.findAccount(accounts, payload.accountName);
         let newAccountCreated = false;
         if (!account) {
-            account = DataManager.addAccount({
+            account = await DataManager.addAccount({
                 name: payload.accountName,
                 industry: payload.industry || '',
                 salesRep: payload.salesRepName || '',
@@ -1024,13 +1026,13 @@ const BulkImport = {
             if (payload.salesRepName && payload.salesRepName !== account.salesRep) {
                 account.salesRep = payload.salesRepName;
             }
-            DataManager.saveAccounts(accounts);
+            await DataManager.saveAccounts(accounts);
         }
 
         let project = this.findProject(account, payload.projectName);
         let newProjectCreated = false;
         if (!project) {
-            project = DataManager.addProject(account.id, {
+            project = await DataManager.addProject(account.id, {
                 name: payload.projectName,
                 sfdcLink: payload.sfdcLink || '',
                 useCases: this.normalizeMultiValues(payload.useCases, payload.useCaseOther),
@@ -1043,7 +1045,7 @@ const BulkImport = {
             account.projects.push(project);
         } else {
             if (payload.sfdcLink) project.sfdcLink = payload.sfdcLink;
-            const accountsList = DataManager.getAccounts();
+            const accountsList = await DataManager.getAccounts();
             const accountRef = accountsList.find(a => a.id === account.id);
             if (accountRef && accountRef.projects) {
                 const projectRef = accountRef.projects.find(p => p.id === project.id);
@@ -1059,7 +1061,7 @@ const BulkImport = {
                     }
                     Object.assign(project, projectRef);
                 }
-                DataManager.saveAccounts(accountsList);
+                await DataManager.saveAccounts(accountsList);
             }
         }
 
@@ -1106,23 +1108,23 @@ const BulkImport = {
             activity.details = {};
         }
 
-        DataManager.addActivity(activity);
+        await DataManager.addActivity(activity);
 
-        const accountsList = DataManager.getAccounts();
+        const accountsList = await DataManager.getAccounts();
         const accountRef = accountsList.find(a => a.id === account.id);
         if (accountRef) {
             const projectRef = accountRef.projects?.find(p => p.id === project.id);
             if (projectRef) {
                 if (!Array.isArray(projectRef.activities)) projectRef.activities = [];
                 projectRef.activities.push(activity);
-                DataManager.saveAccounts(accountsList);
+                await DataManager.saveAccounts(accountsList);
             }
         }
 
         return { newAccount: newAccountCreated, newProject: newProjectCreated };
     },
 
-    commitInternalRow(payload) {
+    async commitInternalRow(payload) {
         const activity = {
             userId: payload.user.id,
             userName: payload.user.username,
@@ -1136,7 +1138,7 @@ const BulkImport = {
             description: payload.description || '',
             isInternal: true
         };
-        DataManager.addInternalActivity(activity);
+        await DataManager.addInternalActivity(activity);
     },
 
     normalizeMultiValues(values, otherText) {

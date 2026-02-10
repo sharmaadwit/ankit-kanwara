@@ -21,6 +21,7 @@ const {
 } = require('./services/dashboardVisibility');
 const { getDashboardMonth } = require('./services/dashboardMonth');
 const {
+  sessionMiddleware,
   requireStorageAuth,
   requireAdminAuth
 } = require('./middleware/auth');
@@ -190,8 +191,8 @@ const createApp = (options = {}) => {
   };
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
-  app.use('/api/entities', requireStorageAuth, entitiesRouter);
-  app.use('/api/storage', storageRequestLogger, storageLimiter, requireStorageAuth, storageRouter);
+  app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);
+  app.use('/api/storage', storageRequestLogger, storageLimiter, sessionMiddleware, requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
   app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
   app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
@@ -213,6 +214,7 @@ const createApp = (options = {}) => {
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || '').toLowerCase() === 'true';
     try {
       const featureFlags = await getFeatureFlags();
       const dashboardVisibility = await getDashboardVisibility();
@@ -220,6 +222,7 @@ const createApp = (options = {}) => {
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+        cookieAuth,
         featureFlags,
         dashboardVisibility,
         dashboardMonth
@@ -229,6 +232,7 @@ const createApp = (options = {}) => {
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+        cookieAuth,
         featureFlags: {},
         dashboardVisibility: {},
         dashboardMonth: 'last'

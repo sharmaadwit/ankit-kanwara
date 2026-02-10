@@ -133,6 +133,10 @@ const DEFAULT_INDUSTRY_USE_CASES = {
     'Government': ['Public Service Alerts', 'Tax Reminders', 'Application Tracking', 'Voter Info']
 };
 
+// Entity keys: server-only fetch (phased). No localStorage fallback; invalidate after save.
+const ENTITY_KEYS = new Set(['accounts', 'activities', 'internalActivities', 'users']);
+const isEntityKey = (key) => key && (ENTITY_KEYS.has(key) || key === 'activities');
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -701,7 +705,7 @@ const DataManager = {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
                 const parsed = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
                 const rawUsers = Array.isArray(parsed) ? parsed : [];
-                const normalized = rawUsers.map(user => {
+                const normalized = rawUsers.map((user) => {
                     const defaultRegion =
                         typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
                     const regions = Array.isArray(user.regions) ? user.regions : [];
@@ -716,11 +720,11 @@ const DataManager = {
                 this.cache.users = normalized;
                 return normalized;
             } catch (err) {
-                console.warn('[DataManager] Async getUsers failed, falling back to sync:', err);
-                // Fallback to sync
+                console.warn('[DataManager] Async getUsers failed:', err);
+                if (isEntityKey('users')) return [];
             }
         }
-        // Sync fallback (for initial load or if async not available)
+        if (isEntityKey('users')) return [];
         const stored = localStorage.getItem('users');
         const rawUsers = stored ? (() => { try { const p = JSON.parse(stored); return Array.isArray(p) ? p : []; } catch (_) { return []; } })() : [];
         const normalized = rawUsers.map(user => {
@@ -924,18 +928,14 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
                 await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('users', payload, { type: 'external' });
-                this.cache.users = users;
-                this.cache.allActivities = null;
+                this.invalidateCache('users', 'allActivities');
                 return;
             } catch (err) {
                 console.warn('[DataManager] Async saveUsers failed, falling back to sync:', err);
-                // Fallback to sync
             }
         }
-        // Sync fallback
         localStorage.setItem('users', payload);
-        this.cache.users = users;
-        this.cache.allActivities = null;
+        this.invalidateCache('users', 'allActivities');
     },
 
     async getUserById(id) {
@@ -1708,14 +1708,15 @@ const DataManager = {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('accounts');
                 const accounts = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
-                this.cache.accounts = accounts;
-                return accounts;
+                const list = Array.isArray(accounts) ? accounts : [];
+                this.cache.accounts = list;
+                return list;
             } catch (err) {
-                console.warn('[DataManager] Async getAccounts failed, falling back to sync:', err);
-                // Fallback to sync
+                console.warn('[DataManager] Async getAccounts failed:', err);
+                if (isEntityKey('accounts')) return [];
             }
         }
-        // Sync fallback (for initial load or if async not available)
+        if (isEntityKey('accounts')) return [];
         const stored = localStorage.getItem('accounts');
         const accounts = stored ? JSON.parse(stored) : [];
         this.cache.accounts = accounts;
@@ -1728,18 +1729,15 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
                 await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('accounts', payload, { type: 'external' });
-                this.cache.accounts = accounts;
-                this.cache.allActivities = null;
+                this.invalidateCache('accounts', 'allActivities');
                 return;
             } catch (err) {
                 console.warn('[DataManager] Async saveAccounts failed, falling back to sync:', err);
-                // Fallback to sync
+                // Fallback to sync when not entity-only path
             }
         }
-        // Sync fallback
         localStorage.setItem('accounts', payload);
-        this.cache.accounts = accounts;
-        this.cache.allActivities = null;
+        this.invalidateCache('accounts', 'allActivities');
     },
 
     async getAccountById(id) {
@@ -1865,11 +1863,11 @@ const DataManager = {
                 this.cache.activities = activities;
                 return activities;
             } catch (err) {
-                console.warn('[DataManager] Async getActivities failed, falling back to sync:', err);
-                // Fallback to sync
+                console.warn('[DataManager] Async getActivities failed:', err);
+                if (isEntityKey('activities')) return [];
             }
         }
-        // Sync fallback (for initial load or if async not available)
+        if (isEntityKey('activities')) return [];
         const stored = localStorage.getItem('activities');
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.activities = activities;
@@ -1888,18 +1886,14 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
                 await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('activities', payload, { type: 'external' });
-                this.cache.activities = activities;
-                this.cache.allActivities = null;
+                this.invalidateCache('activities', 'allActivities');
                 return;
             } catch (err) {
                 console.warn('[DataManager] Async saveActivities failed, falling back to sync:', err);
-                // Fallback to sync
             }
         }
-        // Sync fallback
         localStorage.setItem('activities', payload);
-        this.cache.activities = activities;
-        this.cache.allActivities = null;
+        this.invalidateCache('activities', 'allActivities');
     },
 
     async addActivity(activity) {
@@ -2046,11 +2040,11 @@ const DataManager = {
                 this.cache.internalActivities = activities;
                 return activities;
             } catch (err) {
-                console.warn('[DataManager] Async getInternalActivities failed, falling back to sync:', err);
-                // Fallback to sync
+                console.warn('[DataManager] Async getInternalActivities failed:', err);
+                if (isEntityKey('internalActivities')) return [];
             }
         }
-        // Sync fallback (for initial load or if async not available)
+        if (isEntityKey('internalActivities')) return [];
         const stored = localStorage.getItem('internalActivities');
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.internalActivities = activities;
@@ -2063,18 +2057,14 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
                 await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('internalActivities', payload, { type: 'internal' });
-                this.cache.internalActivities = activities;
-                this.cache.allActivities = null;
+                this.invalidateCache('internalActivities', 'allActivities');
                 return;
             } catch (err) {
                 console.warn('[DataManager] Async saveInternalActivities failed, falling back to sync:', err);
-                // Fallback to sync
             }
         }
-        // Sync fallback
         localStorage.setItem('internalActivities', payload);
-        this.cache.internalActivities = activities;
-        this.cache.allActivities = null;
+        this.invalidateCache('internalActivities', 'allActivities');
     },
 
     async addInternalActivity(activity) {

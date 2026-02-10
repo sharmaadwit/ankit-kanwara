@@ -13,7 +13,8 @@ const App = {
         INR: '₹',
         USD: '$',
         EUR: '€',
-        GBP: '£'
+        GBP: '£',
+        BRL: 'R$'
     },
     latestAnalytics: {},
     reportFilters: {
@@ -721,6 +722,9 @@ const App = {
         this.dashboardMonth = typeof config.dashboardMonth === 'string' && config.dashboardMonth.trim()
             ? config.dashboardMonth.trim()
             : 'last';
+        if (typeof window !== 'undefined') {
+            window.__USE_COOKIE_AUTH__ = config.cookieAuth === true;
+        }
         this.applyAppConfiguration();
     },
 
@@ -7286,6 +7290,7 @@ const App = {
                                     <option value="USD">USD ($)</option>
                                     <option value="EUR">EUR (€)</option>
                                     <option value="GBP">GBP (£)</option>
+                                    <option value="BRL">BRL (R$)</option>
                                 </select>
                             </div>
                             <div class="form-group">

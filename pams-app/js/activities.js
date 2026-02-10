@@ -1623,8 +1623,8 @@ const Activities = {
         if (arrow) arrow.textContent = '▶';
     },
 
-    _getActivityById(activityId) {
-        const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? DataManager.getActivities() : [];
+    async _getActivityById(activityId) {
+        const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? await DataManager.getActivities() : [];
         return activities.find(a => a.id === activityId) || null;
     },
 

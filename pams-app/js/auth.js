@@ -159,9 +159,9 @@ const Auth = {
 
     // Initialize authentication
     async init() {
-        // Check for existing session
         this.clearRemoteSessionArtifact();
         const sessionData = this.readSession();
+
         if (sessionData && sessionData.analyticsOnly) {
             const guest = this.createAnalyticsGuestUser();
             this.currentUser = guest;
@@ -170,6 +170,32 @@ const Auth = {
             }
             this.showMainApp();
             return true;
+        }
+
+        // Cookie-first: restore session from GET /api/auth/me when server sent cookieAuth
+        if (typeof window !== 'undefined' && window.__USE_COOKIE_AUTH__) {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'include' });
+                if (res.ok) {
+                    const me = await res.json();
+                    const user = {
+                        id: me.userId,
+                        username: me.username,
+                        email: me.email || '',
+                        roles: me.roles || [],
+                        regions: me.regions || [],
+                        salesReps: me.salesReps || [],
+                        defaultRegion: me.defaultRegion || '',
+                        isActive: true
+                    };
+                    this.currentUser = user;
+                    this.writeSession({ userId: user.id, loginTime: new Date().toISOString() });
+                    this.showMainApp();
+                    return true;
+                }
+            } catch (e) {
+                console.warn('Cookie session restore failed:', e);
+            }
         }
 
         if (sessionData && sessionData.userId) {
@@ -191,15 +217,44 @@ const Auth = {
     // Login
     async login(username, password) {
         try {
-            // Ensure default users exist
+            const trimmedUsername = (username || '').trim();
+            const trimmedPassword = (password || '').trim();
+            if (!trimmedUsername || !trimmedPassword) {
+                this.reportLoginEvent('failure', { username: trimmedUsername, message: 'Username and password required' });
+                return { success: false, message: 'Username and password are required.' };
+            }
+
+            // Cookie-first auth: POST /api/auth/login, then use returned user
+            if (typeof window !== 'undefined' && window.__USE_COOKIE_AUTH__) {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: trimmedUsername, password: trimmedPassword })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.user) {
+                    const user = data.user;
+                    if (data.forcePasswordChange) {
+                        this.reportLoginEvent('success', { username: trimmedUsername, message: 'Password change required' });
+                        this.pendingPasswordChangeUser = { ...user, forcePasswordChange: true };
+                        this.showPasswordChangePrompt(this.pendingPasswordChangeUser);
+                        return { success: true, requiresPasswordChange: true };
+                    }
+                    this.pendingPasswordChangeUser = null;
+                    this.currentUser = user;
+                    this.writeSession({ userId: user.id, loginTime: new Date().toISOString(), sessionId: data.sessionId });
+                    this.reportLoginEvent('success', { username: trimmedUsername, message: 'Login successful' });
+                    this.showMainApp();
+                    return { success: true, user, requiresPasswordChange: false };
+                }
+                this.reportLoginEvent('failure', { username: trimmedUsername, message: data.message || 'Invalid credentials' });
+                return { success: false, message: data.message || 'Invalid credentials.' };
+            }
+
+            // Legacy: validate against DataManager.getUsers()
             await DataManager.ensureDefaultUsers();
-
             const users = await DataManager.getUsers();
-
-            // Trim username and password to avoid whitespace issues
-            const trimmedUsername = username.trim();
-            const trimmedPassword = password.trim();
-
             const user = users.find(u => {
                 const match = u.username === trimmedUsername && u.password === trimmedPassword;
                 return match;
@@ -303,14 +358,13 @@ const Auth = {
         this.clearRemoteSessionArtifact();
         this.showLoginScreen();
 
-        // Send logout event to server if session ID exists
-        if (sessionId) {
-            fetch('/api/auth/logout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId })
-            }).catch(err => console.warn('Logout logging failed:', err));
-        }
+        // Send logout event to server (cookie cleared when credentials: 'include')
+        fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId })
+        }).catch(err => console.warn('Logout logging failed:', err));
     },
 
     // Show login screen

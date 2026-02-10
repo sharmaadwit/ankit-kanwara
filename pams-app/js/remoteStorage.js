@@ -941,11 +941,11 @@
         }
     };
 
-    /** On login: merge server + local backup (newer wins), add missing, dedupe, then PUT so drift is fixed. */
-    /** Uses skipIfMatch so reconcile PUTs don't get 409 (intent is to push merged state). Per-key try/catch so one failure doesn't block the rest. */
+    /** Entity keys: reconcile = refetch only (no merge with local backup, no PUT). UI will refetch via DataManager. */
+    const ENTITY_RECONCILE_KEYS = ['internalActivities', 'accounts', ACTIVITIES_KEY, 'users'];
+    /** On login: for entity keys refetch from server and invalidate cache only; no merge, no PUT. */
     const reconcileOnLogin = async () => {
         if (typeof window !== 'undefined') {
-            window.__REMOTE_STORAGE_RECONCILE_PUT__ = true;
             try {
                 window.dispatchEvent(new CustomEvent('remotestorage:reconcile-start'));
             } catch (_) { }
@@ -954,7 +954,6 @@
             await reconcileOnLoginImpl();
         } finally {
             if (typeof window !== 'undefined') {
-                window.__REMOTE_STORAGE_RECONCILE_PUT__ = false;
                 try {
                     window.dispatchEvent(new CustomEvent('remotestorage:reconcile-end'));
                 } catch (_) { }
@@ -962,37 +961,17 @@
         }
     };
     const reconcileOnLoginImpl = async () => {
-        const keys = ['internalActivities', 'accounts'];
-        // Process keys sequentially to avoid overwhelming the server
-        for (const key of keys) {
+        for (const key of ENTITY_RECONCILE_KEYS) {
             try {
-                // Use async getItemAsync if available, fallback to sync
-                let serverRaw;
                 if (typeof getItemAsync === 'function') {
-                    serverRaw = await getItemAsync(key);
+                    await getItemAsync(key);
+                } else if (key === ACTIVITIES_KEY) {
+                    loadActivitiesValue();
                 } else {
-                    serverRaw = remoteStorage.getItem(key);
+                    remoteStorage.getItem(key);
                 }
-                const localRaw = getLocalBackup(key);
-                const serverArr = safeJsonParse(serverRaw);
-                const localArr = safeJsonParse(localRaw);
-                const serverA = Array.isArray(serverArr) ? serverArr : [];
-                const localA = Array.isArray(localArr) ? localArr : [];
-                let merged = mergeArrayByIdNewerWins(serverA, localA);
-                if (key === 'internalActivities' && merged.length) {
-                    merged = dedupeInternalBySignature(merged);
-                }
-                if (merged.length === 0 && serverA.length === 0 && localA.length === 0) continue;
-                const payload = JSON.stringify(merged);
-                // Use async setItemAsync if available, fallback to sync
-                if (typeof setItemAsync === 'function') {
-                    await setItemAsync(key, maybeCompressValue(payload));
-                } else {
-                    performRequest('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) });
-                }
-                saveLocalBackup(key, payload);
                 if (typeof console !== 'undefined' && console.log) {
-                    console.log('[RemoteStorage] Reconcile on login: ' + key + ' merged to ' + merged.length + ' items.');
+                    console.log('[RemoteStorage] Reconcile on login: refetched ' + key + '.');
                 }
             } catch (err) {
                 if (typeof console !== 'undefined' && console.warn) {
@@ -1000,50 +979,16 @@
                 }
             }
         }
-        try {
-            // Use async getItemAsync for activities if available, fallback to sync
-            let serverActivities;
-            if (typeof getItemAsync === 'function') {
-                serverActivities = await getItemAsync(ACTIVITIES_KEY);
-            } else {
-                serverActivities = loadActivitiesValue();
+        if (typeof DataManager !== 'undefined') {
+            if (typeof DataManager.invalidateCache === 'function') {
+                DataManager.invalidateCache('activities', 'accounts', 'internalActivities', 'users', 'allActivities');
+            } else if (DataManager.cache) {
+                DataManager.cache.activities = null;
+                DataManager.cache.accounts = null;
+                DataManager.cache.internalActivities = null;
+                DataManager.cache.users = null;
+                DataManager.cache.allActivities = null;
             }
-            const localActivitiesRaw = getLocalBackup(ACTIVITIES_KEY);
-            const serverAct = safeJsonParse(serverActivities);
-            const localAct = safeJsonParse(localActivitiesRaw);
-            const serverArr = Array.isArray(serverAct) ? serverAct : [];
-            const localArr = Array.isArray(localAct) ? localAct : [];
-            let mergedAct = mergeArrayByIdNewerWins(serverArr, localArr);
-            if (mergedAct.length) mergedAct = dedupeActivitiesBySignature(mergedAct);
-            if (mergedAct.length > 0) {
-                const mergedStr = JSON.stringify(mergedAct);
-                if (shardActivities(mergedStr)) {
-                    // Activities need special sharding path - use the existing shard save logic
-                    // Note: setItemAsync doesn't handle activities sharding, so we use the sync path for now
-                    // In future, we could make a setItemAsyncActivities that handles sharding
-                    const doActivitiesSave = (payload) => {
-                        if (shardActivities(payload)) {
-                            saveLocalBackup(ACTIVITIES_KEY, payload);
-                            shardCache[ACTIVITIES_KEY] = { version: null, value: payload };
-                        }
-                    };
-                    doActivitiesSave(mergedStr);
-                    saveLocalBackup(ACTIVITIES_KEY, mergedStr);
-                    if (typeof console !== 'undefined' && console.log) {
-                        console.log('[RemoteStorage] Reconcile on login: activities merged to ' + mergedAct.length + ' items.');
-                    }
-                }
-            }
-        } catch (err) {
-            if (typeof console !== 'undefined' && console.warn) {
-                console.warn('[RemoteStorage] Reconcile on login failed for activities:', err.message);
-            }
-        }
-        if (typeof DataManager !== 'undefined' && DataManager.cache) {
-            DataManager.cache.activities = null;
-            DataManager.cache.accounts = null;
-            DataManager.cache.internalActivities = null;
-            DataManager.cache.allActivities = null;
         }
     };
 
