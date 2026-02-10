@@ -177,7 +177,7 @@ const App = {
             await this.loadAppConfig();
             this.loadAnalyticsTablePresets();
 
-            const hasSession = Auth.init();
+            const hasSession = await Auth.init();
             if (!hasSession) {
                 this.setLoading(false);
                 return;
@@ -204,19 +204,13 @@ const App = {
         }
     },
 
-    buildAnalyticsGlobalControls({ periodType, selectedPeriod, periodOptions }) {
+    async buildAnalyticsGlobalControls({ periodType, selectedPeriod, periodOptions }) {
         const toggleMarkup = `
             <div class="analytics-period-toggle">
-                <button type="button"
-                        class="btn btn-sm ${periodType === 'month' ? 'btn-primary' : 'btn-outline'}"
-                        onclick="App.setAnalyticsPeriodMode('month')">
-                    Monthly
-                </button>
-                <button type="button"
-                        class="btn btn-sm ${periodType === 'year' ? 'btn-primary' : 'btn-outline'}"
-                        onclick="App.setAnalyticsPeriodMode('year')">
-                    Annual
-                </button>
+                <button class="btn btn-tab ${periodType === 'month' ? 'active' : ''}"
+                        onclick="App.switchAnalyticsPeriodMode('month')">Monthly</button>
+                <button class="btn btn-tab ${periodType === 'year' ? 'active' : ''}"
+                        onclick="App.switchAnalyticsPeriodMode('year')">Yearly</button>
             </div>
         `;
 
@@ -238,7 +232,7 @@ const App = {
                        onchange="App.handleReportPeriodInput(this.value)">
             `;
 
-        const regions = DataManager.getRegions().sort((a, b) => a.localeCompare(b));
+        const regions = (await DataManager.getRegions()).sort((a, b) => a.localeCompare(b));
         const selectedRegion = this.reportFilters.region || '';
 
         return `
@@ -302,13 +296,13 @@ const App = {
         `;
     },
 
-    buildAnalyticsTabContent(tab, analytics, context = {}) {
+    async buildAnalyticsTabContent(tab, analytics, context = {}) {
         const scopedContext = { ...context, prefix: context.prefix || 'reports' };
         switch (tab) {
             case 'products':
-                return this.buildAnalyticsProductTab(analytics, scopedContext);
+                return await this.buildAnalyticsProductTab(analytics, scopedContext);
             case 'regions':
-                return this.buildAnalyticsRegionalTab(analytics, scopedContext);
+                return await this.buildAnalyticsRegionalTab(analytics, scopedContext);
             case 'table':
                 return this.buildAnalyticsTableTab(analytics, scopedContext);
             case 'overview':
@@ -373,9 +367,9 @@ const App = {
         `;
     },
 
-    buildAnalyticsProductTab(analytics, context = {}) {
+    async buildAnalyticsProductTab(analytics, context = {}) {
         const prefix = context.prefix || 'reports';
-        const filters = this.buildAnalyticsFilterBar('standard', { showIndustry: true, showChannel: false });
+        const filters = await this.buildAnalyticsFilterBar('standard', { showIndustry: true, showChannel: false });
         return `
             ${filters}
             <div id="${prefix}AnalyticsWrapper" class="analytics-wrapper">
@@ -403,9 +397,9 @@ const App = {
         `;
     },
 
-    buildAnalyticsRegionalTab(analytics, context = {}) {
+    async buildAnalyticsRegionalTab(analytics, context = {}) {
         const prefix = context.prefix || 'reports';
-        const filters = this.buildAnalyticsFilterBar('standard', { showIndustry: false, showChannel: true });
+        const filters = await this.buildAnalyticsFilterBar('standard', { showIndustry: false, showChannel: true });
         return `
             ${filters}
             <div id="${prefix}AnalyticsWrapper" class="analytics-wrapper">
@@ -463,7 +457,7 @@ const App = {
         this.loadReports();
     },
 
-    initAnalyticsChartsForTab(tab, analytics, periodValue) {
+    async initAnalyticsChartsForTab(tab, analytics, periodValue) {
         if (tab === 'table') {
             this.renderAnalyticsTableBuilder(analytics, {
                 periodType: this.analyticsPeriodMode === 'year' ? 'year' : 'month',
@@ -473,7 +467,7 @@ const App = {
             return;
         }
         this.setAnalyticsLoading('reports', true);
-        this.initAnalyticsCharts({ prefix: 'reports', analytics, month: periodValue });
+        await this.initAnalyticsCharts({ prefix: 'reports', analytics, month: periodValue });
         this.setAnalyticsLoading('reports', false);
         this.setupActivityMixToggle('reports', analytics);
     },
@@ -507,12 +501,12 @@ const App = {
         // Login form
         const loginForm = document.getElementById('loginForm');
         if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
+            loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const username = document.getElementById('username').value;
                 const password = document.getElementById('password').value;
                 this.setLoading(true, 'Signing you in…');
-                const result = Auth.login(username, password);
+                const result = await Auth.login(username, password);
                 if (result.success) {
                     if (result.requiresPasswordChange) {
                         this.setLoading(false);
@@ -529,12 +523,12 @@ const App = {
 
         const analyticsAccessForm = document.getElementById('analyticsAccessForm');
         if (analyticsAccessForm) {
-            analyticsAccessForm.addEventListener('submit', (e) => {
+            analyticsAccessForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const passwordInput = document.getElementById('analyticsAccessPassword');
                 const password = passwordInput ? passwordInput.value : '';
                 this.setLoading(true, 'Preparing analytics…');
-                const result = Auth.loginAnalytics(password);
+                const result = await Auth.loginAnalytics(password);
                 if (result.success) {
                     this.analyticsPeriodMode = 'month';
                     this.handleSuccessfulLogin();
@@ -547,11 +541,11 @@ const App = {
 
         const passwordResetForm = document.getElementById('passwordResetForm');
         if (passwordResetForm) {
-            passwordResetForm.addEventListener('submit', (e) => {
+            passwordResetForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const newPassword = document.getElementById('newPassword')?.value || '';
                 const confirmPassword = document.getElementById('confirmPassword')?.value || '';
-                Auth.submitForcedPasswordChange(newPassword, confirmPassword);
+                await Auth.submitForcedPasswordChange(newPassword, confirmPassword);
             });
         }
 
@@ -605,6 +599,40 @@ const App = {
         if (!this.loadingMessageEl) {
             this.loadingMessageEl = document.getElementById('appLoadingMessage');
         }
+        this.setupSyncIndicator();
+    },
+
+    setupSyncIndicator() {
+        const el = document.getElementById('syncIndicator');
+        if (!el || this._syncIndicatorBound) return;
+        this._syncIndicatorBound = true;
+        const show = () => el.classList.remove('hidden');
+        const hide = () => el.classList.add('hidden');
+        window.addEventListener('remotestorage:reconcile-start', show);
+        window.addEventListener('remotestorage:reconcile-end', hide);
+        window.addEventListener('remotestorage:unauthorized', () => {
+            this.capturePendingSubmissionsToDrafts();
+            if (typeof Auth !== 'undefined' && typeof Auth.clearSession === 'function') Auth.clearSession();
+            if (typeof Auth !== 'undefined' && typeof Auth.showLoginScreen === 'function') Auth.showLoginScreen();
+            if (typeof UI !== 'undefined' && typeof UI.showNotification === 'function') {
+                UI.showNotification('Session expired or invalid. Your work was saved to Drafts. Sign in and submit from Drafts.', 'warning');
+            }
+        });
+        window.addEventListener('remotestorage:save-succeeded', () => {
+            const app = typeof window !== 'undefined' && window.app;
+            if (app && typeof app.updateDraftsBadge === 'function') app.updateDraftsBadge();
+            if (app && typeof app.loadDraftsView === 'function') app.loadDraftsView();
+        });
+        window.addEventListener('remotestorage:save-failed', () => {
+            if (typeof UI !== 'undefined' && typeof UI.showNotification === 'function') {
+                UI.showNotification('Data not saved. Check Drafts to retry.', 'warning');
+            }
+            const app = typeof window !== 'undefined' && window.app;
+            if (app) {
+                if (typeof app.updateDraftsBadge === 'function') app.updateDraftsBadge();
+                if (typeof app.loadDraftsView === 'function') app.loadDraftsView();
+            }
+        });
     },
 
     setLoading(isLoading, message) {
@@ -636,7 +664,7 @@ const App = {
                     'X-Admin-User': currentUser.username
                 };
                 if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
-                    setTimeout(function () { window.__REMOTE_STORAGE_RECONCILE__(); }, 500);
+                    setTimeout(function () { window.__REMOTE_STORAGE_RECONCILE__(); }, 0);
                 }
             }
 
@@ -696,9 +724,9 @@ const App = {
         this.applyAppConfiguration();
     },
 
-    loadAnalyticsTablePresets() {
+    async loadAnalyticsTablePresets() {
         try {
-            this.savedAnalyticsTables = DataManager.getAnalyticsTablePresets();
+            this.savedAnalyticsTables = await DataManager.getAnalyticsTablePresets();
         } catch (error) {
             console.warn('Unable to load analytics table presets.', error);
             this.savedAnalyticsTables = [];
@@ -976,7 +1004,7 @@ const App = {
         this.currentView = viewName;
 
         // Load view content
-        switch(viewName) {
+        switch (viewName) {
             case 'dashboard':
                 this.loadDashboard();
                 break;
@@ -1060,10 +1088,10 @@ const App = {
     loadDashboard() {
         // Always use the new card-based dashboard
         // The old dashboard (updateStats/loadRecentActivities) is deprecated
-        this.loadCardDashboard();
+        this.loadCardDashboard().catch(e => console.warn('loadCardDashboard failed', e));
         this.updateDraftsBadge();
     },
-    
+
     // Resolve dashboard view month: 'current' | 'last' | 'YYYY-MM' -> YYYY-MM
     getDashboardViewMonth() {
         const now = new Date();
@@ -1104,27 +1132,33 @@ const App = {
     },
 
     // Load card-based dashboard
-    loadCardDashboard() {
+    async loadCardDashboard() {
         const dashboardView = document.getElementById('dashboardView');
         if (!dashboardView) {
             console.error('Dashboard view element not found');
             return;
         }
-        
+
         // Clear any existing content first (including old static HTML)
         dashboardView.innerHTML = '';
-        
+
         // Destroy existing charts before reloading
         this.destroyDashboardCharts();
-        
-        const stats = this.updateStats() || {};
-        
-        const activities = DataManager.getAllActivities();
+
+        const stats = await this.updateStats() || {};
+
+        const [activities, accounts, users] = await Promise.all([
+            DataManager.getAllActivities(),
+            DataManager.getAccounts(),
+            DataManager.getUsers()
+        ]);
+        const accountMap = new Map(accounts.map(a => [a.id, a]));
+        const userMap = new Map(users.map(u => [u.id, u]));
         const now = new Date();
         const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         const viewMonth = this.getDashboardViewMonth();
         const isViewingCurrentMonth = viewMonth === currentMonth;
-        
+
         // Previous month (for "last month" comparison card)
         const [vy, vm] = viewMonth.split('-').map(Number);
         const prevMonth = vm === 1 ? `${vy - 1}-12` : `${vy}-${String(vm - 1).padStart(2, '0')}`;
@@ -1132,7 +1166,7 @@ const App = {
             const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
             return month === prevMonth;
         });
-        
+
         // Calculate week start (Monday) — only meaningful when viewing current month
         const weekStart = new Date(now);
         const dayOfWeek = now.getDay();
@@ -1142,12 +1176,12 @@ const App = {
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
-        
+
         const monthActivities = activities.filter(a => {
             const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
             return month === viewMonth;
         });
-        
+
         const weekActivities = isViewingCurrentMonth
             ? activities.filter(a => {
                 const date = a.date || a.createdAt;
@@ -1156,7 +1190,7 @@ const App = {
                 return activityDate >= weekStart && activityDate <= weekEnd;
             })
             : [];
-        
+
         // Last activity submission (who + when, submission timestamp, all activities)
         const submissionTs = (a) => (a.createdAt || a.date || '').replace(/\.\d{3}Z$/, 'Z');
         const sortedBySubmission = [...activities].sort((a, b) => new Date(submissionTs(b)) - new Date(submissionTs(a)));
@@ -1166,48 +1200,47 @@ const App = {
         const lastActivityWhen = lastActivityWhenRaw
             ? (() => { const d = new Date(lastActivityWhenRaw); return Number.isNaN(d.getTime()) ? lastActivityWhenRaw : d.toLocaleString(); })()
             : '—';
-        
+
         // Internal vs External breakdown
         const internalCount = monthActivities.filter(a => a.isInternal).length;
         const externalCount = monthActivities.filter(a => !a.isInternal).length;
-        
+
         // Call types breakdown (external activities only)
         const callTypes = {};
         monthActivities.filter(a => !a.isInternal).forEach(a => {
             const type = a.type || 'Other';
             callTypes[type] = (callTypes[type] || 0) + 1;
         });
-        
+
         // Region activity (for default region)
         const currentUser = Auth.getCurrentUser();
         const defaultRegion = currentUser?.defaultRegion || '';
-        const regionActivities = defaultRegion 
+        const regionActivities = defaultRegion
             ? monthActivities.filter(a => {
-                const account = DataManager.getAccountById(a.accountId);
-                const user = DataManager.getUserById(a.userId);
+                const account = accountMap.get(a.accountId);
+                const user = userMap.get(a.userId);
                 const region = DataManager.resolveActivityRegion(a, account, user);
                 return region === defaultRegion;
             }).length
             : 0;
-        
+
         // All regions breakdown for bar chart (EXTERNAL ACTIVITIES ONLY)
         const regionBreakdown = {};
         monthActivities.filter(a => !a.isInternal).forEach(a => {
-            const account = DataManager.getAccountById(a.accountId);
-            const user = DataManager.getUserById(a.userId);
+            const account = accountMap.get(a.accountId);
+            const user = userMap.get(a.userId);
             const region = DataManager.resolveActivityRegion(a, account, user) || 'Unassigned';
             regionBreakdown[region] = (regionBreakdown[region] || 0) + 1;
         });
-        
+
         // Missing SFDC Opportunities calculation
         const externalMonthActivities = monthActivities.filter(a => !a.isInternal);
-        const missingSfdcData = this.calculateMissingSfdcStats(externalMonthActivities, currentUser, defaultRegion);
-        
+        const missingSfdcData = await this.calculateMissingSfdcStats(externalMonthActivities, currentUser, defaultRegion, userMap);
+
         // Top 3 Presales Reps by activity count
         const topPresalesReps = this.getTopPresalesReps(monthActivities, 3);
-        
+
         // Wins and Losses for view month
-        const accounts = DataManager.getAccounts();
         let winsThisMonth = 0;
         let lossesThisMonth = 0;
         accounts.forEach(account => {
@@ -1222,14 +1255,14 @@ const App = {
                 }
             });
         });
-        
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
         const [viewYear, viewMonthNum] = viewMonth.split('-').map(Number);
         const viewMonthName = `${monthNames[viewMonthNum - 1]} ${viewYear}`;
         const prevMonthName = prevMonth.split('-').map(Number);
         const lastMonthLabel = `${monthNames[prevMonthName[1] - 1]} ${prevMonthName[0]}`;
-        
+
         const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
         const monthOptions = (() => {
             const opts = [
@@ -1247,18 +1280,18 @@ const App = {
         })();
         const currentValue = (this.dashboardMonth || 'last').trim().toLowerCase();
         const selectorValue = /^\d{4}-\d{2}$/.test(currentValue) ? currentValue : currentValue;
-        
+
         let totalProjects = 0;
         let customerActivities = 0;
-        const internalActivities = DataManager.getInternalActivities();
-        
+        const internalActivities = activities.filter(a => a.isInternal);
+
         accounts.forEach(account => {
             account.projects?.forEach(project => {
                 totalProjects++;
                 customerActivities += project.activities?.length || 0;
             });
         });
-        
+
         let html = `
             <!-- Log Activity + Admin month selector -->
             <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -1402,10 +1435,10 @@ const App = {
             </div>
             ` : ''}
         `;
-        
+
         dashboardView.innerHTML = html;
         this.applyAppConfiguration();
-        
+
         // Initialize charts after DOM is ready
         setTimeout(() => {
             this.initDashboardCharts({
@@ -1416,17 +1449,21 @@ const App = {
             });
         }, 100);
     },
-    
-    calculateMissingSfdcStats(externalActivities, currentUser, defaultRegion) {
-        const accounts = DataManager.getAccounts();
+
+    async calculateMissingSfdcStats(externalActivities, currentUser, defaultRegion, userMap = null) {
+        const accounts = await DataManager.getAccounts();
         const accountMap = new Map(accounts.map(a => [a.id, a]));
+        if (userMap == null) {
+            const users = await DataManager.getUsers();
+            userMap = new Map(users.map(u => [u.id, u]));
+        }
         const projectMap = new Map();
         accounts.forEach(account => {
             account.projects?.forEach(project => {
                 projectMap.set(project.id, { account, project });
             });
         });
-        
+
         // Team level
         let teamMissing = 0;
         let teamTotal = externalActivities.length;
@@ -1445,14 +1482,14 @@ const App = {
             }
         });
         const teamPercentage = teamTotal > 0 ? (teamMissing / teamTotal) * 100 : 0;
-        
+
         // Region level (default region)
         let regionMissing = 0;
         let regionTotal = 0;
         if (defaultRegion) {
             externalActivities.forEach(activity => {
                 const account = accountMap.get(activity.accountId);
-                const user = DataManager.getUserById(activity.userId);
+                const user = userMap.get(activity.userId);
                 const region = DataManager.resolveActivityRegion(activity, account, user);
                 if (region === defaultRegion) {
                     regionTotal++;
@@ -1472,7 +1509,7 @@ const App = {
             });
         }
         const regionPercentage = regionTotal > 0 ? (regionMissing / regionTotal) * 100 : 0;
-        
+
         // Individual level (current user)
         let individualMissing = 0;
         let individualTotal = 0;
@@ -1496,7 +1533,7 @@ const App = {
             });
         }
         const individualPercentage = individualTotal > 0 ? (individualMissing / individualTotal) * 100 : 0;
-        
+
         return {
             teamMissing,
             teamTotal,
@@ -1509,7 +1546,7 @@ const App = {
             individualPercentage
         };
     },
-    
+
     getTopPresalesReps(activities, limit = 3) {
         const userCounts = {};
         activities.forEach(activity => {
@@ -1524,12 +1561,12 @@ const App = {
                 userCounts[activity.userId].count++;
             }
         });
-        
+
         return Object.values(userCounts)
             .sort((a, b) => b.count - a.count)
             .slice(0, limit);
     },
-    
+
     dashboardCharts: {},
 
     // Plugin to show value on pie segments and bar tops (no extra dependency)
@@ -1565,7 +1602,7 @@ const App = {
             });
         }
     },
-    
+
     destroyDashboardCharts() {
         Object.values(this.dashboardCharts).forEach(chart => {
             if (chart && typeof chart.destroy === 'function') {
@@ -1574,13 +1611,13 @@ const App = {
         });
         this.dashboardCharts = {};
     },
-    
+
     initDashboardCharts(data) {
         // Destroy existing charts first
         this.destroyDashboardCharts();
-        
+
         const { internalCount, externalCount, callTypes, regionBreakdown } = data;
-        
+
         // Internal vs External Pie Chart
         const internalExternalCtx = document.getElementById('internalExternalChart');
         if (internalExternalCtx && (internalCount > 0 || externalCount > 0)) {
@@ -1607,7 +1644,7 @@ const App = {
                         },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                label: function (context) {
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const percentage = ((context.parsed / total) * 100).toFixed(1);
                                     return `${context.label}: ${context.parsed} (${percentage}%)`;
@@ -1618,7 +1655,7 @@ const App = {
                 }
             });
         }
-        
+
         // Call Types Pie Chart
         const callTypesCtx = document.getElementById('callTypesChart');
         if (callTypesCtx && Object.keys(callTypes).length > 0) {
@@ -1635,7 +1672,7 @@ const App = {
             });
             const values = Object.values(callTypes);
             const colors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#F56565', '#38B2AC', '#ECC94B'];
-            
+
             if (typeof Chart !== 'undefined') {
                 try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
@@ -1659,7 +1696,7 @@ const App = {
                         },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                label: function (context) {
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                     const percentage = ((context.parsed / total) * 100).toFixed(1);
                                     return `${context.label}: ${context.parsed} (${percentage}%)`;
@@ -1670,13 +1707,13 @@ const App = {
                 }
             });
         }
-        
+
         // Region Activity Bar Chart
         const regionActivityCtx = document.getElementById('regionActivityChart');
         if (regionActivityCtx && Object.keys(regionBreakdown).length > 0) {
             const regions = Object.keys(regionBreakdown).sort((a, b) => regionBreakdown[b] - regionBreakdown[a]);
             const counts = regions.map(r => regionBreakdown[r]);
-            
+
             if (typeof Chart !== 'undefined') {
                 try { Chart.register(this.chartValueLabelsPlugin); } catch (_) { /* already registered */ }
             }
@@ -1712,7 +1749,7 @@ const App = {
             });
         }
     },
-    
+
     // Navigate to card view (for card interface)
     navigateToCardView(viewName) {
         const accessKey = this.getDashboardVisibilityKey(viewName);
@@ -1736,13 +1773,13 @@ const App = {
             this.switchView(viewName);
             return;
         }
-        
+
         // For card interface, load card-based views
         this.switchView(viewName);
-        
+
         // Reload the view with card layout
         setTimeout(() => {
-            switch(viewName) {
+            switch (viewName) {
                 case 'dashboard':
                     this.loadCardDashboard();
                     break;
@@ -1796,12 +1833,14 @@ const App = {
     },
 
     // Update statistics
-    updateStats() {
+    async updateStats() {
         try {
-            const accounts = DataManager.getAccounts();
+            const [accounts, activities, internalActivities] = await Promise.all([
+                DataManager.getAccounts(),
+                DataManager.getAllActivities(),
+                DataManager.getInternalActivities()
+            ]);
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-            const activities = DataManager.getAllActivities();
-            const internalActivities = DataManager.getInternalActivities();
 
             let totalProjects = 0;
             let customerActivities = 0;
@@ -1813,7 +1852,7 @@ const App = {
                 account.projects?.forEach(project => {
                     totalProjects++;
                     customerActivities += project.activities?.length || 0;
-                    
+
                     if (project.status === 'won') wonProjects++;
                     else if (project.status === 'lost') lostProjects++;
                     else activeProjects++;
@@ -1852,9 +1891,10 @@ const App = {
     },
 
     // Load recent activities
-    loadRecentActivities() {
+    async loadRecentActivities() {
         try {
-            const activities = DataManager.getAllActivities().slice(0, 10);
+            const all = await DataManager.getAllActivities();
+            const activities = all.slice(0, 10);
             const container = document.getElementById('recentActivitiesList');
             if (!container) {
                 console.error('recentActivitiesList container not found');
@@ -1898,16 +1938,17 @@ const App = {
     },
 
     // Load card-based activities view
-    loadCardActivitiesView() {
+    async loadCardActivitiesView() {
         const activitiesView = document.getElementById('activitiesView');
         if (!activitiesView) return;
-        
-        const activities = this.applyActivityFilters(DataManager.getAllActivities());
+
+        const allActivities = await DataManager.getAllActivities();
+        const activities = this.applyActivityFilters(allActivities);
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-        
+
         // Group by month (use monthOfActivity when present so hosted data counts correctly)
         const activitiesByMonth = {};
         activities.forEach(activity => {
@@ -1917,7 +1958,7 @@ const App = {
             }
             activitiesByMonth[month].push(activity);
         });
-        
+
         let html = `
             <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1963,7 +2004,7 @@ const App = {
                 </div>
             </div>
         `;
-        
+
         if (activities.length === 0) {
             html += `<div class="content-card">${UI.emptyState('No activities match the current filters.')}</div>`;
         } else {
@@ -1976,11 +2017,11 @@ const App = {
                         </div>
                         <div class="card-grid-4">
                 `;
-                
+
                 activitiesByMonth[month].forEach(activity => {
-                const isOwner = currentUser
-                    ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
-                    : false;
+                    const isOwner = currentUser
+                        ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
+                        : false;
                     const canManage = isOwner || isAdmin;
                     html += `
                         <div class="activity-card ${activity.isInternal ? 'internal' : 'customer'}">
@@ -2009,17 +2050,17 @@ const App = {
                         </div>
                     `;
                 });
-                
+
                 html += `</div></div>`;
             });
         }
-        
+
         activitiesView.innerHTML = html;
-        this.populateActivityFilterControls();
+        await this.populateActivityFilterControls();
     },
-    
+
     // Load card-based win/loss view
-    loadCardWinLossView() {
+    async loadCardWinLossView() {
         const winlossView = document.getElementById('winlossView');
         if (!winlossView) return;
 
@@ -2033,7 +2074,7 @@ const App = {
         const ownerFilterRaw = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
         const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
 
-        let projects = this.getWinLossProjectsDataset();
+        let projects = await this.getWinLossProjectsDataset();
         projects = projects.filter(project => {
             const ownerIds = project.ownerIds || [];
             if (ownerFilterValue !== 'all') {
@@ -2139,11 +2180,11 @@ const App = {
         }
 
         winlossView.innerHTML = html;
-        this.populateWinLossOwnerFilter();
+        await this.populateWinLossOwnerFilter();
     },
 
-    promptProjectSfdcLink(accountId, projectId) {
-        const accounts = DataManager.getAccounts();
+    async promptProjectSfdcLink(accountId, projectId) {
+        const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         const project = account?.projects?.find(p => p.id === projectId);
 
@@ -2169,7 +2210,7 @@ const App = {
             return;
         }
 
-        DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
+        await DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
         UI.showNotification('SFDC link updated successfully.', 'success');
 
         this.loadAccountsView();
@@ -2184,7 +2225,7 @@ const App = {
         }
     },
 
-    updateSfdcLinkFromInput(accountId, projectId, inputId) {
+    async updateSfdcLinkFromInput(accountId, projectId, inputId) {
         const input = document.getElementById(inputId);
         if (!input) {
             UI.showNotification('Unable to find SFDC input field.', 'error');
@@ -2199,7 +2240,7 @@ const App = {
             UI.showNotification('Please enter a valid SFDC link starting with http:// or https://', 'error');
             return;
         }
-        DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
+        await DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
         UI.showNotification('SFDC link updated successfully.', 'success');
         this.loadAccountsView();
         this.loadWinLossView();
@@ -2212,18 +2253,22 @@ const App = {
             this.loadCardSfdcComplianceView();
         }
     },
-    
+
     // Load card-based accounts view
-    loadCardAccountsView() {
+    async loadCardAccountsView() {
         const accountsView = document.getElementById('accountsView');
         if (!accountsView) return;
-        
-        const accounts = DataManager.getAccounts();
+
+        const [accounts, allActivities, ownerMap] = await Promise.all([
+            DataManager.getAccounts(),
+            DataManager.getAllActivities(),
+            this.getProjectOwnerMap()
+        ]);
         const isAdmin =
             typeof Auth !== 'undefined' &&
             typeof Auth.isAdmin === 'function' &&
             Auth.isAdmin();
-        
+
         let html = `
             <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2235,14 +2280,14 @@ const App = {
                 <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">Accounts</h1>
             </div>
         `;
-        
+
         if (accounts.length === 0) {
             html += `<div class="content-card">${UI.emptyState('No accounts found')}</div>`;
         } else {
             html += `<div class="card-grid-4">`;
-            accounts.forEach(account => {
+            for (const account of accounts) {
                 const projectCount = account.projects?.length || 0;
-                const activityCount = this.getAccountActivityCount(account.id);
+                const activityCount = allActivities.filter(a => a.accountId === account.id).length;
                 const actionButtons = isAdmin
                     ? [
                         `<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); App.editAccount('${account.id}')" style="flex: 1;">Edit</button>`,
@@ -2250,6 +2295,7 @@ const App = {
                         `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); App.showDeleteAccountModal('${account.id}')" style="flex: 1;">Delete</button>`
                     ]
                     : [];
+                const projectsMarkup = await this.buildAccountProjectsMarkup(account, 'card', ownerMap);
                 html += `
                     <div class="account-card">
                         <div class="account-card-header">
@@ -2275,21 +2321,21 @@ const App = {
                                 ${actionButtons.join('')}
                             </div>
                         ` : ''}
-                        ${this.buildAccountProjectsMarkup(account, 'card')}
+                        ${projectsMarkup}
                     </div>
                 `;
-            });
+            }
             html += `</div>`;
         }
-        
+
         accountsView.innerHTML = html;
     },
-    
+
     // Load card-based reports view
-    loadCardReportsView() {
+    async loadCardReportsView() {
         const reportsView = document.getElementById('reportsView');
         if (!reportsView) return;
-        const availableMonths = DataManager.getAvailableActivityMonths();
+        const availableMonths = await DataManager.getAvailableActivityMonths();
         const fallbackMonth = new Date().toISOString().substring(0, 7);
         const monthOptions = availableMonths.length ? [...availableMonths] : [fallbackMonth];
         let selectedMonth = this.latestAnalytics.cardMonth
@@ -2304,7 +2350,7 @@ const App = {
         }
         this.latestAnalytics.cardMonth = selectedMonth;
 
-        const analytics = DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+        const analytics = await DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
         this.latestAnalytics.card = analytics;
 
         reportsView.innerHTML = `
@@ -2334,21 +2380,21 @@ const App = {
         `;
 
         this.setAnalyticsLoading('card', true);
-        this.initAnalyticsCharts({ prefix: 'card', analytics, month: selectedMonth });
+        await this.initAnalyticsCharts({ prefix: 'card', analytics, month: selectedMonth });
         this.setAnalyticsLoading('card', false);
         this.setupActivityMixToggle('card', analytics);
     },
-    
+
     // Load card-based admin view
     loadCardAdminView() {
         // Legacy - redirect to systemAdmin
         this.loadCardSystemAdminView();
     },
-    
+
     loadCardSystemAdminView() {
         Admin.loadSystemAdminPanel();
     },
-    
+
     loadCardConfigurationView() {
         Admin.loadConfigurationPanel();
     },
@@ -2356,7 +2402,7 @@ const App = {
     // Load activities view
     loadActivitiesView() {
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardActivitiesView();
+            this.loadCardActivitiesView().catch(e => console.warn('loadCardActivitiesView failed', e));
             return;
         }
         // Initialize view mode if not set
@@ -2368,6 +2414,105 @@ const App = {
             this.setActivitiesViewMode(this.activitiesViewMode);
         }, 50);
         this.renderActivitiesList('activitiesContent');
+    },
+
+    /**
+     * On session invalid (401): capture any in-progress activity or win/loss form into drafts
+     * so the user can retry after signing in. Drafts are stored in localStorage and survive session clear.
+     */
+    capturePendingSubmissionsToDrafts() {
+        if (typeof Drafts === 'undefined' || typeof Drafts.addDraft !== 'function') return;
+        const msg = 'Session expired. Sign in and submit from Drafts.';
+
+        // Activity modal: capture form state if visible and has meaningful data
+        const activityModal = document.getElementById('activityModal');
+        if (activityModal && activityModal.offsetParent !== null) {
+            const categoryRadio = document.querySelector('#activityForm input[name="activityCategory"]:checked');
+            const category = categoryRadio ? categoryRadio.value : '';
+            const accountId = document.getElementById('selectedAccountId')?.value || '';
+            const accountDisplay = document.getElementById('accountDisplay')?.textContent || '';
+            const industry = document.getElementById('industry')?.value || '';
+            const industryOtherText = document.getElementById('industryOtherText')?.value || '';
+            const projectId = document.getElementById('selectedProjectId')?.value || '';
+            const projectDisplay = document.getElementById('projectDisplay')?.textContent || '';
+            const newAccountName = document.getElementById('newAccountName')?.value || '';
+            const newProjectName = document.getElementById('newProjectName')?.value || '';
+            const activityType = document.getElementById('activityTypeSelect')?.value || '';
+            const activityDate = document.getElementById('activityDate')?.value || '';
+            const hasData = category || accountId || accountDisplay || industry || projectId || projectDisplay || newAccountName || newProjectName || activityType || activityDate;
+            if (hasData) {
+                const formData = {
+                    activityCategory: category,
+                    accountId,
+                    accountName: accountDisplay || newAccountName,
+                    industry,
+                    industryOtherText,
+                    projectId,
+                    projectName: projectDisplay || newProjectName,
+                    newAccountName,
+                    newProjectName,
+                    activityType,
+                    date: activityDate,
+                    salesRepRegion: document.getElementById('salesRepRegionSelect')?.value || '',
+                    salesRep: document.getElementById('salesRepSelect')?.value || '',
+                    selectedUseCases: (typeof Activities !== 'undefined' && Activities.selectedUseCases) ? Activities.selectedUseCases.slice() : [],
+                    callType: document.getElementById('callType')?.value || '',
+                    callDescription: document.getElementById('callDescription')?.value || '',
+                    sowLink: document.getElementById('sowLink')?.value || '',
+                    rfxType: document.getElementById('rfxType')?.value || ''
+                };
+                Drafts.addDraft({
+                    type: category === 'internal' ? 'internal' : 'external',
+                    payload: { _activityForm: true, formData },
+                    errorMessage: msg,
+                    storageKey: 'activity_form',
+                    label: 'Activity (in progress)'
+                });
+            }
+        }
+
+        // Win/Loss modal: capture form state if visible
+        const winLossModal = document.getElementById('winLossModal');
+        if (winLossModal && winLossModal.offsetParent !== null) {
+            const accountId = document.getElementById('winLossAccountId')?.value || '';
+            const projectId = document.getElementById('winLossProjectId')?.value || '';
+            const status = document.getElementById('winLossStatus')?.value || '';
+            const sfdcLink = (document.getElementById('winLossSfdcLink') && document.getElementById('winLossSfdcLink').value) ? document.getElementById('winLossSfdcLink').value.trim() : '';
+            const mrrInput = document.getElementById('winLossMRR');
+            const mrr = mrrInput ? mrrInput.value : '';
+            const currency = mrrInput?.dataset?.currency || 'INR';
+            const fxToInr = mrrInput?.dataset?.fx ? parseFloat(mrrInput.dataset.fx) : null;
+            const monthOfWin = document.getElementById('winLossMonthOfWin')?.value || '';
+            const wonByUserId = document.getElementById('winLossWonBy')?.value || '';
+            const reason = document.getElementById('winLossReason')?.value || '';
+            const competitors = document.getElementById('competitorAnalysis')?.value || '';
+            const accountType = document.getElementById('accountType')?.value || '';
+            const otd = document.getElementById('winLossOtd')?.value || '';
+            if (accountId && projectId) {
+                Drafts.addDraft({
+                    type: 'external',
+                    payload: {
+                        _winlossForm: true,
+                        accountId,
+                        projectId,
+                        status,
+                        sfdcLink,
+                        mrr,
+                        currency,
+                        fxToInr,
+                        monthOfWin,
+                        wonByUserId,
+                        reason,
+                        competitors,
+                        accountType,
+                        otd
+                    },
+                    errorMessage: msg,
+                    storageKey: 'winloss',
+                    label: 'Win/Loss update'
+                });
+            }
+        }
     },
 
     updateDraftsBadge() {
@@ -2397,28 +2542,37 @@ const App = {
         const cards = drafts.map(function (d) {
             const isInternal = d.type === 'internal';
             const p = d.payload;
+            const isWinlossForm = p && p._winlossForm === true;
+            const isActivityForm = p && p._activityForm === true;
             const isFullList = Array.isArray(p) && p.length > 0;
             const storageKey = d.storageKey || (isInternal ? 'internalActivities' : 'activities');
             const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || d.attemptedAt || '')).toString().slice(0, 10);
             const listLabel = storageKey === 'accounts'
                 ? 'Accounts (win/loss) (' + p.length + ' items)'
                 : isInternal ? 'Internal (' + p.length + ' items)' : 'Activities (' + p.length + ' items)';
-            const label = isFullList
-                ? listLabel + ' – ' + dateStr
-                : isInternal
-                    ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
-                    : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+            const label = d.label
+                ? d.label + (dateStr ? ' – ' + dateStr : '')
+                : isFullList
+                    ? listLabel + ' – ' + dateStr
+                    : isInternal
+                        ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
+                        : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+            const typeLabel = d.label ? d.label.split(' – ')[0] : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External'));
             const err = (d.errorMessage || '').slice(0, 80);
+            const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
+            const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : 'Submit again');
+            const submitDisabled = isSubmitting ? ' disabled' : '';
+            const showEdit = !isFullList && !isSubmitting && (isActivityForm || (!isWinlossForm && !isActivityForm));
             return (
                 '<div class="draft-card" data-draft-id="' + (d.id || '') + '">' +
                 '<div class="draft-card-body">' +
-                '<span class="draft-type">' + (storageKey === 'accounts' ? 'Accounts' : (isInternal ? 'Internal' : 'External')) + '</span>' +
+                '<span class="draft-type">' + typeLabel + '</span>' +
                 '<p class="draft-label">' + (label || 'Activity') + '</p>' +
                 (err ? '<p class="draft-error text-muted small">' + err + '</p>' : '') +
                 '<div class="draft-actions">' +
-                '<button type="button" class="btn btn-primary btn-sm draft-submit">Submit again</button> ' +
-                (!isFullList ? '<button type="button" class="btn btn-outline btn-sm draft-edit">Edit</button> ' : '') +
-                '<button type="button" class="btn btn-outline btn-sm draft-discard">Discard</button>' +
+                '<button type="button" class="btn btn-primary btn-sm draft-submit"' + submitDisabled + '>' + submitBtnLabel + '</button> ' +
+                (showEdit ? '<button type="button" class="btn btn-outline btn-sm draft-edit">Edit</button> ' : '') +
+                '<button type="button" class="btn btn-outline btn-sm draft-discard"' + (isSubmitting ? ' disabled' : '') + '>Discard</button>' +
                 '</div></div></div>'
             );
         }).join('');
@@ -2431,32 +2585,51 @@ const App = {
                 const id = card && card.getAttribute('data-draft-id');
                 const draft = drafts.find(function (d) { return d.id === id; });
                 if (!draft) return;
-                try {
-                    var isFullList = Array.isArray(draft.payload) && draft.payload.length > 0;
-                    var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
-                    if (isFullList) {
-                        if (keyToSave === 'accounts') {
-                            localStorage.setItem('accounts', JSON.stringify(draft.payload));
-                            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache('accounts');
-                        } else if (keyToSave === 'internalActivities') {
-                            localStorage.setItem('internalActivities', JSON.stringify(draft.payload));
-                        } else {
-                            localStorage.setItem('activities', JSON.stringify(draft.payload));
+                (async function () {
+                    try {
+                        const p = draft.payload;
+                        if (p && p._winlossForm === true) {
+                            await App.applyWinLossDraft(p);
+                            if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                            UI.showNotification('Win/Loss update saved.', 'success');
+                            App.loadDraftsView();
+                            if (typeof App.loadWinLossView === 'function') await App.loadWinLossView();
+                            return;
                         }
-                    } else if (draft.type === 'internal') {
-                        DataManager.addInternalActivity(draft.payload);
-                    } else {
-                        DataManager.addActivity(draft.payload);
+                        if (p && p._activityForm === true && p.formData) {
+                            if (typeof Activities !== 'undefined' && Activities.restoreFormFromDraft) {
+                                await Activities.restoreFormFromDraft(p.formData, draft.id);
+                            }
+                            App.loadDraftsView();
+                            return;
+                        }
+                        var isFullList = Array.isArray(p) && p.length > 0;
+                        var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
+                        if (isFullList) {
+                            const payload = JSON.stringify(draft.payload);
+                            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+                                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft(keyToSave, payload, {
+                                    type: keyToSave === 'internalActivities' ? 'internal' : 'external'
+                                });
+                            } else {
+                                localStorage.setItem(keyToSave, payload);
+                            }
+                            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
+                        } else if (draft.type === 'internal') {
+                            await DataManager.addInternalActivity(draft.payload);
+                        } else {
+                            await DataManager.addActivity(draft.payload);
+                        }
+                        if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
+                        App.loadDraftsView();
+                        App.loadDashboard();
+                        if (App.loadActivitiesView) App.loadActivitiesView();
+                        if (keyToSave === 'accounts' && typeof App.loadWinLossView === 'function') App.loadWinLossView();
+                    } catch (e) {
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Still could not save. Try again or edit the draft.', 'error');
                     }
-                    if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
-                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
-                    App.loadDraftsView();
-                    App.loadDashboard();
-                    if (App.loadActivitiesView) App.loadActivitiesView();
-                    if (keyToSave === 'accounts' && typeof App.loadWinLossView === 'function') App.loadWinLossView();
-                } catch (e) {
-                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Still could not save. Try again or edit the draft.', 'error');
-                }
+                })();
             });
         });
 
@@ -2465,11 +2638,18 @@ const App = {
                 const card = btn.closest('.draft-card');
                 const id = card && card.getAttribute('data-draft-id');
                 const draft = drafts.find(function (d) { return d.id === id; });
-                if (!draft || Array.isArray(draft.payload)) return;
+                if (!draft) return;
+                const p = draft.payload;
+                if (p && p._activityForm === true && p.formData && typeof Activities !== 'undefined' && Activities.restoreFormFromDraft) {
+                    Activities.restoreFormFromDraft(p.formData, draft.id);
+                    App.loadDraftsView();
+                    return;
+                }
+                if (Array.isArray(p)) return;
                 if (typeof Activities === 'undefined' || !Activities.openActivityModal) return;
                 Activities.openActivityModal({
                     mode: 'create',
-                    activity: draft.payload,
+                    activity: p,
                     isInternal: draft.type === 'internal',
                     fromDraftId: draft.id
                 });
@@ -2502,41 +2682,61 @@ const App = {
         }
     },
 
-    draftsSubmitAll() {
+    async draftsSubmitAll() {
         const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
         if (drafts.length === 0) return;
         let submitted = 0;
         let failed = 0;
-        drafts.forEach(function (draft) {
+        let skippedForms = 0;
+        for (const draft of drafts) {
+            const p = draft.payload;
+            if (p && p._activityForm === true) {
+                skippedForms++;
+                continue;
+            }
+            if (p && p._winlossForm === true) {
+                try {
+                    await this.applyWinLossDraft(p);
+                    if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                    submitted++;
+                } catch (e) {
+                    failed++;
+                }
+                continue;
+            }
             try {
-                const isFullList = Array.isArray(draft.payload) && draft.payload.length > 0;
+                const isFullList = Array.isArray(p) && p.length > 0;
                 const keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                 if (isFullList) {
-                    if (keyToSave === 'accounts') {
-                        localStorage.setItem('accounts', JSON.stringify(draft.payload));
-                        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache('accounts');
-                    } else if (keyToSave === 'internalActivities') {
-                        localStorage.setItem('internalActivities', JSON.stringify(draft.payload));
+                    const payload = JSON.stringify(draft.payload);
+                    if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+                        await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft(keyToSave, payload, {
+                            type: keyToSave === 'internalActivities' ? 'internal' : 'external'
+                        });
                     } else {
-                        localStorage.setItem('activities', JSON.stringify(draft.payload));
+                        localStorage.setItem(keyToSave, payload);
                     }
+                    if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
                 } else if (draft.type === 'internal') {
-                    DataManager.addInternalActivity(draft.payload);
+                    await DataManager.addInternalActivity(draft.payload);
                 } else {
-                    DataManager.addActivity(draft.payload);
+                    await DataManager.addActivity(draft.payload);
                 }
                 if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
                 submitted++;
             } catch (e) {
                 failed++;
             }
-        });
+        }
         App.loadDraftsView();
         App.loadDashboard();
         if (App.loadActivitiesView) App.loadActivitiesView();
         if (typeof App.loadWinLossView === 'function') App.loadWinLossView();
         if (typeof UI !== 'undefined' && UI.showNotification) {
-            UI.showNotification(submitted + ' submitted.' + (failed > 0 ? ' ' + failed + ' failed – check remaining drafts.' : ''), failed > 0 ? 'warning' : 'success');
+            let msg = submitted + ' submitted.';
+            if (failed > 0) msg += ' ' + failed + ' failed – check remaining drafts.';
+            if (skippedForms > 0) msg += ' ' + skippedForms + ' in-progress form(s) – use Edit to complete.';
+            UI.showNotification(msg, failed > 0 || skippedForms > 0 ? 'warning' : 'success');
         }
     },
 
@@ -2550,10 +2750,12 @@ const App = {
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('All drafts deleted.', 'info');
     },
 
-    getWinLossProjectsDataset() {
-        const accounts = DataManager.getAccounts();
-        const ownerMap = this.getProjectOwnerMap();
-        const users = DataManager.getUsers();
+    async getWinLossProjectsDataset() {
+        const [accounts, ownerMap, users] = await Promise.all([
+            DataManager.getAccounts(),
+            this.getProjectOwnerMap(),
+            DataManager.getUsers()
+        ]);
         const userLookup = new Map(users.map(user => [user.id, user]));
 
         const projects = [];
@@ -2587,13 +2789,13 @@ const App = {
         return projects;
     },
 
-    populateWinLossOwnerFilter() {
+    async populateWinLossOwnerFilter() {
         const selectIds = ['winlossOwnerFilter', 'cardWinlossOwnerFilter'];
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
-        const users = this.getActiveUsers();
+        const users = await this.getActiveUsers();
 
         selectIds.forEach(id => {
             const select = document.getElementById(id);
@@ -2637,10 +2839,10 @@ const App = {
         });
     },
 
-    populateWinLossMonthFilter() {
+    async populateWinLossMonthFilter() {
         const select = document.getElementById('winlossMonthFilter');
         if (!select) return;
-        const allProjects = this.getWinLossProjectsDataset();
+        const allProjects = await this.getWinLossProjectsDataset();
         const months = new Set();
         allProjects.forEach(project => {
             const m = project.winLossData?.monthOfWin;
@@ -2681,13 +2883,13 @@ const App = {
     },
 
     // Load win/loss view
-    loadWinLossView() {
+    async loadWinLossView() {
         // Check if card interface is active
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardWinLossView();
+            this.loadCardWinLossView().catch(e => console.warn('loadCardWinLossView failed', e));
             return;
         }
-        
+
         try {
             const container = document.getElementById('winlossContent');
             if (!container) {
@@ -2705,7 +2907,7 @@ const App = {
             const ownerFilterRaw = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
             const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
 
-            let visibleProjects = this.getWinLossProjectsDataset();
+            let visibleProjects = await this.getWinLossProjectsDataset();
             visibleProjects = visibleProjects.filter(project => {
                 const ownerIds = project.ownerIds || [];
                 if (ownerFilterValue !== 'all') {
@@ -2746,8 +2948,8 @@ const App = {
 
             let html = '';
             visibleProjects.forEach(project => {
-                const statusClass = project.status === 'won' ? 'won' : 
-                                  project.status === 'lost' ? 'lost' : 'pending';
+                const statusClass = project.status === 'won' ? 'won' :
+                    project.status === 'lost' ? 'lost' : 'pending';
                 const winLossDetails = project.winLossData ? `
                                 <div style="margin-top: 0.5rem;">
                                     ${this.formatWinLossAmount(project.winLossData) ? `<p><strong>MRR:</strong> ${this.formatWinLossAmount(project.winLossData)}</p>` : ''}
@@ -2757,7 +2959,7 @@ const App = {
                 ` : '';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
                 const canManage = isAdmin || (currentUser?.id && (project.ownerIds || []).includes(currentUser.id));
-                
+
                 html += `
                     <div class="project-card ${statusClass}">
                         <div class="project-info">
@@ -2785,7 +2987,7 @@ const App = {
             });
 
             container.innerHTML = html;
-            this.populateWinLossOwnerFilter();
+            await this.populateWinLossOwnerFilter();
             this.populateWinLossMonthFilter();
         } catch (error) {
             console.error('Error loading win/loss view:', error);
@@ -2835,10 +3037,10 @@ const App = {
     },
 
     // --- Suggestions and Bugs ---
-    loadSuggestionsBugsView() {
+    async loadSuggestionsBugsView() {
         const listEl = document.getElementById('suggestionsBugsList');
         if (!listEl) return;
-        const entries = (typeof DataManager !== 'undefined' && DataManager.getSuggestionsAndBugs) ? DataManager.getSuggestionsAndBugs() : [];
+        const entries = (typeof DataManager !== 'undefined' && DataManager.getSuggestionsAndBugs) ? await DataManager.getSuggestionsAndBugs() : [];
         const sorted = [...entries].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         const user = typeof Auth !== 'undefined' && Auth.currentUser ? Auth.currentUser : null;
         const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
@@ -2892,7 +3094,7 @@ const App = {
         });
     },
 
-    openSuggestionsBugsModal(entryId) {
+    async openSuggestionsBugsModal(entryId) {
         const modalId = 'suggestionsBugsModal';
         let modal = document.getElementById(modalId);
         if (!modal) {
@@ -2931,7 +3133,7 @@ const App = {
         const headerInput = document.getElementById('suggestionsBugsHeader');
         const descInput = document.getElementById('suggestionsBugsDescription');
         if (entryId) {
-            const entries = DataManager.getSuggestionsAndBugs();
+            const entries = await DataManager.getSuggestionsAndBugs();
             const entry = entries.find((e) => e.id === entryId);
             if (entry) {
                 if (titleEl) titleEl.textContent = 'Edit suggestion or bug';
@@ -2957,7 +3159,7 @@ const App = {
         UI.hideModal('suggestionsBugsModal');
     },
 
-    saveSuggestionsBugs(event) {
+    async saveSuggestionsBugs(event) {
         if (event) event.preventDefault();
         const idInput = document.getElementById('suggestionsBugsEntryId');
         const headerInput = document.getElementById('suggestionsBugsHeader');
@@ -2974,7 +3176,7 @@ const App = {
             UI.showNotification('You must be logged in to submit.', 'error');
             return;
         }
-        const entries = DataManager.getSuggestionsAndBugs();
+        const entries = await DataManager.getSuggestionsAndBugs();
         const existingId = (idInput && idInput.value) || null;
         if (existingId) {
             const entry = entries.find((e) => e.id === existingId);
@@ -2990,7 +3192,7 @@ const App = {
             entry.header = header;
             entry.description = description;
             entry.updatedAt = new Date().toISOString();
-            DataManager.saveSuggestionsAndBugs(entries);
+            await DataManager.saveSuggestionsAndBugs(entries);
             UI.showNotification('Updated.');
             this.closeSuggestionsBugsModal();
         } else {
@@ -3005,19 +3207,19 @@ const App = {
                 comments: []
             };
             entries.push(newEntry);
-            DataManager.saveSuggestionsAndBugs(entries);
+            await DataManager.saveSuggestionsAndBugs(entries);
             UI.showNotification('Submitted.');
             this.closeSuggestionsBugsModal();
         }
-        this.loadSuggestionsBugsView();
+        await this.loadSuggestionsBugsView();
     },
 
-    deleteSuggestionsBugs(entryId) {
+    async deleteSuggestionsBugs(entryId) {
         if (!entryId || !DataManager || !DataManager.getSuggestionsAndBugs || !DataManager.saveSuggestionsAndBugs) return;
         const user = Auth && Auth.currentUser;
         if (!user) return;
         const isAdmin = Auth.isAdmin && Auth.isAdmin();
-        const entries = DataManager.getSuggestionsAndBugs();
+        const entries = await DataManager.getSuggestionsAndBugs();
         const entry = entries.find((e) => e.id === entryId);
         if (!entry) return;
         if (entry.ownerId !== user.id && !isAdmin) {
@@ -3026,12 +3228,12 @@ const App = {
         }
         if (!window.confirm('Delete this suggestion/bug? This cannot be undone.')) return;
         const filtered = entries.filter((e) => e.id !== entryId);
-        DataManager.saveSuggestionsAndBugs(filtered);
+        await DataManager.saveSuggestionsAndBugs(filtered);
         UI.showNotification('Deleted.');
         this.loadSuggestionsBugsView();
     },
 
-    addSuggestionsBugsComment(entryId) {
+    async addSuggestionsBugsComment(entryId) {
         if (!entryId || !DataManager || !DataManager.getSuggestionsAndBugs || !DataManager.saveSuggestionsAndBugs) return;
         const user = Auth && Auth.currentUser;
         if (!user) {
@@ -3042,7 +3244,7 @@ const App = {
         const input = card ? card.querySelector('.suggestions-bugs-comment-input') : null;
         const text = (input && input.value) ? input.value.trim() : '';
         if (!text) return;
-        const entries = DataManager.getSuggestionsAndBugs();
+        const entries = await DataManager.getSuggestionsAndBugs();
         const entry = entries.find((e) => e.id === entryId);
         if (!entry) return;
         if (!Array.isArray(entry.comments)) entry.comments = [];
@@ -3053,16 +3255,16 @@ const App = {
             text,
             createdAt: new Date().toISOString()
         });
-        DataManager.saveSuggestionsAndBugs(entries);
+        await DataManager.saveSuggestionsAndBugs(entries);
         if (input) input.value = '';
-        this.loadSuggestionsBugsView();
+        await this.loadSuggestionsBugsView();
     },
 
     // Filter win/loss
     filterWinLoss() {
         const query = document.getElementById('winlossSearch').value.toLowerCase();
         const cards = document.querySelectorAll('.project-card');
-        
+
         cards.forEach(card => {
             const text = card.textContent.toLowerCase();
             card.style.display = text.includes(query) ? '' : 'none';
@@ -3070,12 +3272,12 @@ const App = {
     },
 
     // Load reports V2
-    loadReports() {
+    async loadReports() {
         try {
             const isYearMode = this.analyticsPeriodMode === 'year';
             const availablePeriods = isYearMode
-                ? DataManager.getAvailableActivityYears()
-                : DataManager.getAvailableActivityMonths();
+                ? await DataManager.getAvailableActivityYears()
+                : await DataManager.getAvailableActivityMonths();
             const today = new Date();
             const fallbackPeriod = isYearMode
                 ? String(today.getFullYear())
@@ -3161,12 +3363,12 @@ const App = {
         this.loadReports();
     },
 
-    shiftReportMonth(step = 1, variant = 'standard') {
+    async shiftReportMonth(step = 1, variant = 'standard') {
         const isCard = variant === 'card';
         const isYearMode = !isCard && this.analyticsPeriodMode === 'year';
         const periods = isYearMode
-            ? DataManager.getAvailableActivityYears()
-            : DataManager.getAvailableActivityMonths();
+            ? await DataManager.getAvailableActivityYears()
+            : await DataManager.getAvailableActivityMonths();
         if (!periods.length) {
             return;
         }
@@ -3202,7 +3404,7 @@ const App = {
         }
     },
 
-    exportReportsCsv() {
+    async exportReportsCsv() {
         try {
             if (!this.isFeatureEnabled('csvExport')) {
                 UI.showNotification('CSV export is currently disabled by the administrator.', 'info');
@@ -3220,7 +3422,7 @@ const App = {
 
             const analytics = (this.latestAnalytics.standard && this.latestAnalytics.standardMonth === selectedMonth)
                 ? this.latestAnalytics.standard
-                : DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
+                : await DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
 
             if (!analytics) {
                 UI.showNotification('No analytics data available to export.', 'error');
@@ -3292,8 +3494,8 @@ const App = {
         return rows;
     },
 
-    handleCardReportMonthChange(value) {
-        const availableMonths = DataManager.getAvailableActivityMonths();
+    async handleCardReportMonthChange(value) {
+        const availableMonths = await DataManager.getAvailableActivityMonths();
         const fallbackMonth = new Date().toISOString().substring(0, 7);
         let selected = value || this.latestAnalytics.cardMonth || fallbackMonth;
         if (availableMonths.length && !availableMonths.includes(selected)) {
@@ -3312,7 +3514,7 @@ const App = {
         this.loadCardReportsView();
     },
 
-    handleWinLossCurrencyChange(value) {
+    async handleWinLossCurrencyChange(value) {
         const currency = value || 'INR';
         const mrrInput = document.getElementById('winLossMRR');
         if (!mrrInput) return;
@@ -3320,8 +3522,8 @@ const App = {
         const accountId = document.getElementById('winLossAccountId')?.value;
         let fx = null;
         if (accountId) {
-            const account = DataManager.getAccountById(accountId);
-            const rep = account?.salesRep ? DataManager.getGlobalSalesRepByName(account.salesRep) : null;
+            const account = await DataManager.getAccountById(accountId);
+            const rep = account?.salesRep ? await DataManager.getGlobalSalesRepByName(account.salesRep) : null;
             if (rep && rep.currency === currency && Number.isFinite(rep.fxToInr) && rep.fxToInr > 0) {
                 fx = rep.fxToInr;
             }
@@ -3336,10 +3538,12 @@ const App = {
         this.updateWinLossMrrHelper();
     },
 
-    buildAnalyticsFilterBar(variant = 'standard', options = {}) {
+    async buildAnalyticsFilterBar(variant = 'standard', options = {}) {
         const { showIndustry = true, showChannel = true } = options;
-        const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
-        const channels = this.getAvailableChannels();
+        const [industries, channels] = await Promise.all([
+            DataManager.getIndustries().then(list => (list || []).sort((a, b) => a.localeCompare(b))),
+            this.getAvailableChannels()
+        ]);
         const selectedIndustry = this.reportFilters.industry || '';
         const selectedChannel = this.reportFilters.channel || '';
         const handlerVariantArg = variant === 'card' ? "'card'" : "'standard'";
@@ -3485,8 +3689,8 @@ const App = {
                     <button class="btn btn-primary" onclick="App.generateAnalyticsTable()">Generate Table</button>
                     <button class="btn btn-outline" onclick="App.exportAnalyticsTableCsv()">Export CSV</button>
                     ${(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())
-                        ? '<button class="btn btn-secondary" onclick="App.saveAnalyticsTablePreset()">Save Preset</button>'
-                        : ''}
+                ? '<button class="btn btn-secondary" onclick="App.saveAnalyticsTablePreset()">Save Preset</button>'
+                : ''}
                 </div>
             </div>
         `;
@@ -3758,7 +3962,7 @@ const App = {
         UI.showNotification('Analytics table exported.', 'success');
     },
 
-    saveAnalyticsTablePreset() {
+    async saveAnalyticsTablePreset() {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only admins can save presets.', 'info');
             return;
@@ -3786,7 +3990,7 @@ const App = {
             ...this.savedAnalyticsTables.filter(item => item.id !== preset.id && item.name !== trimmedName),
             preset
         ];
-        DataManager.saveAnalyticsTablePresets(updated);
+        await DataManager.saveAnalyticsTablePresets(updated);
         this.savedAnalyticsTables = updated;
         this.renderAnalyticsTablePresets();
         UI.showNotification('Preset saved.', 'success');
@@ -3834,19 +4038,19 @@ const App = {
         UI.showNotification(`Preset "${preset.name}" loaded.`, 'success');
     },
 
-    deleteAnalyticsTablePreset(id) {
+    async deleteAnalyticsTablePreset(id) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only admins can delete presets.', 'info');
             return;
         }
         this.savedAnalyticsTables = this.savedAnalyticsTables.filter(item => item.id !== id);
-        DataManager.saveAnalyticsTablePresets(this.savedAnalyticsTables);
+        await DataManager.saveAnalyticsTablePresets(this.savedAnalyticsTables);
         this.renderAnalyticsTablePresets();
         UI.showNotification('Preset deleted.', 'success');
     },
 
-    getAvailableChannels() {
-        const accounts = DataManager.getAccounts();
+    async getAvailableChannels() {
+        const accounts = await DataManager.getAccounts();
         const channelsSet = new Set();
         accounts.forEach(account => {
             account.projects?.forEach(project => {
@@ -3860,9 +4064,9 @@ const App = {
         return Array.from(channelsSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
     },
 
-    getActiveUsers() {
+    async getActiveUsers() {
         try {
-            const users = DataManager.getUsers();
+            const users = await DataManager.getUsers();
             return users
                 .filter(user => user && user.isActive !== false)
                 .sort((a, b) => (a.username || '').localeCompare(b.username || ''));
@@ -3904,10 +4108,13 @@ const App = {
         return filterValue;
     },
 
-    getProjectOwnerMap() {
+    async getProjectOwnerMap() {
         const ownerMap = new Map();
         try {
-            const accounts = DataManager.getAccounts();
+            const [accounts, activities] = await Promise.all([
+                DataManager.getAccounts(),
+                DataManager.getAllActivities()
+            ]);
             accounts.forEach(account => {
                 account.projects?.forEach(project => {
                     if (!project?.id) return;
@@ -3924,7 +4131,6 @@ const App = {
                 });
             });
 
-            const activities = DataManager.getAllActivities();
             activities.forEach(activity => {
                 if (!activity?.projectId || !activity?.userId) return;
                 if (!ownerMap.has(activity.projectId)) {
@@ -3938,9 +4144,9 @@ const App = {
         return ownerMap;
     },
 
-    populateActivityFilterControls() {
-        const industries = DataManager.getIndustries().sort((a, b) => a.localeCompare(b));
-        const regions = DataManager.getRegions().sort((a, b) => a.localeCompare(b));
+    async populateActivityFilterControls() {
+        const industries = (await DataManager.getIndustries()).sort((a, b) => a.localeCompare(b));
+        const regions = (await DataManager.getRegions()).sort((a, b) => a.localeCompare(b));
         const activityTypes = ['customerCall', 'sow', 'poc', 'rfx', 'pricing', 'other'];
         const timeframeOptions = [
             { value: 'all', label: 'All Time' },
@@ -3956,48 +4162,64 @@ const App = {
             typeSelect.value = this.activityFilters.type || 'all';
         }
 
+        const cardTypeSelect = document.getElementById('cardActivityFilterType');
+        if (cardTypeSelect) {
+            cardTypeSelect.value = this.activityFilters.type || 'all';
+        }
+
         // Populate Industry filter
         const industrySelect = document.getElementById('activityFilterIndustry');
         if (industrySelect) {
-            industrySelect.innerHTML = [
-                `<option value="">All Industries</option>`,
-                ...industries.map(industry => `<option value="${industry}">${industry}</option>`)
-            ].join('');
-            industrySelect.value = this.activityFilters.industry || '';
+            industrySelect.innerHTML = '<option value="all">All Industries</option>' +
+                industries.map(i => `<option value="${i}">${i}</option>`).join('');
+            industrySelect.value = this.activityFilters.industry || 'all';
+        }
+
+        const cardIndustrySelect = document.getElementById('cardActivityFilterIndustry');
+        if (cardIndustrySelect) {
+            cardIndustrySelect.innerHTML = '<option value="">All Industries</option>' +
+                industries.map(i => `<option value="${i}">${i}</option>`).join('');
+            cardIndustrySelect.value = this.activityFilters.industry || '';
         }
 
         // Populate Region filter
         const regionSelect = document.getElementById('activityFilterRegion');
         if (regionSelect) {
-            regionSelect.innerHTML = [
-                `<option value="">All Regions</option>`,
-                ...regions.map(region => `<option value="${region}">${region}</option>`)
-            ].join('');
-            regionSelect.value = this.activityFilters.region || '';
+            regionSelect.innerHTML = '<option value="all">All Regions</option>' +
+                regions.map(r => `<option value="${r}">${r}</option>`).join('');
+            regionSelect.value = this.activityFilters.region || 'all';
         }
 
-        // Populate Activity Type filter
-        const activityTypeSelect = document.getElementById('activityFilterActivityType');
-        if (activityTypeSelect) {
-            activityTypeSelect.innerHTML = [
-                `<option value="">All Types</option>`,
-                ...activityTypes.map(type => {
-                    const label = UI.getActivityTypeLabel(type);
-                    return `<option value="${type}">${label}</option>`;
-                })
-            ].join('');
-            activityTypeSelect.value = this.activityFilters.activityType || '';
+        // Populate Channel filter
+        const channelSelect = document.getElementById('activityFilterChannel');
+        if (channelSelect) {
+            channelSelect.innerHTML = '<option value="all">All Channels</option>' +
+                activityTypes.map(t => `<option value="${t}">${UI.getActivityTypeLabel(t)}</option>`).join('');
+            channelSelect.value = this.activityFilters.activityType || 'all';
+        }
+
+        const cardChannelSelect = document.getElementById('cardActivityFilterChannel');
+        if (cardChannelSelect) {
+            cardChannelSelect.innerHTML = '<option value="">All Channels</option>' +
+                activityTypes.map(t => `<option value="${t}">${UI.getActivityTypeLabel(t)}</option>`).join('');
+            cardChannelSelect.value = this.activityFilters.activityType || '';
         }
 
         // Populate Timeframe filter
         const timeframeSelect = document.getElementById('activityFilterTimeframe');
         if (timeframeSelect) {
-            timeframeSelect.innerHTML = timeframeOptions.map(option => `
-                <option value="${option.value}" ${option.value === (this.activityFilters.timeframe || 'all') ? 'selected' : ''}>
-                    ${option.label}
-                </option>
-            `).join('');
+            timeframeSelect.innerHTML = timeframeOptions.map(o => `<option value="${o.value}" ${o.value === (this.activityFilters.timeframe || 'all') ? 'selected' : ''}>
+                    ${o.label}
+                </option>`).join('');
             this.toggleCustomDateRange();
+        }
+
+        const cardTimeframeSelect = document.getElementById('cardActivityFilterTimeframe');
+        if (cardTimeframeSelect) {
+            cardTimeframeSelect.innerHTML = timeframeOptions.map(o => `<option value="${o.value}" ${o.value === (this.activityFilters.timeframe || 'all') ? 'selected' : ''}>
+                    ${o.label}
+                </option>`).join('');
+            cardTimeframeSelect.value = this.activityFilters.timeframe || 'all';
         }
 
         // Populate Date inputs
@@ -4012,12 +4234,14 @@ const App = {
 
         // Populate Owner filter
         const ownerSelect = document.getElementById('activityFilterOwner');
-        if (ownerSelect) {
+        const cardOwnerSelect = document.getElementById('cardActivityFilterOwner');
+
+        if (ownerSelect || cardOwnerSelect) {
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
             const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
                 ? Auth.getCurrentUser()
                 : null;
-            const users = this.getActiveUsers();
+            const users = await this.getActiveUsers();
             const options = [];
 
             if (currentUser) {
@@ -4046,19 +4270,36 @@ const App = {
                 uniqueOptions.push(option);
             });
 
-            ownerSelect.innerHTML = uniqueOptions
+            const ownerOptionsHtml = uniqueOptions
                 .map(option => `<option value="${option.value}">${option.label}</option>`)
                 .join('');
 
-            const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
-            if (ownerSelect.querySelector(`option[value="${desiredValue}"]`)) {
-                ownerSelect.value = desiredValue;
-            } else if (currentUser?.id && ownerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
-                ownerSelect.value = currentUser.id;
-                this.activityFilters.owner = currentUser.id;
-            } else if (ownerSelect.querySelector('option[value="all"]')) {
-                ownerSelect.value = 'all';
-                this.activityFilters.owner = 'all';
+            if (ownerSelect) {
+                ownerSelect.innerHTML = ownerOptionsHtml;
+                const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
+                if (ownerSelect.querySelector(`option[value="${desiredValue}"]`)) {
+                    ownerSelect.value = desiredValue;
+                } else if (currentUser?.id && ownerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
+                    ownerSelect.value = currentUser.id;
+                    this.activityFilters.owner = currentUser.id;
+                } else if (ownerSelect.querySelector('option[value="all"]')) {
+                    ownerSelect.value = 'all';
+                    this.activityFilters.owner = 'all';
+                }
+            }
+
+            if (cardOwnerSelect) {
+                cardOwnerSelect.innerHTML = ownerOptionsHtml;
+                const desiredValue = this.activityFilters.owner || this.getDefaultActivityOwnerFilter();
+                if (cardOwnerSelect.querySelector(`option[value="${desiredValue}"]`)) {
+                    cardOwnerSelect.value = desiredValue;
+                } else if (currentUser?.id && cardOwnerSelect.querySelector(`option[value="${currentUser.id}"]`)) {
+                    cardOwnerSelect.value = currentUser.id;
+                    this.activityFilters.owner = currentUser.id;
+                } else if (cardOwnerSelect.querySelector('option[value="all"]')) {
+                    cardOwnerSelect.value = 'all';
+                    this.activityFilters.owner = 'all';
+                }
             }
         }
 
@@ -4074,7 +4315,7 @@ const App = {
             sortSelect.value = this.activitySortBy || 'dateDesc';
         }
     },
-    
+
     toggleCustomDateRange() {
         const timeframeSelect = document.getElementById('activityFilterTimeframe');
         const customRangeDiv = document.getElementById('activityCustomDateRange');
@@ -4087,7 +4328,7 @@ const App = {
         }
     },
 
-    applyActivityFilters(activities = []) {
+    async applyActivityFilters(activities = []) {
         const filters = this.activityFilters || {};
         const searchTerm = (filters.search || '').toLowerCase().trim();
         const typeFilter = filters.type || 'all';
@@ -4103,8 +4344,8 @@ const App = {
             : null;
         const ownerFilterRaw = filters.owner || this.getDefaultActivityOwnerFilter();
         const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
-        
-        const accounts = DataManager.getAccounts();
+
+        const accounts = await DataManager.getAccounts();
         const accountMap = {};
         accounts.forEach(account => {
             accountMap[account.id] = account;
@@ -4222,15 +4463,15 @@ const App = {
         });
     },
 
-    handleActivitySearch(value, variant = 'standard') {
+    async handleActivitySearch(value, variant = 'standard') {
         this.activityFilters.search = value || '';
-        this.renderActivitiesList();
+        await this.renderActivitiesList();
         if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
-            this.loadCardActivitiesView();
+            await this.loadCardActivitiesView();
         }
     },
 
-    handleActivityFiltersChange(variant = 'standard') {
+    async handleActivityFiltersChange(variant = 'standard') {
         if (variant === 'card') {
             // Legacy card view filters (keep for compatibility)
             const channelId = 'cardActivityFilterChannel';
@@ -4248,7 +4489,7 @@ const App = {
                 const selectedOwner = ownerSelect.value;
                 this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
             }
-            this.loadCardActivitiesView();
+            await this.loadCardActivitiesView();
         } else {
             // New sidebar filters
             const typeSelect = document.getElementById('activityFilterType');
@@ -4259,7 +4500,7 @@ const App = {
             const dateFromInput = document.getElementById('activityFilterDateFrom');
             const dateToInput = document.getElementById('activityFilterDateTo');
             const ownerSelect = document.getElementById('activityFilterOwner');
-            
+
             if (typeSelect) this.activityFilters.type = typeSelect.value || 'all';
             if (industrySelect) this.activityFilters.industry = industrySelect.value || '';
             if (regionSelect) this.activityFilters.region = regionSelect.value || '';
@@ -4274,11 +4515,11 @@ const App = {
                 const selectedOwner = ownerSelect.value;
                 this.activityFilters.owner = selectedOwner || this.getDefaultActivityOwnerFilter();
             }
-            this.renderActivitiesList();
+            await this.renderActivitiesList();
         }
     },
 
-    resetActivityFilters() {
+    async resetActivityFilters() {
         this.activityFilters = {
             search: '',
             industry: '',
@@ -4290,10 +4531,10 @@ const App = {
         if (searchInput) searchInput.value = '';
         const cardSearch = document.getElementById('cardActivitySearch');
         if (cardSearch) cardSearch.value = '';
-        this.populateActivityFilterControls();
-        this.renderActivitiesList();
+        await this.populateActivityFilterControls();
+        await this.renderActivitiesList();
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardActivitiesView();
+            await this.loadCardActivitiesView();
         }
     },
 
@@ -4420,7 +4661,7 @@ const App = {
         }
     },
 
-    getExistingDuplicateActivities(activities = []) {
+    async getExistingDuplicateActivities(activities = []) {
         const map = {};
         activities.forEach(activity => {
             if (!activity) return;
@@ -4454,12 +4695,14 @@ const App = {
         return Object.values(map).filter(entry => entry.count > 1);
     },
 
-    computeProjectHealthData() {
-        const accounts = DataManager.getAccounts();
-        const activities = DataManager.getAllActivities();
-        const users = DataManager.getUsers();
+    async computeProjectHealthData() {
+        const [accounts, activities, users, ownerMap] = await Promise.all([
+            DataManager.getAccounts(),
+            DataManager.getAllActivities(),
+            DataManager.getUsers(),
+            this.getProjectOwnerMap()
+        ]);
         const userLookup = new Map(users.map(user => [user.id, user]));
-        const ownerMap = this.getProjectOwnerMap();
         const projectActivityMap = {};
         const dayMs = 1000 * 60 * 60 * 24;
 
@@ -4660,19 +4903,19 @@ const App = {
         const listMarkup = projects.length ? `
             <div class="project-health-grid">
                 ${projects.map(project => {
-                    const riskLabel = project.risk === 'no-activity'
-                        ? 'No Activity'
-                        : project.risk === 'high'
-                            ? `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`
-                            : `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`;
-                    const lastActivityText = project.activityCount
-                        ? `Last activity ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'} ago (${UI.formatDate(project.lastActivityDate)})`
-                        : 'No activity recorded yet';
-                    const sfdcMarkup = project.sfdcMissing
-                        ? `<p class="project-health-warning">SFDC link missing</p>
+            const riskLabel = project.risk === 'no-activity'
+                ? 'No Activity'
+                : project.risk === 'high'
+                    ? `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`
+                    : `Inactive ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'}`;
+            const lastActivityText = project.activityCount
+                ? `Last activity ${project.daysSinceActivity} day${project.daysSinceActivity === 1 ? '' : 's'} ago (${UI.formatDate(project.lastActivityDate)})`
+                : 'No activity recorded yet';
+            const sfdcMarkup = project.sfdcMissing
+                ? `<p class="project-health-warning">SFDC link missing</p>
                             <button class="btn btn-sm btn-primary" onclick="App.promptProjectSfdcLink('${project.accountId}', '${project.projectId}')">Update SFDC Link</button>`
-                        : `<p class="project-health-link"><a href="${project.sfdcLink}" target="_blank" rel="noopener">View SFDC Record</a></p>`;
-                    return `
+                : `<p class="project-health-link"><a href="${project.sfdcLink}" target="_blank" rel="noopener">View SFDC Record</a></p>`;
+            return `
                         <div class="project-health-card risk-${project.risk}">
                             <div class="project-health-header">
                                 <h4>${project.projectName || 'Unnamed Project'}</h4>
@@ -4687,7 +4930,7 @@ const App = {
                             ${sfdcMarkup}
                         </div>
                     `;
-                }).join('')}
+        }).join('')}
             </div>
         ` : `<p class="text-muted">No projects match the current filters.</p>`;
 
@@ -4768,9 +5011,9 @@ const App = {
         }
     },
 
-    loadProjectHealthView() {
+    async loadProjectHealthView() {
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardProjectHealthView();
+            this.loadCardProjectHealthView().catch(e => console.warn('loadCardProjectHealthView failed', e));
             return;
         }
 
@@ -4780,7 +5023,7 @@ const App = {
             return;
         }
 
-        const projects = this.computeProjectHealthData();
+        const projects = await this.computeProjectHealthData();
         const { projects: filteredProjects, summary } = this.getFilteredProjectHealthProjects(projects);
         const backLink = `
             <div class="view-header-utility">
@@ -4794,7 +5037,7 @@ const App = {
         this.syncProjectHealthControls();
     },
 
-    loadCardProjectHealthView() {
+    async loadCardProjectHealthView() {
         const view = document.getElementById('projectHealthView');
         const container = document.getElementById('projectHealthContent');
         if (!container) {
@@ -4802,7 +5045,7 @@ const App = {
             return;
         }
 
-        const projects = this.computeProjectHealthData();
+        const projects = await this.computeProjectHealthData();
         const { projects: filteredProjects, summary } = this.getFilteredProjectHealthProjects(projects);
         if (view && !view.querySelector('.back-to-home')) {
             const backLink = document.createElement('a');
@@ -4824,8 +5067,8 @@ const App = {
         this.syncProjectHealthControls();
     },
 
-    computeSfdcComplianceData() {
-        const projects = this.computeProjectHealthData();
+    async computeSfdcComplianceData() {
+        const projects = await this.computeProjectHealthData();
         return projects.map(project => {
             const link = (project.sfdcLink || '').trim();
             const hasLink = !!link;
@@ -5120,9 +5363,9 @@ const App = {
         }
     },
 
-    loadSfdcComplianceView() {
+    async loadSfdcComplianceView() {
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardSfdcComplianceView();
+            this.loadCardSfdcComplianceView().catch(e => console.warn('loadCardSfdcComplianceView failed', e));
             return;
         }
 
@@ -5136,7 +5379,7 @@ const App = {
             return;
         }
 
-        const projects = this.computeSfdcComplianceData();
+        const projects = await this.computeSfdcComplianceData();
         const { projects: filteredProjects, summary } = this.getFilteredSfdcProjects(projects);
         const backLink = `
             <div class="view-header-utility">
@@ -5150,7 +5393,7 @@ const App = {
         this.syncSfdcControls();
     },
 
-    loadCardSfdcComplianceView() {
+    async loadCardSfdcComplianceView() {
         const view = document.getElementById('sfdcComplianceView');
         const container = document.getElementById('sfdcComplianceContent');
         if (!container) {
@@ -5162,7 +5405,7 @@ const App = {
             this.sfdcFilters.owner = this.getDefaultRecordOwnerFilter();
         }
 
-        const projects = this.computeSfdcComplianceData();
+        const projects = await this.computeSfdcComplianceData();
         const { projects: filteredProjects, summary } = this.getFilteredSfdcProjects(projects);
         if (view && !view.querySelector('.back-to-home')) {
             const backLink = document.createElement('a');
@@ -5867,62 +6110,104 @@ const App = {
     },
 
     // Load accounts view
-    loadAccountsView() {
+    async loadAccountsView() {
         // Check if card interface is active
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardAccountsView();
+            await this.loadCardAccountsView();
             return;
         }
-        
+
         try {
-            const accounts = DataManager.getAccounts();
+            const accounts = await DataManager.getAccounts();
             const container = document.getElementById('accountsContent');
             if (!container) {
                 console.error('accountsContent container not found');
                 return;
             }
 
-            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+            const searchTerm = (this.accountFilters.search || '').toLowerCase().trim();
+            const industryFilter = this.accountFilters.industry || '';
+            const salesRepFilter = this.accountFilters.salesRep || '';
 
-            if (accounts.length === 0) {
-                container.innerHTML = UI.emptyState('No accounts found');
-                return;
-            }
-
-            let html = '';
-            accounts.forEach(account => {
-                const projectCount = account.projects?.length || 0;
-                const activityCount = this.getAccountActivityCount(account.id);
-                const actionButtons = isAdmin
-                    ? [
-                        `<button class="btn btn-secondary btn-sm" onclick="App.editAccount('${account.id}')" title="Edit Account">✏️</button>`,
-                        `<button class="btn btn-info btn-sm" onclick="App.showMergeAccountModal('${account.id}')" title="Merge Account">🔀</button>`,
-                        `<button class="btn btn-danger btn-sm" onclick="App.showDeleteAccountModal('${account.id}')" title="Delete Account">🗑️</button>`
-                    ]
-                    : [];
-                html += `
-                    <div class="card">
-                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3>${account.name}</h3>
-                            ${actionButtons.length ? `
-                                <div style="display: flex; gap: 0.5rem;">
-                                    ${actionButtons.join('')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        <div class="card-body">
-                            <p><strong>Industry:</strong> ${account.industry || 'N/A'}</p>
-                            <p><strong>Sales Rep:</strong> ${account.salesRep || 'N/A'}</p>
-                            <p><strong>Region:</strong> ${account.salesRepRegion || 'N/A'}</p>
-                            <p><strong>Projects:</strong> ${projectCount}</p>
-                            <p><strong>Activities:</strong> ${activityCount}</p>
-                        </div>
-                        ${this.buildAccountProjectsMarkup(account, 'classic')}
-                    </div>
-                `;
+            const filtered = accounts.filter(account => {
+                const matchesSearch = !searchTerm ||
+                    (account.name && account.name.toLowerCase().includes(searchTerm)) ||
+                    (account.salesRep && account.salesRep.toLowerCase().includes(searchTerm));
+                const matchesIndustry = !industryFilter || account.industry === industryFilter;
+                const matchesSalesRep = !salesRepFilter || account.salesRep === salesRepFilter;
+                return matchesSearch && matchesIndustry && matchesSalesRep;
             });
 
-            container.innerHTML = html;
+            const industries = [...new Set(accounts.map(a => a.industry).filter(Boolean))].sort();
+            const salesReps = [...new Set(accounts.map(a => a.salesRep).filter(Boolean))].sort();
+
+            const backLink = `
+                <div class="view-header-utility">
+                    <button class="btn btn-link view-back-link" onclick="App.switchView('dashboard')">← Back to Dashboard</button>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="App.showMergeAccountModal()">Merge Accounts</button>
+                    </div>
+                </div>
+            `;
+
+            const filterBar = `
+                <div class="activity-filters">
+                    <div class="form-group" style="flex: 2;">
+                        <label class="form-label">Search</label>
+                        <input type="text" id="accountSearch" class="form-control" placeholder="Search by name or rep..." value="${this.accountFilters.search || ''}" oninput="App.searchAccounts()">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Industry</label>
+                        <select id="accountFilterIndustry" class="form-control" onchange="App.handleAccountFilterChange('industry', this.value)">
+                            <option value="">All Industries</option>
+                            ${industries.map(i => `<option value="${i}" ${i === industryFilter ? 'selected' : ''}>${i}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Sales Rep</label>
+                        <select id="accountFilterSalesRep" class="form-control" onchange="App.handleAccountFilterChange('salesRep', this.value)">
+                            <option value="">All Reps</option>
+                            ${salesReps.map(r => `<option value="${r}" ${r === salesRepFilter ? 'selected' : ''}>${r}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group" style="align-self: flex-end;">
+                        <button class="btn btn-link" onclick="App.resetAccountFilters(); return false;">Reset</button>
+                    </div>
+                </div>
+            `;
+
+            const ownerMap = await this.getProjectOwnerMap();
+            const cards = await Promise.all(filtered.map(async account => {
+                const activityCount = await this.getAccountActivityCount(account.id);
+                return `
+                    <div class="account-card">
+                        <div class="account-card-header">
+                            <h3 class="account-card-title">${account.name}</h3>
+                            <button class="btn btn-icon" onclick="App.editAccount('${account.id}')" title="Edit Account">✎</button>
+                        </div>
+                        <div class="account-card-meta">
+                            <div class="account-card-meta-item">
+                                <strong>Industry:</strong> ${account.industry || 'Unknown'}
+                            </div>
+                            <div class="account-card-meta-item">
+                                <strong>Sales Rep:</strong> ${account.salesRep || 'Unassigned'}
+                            </div>
+                            <div class="account-card-meta-item">
+                                <strong>Activities:</strong> ${activityCount}
+                            </div>
+                        </div>
+                        ${await this.buildAccountProjectsMarkup(account, 'classic', ownerMap)}
+                    </div>
+                `;
+            }));
+
+            container.innerHTML = `
+                ${backLink}
+                ${filterBar}
+                <div class="accounts-grid">
+                    ${cards.join('')}
+                </div>
+            `;
         } catch (error) {
             console.error('Error loading accounts view:', error);
             const container = document.getElementById('accountsContent');
@@ -5937,25 +6222,25 @@ const App = {
         const query = document.getElementById('accountSearch').value.toLowerCase();
         const classicCards = document.querySelectorAll('#accountsContent .card');
         const cardInterfaceCards = document.querySelectorAll('#accountsView .account-card');
-        
+
         [...classicCards, ...cardInterfaceCards].forEach(card => {
             const text = card.textContent.toLowerCase();
             card.style.display = !query || text.includes(query) ? '' : 'none';
         });
     },
-    
+
     // Get activity count for account
-    getAccountActivityCount(accountId) {
-        const activities = DataManager.getAllActivities();
+    async getAccountActivityCount(accountId) {
+        const activities = await DataManager.getAllActivities();
         return activities.filter(a => a.accountId === accountId).length;
     },
-    
-    buildAccountProjectsMarkup(account, variant = 'classic') {
+
+    async buildAccountProjectsMarkup(account, variant = 'classic', ownerMap = null) {
         const projects = Array.isArray(account.projects) ? account.projects : [];
         if (!projects.length) return '';
 
         const wrapperClass = variant === 'card' ? 'account-projects account-projects-card' : 'account-projects';
-        const ownerMap = this.getProjectOwnerMap();
+        const map = ownerMap != null ? ownerMap : await this.getProjectOwnerMap();
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
@@ -5965,7 +6250,7 @@ const App = {
             const sfdcMarkup = project.sfdcLink
                 ? `<a href="${project.sfdcLink}" target="_blank" rel="noopener">Open Link</a>`
                 : '<span class="text-muted">Not set</span>';
-            const ownerIds = Array.from(ownerMap.get(project.id) || new Set());
+            const ownerIds = Array.from(map.get(project.id) || new Set());
             if (project.createdBy && !ownerIds.includes(project.createdBy)) {
                 ownerIds.push(project.createdBy);
             }
@@ -5997,28 +6282,28 @@ const App = {
     },
 
     // Edit account
-    editAccount(accountId) {
+    async editAccount(accountId) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can edit accounts.', 'error');
             return;
         }
-        const account = DataManager.getAccountById(accountId);
+        const account = await DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
             return;
         }
-        
+
         const name = prompt('Enter new account name:', account.name);
         if (!name || name.trim() === '') return;
-        
+
         const industry = prompt('Enter industry:', account.industry || '');
         if (industry === null) return;
-        
+
         // Get sales rep
-        const salesReps = DataManager.getGlobalSalesReps();
+        const salesReps = await DataManager.getGlobalSalesReps();
         const currentSalesRep = salesReps.find(r => r.name === account.salesRep);
         let salesRepEmail = currentSalesRep ? currentSalesRep.email : '';
-        
+
         if (salesReps.length > 0) {
             const salesRepOptions = salesReps.map(r => `${r.name} (${r.email})`).join('\n');
             const selectedIndex = prompt(`Select sales rep (enter number):\n${salesReps.map((r, i) => `${i + 1}. ${r.name} (${r.email})`).join('\n')}\n0. None`);
@@ -6031,31 +6316,31 @@ const App = {
                 }
             }
         }
-        
+
         const selectedSalesRep = salesReps.find(r => r.email === salesRepEmail);
         const salesRepName = selectedSalesRep ? selectedSalesRep.name : '';
-        
+
         // Update account
-        const accounts = DataManager.getAccounts();
+        const accounts = await DataManager.getAccounts();
         const accountIndex = accounts.findIndex(a => a.id === accountId);
         if (accountIndex !== -1) {
             accounts[accountIndex].name = name.trim();
             accounts[accountIndex].industry = industry.trim();
             accounts[accountIndex].salesRep = salesRepName;
             accounts[accountIndex].salesRepEmail = selectedSalesRep?.email || '';
-            const newRegion = selectedSalesRep?.region || accounts[accountIndex].salesRepRegion || (DataManager.getRegions()[0] || '');
+            const newRegion = selectedSalesRep?.region || accounts[accountIndex].salesRepRegion || ((await DataManager.getRegions())[0] || '');
             accounts[accountIndex].salesRepRegion = newRegion;
             accounts[accountIndex].updatedAt = new Date().toISOString();
             if (typeof console !== 'undefined' && console.log) {
                 console.log('PAMS: Account region set', { accountId, accountName: name, salesRepRegion: newRegion, fromRep: selectedSalesRep?.name });
             }
-            DataManager.saveAccounts(accounts);
-            
+            await DataManager.saveAccounts(accounts);
+
             UI.showNotification('Account updated successfully', 'success');
-            this.loadAccountsView();
+            await this.loadAccountsView();
         }
     },
-    
+
     // Ensure merge account modal exists (search + checkbox list, then Merge button)
     ensureMergeAccountModal() {
         const modalId = 'mergeAccountModal';
@@ -6106,17 +6391,18 @@ const App = {
     },
 
     // Show merge account modal with search + select list
-    showMergeAccountModal(accountId) {
+    async showMergeAccountModal(accountId) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can merge accounts.', 'error');
             return;
         }
-        const account = DataManager.getAccountById(accountId);
+        const account = await DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
             return;
         }
-        const others = DataManager.getAccounts().filter(a => a.id !== accountId);
+        const accounts = await DataManager.getAccounts();
+        const others = accounts.filter(a => a.id !== accountId);
         if (others.length === 0) {
             UI.showNotification('No other accounts to merge with', 'error');
             return;
@@ -6177,21 +6463,21 @@ const App = {
         UI.hideModal('mergeAccountModal');
         this.mergeAccounts(sourceId, targetId);
     },
-    
+
     // Merge accounts
-    mergeAccounts(sourceAccountId, targetAccountId) {
+    async mergeAccounts(sourceAccountId, targetAccountId) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can merge accounts.', 'error');
             return;
         }
-        const sourceAccount = DataManager.getAccountById(sourceAccountId);
-        const targetAccount = DataManager.getAccountById(targetAccountId);
-        
+        const sourceAccount = await DataManager.getAccountById(sourceAccountId);
+        const targetAccount = await DataManager.getAccountById(targetAccountId);
+
         if (!sourceAccount || !targetAccount) {
             UI.showNotification('One or both accounts not found', 'error');
             return;
         }
-        
+
         // Check for conflicts
         const conflicts = [];
         if (sourceAccount.salesRep !== targetAccount.salesRep) {
@@ -6208,27 +6494,27 @@ const App = {
                 target: targetAccount.industry || 'None'
             });
         }
-        
+
         // Show conflicts and get user choices
         let finalSalesRep = targetAccount.salesRep;
         let finalIndustry = targetAccount.industry;
-        
+
         if (conflicts.length > 0) {
             let conflictMsg = 'Conflicts detected:\n\n';
             conflicts.forEach(c => {
                 conflictMsg += `${c.field}:\n  Source: ${c.source}\n  Target: ${c.target}\n\n`;
             });
             conflictMsg += 'Enter "1" to use Source values, "2" to use Target values, or "3" to cancel:';
-            
+
             const choice = prompt(conflictMsg);
             if (choice === '3' || choice === null) return;
-            
+
             if (choice === '1') {
                 finalSalesRep = sourceAccount.salesRep;
                 finalIndustry = sourceAccount.industry;
             }
         }
-        
+
         // Merge projects
         const mergedProjects = [...(targetAccount.projects || [])];
         (sourceAccount.projects || []).forEach(project => {
@@ -6244,23 +6530,22 @@ const App = {
                 }
             }
         });
-        
+
         // Update target account
-        const accounts = DataManager.getAccounts();
+        const accounts = await DataManager.getAccounts();
         const targetIndex = accounts.findIndex(a => a.id === targetAccountId);
         if (targetIndex !== -1) {
             accounts[targetIndex].salesRep = finalSalesRep;
-            const finalRepRecord = typeof DataManager.getGlobalSalesReps === 'function'
-                ? DataManager.getGlobalSalesReps().find(rep => rep.name === finalSalesRep)
-                : null;
+            const salesRepsList = typeof DataManager.getGlobalSalesReps === 'function' ? await DataManager.getGlobalSalesReps() : [];
+            const finalRepRecord = salesRepsList.find(rep => rep.name === finalSalesRep) || null;
             accounts[targetIndex].salesRepEmail = finalRepRecord?.email || accounts[targetIndex].salesRepEmail || '';
-            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || (typeof DataManager !== 'undefined' && DataManager.getRegions && DataManager.getRegions()[0]) || '';
+            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || (typeof DataManager !== 'undefined' && DataManager.getRegions && (await DataManager.getRegions())[0]) || '';
             accounts[targetIndex].industry = finalIndustry;
             accounts[targetIndex].projects = mergedProjects;
             accounts[targetIndex].updatedAt = new Date().toISOString();
-            
+
             // Update only external (customer) activities – internal activities stay in internalActivities key
-            const externalActivities = DataManager.getActivities();
+            const externalActivities = await DataManager.getActivities();
             let activitiesUpdated = 0;
             externalActivities.forEach(activity => {
                 if (activity.accountId === sourceAccountId) {
@@ -6270,73 +6555,78 @@ const App = {
                 }
             });
             try {
-                DataManager.saveActivities(externalActivities);
+                await DataManager.saveActivities(externalActivities);
             } catch (err) {
                 console.error('Merge: saveActivities failed', err);
                 UI.showNotification('Merge failed: could not save activities. Try again or refresh.', 'error');
                 return;
             }
-            
+
             // Remove source account and persist (deleteAccount saves activities + accounts)
             try {
-                DataManager.deleteAccount(sourceAccountId);
+                await DataManager.deleteAccount(sourceAccountId);
             } catch (err) {
                 console.error('Merge: deleteAccount/save failed', err);
                 UI.showNotification('Merge failed: could not save. Activities were moved – please refresh and try merging again.', 'error');
                 return;
             }
-            
+
             UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${targetAccount.name}"${activitiesUpdated ? ` (${activitiesUpdated} activities moved)` : ''}.`, 'success');
             this.loadAccountsView();
         }
     },
-    
+
     // Show delete account modal
-    showDeleteAccountModal(accountId) {
+    async showDeleteAccountModal(accountId) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can delete accounts.', 'error');
             return;
         }
-        const account = DataManager.getAccountById(accountId);
+        const account = await DataManager.getAccountById(accountId);
         if (!account) {
             UI.showNotification('Account not found', 'error');
             return;
         }
-        
+
         const projectCount = account.projects?.length || 0;
-        const activityCount = this.getAccountActivityCount(accountId);
-        
+        const activityCount = await this.getAccountActivityCount(accountId);
+
         let message = `Are you sure you want to delete "${account.name}"?\n\n`;
         message += `This will delete:\n`;
         message += `- ${projectCount} project(s)\n`;
         message += `- ${activityCount} activity/activities\n\n`;
         message += `This action cannot be undone!\n\n`;
         message += `Enter "DELETE" to confirm:`;
-        
+
         const confirmation = prompt(message);
         if (confirmation !== 'DELETE') {
             return;
         }
-        
+
         // Check for activities with different sales reps
-        const activities = DataManager.getAllActivities().filter(a => a.accountId === accountId);
+        const allActivitiesForDelete = await DataManager.getAllActivities();
+        const activities = allActivitiesForDelete.filter(a => a.accountId === accountId);
         const uniqueSalesReps = [...new Set(activities.map(a => a.salesRep).filter(Boolean))];
-        
+
         if (uniqueSalesReps.length > 1) {
             const salesRepMsg = `Warning: Activities have different sales reps:\n${uniqueSalesReps.join(', ')}\n\n`;
             const salesRepMsg2 = `Do you want to reassign activities to another account before deletion?\n\n`;
             const salesRepMsg3 = `Enter account name to reassign, or "DELETE" to proceed with deletion:`;
             const reassign = prompt(salesRepMsg + salesRepMsg2 + salesRepMsg3);
-            
+
             if (reassign && reassign !== 'DELETE') {
-                const targetAccount = DataManager.getAccounts().find(a => a.name.toLowerCase() === reassign.toLowerCase());
+                const allAccounts = await DataManager.getAccounts();
+                const targetAccount = allAccounts.find(a => a.name.toLowerCase() === reassign.toLowerCase());
                 if (targetAccount) {
-                    // Reassign activities
-                    activities.forEach(activity => {
-                        activity.accountId = targetAccount.id;
-                        activity.accountName = targetAccount.name;
+                    // Reassign: get full activities list, update the ones for this account, then save
+                    const externalActivities = await DataManager.getActivities();
+                    externalActivities.forEach(activity => {
+                        if (activity.accountId === accountId) {
+                            activity.accountId = targetAccount.id;
+                            activity.accountName = targetAccount.name;
+                        }
                     });
-                    DataManager.saveActivities(activities);
+                    await DataManager.saveActivities(externalActivities);
                     UI.showNotification(`Activities reassigned to "${targetAccount.name}"`, 'success');
                 } else {
                     UI.showNotification('Account not found. Deletion cancelled.', 'error');
@@ -6344,15 +6634,15 @@ const App = {
                 }
             }
         }
-        
+
         // Delete account (this will also delete projects and activities)
-        DataManager.deleteAccount(accountId);
-        
+        await DataManager.deleteAccount(accountId);
+
         UI.showNotification('Account deleted successfully', 'success');
         this.loadAccountsView();
     },
 
-    renderActivitiesList(containerId = 'activitiesContent') {
+    async renderActivitiesList(containerId = 'activitiesContent') {
         try {
             const container = document.getElementById(containerId);
             if (!container) {
@@ -6360,19 +6650,19 @@ const App = {
                 return;
             }
 
-            const allActivities = DataManager.getAllActivities();
+            const allActivities = await DataManager.getAllActivities();
             const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
                 ? Auth.getCurrentUser()
                 : null;
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-            
+
             if (containerId === 'activitiesContent') {
-                this.populateActivityFilterControls();
+                await this.populateActivityFilterControls();
             }
-            
+
             const applyFilters = containerId === 'activitiesContent';
-            let activities = applyFilters ? this.applyActivityFilters(allActivities) : allActivities;
-            
+            let activities = applyFilters ? await this.applyActivityFilters(allActivities) : allActivities;
+
             // Apply sorting
             activities = this.applyActivitySorting(activities);
 
@@ -6382,7 +6672,7 @@ const App = {
             }
 
             const viewMode = this.activitiesViewMode || 'cards';
-            
+
             if (viewMode === 'table') {
                 container.innerHTML = this.renderActivitiesTable(activities, currentUser, isAdmin);
             } else {
@@ -6396,7 +6686,7 @@ const App = {
             }
         }
     },
-    
+
     renderActivitiesCards(activities, currentUser, isAdmin) {
         const activityTypeColors = {
             'customerCall': '#4299E1',
@@ -6406,7 +6696,7 @@ const App = {
             'pricing': '#F56565',
             'other': '#718096'
         };
-        
+
         const activitiesByMonth = {};
         activities.forEach(activity => {
             const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
@@ -6431,11 +6721,11 @@ const App = {
                     ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
                     : false;
                 const canManage = isOwner || isAdmin;
-                
+
                 const activityType = activity.type || 'other';
                 const typeColor = activityTypeColors[activityType.toLowerCase()] || activityTypeColors.other;
                 const typeLabel = UI.getActivityTypeLabel(activityType);
-                
+
                 if (activity.isInternal) {
                     const activityName = activity.activityName || typeLabel || 'Internal Activity';
                     html += `
@@ -6473,10 +6763,8 @@ const App = {
                         <div class="activity-item">
                             <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem;">
                                 <div style="flex: 1;">
-                                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                        <span class="activity-badge external">External</span>
-                                    </div>
                                     <div style="margin-bottom: 0.5rem; font-size: 1rem;">
+                                        <span class="activity-badge external">External</span>
                                         <span class="activity-highlight account" style="color: #3182CE; font-weight: 600;">${accountName}</span>
                                         ${projectName ? `<span style="color: var(--gray-400);"> → </span><span class="activity-highlight project" style="color: #38A169; font-weight: 600;">${projectName}</span>` : ''}
                                         <span style="color: var(--gray-400);"> → </span>
@@ -6509,7 +6797,7 @@ const App = {
 
         return html;
     },
-    
+
     renderActivitiesTable(activities, currentUser, isAdmin) {
         const activityTypeColors = {
             'customerCall': '#4299E1',
@@ -6519,7 +6807,7 @@ const App = {
             'pricing': '#F56565',
             'other': '#718096'
         };
-        
+
         const activitiesByMonth = {};
         activities.forEach(activity => {
             const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
@@ -6557,11 +6845,11 @@ const App = {
                     ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
                     : false;
                 const canManage = isOwner || isAdmin;
-                
+
                 const activityType = activity.type || 'other';
                 const typeColor = activityTypeColors[activityType.toLowerCase()] || activityTypeColors.other;
                 const typeLabel = UI.getActivityTypeLabel(activityType);
-                
+
                 if (activity.isInternal) {
                     const activityName = activity.activityName || typeLabel || 'Internal Activity';
                     html += `
@@ -6612,11 +6900,11 @@ const App = {
 
         return html;
     },
-    
+
     applyActivitySorting(activities) {
         const sortBy = this.activitySortBy || 'dateDesc';
         const sorted = [...activities];
-        
+
         sorted.sort((a, b) => {
             switch (sortBy) {
                 case 'dateDesc':
@@ -6655,10 +6943,10 @@ const App = {
                     return 0;
             }
         });
-        
+
         return sorted;
     },
-    
+
     setActivitiesViewMode(mode) {
         this.activitiesViewMode = mode;
         // Update toggle buttons
@@ -6679,7 +6967,7 @@ const App = {
         }
         this.renderActivitiesList();
     },
-    
+
     toggleActivitiesSidebar() {
         const sidebar = document.querySelector('.activities-sidebar');
         const icon = document.getElementById('activitiesSidebarToggleIcon');
@@ -6696,7 +6984,7 @@ const App = {
             }
         }
     },
-    
+
     handleActivitySortChange() {
         const sortSelect = document.getElementById('activitySortBy');
         if (sortSelect) {
@@ -6706,7 +6994,7 @@ const App = {
     },
 
     // Load user regions (legacy - kept for compatibility)
-    loadUserRegions() {
+    async loadUserRegions() {
         try {
             const currentUser = Auth.getCurrentUser();
             if (!currentUser) {
@@ -6714,7 +7002,7 @@ const App = {
                 return;
             }
 
-            const allRegions = DataManager.getRegions();
+            const allRegions = await DataManager.getRegions();
             const userRegions = currentUser.regions || [];
             const container = document.getElementById('userRegionsList');
             if (!container) {
@@ -6746,20 +7034,20 @@ const App = {
     },
 
     // Save user regions
-    saveUserRegions() {
+    async saveUserRegions() {
         const currentUser = Auth.getCurrentUser();
         if (!currentUser) return;
 
         const checkboxes = document.querySelectorAll('#userRegionsList input[type="checkbox"]:checked');
         const regions = Array.from(checkboxes).map(cb => cb.value);
 
-        DataManager.updateUser(currentUser.id, { regions });
+        await DataManager.updateUser(currentUser.id, { regions });
         Auth.currentUser.regions = regions;
         UI.showNotification('Regions saved successfully', 'success');
     },
 
     // Load user sales reps
-    loadUserSalesReps() {
+    async loadUserSalesReps() {
         try {
             const currentUser = Auth.getCurrentUser();
             if (!currentUser) {
@@ -6797,10 +7085,10 @@ const App = {
     },
 
     // Add sales rep
-    addSalesRep() {
+    async addSalesRep() {
         const input = document.getElementById('newSalesRep');
         const rep = input.value.trim();
-        
+
         if (!rep) {
             UI.showNotification('Please enter a sales rep name', 'error');
             return;
@@ -6816,29 +7104,29 @@ const App = {
         }
 
         salesReps.push(rep);
-        DataManager.updateUser(currentUser.id, { salesReps });
+        await DataManager.updateUser(currentUser.id, { salesReps });
         Auth.currentUser.salesReps = salesReps;
-        
+
         input.value = '';
         UI.showNotification('Sales rep added successfully', 'success');
-        this.loadUserSalesReps();
+        await this.loadUserSalesReps();
     },
 
     // Remove sales rep
-    removeSalesRep(rep) {
+    async removeSalesRep(rep) {
         const currentUser = Auth.getCurrentUser();
         if (!currentUser) return;
 
         const salesReps = (currentUser.salesReps || []).filter(r => r !== rep);
-        DataManager.updateUser(currentUser.id, { salesReps });
+        await DataManager.updateUser(currentUser.id, { salesReps });
         Auth.currentUser.salesReps = salesReps;
-        
+
         UI.showNotification('Sales rep removed successfully', 'success');
-        this.loadUserSalesReps();
+        await this.loadUserSalesReps();
     },
 
     // Open win/loss modal
-    openWinLossModal(accountId, projectId) {
+    async openWinLossModal(accountId, projectId) {
         if (!this.isFeatureEnabled('winLoss')) {
             UI.showNotification(this.getAccessMessage('winLoss', 'feature'), 'info');
             return;
@@ -6848,17 +7136,17 @@ const App = {
             return;
         }
         this.createWinLossModal();
-        
-        const accounts = DataManager.getAccounts();
+
+        const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         const project = account?.projects?.find(p => p.id === projectId);
-        
+
         if (!project) {
             UI.showNotification('Project not found', 'error');
             return;
         }
-        
-        const accountSalesRep = DataManager.getGlobalSalesRepByName(account?.salesRep || '');
+
+        const accountSalesRep = await DataManager.getGlobalSalesRepByName(account?.salesRep || '');
         const existingWinLoss = project.winLossData || {};
         const defaultCurrency = existingWinLoss.currency || accountSalesRep?.currency || 'INR';
         const defaultFx = existingWinLoss.fxToInr !== undefined && existingWinLoss.fxToInr !== null ? Number(existingWinLoss.fxToInr) : (accountSalesRep && accountSalesRep.fxToInr ? Number(accountSalesRep.fxToInr) : null);
@@ -6873,7 +7161,7 @@ const App = {
         const accountTypeSelect = document.getElementById('accountType');
         const otdInput = document.getElementById('winLossOtd');
         const currencySelect = document.getElementById('winLossCurrency');
-        
+
         const monthOfWinInput = document.getElementById('winLossMonthOfWin');
         const now = new Date();
         const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -6882,9 +7170,8 @@ const App = {
         }
         const wonBySelect = document.getElementById('winLossWonBy');
         if (wonBySelect) {
-            const presalesUsers = (typeof DataManager !== 'undefined' && DataManager.getUsers)
-                ? DataManager.getUsers().filter(u => u && Array.isArray(u.roles) && u.roles.includes('Presales User'))
-                : [];
+            const allUsers = (typeof DataManager !== 'undefined' && DataManager.getUsers) ? await DataManager.getUsers() : [];
+            const presalesUsers = allUsers.filter(u => u && Array.isArray(u.roles) && u.roles.includes('Presales User'));
             wonBySelect.innerHTML = '<option value="">Select presales</option>' +
                 presalesUsers.map(u => `<option value="${u.id}">${u.username || u.name || u.id}</option>`).join('');
             wonBySelect.value = project.winLossData?.wonByUserId || '';
@@ -6929,17 +7216,17 @@ const App = {
 
         this.toggleWinLossFields();
         this.updateWinLossMrrHelper();
-        
+
         UI.showModal('winLossModal');
     },
-    
+
     // Create Win/Loss modal
     createWinLossModal() {
         const container = document.getElementById('modalsContainer');
         const modalId = 'winLossModal';
-        
+
         if (document.getElementById(modalId)) return;
-        
+
         const modalHTML = `
             <div id="${modalId}" class="modal">
                 <div class="modal-content">
@@ -7018,7 +7305,7 @@ const App = {
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
     },
-    
+
     // Toggle Win/Loss fields
     toggleWinLossFields() {
         const status = document.getElementById('winLossStatus').value;
@@ -7052,11 +7339,11 @@ const App = {
         }
         this.updateWinLossMrrHelper();
     },
-    
+
     // Save Win/Loss
-    saveWinLoss(event) {
+    async saveWinLoss(event) {
         event.preventDefault();
-        
+
         const accountId = document.getElementById('winLossAccountId').value;
         const projectId = document.getElementById('winLossProjectId').value;
         const status = document.getElementById('winLossStatus').value;
@@ -7066,18 +7353,18 @@ const App = {
         const otdInput = document.getElementById('winLossOtd');
         UI.clearFieldError(sfdcInput);
         UI.clearFieldError(mrrInput);
-        
-        const accounts = DataManager.getAccounts();
+
+        const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         const project = account?.projects?.find(p => p.id === projectId);
-        
+
         if (!project) {
             UI.showNotification('Project not found', 'error');
             return;
         }
-        
+
         project.status = status;
-        
+
         if (status === 'won' || status === 'lost') {
             if (!sfdcLinkValue) {
                 UI.setFieldError(sfdcInput, 'SFDC link is required for won/lost projects.');
@@ -7113,7 +7400,7 @@ const App = {
                 return;
             }
             const wonByUserName = wonByUserId && typeof DataManager !== 'undefined' && DataManager.getUsers
-                ? (DataManager.getUsers().find(u => u.id === wonByUserId)?.username || null)
+                ? (await DataManager.getUsers()).find(u => u.id === wonByUserId)?.username || null
                 : null;
             project.winLossData = {
                 reason: document.getElementById('winLossReason').value,
@@ -7140,26 +7427,62 @@ const App = {
                 project.sfdcLink = sfdcLinkValue;
             }
         }
-        
-        DataManager.saveAccounts(accounts);
-        
+
+        await DataManager.saveAccounts(accounts);
+
         UI.hideModal('winLossModal');
         UI.showNotification('Project status updated!', 'success');
-        this.loadWinLossView();
+        await this.loadWinLossView();
+    },
+
+    /** Apply a win/loss draft (saved when session was invalid). Loads accounts, applies form data, saves. */
+    async applyWinLossDraft(payload) {
+        if (!payload || payload._winlossForm !== true || !payload.accountId || !payload.projectId) return;
+        const accounts = await DataManager.getAccounts();
+        const account = accounts.find(a => a.id === payload.accountId);
+        const project = account?.projects?.find(p => p.id === payload.projectId);
+        if (!project) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Account or project no longer found. Discard the draft.', 'error');
+            return;
+        }
+        project.status = payload.status || project.status;
+        if (payload.sfdcLink) project.sfdcLink = payload.sfdcLink;
+        if (payload.status === 'won' || payload.status === 'lost') {
+            const mrr = Number(payload.mrr);
+            project.winLossData = {
+                reason: payload.reason || '',
+                competitors: payload.competitors || '',
+                mrr: Number.isFinite(mrr) ? mrr : 0,
+                accountType: payload.accountType || '',
+                currency: payload.currency || 'INR',
+                fxToInr: payload.fxToInr || null,
+                mrrInInr: payload.currency === 'INR' && Number.isFinite(mrr) ? mrr : (payload.fxToInr && Number.isFinite(mrr) ? Number((mrr * payload.fxToInr).toFixed(2)) : null),
+                otd: payload.otd || '',
+                monthOfWin: payload.monthOfWin || undefined,
+                wonByUserId: payload.wonByUserId || undefined,
+                wonByUserName: payload.wonByUserId && typeof DataManager !== 'undefined' && DataManager.getUsers
+                    ? (await DataManager.getUsers()).find(u => u.id === payload.wonByUserId)?.username || null
+                    : null,
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            delete project.winLossData;
+        }
+        await DataManager.saveAccounts(accounts);
     },
 
     // Edit activity (own activities only)
-    editActivity(activityId, isInternal) {
+    async editActivity(activityId, isInternal) {
         const currentUser = Auth.getCurrentUser();
         if (!currentUser) return;
 
         // Find activity
         let activity;
         if (isInternal) {
-            const activities = DataManager.getInternalActivities();
+            const activities = await DataManager.getInternalActivities();
             activity = activities.find(a => a.id === activityId);
         } else {
-            const activities = DataManager.getActivities();
+            const activities = await DataManager.getActivities();
             activity = activities.find(a => a.id === activityId);
         }
 
@@ -7179,7 +7502,7 @@ const App = {
         }
 
         if (typeof Activities !== 'undefined' && Activities.openActivityModal) {
-            Activities.openActivityModal({
+            await Activities.openActivityModal({
                 mode: 'edit',
                 activity,
                 isInternal: !!isInternal
@@ -7190,7 +7513,7 @@ const App = {
     },
 
     // Delete activity (own activities only)
-    deleteActivity(activityId, isInternal) {
+    async deleteActivity(activityId, isInternal) {
         if (!confirm('Are you sure you want to delete this activity?')) return;
 
         const currentUser = Auth.getCurrentUser();
@@ -7199,10 +7522,10 @@ const App = {
         // Find activity
         let activity;
         if (isInternal) {
-            const activities = DataManager.getInternalActivities();
+            const activities = await DataManager.getInternalActivities();
             activity = activities.find(a => a.id === activityId);
         } else {
-            const activities = DataManager.getActivities();
+            const activities = await DataManager.getActivities();
             activity = activities.find(a => a.id === activityId);
         }
 
@@ -7223,25 +7546,24 @@ const App = {
 
         // Delete activity
         if (isInternal) {
-            DataManager.deleteInternalActivity(activityId);
+            await DataManager.deleteInternalActivity(activityId);
         } else {
-            DataManager.deleteActivity(activityId);
+            await DataManager.deleteActivity(activityId);
         }
 
         UI.showNotification('Activity deleted successfully', 'success');
-        this.loadActivitiesView();
-        this.loadDashboard();
-        this.loadAccountsView();
-        this.loadWinLossView();
-        this.loadProjectHealthView();
-        this.loadSfdcComplianceView();
+        await this.loadActivitiesView();
+        await this.loadDashboard();
+        await this.loadAccountsView();
+        await this.loadWinLossView();
+        await this.loadProjectHealthView();
+        await this.loadSfdcComplianceView();
         if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardWinLossView();
-            this.loadCardProjectHealthView();
-            this.loadCardSfdcComplianceView();
+            await this.loadCardWinLossView();
+            await this.loadCardProjectHealthView();
+            await this.loadCardSfdcComplianceView();
         }
     },
-
     // Expose functions globally
     openActivityModal: () => Activities.openActivityModal()
 };
@@ -7255,8 +7577,8 @@ window.Auth = Auth;
 
 // Override analytics helpers with module-driven implementations
 if (typeof Analytics !== 'undefined') {
-    App.initAnalyticsCharts = function ({ prefix = 'reports', analytics }) {
-        Analytics.renderCharts({ prefix, analytics });
+    App.initAnalyticsCharts = async function ({ prefix = 'reports', analytics }) {
+        await Analytics.renderCharts({ prefix, analytics });
     };
 
     App.destroyAnalyticsCharts = function (prefix) {
@@ -7265,18 +7587,22 @@ if (typeof Analytics !== 'undefined') {
 }
 
 // Utility function to reset users (for testing)
-window.resetUsers = function() {
+window.resetUsers = async function () {
     localStorage.removeItem('users');
-    DataManager.ensureDefaultUsers();
-    console.log('Users reset. Current users:', DataManager.getUsers().map(u => u.username));
+    await DataManager.ensureDefaultUsers();
+    const users = await DataManager.getUsers();
+    console.log('Users reset. Current users:', users.map(u => u.username));
     alert('Users reset! You can now login with:\n- admin / admin123\n- user / user123');
 };
 
 // Initialize on DOM load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing app...');
-    // Ensure users exist before initializing
-    DataManager.ensureDefaultUsers();
+    try {
+        await DataManager.ensureDefaultUsers();
+    } catch (e) {
+        console.warn('ensureDefaultUsers failed:', e);
+    }
     App.init().catch(error => {
         console.error('Failed to initialise application', error);
     });

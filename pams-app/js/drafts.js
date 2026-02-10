@@ -37,7 +37,7 @@
         },
 
         addDraft(options) {
-            const { type, payload, errorMessage, storageKey } = options || {};
+            const { type, payload, errorMessage, storageKey, label } = options || {};
             if (!payload) return null;
             const list = getStorage();
             const draft = {
@@ -46,7 +46,8 @@
                 payload: typeof payload === 'object' ? (Array.isArray(payload) ? payload.slice() : { ...payload }) : payload,
                 errorMessage: typeof errorMessage === 'string' ? errorMessage : 'Save failed',
                 attemptedAt: new Date().toISOString(),
-                storageKey: typeof storageKey === 'string' && storageKey ? storageKey : null
+                storageKey: typeof storageKey === 'string' && storageKey ? storageKey : null,
+                label: typeof label === 'string' ? label : null
             };
             list.unshift(draft);
             setStorage(list);

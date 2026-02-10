@@ -42,13 +42,13 @@ const ReportsV2 = {
     },
 
     // Initialize Reports V2
-    init(period, periodType = 'month') {
+    async init(period, periodType = 'month') {
         this.currentPeriod = period;
         this.currentPeriodType = periodType;
         this.cachedData = null; // Clear cache
         this.activeTab = 'presales';
         this.activityBreakdownFilter = 'all';
-        this.render();
+        await this.render();
     },
 
     // Switch active tab
@@ -68,13 +68,13 @@ const ReportsV2 = {
     REPORTS_ACTIVITY_CUTOFF: '2026-01',
 
     // Get activities for the selected period (only Jan 2026+)
-    getPeriodActivities() {
+    async getPeriodActivities() {
         if (!this.currentPeriod) {
             console.warn('ReportsV2: currentPeriod is not set');
             return [];
         }
 
-        const allActivities = DataManager.getAllActivities();
+        const allActivities = await DataManager.getAllActivities();
         if (!allActivities || !allActivities.length) {
             console.warn('ReportsV2: No activities found in DataManager');
             return [];
@@ -167,7 +167,7 @@ const ReportsV2 = {
     },
 
     // Main render function
-    render() {
+    async render() {
         // Ensure we wait for DOM to be ready
         const container = document.getElementById('reportsContent');
         if (!container) {
@@ -206,7 +206,7 @@ const ReportsV2 = {
         try {
             // Destroy existing charts before re-rendering
             this.destroyCharts();
-            
+
             // Also destroy any Chart.js instances that might be lingering on canvases
             if (typeof Chart !== 'undefined' && Chart.getChart) {
                 const chartCanvases = [
@@ -220,7 +220,7 @@ const ReportsV2 = {
                     'industryTotalChart',
                     'industryAverageChart'
                 ];
-                
+
                 chartCanvases.forEach(canvasId => {
                     const canvas = document.getElementById(canvasId);
                     if (canvas) {
@@ -236,20 +236,20 @@ const ReportsV2 = {
                 });
             }
 
-            const activities = this.getPeriodActivities();
+            const activities = await this.getPeriodActivities();
             const periodLabel = this.formatPeriod(this.currentPeriod);
-            
+
             console.log(`ReportsV2: Rendering reports for period ${this.currentPeriod} (${this.currentPeriodType}), ${activities.length} activities`);
-            
+
             // Compute and cache data for charts
-            this.cachedData = this.computeReportData(activities);
+            this.cachedData = await this.computeReportData(activities);
 
             container.innerHTML = `
                 <div class="reports-v2-container">
-                    ${this.renderHeader(periodLabel)}
-                    ${this.renderReportsTotalActivityRow(activities, periodLabel)}
+                    ${await this.renderHeader(periodLabel)}
+                    ${await this.renderReportsTotalActivityRow(activities, periodLabel)}
                     ${this.renderTabNavigation()}
-                    ${this.renderTabContent(activities)}
+                    ${await this.renderTabContent(activities)}
                 </div>
             `;
 
@@ -273,12 +273,12 @@ const ReportsV2 = {
     },
 
     // Total Activity – one row, horizontal with insights (Reports only)
-    renderReportsTotalActivityRow(activities, periodLabel) {
+    async renderReportsTotalActivityRow(activities, periodLabel) {
         const safe = activities && Array.isArray(activities) ? activities : [];
         const total = safe.length;
         const internal = safe.filter(a => a.isInternal === true).length;
         const external = safe.filter(a => !a.isInternal).length;
-        const accounts = typeof DataManager !== 'undefined' ? DataManager.getAccounts() : [];
+        const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
         const regionCounts = {};
         safe.filter(a => !a.isInternal).forEach(a => {
             const account = accounts.find(ac => ac.id === a.accountId);
@@ -350,23 +350,21 @@ const ReportsV2 = {
     },
 
     // Render tab content based on active tab
-    renderTabContent(activities) {
-        switch(this.activeTab) {
+    async renderTabContent(activities) {
+        switch (this.activeTab) {
             case 'presales':
-                return `
-                    ${this.renderPresalesReports(activities)}
-                `;
+                return await this.renderPresalesReports(activities);
             case 'sales':
                 return `
-                    ${this.renderSalesView(activities)}
-                    ${this.renderProductLevelData(activities)}
+                    ${await this.renderSalesView(activities)}
+                    ${await this.renderProductLevelData(activities)}
                 `;
             case 'regional':
-                return this.renderRegionalData(activities);
+                return await this.renderRegionalData(activities);
             case 'ai':
                 return this.renderAIIntelligencePlaceholder();
             default:
-                return this.renderPresalesReports(activities);
+                return await this.renderPresalesReports(activities);
         }
     },
 
@@ -389,7 +387,7 @@ const ReportsV2 = {
     },
 
     // Compute all report data
-    computeReportData(activities) {
+    async computeReportData(activities) {
         const data = {
             totalActivities: activities.length,
             internalCount: activities.filter(a => a.isInternal).length,
@@ -444,7 +442,7 @@ const ReportsV2 = {
         });
 
         // Industry data
-        const accounts = DataManager.getAccounts();
+        const accounts = await DataManager.getAccounts();
         activities.forEach(activity => {
             if (!activity.isInternal && activity.accountId) {
                 const account = accounts.find(a => a.id === activity.accountId);
@@ -487,11 +485,11 @@ const ReportsV2 = {
     },
 
     // Render header with period toggle and navigation
-    renderHeader(periodLabel) {
-        const availableMonths = DataManager.getAvailableActivityMonths();
-        const availableYears = DataManager.getAvailableActivityYears();
+    async renderHeader(periodLabel) {
+        const availableMonths = await DataManager.getAvailableActivityMonths();
+        const availableYears = await DataManager.getAvailableActivityYears();
         const isYear = this.currentPeriodType === 'year';
-        const canGoPrev = isYear 
+        const canGoPrev = isYear
             ? availableYears.includes(String(parseInt(this.currentPeriod) - 1))
             : availableMonths.includes(this.getPreviousPeriod());
         const canGoNext = isYear
@@ -558,7 +556,7 @@ const ReportsV2 = {
     },
 
     // Render Presales Reports Section
-    renderPresalesReports(activities) {
+    async renderPresalesReports(activities) {
         const totalActivities = activities.length;
         const internalCount = activities.filter(a => a.isInternal).length;
         const externalCount = activities.filter(a => !a.isInternal).length;
@@ -659,11 +657,11 @@ const ReportsV2 = {
     },
 
     // Render Sales View Section
-    renderSalesView(activities) {
+    async renderSalesView(activities) {
         // Missing SFDC Links - Regional bar graph
-        const accounts = DataManager.getAccounts();
+        const accounts = await DataManager.getAccounts();
         const regionMissingMap = new Map();
-        
+
         activities.forEach(activity => {
             if (!activity.isInternal && activity.accountId) {
                 const account = accounts.find(a => a.id === activity.accountId);
@@ -702,9 +700,9 @@ const ReportsV2 = {
     },
 
     // Render Regional Data Section
-    renderRegionalData(activities) {
-        const accounts = DataManager.getAccounts();
-        
+    async renderRegionalData(activities) {
+        const accounts = await DataManager.getAccounts();
+
         // Sales Rep Missing Opportunities
         const salesRepMissingMap = new Map();
         activities.forEach(activity => {
@@ -928,14 +926,15 @@ const ReportsV2 = {
     },
 
     // Render Product Level Data Section
-    renderProductLevelData(activities) {
+    async renderProductLevelData(activities) {
         // Industry Wise - Total Activities
         const industryActivityMap = new Map();
         const industryAccountMap = new Map();
+        const accounts = await DataManager.getAccounts();
 
         activities.forEach(activity => {
             if (!activity.isInternal && activity.accountId) {
-                const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                const account = accounts.find(a => a.id === activity.accountId);
                 if (account && account.industry) {
                     const industry = account.industry;
                     if (!industryActivityMap.has(industry)) {
@@ -984,8 +983,9 @@ const ReportsV2 = {
     },
 
     // Initialize all charts
-    initCharts(activities) {
+    async initCharts(activities) {
         const safeActivities = activities && Array.isArray(activities) ? activities : [];
+        const accounts = await DataManager.getAccounts();
 
         try {
             if (typeof Chart !== 'undefined') {
@@ -1006,7 +1006,7 @@ const ReportsV2 = {
                     });
                     const userActivityData = Array.from(userActivityMap.values())
                         .sort((a, b) => b.count - a.count);
-                    
+
                     if (userActivityData.length > 0) {
                         // Destroy existing chart
                         if (this.charts['presalesActivityChart']) {
@@ -1024,7 +1024,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderHorizontalBarChart('presalesActivityChart', {
                             labels: userActivityData.map(u => u.userName),
                             data: userActivityData.map(u => u.count),
@@ -1067,7 +1067,6 @@ const ReportsV2 = {
             if (this.activeTab === 'sales') {
                 const missingSfdcCanvas = document.getElementById('missingSfdcRegionalChart');
                 if (missingSfdcCanvas) {
-                    const accounts = DataManager.getAccounts();
                     const regionMissingMap = new Map();
                     safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
@@ -1081,7 +1080,7 @@ const ReportsV2 = {
                     const regionMissingData = Array.from(regionMissingMap.entries())
                         .map(([region, count]) => ({ region, count }))
                         .sort((a, b) => b.count - a.count);
-                    
+
                     if (regionMissingData.length > 0) {
                         // Destroy existing chart
                         if (this.charts['missingSfdcRegionalChart']) {
@@ -1099,7 +1098,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderBarChart('missingSfdcRegionalChart', {
                             labels: regionMissingData.map(d => d.region),
                             data: regionMissingData.map(d => d.count),
@@ -1111,8 +1110,6 @@ const ReportsV2 = {
 
             // Regional Data Charts
             if (this.activeTab === 'regional') {
-                const accounts = DataManager.getAccounts();
-                
                 // Industry Wise Regional Traffic
                 const industryRegionalCanvas = document.getElementById('industryRegionalChart');
                 if (industryRegionalCanvas) {
@@ -1131,7 +1128,7 @@ const ReportsV2 = {
                             }
                         }
                     });
-                    
+
                     // Group by region for stacked bar chart
                     const regions = new Set();
                     const industries = new Set();
@@ -1139,7 +1136,7 @@ const ReportsV2 = {
                         regions.add(region);
                         industries.add(industry);
                     });
-                    
+
                     const regionLabels = Array.from(regions).sort();
                     const industryLabels = Array.from(industries).sort();
                     const datasets = industryLabels.map((industry, idx) => ({
@@ -1150,7 +1147,7 @@ const ReportsV2 = {
                         }),
                         backgroundColor: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'][idx % 7]
                     }));
-                    
+
                     if (datasets.length > 0 && regionLabels.length > 0) {
                         // Destroy existing chart
                         if (this.charts['industryRegionalChart']) {
@@ -1168,7 +1165,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderHorizontalStackedBarChart('industryRegionalChart', {
                             labels: regionLabels,
                             datasets: datasets
@@ -1193,7 +1190,7 @@ const ReportsV2 = {
                         .filter(([, count]) => count > 0)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 15); // Top 15
-                    
+
                     if (salesRepSfdcData.length > 0) {
                         // Destroy existing chart
                         if (this.charts['missingSfdcSalesRepChart']) {
@@ -1211,7 +1208,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderHorizontalBarChart('missingSfdcSalesRepChart', {
                             labels: salesRepSfdcData.map(([name]) => name),
                             data: salesRepSfdcData.map(([, count]) => count),
@@ -1236,7 +1233,7 @@ const ReportsV2 = {
                 const topSalesReps = Array.from(salesRepMap.entries())
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 10);
-                
+
                 if (topSalesReps.length > 0) {
                     this.renderHorizontalBarChart('salesRepRequestsChart', {
                         labels: topSalesReps.map(([name]) => name),
@@ -1250,12 +1247,12 @@ const ReportsV2 = {
             if (this.activeTab === 'sales') {
                 const industryTotalCanvas = document.getElementById('industryTotalChart');
                 const industryAverageCanvas = document.getElementById('industryAverageChart');
-                
+
                 if (industryTotalCanvas) {
                     const industryActivityMap = new Map();
                     safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
-                            const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                            const account = accounts.find(a => a.id === activity.accountId);
                             if (account && account.industry) {
                                 const industry = account.industry;
                                 industryActivityMap.set(industry, (industryActivityMap.get(industry) || 0) + 1);
@@ -1264,7 +1261,7 @@ const ReportsV2 = {
                     });
                     const industryData = Array.from(industryActivityMap.entries())
                         .sort((a, b) => b[1] - a[1]);
-                    
+
                     if (industryData.length > 0) {
                         // Destroy existing chart
                         if (this.charts['industryTotalChart']) {
@@ -1282,7 +1279,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderHorizontalBarChart('industryTotalChart', {
                             labels: industryData.map(([industry]) => industry),
                             data: industryData.map(([, count]) => count),
@@ -1296,7 +1293,7 @@ const ReportsV2 = {
                     const industryAvgMap = new Map();
                     safeActivities.forEach(activity => {
                         if (!activity.isInternal && activity.accountId) {
-                            const account = DataManager.getAccounts().find(a => a.id === activity.accountId);
+                            const account = accounts.find(a => a.id === activity.accountId);
                             if (account && account.industry) {
                                 const industry = account.industry;
                                 if (!industryAvgMap.has(industry)) {
@@ -1313,7 +1310,7 @@ const ReportsV2 = {
                             average: data.accounts.size > 0 ? (data.total / data.accounts.size) : 0
                         }))
                         .sort((a, b) => b.average - a.average);
-                    
+
                     if (industryAvgData.length > 0) {
                         // Destroy existing chart
                         if (this.charts['industryAverageChart']) {
@@ -1331,7 +1328,7 @@ const ReportsV2 = {
                                 console.warn('Error destroying Chart.js instance:', e);
                             }
                         }
-                        
+
                         this.renderHorizontalBarChart('industryAverageChart', {
                             labels: industryAvgData.map(d => d.industry),
                             data: industryAvgData.map(d => parseFloat(d.average.toFixed(2))),
@@ -1352,7 +1349,7 @@ const ReportsV2 = {
             console.warn(`Chart canvas not found: ${canvasId}`);
             return;
         }
-        
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js is not loaded');
             return;
@@ -1373,7 +1370,7 @@ const ReportsV2 = {
             }
             delete this.charts[canvasId];
         }
-        
+
         // Also check if Chart.js has a chart instance on this canvas
         if (Chart.getChart && Chart.getChart(canvas)) {
             try {
@@ -1390,7 +1387,7 @@ const ReportsV2 = {
         // Default colors if not provided
         const defaultColors = ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#2B6CB0', '#319795'];
         const chartColors = colors || labels.map((_, idx) => defaultColors[idx % defaultColors.length]);
-        
+
         console.log(`Creating pie chart ${canvasId} with data:`, { labels, data, colors: chartColors });
 
         try {
@@ -1400,7 +1397,7 @@ const ReportsV2 = {
                 console.error(`Canvas ${canvasId} not found`);
                 return;
             }
-            
+
             // Set explicit dimensions if not already set
             if (!canvas.style.width || canvas.style.width === '0px') {
                 canvas.style.width = '100%';
@@ -1428,7 +1425,7 @@ const ReportsV2 = {
                         },
                         tooltip: {
                             callbacks: {
-                                label: function(context) {
+                                label: function (context) {
                                     const label = context.label || '';
                                     const value = context.parsed || 0;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
@@ -1453,7 +1450,7 @@ const ReportsV2 = {
             console.warn(`Chart canvas not found: ${canvasId}`);
             return;
         }
-        
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js is not loaded');
             return;
@@ -1474,7 +1471,7 @@ const ReportsV2 = {
             }
             delete this.charts[canvasId];
         }
-        
+
         // Also check Chart.js registry
         if (Chart.getChart && Chart.getChart(canvas)) {
             try {
@@ -1531,7 +1528,7 @@ const ReportsV2 = {
             console.warn(`Chart canvas not found: ${canvasId}`);
             return;
         }
-        
+
         if (typeof Chart === 'undefined') {
             console.error('Chart.js is not loaded');
             return;
@@ -1552,7 +1549,7 @@ const ReportsV2 = {
             }
             delete this.charts[canvasId];
         }
-        
+
         // Also check Chart.js registry
         if (Chart.getChart && Chart.getChart(canvas)) {
             try {
@@ -1613,7 +1610,7 @@ const ReportsV2 = {
             'Pricing': activities.filter(a => a.type === 'pricing').length,
             'Customer Calls': activities.filter(a => a.type === 'customerCall').length
         };
-        
+
         let filteredBreakdown = breakdown;
         if (this.activityBreakdownFilter !== 'all') {
             const filterMap = {
@@ -1626,7 +1623,7 @@ const ReportsV2 = {
             const selectedType = filterMap[this.activityBreakdownFilter];
             filteredBreakdown = { [selectedType]: breakdown[selectedType] || 0 };
         }
-        
+
         this.renderDonutChart('activityBreakdownChart', {
             labels: Object.keys(filteredBreakdown),
             data: Object.values(filteredBreakdown),
@@ -1667,7 +1664,7 @@ const ReportsV2 = {
                     },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 const label = context.label || '';
                                 const value = context.parsed || 0;
                                 const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -1679,7 +1676,7 @@ const ReportsV2 = {
             },
             plugins: [{
                 id: 'centerText',
-                beforeDraw: function(chart) {
+                beforeDraw: function (chart) {
                     if (!chart.chartArea || chart.chartArea.right <= chart.chartArea.left || chart.chartArea.bottom <= chart.chartArea.top) return;
                     const ctx = chart.ctx;
                     const centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
@@ -1690,7 +1687,7 @@ const ReportsV2 = {
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(total.toString(), centerX, centerY - 10);
-                    
+
                     ctx.font = '14px Arial';
                     ctx.fillStyle = '#6b7280';
                     ctx.fillText('Total', centerX, centerY + 15);
@@ -1726,35 +1723,35 @@ const ReportsV2 = {
 
         try {
             this.charts[canvasId] = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: datasets
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        stacked: true,
-                        beginAtZero: true
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            beginAtZero: true
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
                     },
-                    y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
                         }
                     }
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    }
                 }
-            }
-        });
+            });
         } catch (error) {
             console.error(`Error creating stacked bar chart ${canvasId}:`, error);
         }

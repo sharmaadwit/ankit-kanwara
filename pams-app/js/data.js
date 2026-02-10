@@ -111,23 +111,21 @@ const MIGRATION_DUPLICATE_PATTERNS = [
 const ANALYTICS_ACCESS_CONFIG_KEY = 'analyticsAccessConfig';
 const ANALYTICS_TABLE_PRESETS_KEY = 'analyticsTablePresets';
 
-const INDUSTRIES_KEY = 'industries';
-const INDUSTRY_USE_CASES_KEY = 'industryUseCases';
-const PENDING_INDUSTRIES_KEY = 'pendingIndustries';
-const PENDING_USE_CASES_KEY = 'pendingUseCases';
-const SUGGESTIONS_AND_BUGS_KEY = 'suggestionsAndBugs';
-
 const DEFAULT_INDUSTRY_USE_CASES = {
     'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Customer Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
     'IT & Software': ['Product Onboarding', 'Feature Updates', 'Technical Support', 'License Management', 'User Training', 'Bug Reports', 'API Documentation', 'System Alerts'],
-    'Retail & eCommerce': ['Lead Generation', 'WhatsApp Commerce', 'Post Sales Support', 'Order Management', 'COD (Cash on Delivery)', 'Returns & Refunds', 'Customer Onboarding', 'Promotions & Campaigns', 'Inventory Management', 'Product Recommendations', 'Abandoned Cart Recovery'],
-    'Telecom': ['SIM Activation', 'Bill Payments', 'Plan Upgrades', 'Network Alerts', 'Customer Support', 'Service Activation', 'Data Usage Alerts', 'Recharge Reminders'],
+    'Retail & eCommerce': ['WhatsApp Commerce', 'Order Management', 'Returns & Refunds', 'Loyalty Updates', 'Inventory Management', 'In-store Appointments'],
+    'E-commerce': ['Shopping Cart Recovery', 'Product Recommendations', 'Order Status', 'Flash Sales', 'Feedback'],
     'Healthcare': ['Appointment Booking', 'Patient Reminders', 'Prescription Management', 'Health Check-ups', 'Lab Reports', 'Telemedicine', 'Patient Onboarding', 'Medical Records', 'Vaccination Reminders'],
-    'Media & Entertainment': ['Content Notifications', 'Subscription Management', 'User Engagement', 'Event Reminders', 'Support'],
-    'Travel & Hospitality': ['Booking Confirmations', 'Check-in Reminders', 'Loyalty Updates', 'Customer Support', 'Offers'],
-    'Automotive': ['Lead Follow-up', 'Service Reminders', 'Booking', 'Support'],
-    'Government': ['Citizen Notifications', 'Document Status', 'Support'],
-    'Education': ['Student Enrollment', 'Course Updates', 'Fee Reminders', 'Exam Notifications', 'Assignment Submissions', 'Parent-Teacher Communication', 'Library Management', 'Attendance Alerts', 'Result Notifications']
+    'Education': ['Student Enrollment', 'Course Updates', 'Fee Reminders', 'Exam Notifications', 'Assignment Submissions', 'Parent-Teacher Communication', 'Attendance Alerts'],
+    'Telecom': ['Plan Upgrades', 'Bill Payments', 'Network Status', 'SIM Activation', 'Roaming Alerts'],
+    'Manufacturing': ['Inventory Alerts', 'Batch Management', 'Safety Guidelines', 'Supplier Coordination'],
+    'Logistics': ['Tracking Updates', 'Delivery Proof', 'Route Alerts', 'Warehouse Management'],
+    'Hospitality': ['Booking Confirmations', 'Room Services', 'Local Guides', 'Feedback Surveys'],
+    'Real Estate': ['Property Alerts', 'Site Visit Reminders', 'Payment Schedules', 'Tenant Comms'],
+    'Media': ['Content Alerts', 'Subscription Management', 'Event Updates', 'Audience Polls'],
+    'Automotive': ['Service Reminders', 'Test Drive Booking', 'Recall Alerts', 'Spare Parts Status'],
+    'Government': ['Public Service Alerts', 'Tax Reminders', 'Application Tracking', 'Voter Info']
 };
 
 const DataManager = {
@@ -182,11 +180,11 @@ const DataManager = {
     },
 
     // Initialize default data
-    initialize() {
+    async initialize() {
         try {
             this.resetCache();
             // Initialize users if none exist
-            const existingUsers = this.getUsers();
+            const existingUsers = await this.getUsers();
             if (!existingUsers.length) {
                 const defaultUsers = [
                     {
@@ -218,143 +216,150 @@ const DataManager = {
                         passwordUpdatedAt: new Date().toISOString()
                     }
                 ];
-                this.saveUsers(defaultUsers);
+                await this.saveUsers(defaultUsers);
             }
 
-        // Initialize industries if none exist
-        if (!this.getIndustries().length) {
-            const defaultIndustries = [
-                'BFSI', 'IT & Software', 'Retail & eCommerce', 'Telecom',
-                'Healthcare', 'Media & Entertainment', 'Travel & Hospitality',
-                'Automotive', 'Government', 'Education'
-            ];
-            this.saveIndustries(defaultIndustries);
-        }
-        this.ensureIndustryUseCasesBaseline();
+            // Initialize industries if none exist
+            if (!this.getIndustries().length) {
+                const defaultIndustries = [
+                    'Banking', 'Fintech', 'Insurance', 'IT & Software', 'Retail',
+                    'CPG & FMCG', 'Healthcare', 'Pharma & Life Sciences', 'Manufacturing',
+                    'Logistics & Supply Chain', 'Industrial', 'Agritech',
+                    'Real Estate & Construction', 'Education', 'Media & Entertainment',
+                    'Travel & Hospitality', 'Government & Public Sector', 'Professional Services'
+                ];
+                this.saveIndustries(defaultIndustries);
+            }
 
-        // Initialize regions if none exist
-        if (!this.getRegions().length) {
-            this.saveRegions([...DEFAULT_SALES_REGIONS]);
-        } else {
-            this.ensureRegionBaseline();
-        }
+            // Initialize Industry-Use Case map if empty
+            if (!store.getItem(INDUSTRY_USE_CASES_KEY)) {
+                this.saveIndustryUseCases(DEFAULT_INDUSTRY_USE_CASES);
+                const industries = Object.keys(DEFAULT_INDUSTRY_USE_CASES).sort();
+                this.saveIndustries(industries);
+            }
+            // Initialize regions if none exist
+            if (!this.getRegions().length) {
+                this.saveRegions([...DEFAULT_SALES_REGIONS]);
+            } else {
+                this.ensureRegionBaseline();
+            }
 
-        // Initialize / ensure sales rep roster
-        let salesReps = this.getGlobalSalesReps();
-        if (!salesReps.length) {
-            salesReps = DEFAULT_SALES_REPS.map(rep => ({
-                id: this.generateId(),
-                name: rep.name,
-                email: rep.email,
-                region: rep.region,
-                currency: rep.currency || 'INR',
-                fxToInr: null,
-                isActive: true,
-                createdAt: new Date().toISOString()
-            }));
-            this.saveGlobalSalesReps(salesReps);
-        } else {
-            const emailIndex = new Map();
-            salesReps.forEach((rep, index) => {
-                const emailKey = (rep.email || '').toLowerCase();
-                if (emailKey) {
-                    emailIndex.set(emailKey, index);
-                }
-            });
-            let mutated = false;
-
-            const configuredRegionsSet = new Set(this.getRegions());
-            DEFAULT_SALES_REPS.forEach(rep => {
-                const emailKey = rep.email.toLowerCase();
-                if (!emailIndex.has(emailKey)) {
-                    const newRep = {
-                        id: this.generateId(),
-                        name: rep.name,
-                        email: rep.email,
-                        region: rep.region,
-                        currency: rep.currency || 'INR',
-                        fxToInr: null,
-                        isActive: true,
-                        createdAt: new Date().toISOString()
-                    };
-                    salesReps.push(newRep);
-                    emailIndex.set(emailKey, salesReps.length - 1);
-                    mutated = true;
-                    return;
-                }
-
-                const index = emailIndex.get(emailKey);
-                const current = salesReps[index];
-                const updated = { ...current };
-                let changed = false;
-
-                if ((current.name || '').trim() !== rep.name) {
-                    updated.name = rep.name;
-                    changed = true;
-                }
-
-                // Preserve existing region (e.g. Inside sales) – never overwrite with default list so admins' choices stick
-                const currentRegion = (current.region || '').trim();
-                if (!currentRegion && rep.region) {
-                    updated.region = rep.region;
-                    changed = true;
-                }
-
-                if (!current.currency) {
-                    updated.currency = rep.currency || 'INR';
-                    changed = true;
-                }
-
-                if (updated.isActive === undefined) {
-                    updated.isActive = true;
-                    changed = true;
-                }
-
-                if (changed) {
-                    salesReps[index] = updated;
-                    mutated = true;
-                }
-            });
-
-            if (mutated) {
+            // Initialize / ensure sales rep roster
+            let salesReps = this.getGlobalSalesReps();
+            if (!salesReps.length) {
+                salesReps = DEFAULT_SALES_REPS.map(rep => ({
+                    id: this.generateId(),
+                    name: rep.name,
+                    email: rep.email,
+                    region: rep.region,
+                    currency: rep.currency || 'INR',
+                    fxToInr: null,
+                    isActive: true,
+                    createdAt: new Date().toISOString()
+                }));
                 this.saveGlobalSalesReps(salesReps);
+            } else {
+                const emailIndex = new Map();
+                salesReps.forEach((rep, index) => {
+                    const emailKey = (rep.email || '').toLowerCase();
+                    if (emailKey) {
+                        emailIndex.set(emailKey, index);
+                    }
+                });
+                let mutated = false;
+
+                const configuredRegionsSet = new Set(this.getRegions());
+                DEFAULT_SALES_REPS.forEach(rep => {
+                    const emailKey = rep.email.toLowerCase();
+                    if (!emailIndex.has(emailKey)) {
+                        const newRep = {
+                            id: this.generateId(),
+                            name: rep.name,
+                            email: rep.email,
+                            region: rep.region,
+                            currency: rep.currency || 'INR',
+                            fxToInr: null,
+                            isActive: true,
+                            createdAt: new Date().toISOString()
+                        };
+                        salesReps.push(newRep);
+                        emailIndex.set(emailKey, salesReps.length - 1);
+                        mutated = true;
+                        return;
+                    }
+
+                    const index = emailIndex.get(emailKey);
+                    const current = salesReps[index];
+                    const updated = { ...current };
+                    let changed = false;
+
+                    if ((current.name || '').trim() !== rep.name) {
+                        updated.name = rep.name;
+                        changed = true;
+                    }
+
+                    // Preserve existing region (e.g. Inside sales) – never overwrite with default list so admins' choices stick
+                    const currentRegion = (current.region || '').trim();
+                    if (!currentRegion && rep.region) {
+                        updated.region = rep.region;
+                        changed = true;
+                    }
+
+                    if (!current.currency) {
+                        updated.currency = rep.currency || 'INR';
+                        changed = true;
+                    }
+
+                    if (updated.isActive === undefined) {
+                        updated.isActive = true;
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        salesReps[index] = updated;
+                        mutated = true;
+                    }
+                });
+
+                if (mutated) {
+                    this.saveGlobalSalesReps(salesReps);
+                }
             }
-        }
-        
-        // Initialize industries and regions as empty arrays (will be managed inline in forms)
-        if (!localStorage.getItem('industries')) {
-            this.saveIndustries(['BFSI', 'IT & Software', 'Retail & eCommerce', 'Telecom', 'Healthcare', 'Media & Entertainment', 'Travel & Hospitality', 'Automotive', 'Government', 'Education']);
-        }
-        if (!localStorage.getItem('regions')) {
-            this.saveRegions([...DEFAULT_SALES_REGIONS]);
-        }
 
-        // Initialize other data structures
-        if (!localStorage.getItem('accounts')) {
-            this.saveAccounts([]);
-        }
-        if (!localStorage.getItem('activities')) {
-            this.saveActivities([]);
-        }
-        if (!localStorage.getItem('internalActivities')) {
-            this.saveInternalActivities([]);
-        }
+            // Initialize industries and regions as empty arrays (will be managed inline in forms)
+            if (!localStorage.getItem('industries')) {
+                this.saveIndustries(['BFSI', 'IT & Software', 'Retail & eCommerce', 'Telecom', 'Healthcare', 'Media & Entertainment', 'Travel & Hospitality', 'Automotive', 'Government', 'Education']);
+            }
+            if (!localStorage.getItem('regions')) {
+                this.saveRegions([...DEFAULT_SALES_REGIONS]);
+            }
 
-        if (!localStorage.getItem('presalesActivityTarget')) {
-            this.savePresalesActivityTarget(20, { updatedBy: 'System' });
-        }
+            // Initialize other data structures
+            if (!localStorage.getItem('accounts')) {
+                await this.saveAccounts([]);
+            }
+            if (!localStorage.getItem('activities')) {
+                await this.saveActivities([]);
+            }
+            if (!localStorage.getItem('internalActivities')) {
+                await this.saveInternalActivities([]);
+            }
 
-        this.normalizeSalesRepRegions();
-        this.backfillAccountSalesRepRegions();
-        this.backfillActivitySalesRepRegions();
-        this.applyMigrationCleanupIfNeeded();
-        this.ensureAnalyticsPresetBaseline();
+            if (!localStorage.getItem('presalesActivityTarget')) {
+                this.savePresalesActivityTarget(20, { updatedBy: 'System' });
+            }
+
+            this.normalizeSalesRepRegions();
+            this.backfillAccountSalesRepRegions();
+            this.backfillActivitySalesRepRegions();
+            await this.applyMigrationCleanupIfNeeded();
+            this.ensureAnalyticsPresetBaseline();
         } catch (error) {
             console.error('Error initializing data:', error);
         }
     },
 
-    applyMigrationCleanupIfNeeded() {
+    async applyMigrationCleanupIfNeeded() {
         try {
             const appliedVersion = localStorage.getItem(
                 MIGRATION_CLEANUP_VERSION_KEY
@@ -363,17 +368,17 @@ const DataManager = {
                 return;
             }
 
-            const existingActivities = this.getActivities();
+            const existingActivities = await this.getActivities();
             const {
                 records: normalizedActivities,
                 changed: activitiesChanged
             } = this.prepareMigratedActivities(existingActivities);
 
             if (activitiesChanged) {
-                this.saveActivities(normalizedActivities);
+                await this.saveActivities(normalizedActivities);
             }
 
-            const existingAccounts = this.getAccounts();
+            const existingAccounts = await this.getAccounts();
             const {
                 records: normalizedAccounts,
                 changed: accountsChanged
@@ -383,7 +388,7 @@ const DataManager = {
             );
 
             if (accountsChanged) {
-                this.saveAccounts(normalizedAccounts);
+                await this.saveAccounts(normalizedAccounts);
             }
 
             localStorage.setItem(
@@ -415,7 +420,7 @@ const DataManager = {
             }
             seenSignatures.add(signature);
 
-             const userSummarySignature = this.buildActivityUserSummarySignature(
+            const userSummarySignature = this.buildActivityUserSummarySignature(
                 record
             );
             if (seenUserSummarySignatures.has(userSummarySignature)) {
@@ -539,9 +544,9 @@ const DataManager = {
         const summaryKey = normalize(activity.summary);
         const userKey = normalize(
             activity.assignedUserEmail ||
-                activity.userId ||
-                activity.userName ||
-                ''
+            activity.userId ||
+            activity.userName ||
+            ''
         );
 
         return [
@@ -678,10 +683,35 @@ const DataManager = {
     },
 
     // User Management
-    getUsers() {
+    async getUsers() {
         if (this.cache.users) {
             return this.cache.users;
         }
+        // Try async first if available, fallback to sync for initial load
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
+                const rawUsers = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const normalized = rawUsers.map(user => {
+                    const defaultRegion =
+                        typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
+                    const regions = Array.isArray(user.regions) ? user.regions : [];
+                    const salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
+                    return {
+                        ...user,
+                        regions,
+                        salesReps,
+                        defaultRegion
+                    };
+                });
+                this.cache.users = normalized;
+                return normalized;
+            } catch (err) {
+                console.warn('[DataManager] Async getUsers failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback (for initial load or if async not available)
         const stored = localStorage.getItem('users');
         const rawUsers = stored ? JSON.parse(stored) : [];
         const normalized = rawUsers.map(user => {
@@ -699,10 +729,10 @@ const DataManager = {
         this.cache.users = normalized;
         return normalized;
     },
-    
+
     // Ensure default users exist (call this if needed)
-    ensureDefaultUsers() {
-        const users = this.getUsers();
+    async ensureDefaultUsers() {
+        const users = await this.getUsers();
         if (users.length === 0) {
             const defaultUsers = [
                 {
@@ -874,33 +904,49 @@ const DataManager = {
                     passwordUpdatedAt: null
                 }
             ];
-            this.saveUsers(defaultUsers);
+            await this.saveUsers(defaultUsers);
         }
         return users;
     },
 
-    saveUsers(users) {
-        localStorage.setItem('users', JSON.stringify(users));
+    async saveUsers(users) {
+        const payload = JSON.stringify(users);
+        // Use async with draft for conflict handling
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('users', payload, { type: 'external' });
+                this.cache.users = users;
+                this.cache.allActivities = null;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveUsers failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback
+        localStorage.setItem('users', payload);
         this.cache.users = users;
         this.cache.allActivities = null;
     },
 
-    getUserById(id) {
-        return this.getUsers().find(u => u.id === id);
+    async getUserById(id) {
+        const users = await this.getUsers();
+        return users.find(u => u.id === id);
     },
 
-    getUserByUsername(username) {
-        return this.getUsers().find(u => u.username === username);
+    async getUserByUsername(username) {
+        const users = await this.getUsers();
+        return users.find(u => u.username === username);
     },
 
-    addUser(user) {
-        const users = this.getUsers();
+    async addUser(user) {
+        const users = await this.getUsers();
         user.id = this.generateId();
         user.createdAt = new Date().toISOString();
         user.isActive = user.isActive !== undefined ? user.isActive : true;
         user.forcePasswordChange = user.forcePasswordChange === true;
         user.passwordUpdatedAt = user.forcePasswordChange ? null : new Date().toISOString();
-        const availableRegions = this.getRegions();
+        const availableRegions = await this.getRegions();
         const defaultRegion =
             typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
         user.defaultRegion =
@@ -908,12 +954,12 @@ const DataManager = {
         user.regions = Array.isArray(user.regions) ? user.regions : [];
         user.salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
         users.push(user);
-        this.saveUsers(users);
+        await this.saveUsers(users);
         return user;
     },
 
-    updateUser(userId, updates) {
-        const users = this.getUsers();
+    async updateUser(userId, updates) {
+        const users = await this.getUsers();
         const index = users.findIndex(u => u.id === userId);
         if (index !== -1) {
             const merged = { ...users[index], ...updates };
@@ -931,49 +977,86 @@ const DataManager = {
             if (updates.defaultRegion !== undefined) {
                 const trimmed =
                     typeof updates.defaultRegion === 'string' ? updates.defaultRegion.trim() : '';
-                const availableRegions = this.getRegions();
+                const availableRegions = await this.getRegions();
                 merged.defaultRegion =
                     trimmed && availableRegions.includes(trimmed) ? trimmed : '';
             }
             merged.updatedAt = new Date().toISOString();
             users[index] = merged;
-            this.saveUsers(users);
+            await this.saveUsers(users);
             return users[index];
         }
         return null;
     },
 
-    deleteUser(userId) {
-        const users = this.getUsers().filter(u => u.id !== userId);
-        this.saveUsers(users);
+    async deleteUser(userId) {
+        const users = (await this.getUsers()).filter(u => u.id !== userId);
+        await this.saveUsers(users);
     },
 
     // Industry Management
-    getIndustries() {
-        const stored = localStorage.getItem('industries');
-        return stored ? JSON.parse(stored) : [];
+    async getIndustries() {
+        if (this.cache.industries) return this.cache.industries;
+        const key = 'industries';
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                const industries = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.industries = industries;
+                return industries;
+            } catch (err) {
+                console.warn('[DataManager] Async getIndustries failed:', err);
+            }
+        }
+        const stored = localStorage.getItem(key);
+        const industries = stored ? JSON.parse(stored) : [];
+        this.cache.industries = industries;
+        return industries;
     },
 
-    saveIndustries(industries) {
-        localStorage.setItem('industries', JSON.stringify(industries));
+    async saveIndustries(industries) {
+        const key = 'industries';
+        const payload = JSON.stringify(industries);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                this.cache.industries = industries;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveIndustries failed:', err);
+            }
+        }
+        localStorage.setItem(key, payload);
+        this.cache.industries = industries;
     },
 
-    addIndustry(industry) {
-        const industries = this.getIndustries();
+    async addIndustry(industry) {
+        const industries = await this.getIndustries();
         if (!industries.includes(industry)) {
             industries.push(industry);
-            this.saveIndustries(industries);
+            await this.saveIndustries(industries);
         }
     },
 
-    deleteIndustry(industry) {
-        const industries = this.getIndustries().filter(i => i !== industry);
-        this.saveIndustries(industries);
+    async deleteIndustry(industry) {
+        const industries = (await this.getIndustries()).filter(i => i !== industry);
+        await this.saveIndustries(industries);
     },
 
     // Industry Use Cases (per-industry)
-    getIndustryUseCases() {
-        const stored = localStorage.getItem(INDUSTRY_USE_CASES_KEY);
+    async getIndustryUseCases() {
+        const key = INDUSTRY_USE_CASES_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (!stored) return {};
+                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch (e) {
+                console.warn('[DataManager] Async getIndustryUseCases failed:', e);
+            }
+        }
+        const stored = localStorage.getItem(key);
         if (!stored) return {};
         try {
             const parsed = JSON.parse(stored);
@@ -983,42 +1066,91 @@ const DataManager = {
         }
     },
 
-    getUseCasesForIndustry(industry) {
+    async getUseCasesForIndustry(industry) {
         if (!industry || typeof industry !== 'string') return [];
-        const map = this.getIndustryUseCases();
+        const map = await this.getIndustryUseCases();
         const list = map[industry.trim()];
         return Array.isArray(list) ? [...list] : [];
     },
 
-    saveIndustryUseCases(map) {
-        localStorage.setItem(INDUSTRY_USE_CASES_KEY, JSON.stringify(map || {}));
+    async getUniversalUseCases() {
+        const key = UNIVERSAL_USE_CASES_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                return stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+            } catch (e) {
+                console.warn('[DataManager] Async getUniversalUseCases failed:', e);
+            }
+        }
+        try {
+            const store = this.getLocalStorage();
+            const data = store.getItem(key);
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
     },
 
-    setUseCasesForIndustry(industry, useCases) {
+    async saveUniversalUseCases(list) {
+        if (!Array.isArray(list)) return;
+        const key = UNIVERSAL_USE_CASES_KEY;
+        const payload = JSON.stringify(list);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async saveUniversalUseCases failed:', e);
+            }
+        }
+        try {
+            const store = this.getLocalStorage();
+            store.setItem(key, payload);
+        } catch (e) {
+            console.error('Failed to save universal use cases:', e);
+        }
+    },
+
+    async saveIndustryUseCases(map) {
+        const key = INDUSTRY_USE_CASES_KEY;
+        const payload = JSON.stringify(map || {});
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async saveIndustryUseCases failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
+    },
+
+    async setUseCasesForIndustry(industry, useCases) {
         const trimmed = industry && typeof industry === 'string' ? industry.trim() : '';
         if (!trimmed) return;
-        const map = this.getIndustryUseCases();
+        const map = await this.getIndustryUseCases();
         map[trimmed] = Array.isArray(useCases) ? useCases : [];
-        this.saveIndustryUseCases(map);
+        await this.saveIndustryUseCases(map);
     },
 
-    addUseCaseToIndustry(industry, useCase) {
+    async addUseCaseToIndustry(industry, useCase) {
         const trimmed = (useCase && typeof useCase === 'string' ? useCase.trim() : '') || '';
         if (!trimmed) return;
-        const list = this.getUseCasesForIndustry(industry);
+        const list = await this.getUseCasesForIndustry(industry);
         if (list.includes(trimmed)) return;
         list.push(trimmed);
-        this.setUseCasesForIndustry(industry, list);
+        await this.setUseCasesForIndustry(industry, list);
     },
 
-    removeUseCaseFromIndustry(industry, useCase) {
-        const list = this.getUseCasesForIndustry(industry).filter(uc => uc !== useCase);
-        this.setUseCasesForIndustry(industry, list);
+    async removeUseCaseFromIndustry(industry, useCase) {
+        const list = (await this.getUseCasesForIndustry(industry)).filter(uc => uc !== useCase);
+        await this.setUseCasesForIndustry(industry, list);
     },
 
-    ensureIndustryUseCasesBaseline() {
-        const industries = this.getIndustries();
-        const map = this.getIndustryUseCases();
+    async ensureIndustryUseCasesBaseline() {
+        const industries = await this.getIndustries();
+        const map = await this.getIndustryUseCases();
         let changed = false;
         industries.forEach(ind => {
             if (!Array.isArray(map[ind]) || !map[ind].length) {
@@ -1027,12 +1159,21 @@ const DataManager = {
                 changed = true;
             }
         });
-        if (changed) this.saveIndustryUseCases(map);
+        if (changed) await this.saveIndustryUseCases(map);
     },
 
     // Pending industries (from "Other" in forms)
-    getPendingIndustries() {
-        const stored = localStorage.getItem(PENDING_INDUSTRIES_KEY);
+    async getPendingIndustries() {
+        const key = PENDING_INDUSTRIES_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                return stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+            } catch (e) {
+                console.warn('[DataManager] Async getPendingIndustries failed:', e);
+            }
+        }
+        const stored = localStorage.getItem(key);
         if (!stored) return [];
         try {
             const parsed = JSON.parse(stored);
@@ -1042,50 +1183,69 @@ const DataManager = {
         }
     },
 
-    savePendingIndustries(list) {
-        localStorage.setItem(PENDING_INDUSTRIES_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    async savePendingIndustries(list) {
+        const key = PENDING_INDUSTRIES_KEY;
+        const payload = JSON.stringify(Array.isArray(list) ? list : []);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async savePendingIndustries failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
     },
 
-    addPendingIndustry(value, meta = {}) {
+    async addPendingIndustry(value, meta = {}) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         if (!trimmed) return null;
-        const industries = this.getIndustries();
+        const industries = await this.getIndustries();
         if (industries.includes(trimmed)) return null;
-        const pending = this.getPendingIndustries();
+        const pending = await this.getPendingIndustries();
         if (pending.some(p => (p.value || p).toString().trim() === trimmed)) return null;
         const entry = { value: trimmed, suggestedBy: meta.suggestedBy || null, createdAt: meta.createdAt || new Date().toISOString() };
         pending.push(entry);
-        this.savePendingIndustries(pending);
+        await this.savePendingIndustries(pending);
         return entry;
     },
 
-    acceptPendingIndustry(value) {
+    async acceptPendingIndustry(value) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         if (!trimmed) return false;
-        const pending = this.getPendingIndustries();
+        const pending = await this.getPendingIndustries();
         const filtered = pending.filter(p => (p.value || p).toString().trim() !== trimmed);
         if (filtered.length === pending.length) return false;
-        this.savePendingIndustries(filtered);
-        this.addIndustry(trimmed);
-        const map = this.getIndustryUseCases();
+        await this.savePendingIndustries(filtered);
+        await this.addIndustry(trimmed);
+        const map = await this.getIndustryUseCases();
         if (!Array.isArray(map[trimmed]) || !map[trimmed].length) {
             map[trimmed] = ['Marketing', 'Commerce', 'Support'];
-            this.saveIndustryUseCases(map);
+            await this.saveIndustryUseCases(map);
         }
         return true;
     },
 
-    rejectPendingIndustry(value) {
+    async rejectPendingIndustry(value) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         if (!trimmed) return false;
-        const pending = this.getPendingIndustries().filter(p => (p.value || p).toString().trim() !== trimmed);
-        this.savePendingIndustries(pending);
+        const pending = (await this.getPendingIndustries()).filter(p => (p.value || p).toString().trim() !== trimmed);
+        await this.savePendingIndustries(pending);
         return true;
     },
 
     // Pending use cases (from "Other" in forms, per industry)
-    getPendingUseCases() {
-        const stored = localStorage.getItem(PENDING_USE_CASES_KEY);
+    async getPendingUseCases() {
+        const key = PENDING_USE_CASES_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                return stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+            } catch (e) {
+                console.warn('[DataManager] Async getPendingUseCases failed:', e);
+            }
+        }
+        const stored = localStorage.getItem(key);
         if (!stored) return [];
         try {
             const parsed = JSON.parse(stored);
@@ -1095,13 +1255,32 @@ const DataManager = {
         }
     },
 
-    savePendingUseCases(list) {
-        localStorage.setItem(PENDING_USE_CASES_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    async savePendingUseCases(list) {
+        const key = PENDING_USE_CASES_KEY;
+        const payload = JSON.stringify(Array.isArray(list) ? list : []);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async savePendingUseCases failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
     },
 
-    getSuggestionsAndBugs() {
+    async getSuggestionsAndBugs() {
+        const key = SUGGESTIONS_AND_BUGS_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                return stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+            } catch (e) {
+                console.warn('[DataManager] Async getSuggestionsAndBugs failed:', e);
+            }
+        }
         try {
-            const stored = localStorage.getItem(SUGGESTIONS_AND_BUGS_KEY);
+            const stored = localStorage.getItem(key);
             const list = stored ? JSON.parse(stored) : [];
             return Array.isArray(list) ? list : [];
         } catch (e) {
@@ -1109,41 +1288,51 @@ const DataManager = {
         }
     },
 
-    saveSuggestionsAndBugs(list) {
-        localStorage.setItem(SUGGESTIONS_AND_BUGS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    async saveSuggestionsAndBugs(list) {
+        const key = SUGGESTIONS_AND_BUGS_KEY;
+        const payload = JSON.stringify(Array.isArray(list) ? list : []);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async saveSuggestionsAndBugs failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
     },
 
-    addPendingUseCase(value, industry, meta = {}) {
+    async addPendingUseCase(value, industry, meta = {}) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         if (!trimmed) return null;
         const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
-        const existing = this.getUseCasesForIndustry(ind);
+        const existing = await this.getUseCasesForIndustry(ind);
         if (existing.includes(trimmed)) return null;
-        const pending = this.getPendingUseCases();
+        const pending = await this.getPendingUseCases();
         if (pending.some(p => (p.value || p).toString().trim() === trimmed && (p.industry || '') === ind)) return null;
         const entry = { value: trimmed, industry: ind, suggestedBy: meta.suggestedBy || null, createdAt: meta.createdAt || new Date().toISOString() };
         pending.push(entry);
-        this.savePendingUseCases(pending);
+        await this.savePendingUseCases(pending);
         return entry;
     },
 
-    acceptPendingUseCase(value, industry) {
+    async acceptPendingUseCase(value, industry) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
         if (!trimmed) return false;
-        const pending = this.getPendingUseCases();
+        const pending = await this.getPendingUseCases();
         const filtered = pending.filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
         if (filtered.length === pending.length) return false;
-        this.savePendingUseCases(filtered);
-        this.addUseCaseToIndustry(ind, trimmed);
+        await this.savePendingUseCases(filtered);
+        await this.addUseCaseToIndustry(ind, trimmed);
         return true;
     },
 
-    rejectPendingUseCase(value, industry) {
+    async rejectPendingUseCase(value, industry) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
-        const pending = this.getPendingUseCases().filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
-        this.savePendingUseCases(pending);
+        const pending = (await this.getPendingUseCases()).filter(p => (p.value || p).toString().trim() !== trimmed || (p.industry || '') !== ind);
+        await this.savePendingUseCases(pending);
         return true;
     },
 
@@ -1155,16 +1344,16 @@ const DataManager = {
      * @param {string} existingIndustry - Approved industry to merge into (e.g. "BFSI")
      * @returns {{ success: boolean, accountsUpdated?: number, message?: string }}
      */
-    mergePendingIndustryInto(pendingValue, existingIndustry) {
+    async mergePendingIndustryInto(pendingValue, existingIndustry) {
         const fromVal = (pendingValue && typeof pendingValue === 'string' ? pendingValue.trim() : '') || '';
         const toVal = (existingIndustry && typeof existingIndustry === 'string' ? existingIndustry.trim() : '') || '';
         if (!fromVal || !toVal) return { success: false, message: 'Both values are required.' };
-        const industries = this.getIndustries();
+        const industries = await this.getIndustries();
         if (!industries.includes(toVal)) return { success: false, message: 'Target industry is not in the approved list.' };
-        const pending = this.getPendingIndustries();
+        const pending = await this.getPendingIndustries();
         if (!pending.some(p => (p.value || p).toString().trim() === fromVal)) return { success: false, message: 'Pending industry not found.' };
 
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
         let count = 0;
         accounts.forEach(acc => {
             const accInd = (acc.industry && typeof acc.industry === 'string' ? acc.industry.trim() : '') || '';
@@ -1173,8 +1362,8 @@ const DataManager = {
                 count++;
             }
         });
-        if (count > 0) this.saveAccounts(accounts);
-        this.rejectPendingIndustry(fromVal);
+        if (count > 0) await this.saveAccounts(accounts);
+        await this.rejectPendingIndustry(fromVal);
         return { success: true, accountsUpdated: count };
     },
 
@@ -1186,17 +1375,17 @@ const DataManager = {
      * @param {string} existingUseCase - Approved use case to merge into
      * @returns {{ success: boolean, projectsUpdated?: number, message?: string }}
      */
-    mergePendingUseCaseInto(pendingValue, pendingIndustry, existingUseCase) {
+    async mergePendingUseCaseInto(pendingValue, pendingIndustry, existingUseCase) {
         const fromVal = (pendingValue && typeof pendingValue === 'string' ? pendingValue.trim() : '') || '';
         const ind = (pendingIndustry && typeof pendingIndustry === 'string' ? pendingIndustry.trim() : '') || '';
         const toVal = (existingUseCase && typeof existingUseCase === 'string' ? existingUseCase.trim() : '') || '';
         if (!fromVal || !toVal) return { success: false, message: 'Both values are required.' };
-        const existingList = this.getUseCasesForIndustry(ind);
+        const existingList = await this.getUseCasesForIndustry(ind);
         if (!existingList.includes(toVal)) return { success: false, message: 'Target use case is not in the list for this industry.' };
-        const pending = this.getPendingUseCases();
+        const pending = await this.getPendingUseCases();
         if (!pending.some(p => (p.value || p).toString().trim() === fromVal && (p.industry || '') === ind)) return { success: false, message: 'Pending use case not found.' };
 
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
         let projectsUpdated = 0;
         accounts.forEach(account => {
             (account.projects || []).forEach(project => {
@@ -1216,15 +1405,29 @@ const DataManager = {
                 }
             });
         });
-        if (projectsUpdated > 0) this.saveAccounts(accounts);
-        this.rejectPendingUseCase(fromVal, ind);
+        if (projectsUpdated > 0) await this.saveAccounts(accounts);
+        await this.rejectPendingUseCase(fromVal, ind);
         return { success: true, projectsUpdated };
     },
 
     // Region Management
-    getRegions() {
-        const stored = localStorage.getItem('regions');
-        return stored ? JSON.parse(stored) : [];
+    async getRegions() {
+        if (this.cache.regions) return this.cache.regions;
+        const key = 'regions';
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                const regions = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.regions = regions;
+                return regions;
+            } catch (err) {
+                console.warn('[DataManager] Async getRegions failed:', err);
+            }
+        }
+        const stored = localStorage.getItem(key);
+        const regions = stored ? JSON.parse(stored) : [];
+        this.cache.regions = regions;
+        return regions;
     },
 
     isDefaultRegion(region) {
@@ -1232,24 +1435,36 @@ const DataManager = {
         return DEFAULT_REGION_SET.has(region.trim());
     },
 
-    saveRegions(regions) {
-        localStorage.setItem('regions', JSON.stringify(regions));
+    async saveRegions(regions) {
+        const key = 'regions';
+        const payload = JSON.stringify(regions);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                this.cache.regions = regions;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveRegions failed:', err);
+            }
+        }
+        localStorage.setItem(key, payload);
+        this.cache.regions = regions;
     },
 
-    addRegion(region) {
-        const regions = this.getRegions();
+    async addRegion(region) {
+        const regions = await this.getRegions();
         if (!regions.includes(region)) {
             regions.push(region);
-            this.saveRegions(regions);
+            await this.saveRegions(regions);
         }
     },
 
-    deleteRegion(region) {
-        const regions = this.getRegions().filter(r => r !== region);
-        this.saveRegions(regions);
+    async deleteRegion(region) {
+        const regions = (await this.getRegions()).filter(r => r !== region);
+        await this.saveRegions(regions);
     },
 
-    getRegionUsage(region) {
+    async getRegionUsage(region) {
         if (!region) {
             return { salesReps: 0, accounts: 0, activities: 0, users: 0 };
         }
@@ -1258,15 +1473,15 @@ const DataManager = {
             return { salesReps: 0, accounts: 0, activities: 0, users: 0 };
         }
 
-        const salesReps = this.getGlobalSalesReps().filter(rep => (rep.region || '').trim().toLowerCase() === normalized).length;
-        const accounts = this.getAccounts().filter(account => (account.salesRepRegion || '').trim().toLowerCase() === normalized).length;
-        const activities = this.getAllActivities().filter(activity => (activity.salesRepRegion || '').trim().toLowerCase() === normalized).length;
-        const users = this.getUsers().filter(user => (user.defaultRegion || '').trim().toLowerCase() === normalized).length;
-
-        return { salesReps, accounts, activities, users };
+        const [accounts, activities, users] = await Promise.all([this.getAccounts(), this.getAllActivities(), this.getUsers()]);
+        const salesReps = (await this.getGlobalSalesReps()).filter(rep => (rep.region || '').trim().toLowerCase() === normalized).length;
+        const accountsCount = accounts.filter(account => (account.salesRepRegion || '').trim().toLowerCase() === normalized).length;
+        const activitiesCount = activities.filter(activity => (activity.salesRepRegion || '').trim().toLowerCase() === normalized).length;
+        const usersCount = users.filter(user => (user.defaultRegion || '').trim().toLowerCase() === normalized).length;
+        return { salesReps, accounts: accountsCount, activities: activitiesCount, users: usersCount };
     },
 
-    removeRegion(region) {
+    async removeRegion(region) {
         const trimmed = region && typeof region === 'string' ? region.trim() : '';
         if (!trimmed) {
             return { success: false, message: 'Select a region to remove.' };
@@ -1276,12 +1491,12 @@ const DataManager = {
             return { success: false, message: 'Default regions cannot be removed.' };
         }
 
-        const regions = this.getRegions();
+        const regions = await this.getRegions();
         if (!regions.includes(trimmed)) {
             return { success: false, message: `Region "${trimmed}" was not found.` };
         }
 
-        const usage = this.getRegionUsage(trimmed);
+        const usage = await this.getRegionUsage(trimmed);
         if (usage.salesReps || usage.accounts || usage.activities || usage.users) {
             return {
                 success: false,
@@ -1290,32 +1505,32 @@ const DataManager = {
             };
         }
 
-        this.deleteRegion(trimmed);
-        this.ensureRegionBaseline();
+        await this.deleteRegion(trimmed);
+        await this.ensureRegionBaseline();
         this.recordAudit('region.delete', 'region', trimmed, usage);
 
         return { success: true, usage };
     },
 
-    pruneUnusedRegions() {
-        const regions = [...this.getRegions()];
+    async pruneUnusedRegions() {
+        const regions = [...await this.getRegions()];
         const removed = [];
 
-        regions.forEach(region => {
+        for (const region of regions) {
             if (this.isDefaultRegion(region)) {
-                return;
+                continue;
             }
-            const usage = this.getRegionUsage(region);
+            const usage = await this.getRegionUsage(region);
             if (usage.salesReps || usage.accounts || usage.activities || usage.users) {
-                return;
+                continue;
             }
-            this.deleteRegion(region);
+            await this.deleteRegion(region);
             this.recordAudit('region.delete', 'region', region, usage);
             removed.push(region);
-        });
+        }
 
         if (removed.length) {
-            this.ensureRegionBaseline();
+            await this.ensureRegionBaseline();
         }
 
         return { removed };
@@ -1323,12 +1538,25 @@ const DataManager = {
 
     // Global Sales Reps Management (Enhanced with email and region)
     // Email is PRIMARY KEY
-    getGlobalSalesReps() {
+    async getGlobalSalesReps() {
         if (this.cache.globalSalesReps) {
             return this.cache.globalSalesReps;
         }
-        const stored = localStorage.getItem('globalSalesReps');
-        const reps = stored ? JSON.parse(stored) : [];
+        const key = 'globalSalesReps';
+        let reps = [];
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                reps = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+            } catch (err) {
+                console.warn('[DataManager] Async getGlobalSalesReps failed:', err);
+            }
+        }
+        if (!reps.length) {
+            const stored = localStorage.getItem(key);
+            reps = stored ? JSON.parse(stored) : [];
+        }
+
         const normalized = reps.map(rep => {
             const fxValue = Number(rep.fxToInr);
             const regionTrimmed = (rep.region != null && String(rep.region).trim()) ? String(rep.region).trim() : '';
@@ -1343,22 +1571,25 @@ const DataManager = {
         return normalized;
     },
 
-    getGlobalSalesRepByName(name) {
+    async getGlobalSalesRepByName(name) {
         if (!name) return null;
         const targetName = name.toLowerCase();
-        return this.getGlobalSalesReps().find(rep => rep.name && rep.name.toLowerCase() === targetName) || null;
+        const reps = await this.getGlobalSalesReps();
+        return reps.find(rep => rep.name && rep.name.toLowerCase() === targetName) || null;
     },
 
-    getGlobalSalesRepByEmail(email) {
+    async getGlobalSalesRepByEmail(email) {
         if (!email) return null;
         const targetEmail = email.toLowerCase();
-        return this.getGlobalSalesReps().find(rep => rep.email && rep.email.toLowerCase() === targetEmail) || null;
+        const reps = await this.getGlobalSalesReps();
+        return reps.find(rep => rep.email && rep.email.toLowerCase() === targetEmail) || null;
     },
 
-    getSalesRepsByRegion(region = 'all', options = {}) {
+    async getSalesRepsByRegion(region = 'all', options = {}) {
         const { includeInactive = false } = options || {};
         const normalizedRegion = region ? region.trim() : '';
-        const reps = this.getGlobalSalesReps().filter(rep => includeInactive || rep.isActive !== false);
+        const allReps = await this.getGlobalSalesReps();
+        const reps = allReps.filter(rep => includeInactive || rep.isActive !== false);
         if (!normalizedRegion || normalizedRegion.toLowerCase() === 'all') {
             return [...reps].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
         }
@@ -1367,14 +1598,26 @@ const DataManager = {
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     },
 
-    saveGlobalSalesReps(salesReps) {
-        localStorage.setItem('globalSalesReps', JSON.stringify(salesReps));
+    async saveGlobalSalesReps(salesReps) {
+        const key = 'globalSalesReps';
+        const payload = JSON.stringify(salesReps);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                this.cache.globalSalesReps = salesReps;
+                this.cache.allActivities = null;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveGlobalSalesReps failed:', err);
+            }
+        }
+        localStorage.setItem(key, payload);
         this.cache.globalSalesReps = salesReps;
         this.cache.allActivities = null;
     },
 
-    addGlobalSalesRep(salesRep) {
-        const salesReps = this.getGlobalSalesReps();
+    async addGlobalSalesRep(salesRep) {
+        const salesReps = await this.getGlobalSalesReps();
         // Check if sales rep with same email already exists (email is primary key)
         const existing = salesReps.find(r => r.email && salesRep.email && r.email.toLowerCase() === salesRep.email.toLowerCase());
         if (existing) {
@@ -1389,7 +1632,7 @@ const DataManager = {
                 }
             };
         }
-        
+
         salesRep.currency = salesRep.currency || 'INR';
         const fxValue = Number(salesRep.fxToInr);
         salesRep.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
@@ -1397,21 +1640,22 @@ const DataManager = {
         salesRep.createdAt = new Date().toISOString();
         salesRep.isActive = salesRep.isActive !== undefined ? salesRep.isActive : true;
         const regionTrimmed = (salesRep.region != null && String(salesRep.region).trim()) ? String(salesRep.region).trim() : '';
-        salesRep.region = regionTrimmed || (this.getRegions()[0] || '');
+        const currentRegions = await this.getRegions();
+        salesRep.region = regionTrimmed || (currentRegions[0] || '');
         salesReps.push(salesRep);
-        this.saveGlobalSalesReps(salesReps);
+        await this.saveGlobalSalesReps(salesReps);
         this.recordAudit('salesRep.create', 'salesRep', salesRep.id, {
             name: salesRep.name,
             email: salesRep.email,
             region: salesRep.region
         });
-        this.backfillAccountSalesRepRegions();
-        this.backfillActivitySalesRepRegions();
+        await this.backfillAccountSalesRepRegions();
+        await this.backfillActivitySalesRepRegions();
         return salesRep;
     },
 
-    updateGlobalSalesRep(salesRepId, updates) {
-        const salesReps = this.getGlobalSalesReps();
+    async updateGlobalSalesRep(salesRepId, updates) {
+        const salesReps = await this.getGlobalSalesReps();
         const index = salesReps.findIndex(r => r.id === salesRepId);
         if (index !== -1) {
             const current = salesReps[index];
@@ -1424,49 +1668,78 @@ const DataManager = {
             const fxValue = Number(merged.fxToInr);
             merged.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
             const regionTrimmed = (merged.region != null && String(merged.region).trim()) ? String(merged.region).trim() : '';
-            merged.region = regionTrimmed || (current.region || this.getRegions()[0] || '');
+            const currentRegions = await this.getRegions();
+            merged.region = regionTrimmed || (current.region || currentRegions[0] || '');
             salesReps[index] = merged;
-            this.saveGlobalSalesReps(salesReps);
+            await this.saveGlobalSalesReps(salesReps);
             this.recordAudit('salesRep.update', 'salesRep', salesRepId, updates);
-            this.backfillAccountSalesRepRegions();
-            this.backfillActivitySalesRepRegions();
+            await this.backfillAccountSalesRepRegions();
+            await this.backfillActivitySalesRepRegions();
             return merged;
         }
         return null;
     },
 
-    deleteGlobalSalesRep(salesRepId) {
-        const salesReps = this.getGlobalSalesReps().filter(r => r.id !== salesRepId);
-        this.saveGlobalSalesReps(salesReps);
+    async deleteGlobalSalesRep(salesRepId) {
+        const salesReps = (await this.getGlobalSalesReps()).filter(r => r.id !== salesRepId);
+        await this.saveGlobalSalesReps(salesReps);
         this.recordAudit('salesRep.delete', 'salesRep', salesRepId);
     },
 
 
     // Account Management
-    getAccounts() {
+    async getAccounts() {
         if (this.cache.accounts) {
             return this.cache.accounts;
         }
+        // Try async first if available, fallback to sync for initial load
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('accounts');
+                const accounts = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.accounts = accounts;
+                return accounts;
+            } catch (err) {
+                console.warn('[DataManager] Async getAccounts failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback (for initial load or if async not available)
         const stored = localStorage.getItem('accounts');
         const accounts = stored ? JSON.parse(stored) : [];
         this.cache.accounts = accounts;
         return accounts;
     },
 
-    saveAccounts(accounts) {
-        localStorage.setItem('accounts', JSON.stringify(accounts));
+    async saveAccounts(accounts) {
+        const payload = JSON.stringify(accounts);
+        // Use async with draft for conflict handling
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('accounts', payload, { type: 'external' });
+                this.cache.accounts = accounts;
+                this.cache.allActivities = null;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveAccounts failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback
+        localStorage.setItem('accounts', payload);
         this.cache.accounts = accounts;
         this.cache.allActivities = null;
     },
 
-    getAccountById(id) {
-        return this.getAccounts().find(a => a.id === id);
+    async getAccountById(id) {
+        const accounts = await this.getAccounts();
+        return accounts.find(a => a.id === id);
     },
 
-    addAccount(account) {
-        const accounts = this.getAccounts();
+    async addAccount(account) {
+        const accounts = await this.getAccounts();
         account.id = this.generateId();
-        const resolvedRep = this.resolveSalesRepMetadata({
+        const resolvedRep = await this.resolveSalesRepMetadata({
             name: account.salesRep || '',
             email: account.salesRepEmail || '',
             fallbackRegion: account.salesRepRegion
@@ -1477,7 +1750,7 @@ const DataManager = {
         account.projects = account.projects || [];
         account.createdAt = new Date().toISOString();
         accounts.push(account);
-        this.saveAccounts(accounts);
+        await this.saveAccounts(accounts);
         this.recordAudit('account.create', 'account', account.id, {
             name: account.name,
             industry: account.industry || ''
@@ -1485,12 +1758,12 @@ const DataManager = {
         return account;
     },
 
-    updateAccount(accountId, updates) {
-        const accounts = this.getAccounts();
+    async updateAccount(accountId, updates) {
+        const accounts = await this.getAccounts();
         const index = accounts.findIndex(a => a.id === accountId);
         if (index !== -1) {
             const merged = { ...accounts[index], ...updates };
-            const resolvedRep = this.resolveSalesRepMetadata({
+            const resolvedRep = await this.resolveSalesRepMetadata({
                 name: merged.salesRep || '',
                 email: merged.salesRepEmail || '',
                 fallbackRegion: merged.salesRepRegion
@@ -1500,30 +1773,30 @@ const DataManager = {
             merged.salesRepRegion = resolvedRep.region;
             merged.updatedAt = new Date().toISOString();
             accounts[index] = merged;
-            this.saveAccounts(accounts);
+            await this.saveAccounts(accounts);
             this.recordAudit('account.update', 'account', accountId, updates);
             return accounts[index];
         }
         return null;
     },
-    
-    deleteAccount(accountId) {
+
+    async deleteAccount(accountId) {
         // Delete all activities associated with this account
-        const activities = this.getActivities();
+        const activities = await this.getActivities();
         const filteredActivities = activities.filter(a => a.accountId !== accountId);
-        this.saveActivities(filteredActivities);
-        
+        await this.saveActivities(filteredActivities);
+
         // Delete account (projects are nested, so they'll be deleted too)
-        const accounts = this.getAccounts().filter(a => a.id !== accountId);
-        this.saveAccounts(accounts);
+        const accounts = (await this.getAccounts()).filter(a => a.id !== accountId);
+        await this.saveAccounts(accounts);
         this.recordAudit('account.delete', 'account', accountId, {
             removedActivities: activities.length - filteredActivities.length
         });
     },
 
     // Project Management
-    addProject(accountId, project) {
-        const accounts = this.getAccounts();
+    async addProject(accountId, project) {
+        const accounts = await this.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         if (account) {
             if (!account.projects) account.projects = [];
@@ -1532,7 +1805,7 @@ const DataManager = {
             project.status = project.status || 'active';
             project.createdAt = new Date().toISOString();
             account.projects.push(project);
-            this.saveAccounts(accounts);
+            await this.saveAccounts(accounts);
             this.recordAudit('project.create', 'project', project.id, {
                 accountId,
                 name: project.name,
@@ -1546,14 +1819,14 @@ const DataManager = {
         return null;
     },
 
-    updateProject(accountId, projectId, updates) {
-        const accounts = this.getAccounts();
+    async updateProject(accountId, projectId, updates) {
+        const accounts = await this.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         if (account && account.projects) {
             const project = account.projects.find(p => p.id === projectId);
             if (project) {
                 Object.assign(project, updates, { updatedAt: new Date().toISOString() });
-                this.saveAccounts(accounts);
+                await this.saveAccounts(accounts);
                 this.recordAudit('project.update', 'project', projectId, {
                     accountId,
                     ...updates
@@ -1569,33 +1842,61 @@ const DataManager = {
     },
 
     // Activity Management
-    getActivities() {
+    async getActivities() {
         if (this.cache.activities) {
             return this.cache.activities;
         }
+        // Try async first if available, fallback to sync for initial load
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities');
+                const activities = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.activities = activities;
+                return activities;
+            } catch (err) {
+                console.warn('[DataManager] Async getActivities failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback (for initial load or if async not available)
         const stored = localStorage.getItem('activities');
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.activities = activities;
         return activities;
     },
 
-    getActivitiesByProject(projectId) {
+    async getActivitiesByProject(projectId) {
         if (!projectId) return [];
-        return this.getActivities().filter(a => a.projectId === projectId);
+        const activities = await this.getActivities();
+        return activities.filter(a => a.projectId === projectId);
     },
 
-    saveActivities(activities) {
-        localStorage.setItem('activities', JSON.stringify(activities));
+    async saveActivities(activities) {
+        const payload = JSON.stringify(activities);
+        // Use async with draft for conflict handling
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('activities', payload, { type: 'external' });
+                this.cache.activities = activities;
+                this.cache.allActivities = null;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveActivities failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback
+        localStorage.setItem('activities', payload);
         this.cache.activities = activities;
         this.cache.allActivities = null;
     },
 
-    addActivity(activity) {
+    async addActivity(activity) {
         // Re-fetch from remote so we merge with latest (avoids overwriting other users' or today's entries)
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
             this.cache.activities = null;
         }
-        const activities = this.getActivities();
+        const activities = await this.getActivities();
         const timestamp = new Date().toISOString();
         const normalized = {
             ...activity,
@@ -1634,7 +1935,7 @@ const DataManager = {
 
         activities.push(normalized);
         try {
-            this.saveActivities(activities);
+            await this.saveActivities(activities);
         } catch (err) {
             throw err;
         }
@@ -1648,42 +1949,42 @@ const DataManager = {
         return normalized;
     },
 
-    updateActivity(activityId, updates) {
+    async updateActivity(activityId, updates) {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
             this.cache.activities = null;
         }
-        const activities = this.getActivities();
+        const activities = await this.getActivities();
         const index = activities.findIndex(a => a.id === activityId);
         if (index !== -1) {
             activities[index] = { ...activities[index], ...updates, updatedAt: new Date().toISOString() };
-            this.saveActivities(activities);
+            await this.saveActivities(activities);
             this.recordAudit('activity.update', 'activity', activityId, updates);
             return activities[index];
         }
         return null;
     },
 
-    deleteActivity(activityId) {
+    async deleteActivity(activityId) {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
             this.cache.activities = null;
         }
-        const activities = this.getActivities().filter(a => a.id !== activityId);
-        this.saveActivities(activities);
+        const activities = (await this.getActivities()).filter(a => a.id !== activityId);
+        await this.saveActivities(activities);
         this.recordAudit('activity.delete', 'activity', activityId);
     },
 
-    clearAllActivities(options = {}) {
+    async clearAllActivities(options = {}) {
         const { includeInternal = true } = options;
 
-        this.saveActivities([]);
+        await this.saveActivities([]);
         if (includeInternal) {
-            this.saveInternalActivities([]);
+            await this.saveInternalActivities([]);
         } else {
-            this.cache.internalActivities = this.getInternalActivities();
+            this.cache.internalActivities = await this.getInternalActivities();
         }
         this.cache.allActivities = null;
 
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
         let accountsMutated = false;
 
         const normalizedAccounts = accounts.map(account => {
@@ -1712,7 +2013,7 @@ const DataManager = {
         });
 
         if (accountsMutated) {
-            this.saveAccounts(normalizedAccounts);
+            await this.saveAccounts(normalizedAccounts);
         }
 
         this.recordAudit('activity.purge', 'activity', '*', {
@@ -1722,24 +2023,51 @@ const DataManager = {
     },
 
     // Internal Activities
-    getInternalActivities() {
+    async getInternalActivities() {
         if (this.cache.internalActivities) {
             return this.cache.internalActivities;
         }
+        // Try async first if available, fallback to sync for initial load
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('internalActivities');
+                const activities = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.internalActivities = activities;
+                return activities;
+            } catch (err) {
+                console.warn('[DataManager] Async getInternalActivities failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback (for initial load or if async not available)
         const stored = localStorage.getItem('internalActivities');
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.internalActivities = activities;
         return activities;
     },
 
-    saveInternalActivities(activities) {
-        localStorage.setItem('internalActivities', JSON.stringify(activities));
+    async saveInternalActivities(activities) {
+        const payload = JSON.stringify(activities);
+        // Use async with draft for conflict handling
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('internalActivities', payload, { type: 'internal' });
+                this.cache.internalActivities = activities;
+                this.cache.allActivities = null;
+                return;
+            } catch (err) {
+                console.warn('[DataManager] Async saveInternalActivities failed, falling back to sync:', err);
+                // Fallback to sync
+            }
+        }
+        // Sync fallback
+        localStorage.setItem('internalActivities', payload);
         this.cache.internalActivities = activities;
         this.cache.allActivities = null;
     },
 
-    addInternalActivity(activity) {
-        const activities = this.getInternalActivities();
+    async addInternalActivity(activity) {
+        const activities = await this.getInternalActivities();
         const dateDay = (activity.date || activity.createdAt || '').toString().slice(0, 10);
         const duplicate = activities.find(function (a) {
             return (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
@@ -1757,7 +2085,7 @@ const DataManager = {
         activity.updatedAt = new Date().toISOString();
         activities.push(activity);
         try {
-            this.saveInternalActivities(activities);
+            await this.saveInternalActivities(activities);
         } catch (err) {
             throw err;
         }
@@ -1769,33 +2097,47 @@ const DataManager = {
         return activity;
     },
 
-    updateInternalActivity(activityId, updates) {
-        const activities = this.getInternalActivities();
+    async updateInternalActivity(activityId, updates) {
+        const activities = await this.getInternalActivities();
         const index = activities.findIndex(a => a.id === activityId);
         if (index !== -1) {
             activities[index] = { ...activities[index], ...updates, updatedAt: new Date().toISOString() };
-            this.saveInternalActivities(activities);
+            await this.saveInternalActivities(activities);
             this.recordAudit('activity.update', 'internalActivity', activityId, updates);
             return activities[index];
         }
         return null;
     },
 
-    deleteInternalActivity(activityId) {
-        const activities = this.getInternalActivities().filter(a => a.id !== activityId);
-        this.saveInternalActivities(activities);
+    async deleteInternalActivity(activityId) {
+        const activities = (await this.getInternalActivities()).filter(a => a.id !== activityId);
+        await this.saveInternalActivities(activities);
         this.recordAudit('activity.delete', 'internalActivity', activityId);
     },
 
     // Presales analytics target management
-    getPresalesActivityTarget() {
-        const stored = localStorage.getItem('presalesActivityTarget');
+    async getPresalesActivityTarget() {
+        const key = 'presalesActivityTarget';
+        let stored;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+            } catch (e) {
+                console.warn('[DataManager] Async getPresalesActivityTarget failed:', e);
+            }
+        }
         if (!stored) {
-            return {
+            stored = localStorage.getItem(key);
+        }
+
+        if (!stored) {
+            const fallback = {
                 value: 20,
                 updatedAt: null,
                 updatedBy: null
             };
+            await this.savePresalesActivityTarget(fallback.value, fallback);
+            return fallback;
         }
 
         try {
@@ -1808,27 +2150,39 @@ const DataManager = {
         } catch (error) {
             // Backwards compatibility if value stored as plain number/string
             const numericValue = Number(stored);
-            return {
+            const fallback = {
                 value: Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : 20,
                 updatedAt: null,
                 updatedBy: null
             };
+            await this.savePresalesActivityTarget(fallback.value, fallback);
+            return fallback;
         }
     },
 
-    savePresalesActivityTarget(value, meta = {}) {
+    async savePresalesActivityTarget(value, meta = {}) {
         const numericValue = Number(value);
         const target = {
             value: Number.isFinite(numericValue) && numericValue >= 0 ? Math.round(numericValue) : 0,
             updatedAt: meta.updatedAt || new Date().toISOString(),
             updatedBy: meta.updatedBy || null
         };
-        localStorage.setItem('presalesActivityTarget', JSON.stringify(target));
+        const key = 'presalesActivityTarget';
+        const payload = JSON.stringify(target);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return target;
+            } catch (e) {
+                console.warn('[DataManager] Async savePresalesActivityTarget failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
         return target;
     },
 
-    getWinLossTrend(limit = 6) {
-        const accounts = this.getAccounts();
+    async getWinLossTrend(limit = 6) {
+        const accounts = await this.getAccounts();
         const trendMap = {};
 
         accounts.forEach(account => {
@@ -1854,10 +2208,10 @@ const DataManager = {
         }));
     },
 
-    getChannelOutcomeStats(month) {
+    async getChannelOutcomeStats(month) {
         const result = {};
         const targetMonth = month;
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
 
         accounts.forEach(account => {
             account.projects?.forEach(project => {
@@ -1881,9 +2235,9 @@ const DataManager = {
         return result;
     },
 
-    getPocFunnelStats(month) {
+    async getPocFunnelStats(month) {
         const targetMonth = month;
-        const activities = this.getAllActivities();
+        const activities = await this.getAllActivities();
         const pocActivities = activities.filter(activity => {
             if (activity.isInternal || activity.type !== 'poc') return false;
             const date = activity.date || activity.createdAt;
@@ -1913,7 +2267,7 @@ const DataManager = {
             }
         });
 
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
         accounts.forEach(account => {
             account.projects?.forEach(project => {
                 if (!projectTypeMap[project.id]) return;
@@ -1939,7 +2293,7 @@ const DataManager = {
         };
     },
 
-    getMonthlyAnalytics(period, filters = {}) {
+    async getMonthlyAnalytics(period, filters = {}) {
         const now = new Date();
         const defaultMonth = now.toISOString().substring(0, 7);
         const rawPeriod = typeof period === 'string' && period.trim() ? period.trim() : defaultMonth;
@@ -1947,10 +2301,10 @@ const DataManager = {
         const isYearMode = normalizedPeriod.length === 4 && !normalizedPeriod.includes('-');
         const referencePeriod = isYearMode ? normalizedPeriod : normalizedPeriod.substring(0, 7);
 
-        const targetInfo = this.getPresalesActivityTarget();
+        const targetInfo = await this.getPresalesActivityTarget();
         const targetValue = Number(targetInfo.value) >= 0 ? Number(targetInfo.value) : 0;
 
-        const users = this.getUsers();
+        const users = await this.getUsers();
         const presalesUsers = users.filter(user => Array.isArray(user.roles) && user.roles.includes('Presales User'));
         const userLookup = new Map(users.map(user => [user.id, user]));
         const userMap = new Map(users.map(user => [user.id, user]));
@@ -1971,7 +2325,7 @@ const DataManager = {
             };
         });
 
-        const allActivities = this.getAllActivities();
+        const allActivities = await this.getAllActivities();
         const monthsInPeriod = new Set();
         const resolveActivityMonth = (activity) => {
             const explicitMonth = typeof activity.monthOfActivity === 'string'
@@ -2016,7 +2370,7 @@ const DataManager = {
             return false;
         });
 
-        const accounts = this.getAccounts();
+        const accounts = await this.getAccounts();
         const accountMap = {};
         accounts.forEach(account => {
             accountMap[account.id] = account;
@@ -2341,14 +2695,14 @@ const DataManager = {
 
     // Get all activities (customer + internal) with user info. Deduplicates by id so merge
     // corruption (internal saved into activities key) and duplicate ids don't double-count.
-    getAllActivities() {
+    async getAllActivities() {
         if (this.cache.allActivities) {
             return this.cache.allActivities.map(activity => ({ ...activity }));
         }
 
-        const activities = this.getActivities();
-        const internalActivities = this.getInternalActivities();
-        const users = this.getUsers();
+        const activities = await this.getActivities();
+        const internalActivities = await this.getInternalActivities();
+        const users = await this.getUsers();
 
         const internalIds = new Set(internalActivities.map(a => a.id));
         const externalOnly = activities.filter(a => !internalIds.has(a.id));
@@ -2388,7 +2742,7 @@ const DataManager = {
         return allActivities.map(activity => ({ ...activity }));
     },
 
-    getAvailableActivityMonths(includeInternal = true) {
+    async getAvailableActivityMonths(includeInternal = true) {
         const months = new Set();
         const addMonth = (value) => {
             if (!value) return;
@@ -2401,17 +2755,19 @@ const DataManager = {
             }
         };
 
-        this.getActivities().forEach((activity) => {
+        const activities = await this.getActivities();
+        activities.forEach((activity) => {
             addMonth(
                 activity.monthOfActivity ||
-                    (activity.date ? activity.date.slice(0, 7) : '')
+                (activity.date ? activity.date.slice(0, 7) : '')
             );
         });
         if (includeInternal) {
-            this.getInternalActivities().forEach((activity) => {
+            const internalActivities = await this.getInternalActivities();
+            internalActivities.forEach((activity) => {
                 addMonth(
                     activity.monthOfActivity ||
-                        (activity.date ? activity.date.slice(0, 7) : '')
+                    (activity.date ? activity.date.slice(0, 7) : '')
                 );
             });
         }
@@ -2422,7 +2778,7 @@ const DataManager = {
             .sort((a, b) => a.localeCompare(b));
     },
 
-    getAvailableActivityYears(includeInternal = true) {
+    async getAvailableActivityYears(includeInternal = true) {
         const years = new Set();
         const addYear = (value) => {
             if (!value) return;
@@ -2435,17 +2791,19 @@ const DataManager = {
             }
         };
 
-        this.getActivities().forEach((activity) => {
+        const activities = await this.getActivities();
+        activities.forEach((activity) => {
             addYear(
                 activity.monthOfActivity ||
-                    (activity.date ? activity.date.slice(0, 7) : '')
+                (activity.date ? activity.date.slice(0, 7) : '')
             );
         });
         if (includeInternal) {
-            this.getInternalActivities().forEach((activity) => {
+            const internalActivities = await this.getInternalActivities();
+            internalActivities.forEach((activity) => {
                 addYear(
                     activity.monthOfActivity ||
-                        (activity.date ? activity.date.slice(0, 7) : '')
+                    (activity.date ? activity.date.slice(0, 7) : '')
                 );
             });
         }
@@ -2575,16 +2933,43 @@ const DataManager = {
         return candidates.length ? candidates[0] : 'Unassigned';
     },
 
-    getAnalyticsAccessConfig() {
+    async getAnalyticsAccessConfig() {
+        const key = ANALYTICS_ACCESS_CONFIG_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (!stored) {
+                    const fallback = {
+                        password: 'Gup$hup.io',
+                        updatedAt: null,
+                        updatedBy: null
+                    };
+                    await this.saveAnalyticsAccessConfig(fallback);
+                    return fallback;
+                }
+                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                if (parsed && typeof parsed === 'object') {
+                    return {
+                        password: typeof parsed.password === 'string' && parsed.password.trim()
+                            ? parsed.password.trim()
+                            : 'Gup$hup.io',
+                        updatedAt: parsed.updatedAt || null,
+                        updatedBy: parsed.updatedBy || null
+                    };
+                }
+            } catch (error) {
+                console.warn('Failed to parse analytics access config. Using defaults.', error);
+            }
+        }
         try {
-            const stored = localStorage.getItem(ANALYTICS_ACCESS_CONFIG_KEY);
+            const stored = localStorage.getItem(key);
             if (!stored) {
                 const fallback = {
                     password: 'Gup$hup.io',
                     updatedAt: null,
                     updatedBy: null
                 };
-                this.saveAnalyticsAccessConfig(fallback);
+                await this.saveAnalyticsAccessConfig(fallback);
                 return fallback;
             }
             const parsed = JSON.parse(stored);
@@ -2605,11 +2990,11 @@ const DataManager = {
             updatedAt: null,
             updatedBy: null
         };
-        this.saveAnalyticsAccessConfig(fallback);
+        await this.saveAnalyticsAccessConfig(fallback);
         return fallback;
     },
 
-    saveAnalyticsAccessConfig(config) {
+    async saveAnalyticsAccessConfig(config) {
         if (!config || typeof config !== 'object') {
             return;
         }
@@ -2620,15 +3005,41 @@ const DataManager = {
             updatedAt: config.updatedAt !== undefined ? config.updatedAt : new Date().toISOString(),
             updatedBy: config.updatedBy !== undefined ? config.updatedBy : null
         };
-        localStorage.setItem(ANALYTICS_ACCESS_CONFIG_KEY, JSON.stringify(payload));
+        const key = ANALYTICS_ACCESS_CONFIG_KEY;
+        const jsonPayload = JSON.stringify(payload);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, jsonPayload);
+                return payload;
+            } catch (e) {
+                console.warn('[DataManager] Async saveAnalyticsAccessConfig failed:', e);
+            }
+        }
+        localStorage.setItem(key, jsonPayload);
         return payload;
     },
 
-    getAnalyticsTablePresets() {
+    async getAnalyticsTablePresets() {
+        const key = ANALYTICS_TABLE_PRESETS_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (!stored) {
+                    await this.saveAnalyticsTablePresets([]);
+                    return [];
+                }
+                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                if (Array.isArray(parsed)) {
+                    return parsed.filter(preset => preset && typeof preset === 'object');
+                }
+            } catch (error) {
+                console.warn('Failed to parse analytics table presets from async storage. Returning empty list.', error);
+            }
+        }
         try {
-            const stored = localStorage.getItem(ANALYTICS_TABLE_PRESETS_KEY);
+            const stored = localStorage.getItem(key);
             if (!stored) {
-                this.saveAnalyticsTablePresets([]);
+                await this.saveAnalyticsTablePresets([]);
                 return [];
             }
             const parsed = JSON.parse(stored);
@@ -2638,22 +3049,32 @@ const DataManager = {
         } catch (error) {
             console.warn('Failed to parse analytics table presets. Returning empty list.', error);
         }
-        this.saveAnalyticsTablePresets([]);
+        await this.saveAnalyticsTablePresets([]);
         return [];
     },
 
-    saveAnalyticsTablePresets(presets) {
+    async saveAnalyticsTablePresets(presets) {
+        const key = ANALYTICS_TABLE_PRESETS_KEY;
+        const sanitized = Array.isArray(presets)
+            ? presets.filter(preset => preset && typeof preset === 'object')
+            : [];
+        const payload = JSON.stringify(sanitized);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] Async saveAnalyticsTablePresets failed:', e);
+            }
+        }
         try {
-            const sanitized = Array.isArray(presets)
-                ? presets.filter(preset => preset && typeof preset === 'object')
-                : [];
-            localStorage.setItem(ANALYTICS_TABLE_PRESETS_KEY, JSON.stringify(sanitized));
+            localStorage.setItem(key, payload);
         } catch (error) {
             console.warn('Unable to save analytics table presets.', error);
         }
     },
 
-    ensureAnalyticsPresetBaseline() {
+    async ensureAnalyticsPresetBaseline() {
         try {
             let hasPresetKey = false;
             if (typeof localStorage?.length === 'number' && typeof localStorage.key === 'function') {
@@ -2673,8 +3094,8 @@ const DataManager = {
         }
     },
 
-    ensureRegionBaseline() {
-        const stored = this.getRegions();
+    async ensureRegionBaseline() {
+        const stored = await this.getRegions();
         const cleaned = [];
         const seenStored = new Set();
 
@@ -2704,16 +3125,16 @@ const DataManager = {
 
         const changed = JSON.stringify(stored) !== JSON.stringify(final);
         if (changed) {
-            this.saveRegions(final);
+            await this.saveRegions(final);
         }
     },
 
-    normalizeSalesRepRegions() {
-        const salesReps = this.getGlobalSalesReps();
+    async normalizeSalesRepRegions() {
+        const salesReps = await this.getGlobalSalesReps();
         if (!salesReps.length) return;
 
         // Use admin-configured regions (includes "Inside Sales" and any custom regions), not just DEFAULT_SALES_REGIONS
-        const configuredRegions = this.getRegions();
+        const configuredRegions = await this.getRegions();
         const allowed = new Set(configuredRegions.length ? configuredRegions : DEFAULT_SALES_REGIONS);
         const fallbackRegion = configuredRegions[0] || DEFAULT_SALES_REGIONS[0] || 'India West';
         let mutated = false;
@@ -2736,15 +3157,15 @@ const DataManager = {
         });
 
         if (mutated) {
-            this.saveGlobalSalesReps(normalized);
+            await this.saveGlobalSalesReps(normalized);
         }
     },
 
-    backfillAccountSalesRepRegions() {
-        const accounts = this.getAccounts();
+    async backfillAccountSalesRepRegions() {
+        const accounts = await this.getAccounts();
         if (!accounts.length) return;
 
-        const salesReps = this.getGlobalSalesReps();
+        const salesReps = await this.getGlobalSalesReps();
         const byEmail = new Map();
         const byName = new Map();
 
@@ -2757,6 +3178,8 @@ const DataManager = {
             }
         });
 
+        const currentRegions = await this.getRegions();
+        const fallbackRegion = currentRegions[0] || 'India West';
         let mutated = false;
         const normalized = accounts.map(account => {
             if (!account || !account.salesRep) {
@@ -2769,7 +3192,7 @@ const DataManager = {
                 matched = byName.get(account.salesRep.toLowerCase());
             }
 
-            const resolvedRegion = matched?.region || account.salesRepRegion || this.getRegions()[0] || 'India West';
+            const resolvedRegion = matched?.region || account.salesRepRegion || fallbackRegion;
             const resolvedEmail = matched?.email || account.salesRepEmail || '';
             const resolvedName = matched?.name || account.salesRep;
 
@@ -2787,15 +3210,15 @@ const DataManager = {
         });
 
         if (mutated) {
-            this.saveAccounts(normalized);
+            await this.saveAccounts(normalized);
         }
     },
 
-    backfillActivitySalesRepRegions() {
-        const activities = this.getActivities();
+    async backfillActivitySalesRepRegions() {
+        const activities = await this.getActivities();
         if (!activities.length) return;
 
-        const salesReps = this.getGlobalSalesReps();
+        const salesReps = await this.getGlobalSalesReps();
         const byEmail = new Map();
         const byName = new Map();
 
@@ -2808,6 +3231,8 @@ const DataManager = {
             }
         });
 
+        const currentRegions = await this.getRegions();
+        const fallbackRegion = currentRegions[0] || 'India West';
         let mutated = false;
         const normalized = activities.map(activity => {
             if (!activity || !activity.salesRep) {
@@ -2820,7 +3245,7 @@ const DataManager = {
                 matched = byName.get(activity.salesRep.toLowerCase());
             }
 
-            const resolvedRegion = matched?.region || activity.salesRepRegion || this.getRegions()[0] || 'India West';
+            const resolvedRegion = matched?.region || activity.salesRepRegion || fallbackRegion;
             const resolvedEmail = matched?.email || activity.salesRepEmail || '';
             const resolvedName = matched?.name || activity.salesRep;
 
@@ -2838,25 +3263,26 @@ const DataManager = {
         });
 
         if (mutated) {
-            this.saveActivities(normalized);
+            await this.saveActivities(normalized);
         }
     },
 
-    resolveSalesRepMetadata({ email = '', name = '', fallbackRegion = null } = {}) {
+    async resolveSalesRepMetadata({ email = '', name = '', fallbackRegion = null } = {}) {
         const trimmedEmail = email ? email.trim().toLowerCase() : '';
         const trimmedName = name ? name.trim().toLowerCase() : '';
 
         let rep = null;
         if (trimmedEmail) {
-            rep = this.getGlobalSalesRepByEmail(trimmedEmail);
+            rep = await this.getGlobalSalesRepByEmail(trimmedEmail);
         }
         if (!rep && trimmedName) {
-            rep = this.getGlobalSalesRepByName(trimmedName);
+            rep = await this.getGlobalSalesRepByName(trimmedName);
         }
 
         const resolvedName = rep?.name || name || '';
         const resolvedEmail = rep?.email || email || '';
-        const resolvedRegion = rep?.region || fallbackRegion || this.getRegions()[0] || 'India West';
+        const currentRegions = await this.getRegions();
+        const resolvedRegion = rep?.region || fallbackRegion || currentRegions[0] || 'India West';
 
         return {
             name: resolvedName,
@@ -2868,11 +3294,20 @@ const DataManager = {
 
 // Initialize data on load
 if (typeof DataManager !== 'undefined') {
-    DataManager.initialize();
-    // Also ensure users exist
-    DataManager.ensureDefaultUsers();
-    console.log('DataManager initialized. Users:', DataManager.getUsers().length);
-    console.log('Industries:', DataManager.getIndustries().length);
-    console.log('Industry Use Cases initialized:', Object.keys(DataManager.getIndustryUseCases()).length);
+    (async () => {
+        try {
+            await DataManager.initialize();
+            // Also ensure users exist
+            await DataManager.ensureDefaultUsers();
+            const users = await DataManager.getUsers();
+            const industries = await DataManager.getIndustries();
+            const useCases = await DataManager.getIndustryUseCases();
+            console.log('DataManager initialized. Users:', users.length);
+            console.log('Industries:', industries.length);
+            console.log('Industry Use Cases initialized:', Object.keys(useCases).length);
+        } catch (err) {
+            console.error('DataManager async initialization failed:', err);
+        }
+    })();
 }
 

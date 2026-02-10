@@ -24,16 +24,18 @@ const Activities = {
     currentSalesRepRegion: null,
 
     // Open unified activity modal
-    openActivityModal(context = {}) {
-        this.resetActivityForm();
-        this.createActivityModal();
+    async openActivityModal(context = {}) {
+        await this.resetActivityForm();
+        await this.createActivityModal();
 
         const {
             mode = 'create',
             activity = null,
             isInternal = false,
-            fromDraftId = null
+            fromDraftId = null,
+            restoreFormData = null
         } = context || {};
+        this._restoreFormDataPending = restoreFormData || null;
 
         const isEdit = mode === 'edit' && activity;
 
@@ -83,15 +85,95 @@ const Activities = {
         UI.showModal(modalId);
 
         // Initialize use case dropdown after modal is shown
-        setTimeout(() => {
-            if ((isEdit || fromDraftId) && activity) {
-                this.populateEditForm(activity, !!isInternal);
+        setTimeout(async () => {
+            if (this._restoreFormDataPending) {
+                await this.restoreFormFromDraftFields(this._restoreFormDataPending);
+                this._restoreFormDataPending = null;
+            } else if ((isEdit || fromDraftId) && activity) {
+                await this.populateEditForm(activity, !!isInternal);
             } else {
-                // Initialize use case dropdown with defaults for new activities
                 this.refreshUseCaseOptions('');
             }
             this.updateAddAnotherActivityButtonVisibility();
         }, 100);
+    },
+
+    /**
+     * Restore activity form from draft (e.g. after session expired). Called when user retries from Drafts.
+     */
+    async restoreFormFromDraft(formData, draftId) {
+        if (!formData || typeof formData !== 'object') return;
+        await this.openActivityModal({
+            mode: 'create',
+            fromDraftId: draftId || null,
+            restoreFormData: formData
+        });
+    },
+
+    async restoreFormFromDraftFields(formData) {
+        if (!formData) return;
+        const category = formData.activityCategory || 'external';
+        const categoryRadio = document.querySelector(`#activityForm input[name="activityCategory"][value="${category}"]`);
+        if (categoryRadio) {
+            categoryRadio.checked = true;
+            await this.setActivityCategory(category);
+        }
+        if (category === 'internal') return;
+
+        const accountId = formData.accountId || '';
+        const accountName = formData.accountName || formData.newAccountName || '';
+        const projectId = formData.projectId || '';
+        const projectName = formData.projectName || formData.newProjectName || '';
+        const selAcc = document.getElementById('selectedAccountId');
+        const accDisp = document.getElementById('accountDisplay');
+        const selProj = document.getElementById('selectedProjectId');
+        const projDisp = document.getElementById('projectDisplay');
+        if (selAcc) selAcc.value = accountId;
+        if (accDisp) accDisp.textContent = accountName || 'Select account...';
+        if (selProj) selProj.value = projectId;
+        if (projDisp) projDisp.textContent = projectName || 'Select account first...';
+        const newAcc = document.getElementById('newAccountName');
+        const newProj = document.getElementById('newProjectName');
+        if (newAcc) { newAcc.value = formData.newAccountName || ''; newAcc.closest('div') && (newAcc.closest('div').style.display = accountId === 'new' ? 'block' : 'none'); }
+        if (newProj) { newProj.value = formData.newProjectName || ''; newProj.closest('div') && (newProj.closest('div').style.display = projectId === 'new' ? 'block' : 'none'); }
+        const accountSection = document.getElementById('accountSection');
+        const projectSection = document.getElementById('projectSection');
+        if (accountSection) accountSection.classList.remove('hidden');
+        if (projectSection) projectSection.classList.remove('hidden');
+        if (accountId && accountId !== 'new') await this.selectAccount(accountId, accountName);
+        if (projectId && projectId !== 'new') await this.selectProject(projectId, projectName);
+        const industryEl = document.getElementById('industry');
+        if (industryEl) {
+            industryEl.value = formData.industry || '';
+            const otherText = document.getElementById('industryOtherText');
+            if (formData.industry === 'Other' && otherText) {
+                otherText.value = formData.industryOtherText || '';
+                otherText.style.display = 'block';
+            }
+            this.handleIndustryChange(formData.industry || '');
+        }
+        if (formData.salesRepRegion) {
+            this.currentSalesRepRegion = formData.salesRepRegion;
+            await this.populateSalesRepRegionOptions(formData.salesRepRegion);
+            await this.populateSalesRepOptions(formData.salesRepRegion);
+        }
+        const salesRepSelect = document.getElementById('salesRepSelect');
+        if (salesRepSelect && formData.salesRep) salesRepSelect.value = formData.salesRep;
+        const typeSelect = document.getElementById('activityTypeSelect');
+        if (typeSelect && formData.activityType) typeSelect.value = formData.activityType;
+        const dateInput = document.getElementById('activityDate');
+        if (dateInput && formData.date) dateInput.value = formData.date;
+        if (Array.isArray(formData.selectedUseCases)) this.selectedUseCases = formData.selectedUseCases.slice();
+        const callType = document.getElementById('callType');
+        if (callType && formData.callType) callType.value = formData.callType;
+        const callDesc = document.getElementById('callDescription');
+        if (callDesc && formData.callDescription) callDesc.value = formData.callDescription;
+        const sowLink = document.getElementById('sowLink');
+        if (sowLink && formData.sowLink) sowLink.value = formData.sowLink;
+        const rfxType = document.getElementById('rfxType');
+        if (rfxType && formData.rfxType) rfxType.value = formData.rfxType;
+        this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases || []);
+        this.syncMultiSelectState('useCase', this.selectedUseCases || []);
     },
 
     updateAddAnotherActivityButtonVisibility() {
@@ -185,7 +267,7 @@ const Activities = {
         return parsed.toISOString().split('T')[0];
     },
 
-    populateEditForm(activity, isInternal) {
+    async populateEditForm(activity, isInternal) {
         if (!activity) return;
 
         const categoryValue = isInternal ? 'internal' : 'external';
@@ -212,7 +294,7 @@ const Activities = {
         if (isInternal) {
             this.populateInternalEditFields(activity);
         } else {
-            this.populateExternalEditFields(activity);
+            await this.populateExternalEditFields(activity);
         }
     },
 
@@ -256,16 +338,16 @@ const Activities = {
         if (descriptionInput) descriptionInput.value = activity.description || '';
     },
 
-    populateExternalEditFields(activity) {
+    async populateExternalEditFields(activity) {
         if (!activity) return;
 
         const desiredAccountId = activity.accountId || null;
         let accountResolved = false;
 
         if (desiredAccountId) {
-            const account = DataManager.getAccountById(desiredAccountId);
+            const account = await DataManager.getAccountById(desiredAccountId);
             if (account) {
-                this.selectAccount(account.id, account.name || activity.accountName || 'Account');
+                await this.selectAccount(account.id, account.name || activity.accountName || 'Account');
                 accountResolved = true;
             }
         }
@@ -279,10 +361,10 @@ const Activities = {
         const selectedAccountId = document.getElementById('selectedAccountId')?.value;
 
         if (selectedAccountId && selectedAccountId !== 'new' && desiredProjectId) {
-            const account = DataManager.getAccountById(selectedAccountId);
+            const account = await DataManager.getAccountById(selectedAccountId);
             const project = account?.projects?.find(p => p.id === desiredProjectId);
             if (project) {
-                this.selectProject(project.id, project.name || activity.projectName || 'Project');
+                await this.selectProject(project.id, project.name || activity.projectName || 'Project');
                 projectResolved = true;
             }
         }
@@ -291,9 +373,9 @@ const Activities = {
             this.prefillNewProjectForEdit(activity);
         }
 
-        const resolvedRegion = activity.salesRepRegion || this.getDefaultSalesRepRegion();
-        this.populateSalesRepRegionOptions(resolvedRegion);
-        this.populateSalesRepOptions(resolvedRegion);
+        const resolvedRegion = activity.salesRepRegion || await this.getDefaultSalesRepRegion();
+        await this.populateSalesRepRegionOptions(resolvedRegion);
+        await this.populateSalesRepOptions(resolvedRegion);
 
         const salesRepSelect = document.getElementById('salesRepSelect');
         if (salesRepSelect && activity.salesRep) {
@@ -474,12 +556,13 @@ const Activities = {
     },
 
     // Create unified activity modal HTML
-    createActivityModal() {
+    async createActivityModal() {
         const container = document.getElementById('modalsContainer');
         const modalId = 'activityModal';
-        
+
         if (document.getElementById(modalId)) return; // Already exists
 
+        const industries = await DataManager.getIndustries();
         const modalHTML = `
             <div id="${modalId}" class="modal">
                 <div class="modal-content large">
@@ -546,7 +629,7 @@ const Activities = {
                                     <label class="form-label required">Industry</label>
                                     <select class="form-control" id="industry" data-was-required="true" required onchange="Activities.handleIndustryChange(this.value)">
                                         <option value="">Select Industry</option>
-                                        ${(DataManager.getIndustries() || []).map(ind => `<option value="${ind}">${ind}</option>`).join('')}
+                                        ${(industries || []).map(ind => `<option value="${ind}">${ind}</option>`).join('')}
                                         <option value="Other">Other</option>
                                     </select>
                                     <input type="text" class="form-control" id="industryOtherText" placeholder="Specify industry..." style="margin-top: 0.5rem; display: none;">
@@ -680,21 +763,22 @@ const Activities = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', modalHTML);
-        
+
         // Set default date
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById('activityDate');
         if (dateInput) dateInput.value = today;
 
-        this.populateSalesRepRegionOptions(this.currentSalesRepRegion);
-        this.populateSalesRepOptions(this.currentSalesRepRegion);
+        await this.populateSalesRepRegionOptions(this.currentSalesRepRegion);
+        await this.populateSalesRepOptions(this.currentSalesRepRegion);
     },
 
-    getDefaultSalesRepRegion() {
+    async getDefaultSalesRepRegion() {
         if (typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
             return '';
         }
-        const regions = Array.from(new Set((DataManager.getRegions() || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+        const regionsList = await DataManager.getRegions();
+        const regions = Array.from(new Set((regionsList || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
         if (!regions.length) return '';
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
@@ -704,15 +788,15 @@ const Activities = {
         return regions[0];
     },
 
-    populateSalesRepRegionOptions(selectedRegion = null) {
+    async populateSalesRepRegionOptions(selectedRegion = null) {
         const regionSelect = document.getElementById('salesRepRegionSelect');
         if (!regionSelect || typeof DataManager === 'undefined' || typeof DataManager.getRegions !== 'function') {
             return;
         }
 
-        const regions = DataManager.getRegions();
+        const regions = await DataManager.getRegions();
         const uniqueRegions = Array.from(new Set((regions || []).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-        const defaultRegion = selectedRegion || this.currentSalesRepRegion || this.getDefaultSalesRepRegion();
+        const defaultRegion = selectedRegion || this.currentSalesRepRegion || await this.getDefaultSalesRepRegion();
 
         let options = '<option value="">Select region...</option>';
         uniqueRegions.forEach(region => {
@@ -733,21 +817,21 @@ const Activities = {
         this.currentSalesRepRegion = regionSelect.value || '';
     },
 
-    populateSalesRepOptions(region = null) {
+    async populateSalesRepOptions(region = null) {
         const salesRepSelect = document.getElementById('salesRepSelect');
         if (!salesRepSelect || typeof DataManager === 'undefined') {
             return;
         }
 
-        const targetRegion = region || this.currentSalesRepRegion || this.getDefaultSalesRepRegion();
+        const targetRegion = region || this.currentSalesRepRegion || await this.getDefaultSalesRepRegion();
         let reps = typeof DataManager.getSalesRepsByRegion === 'function'
-            ? DataManager.getSalesRepsByRegion(targetRegion || 'all')
-            : DataManager.getGlobalSalesReps();
+            ? await DataManager.getSalesRepsByRegion(targetRegion || 'all')
+            : await DataManager.getGlobalSalesReps();
 
         // If this region has no reps (e.g. "Inside Sales"), fall back to all reps so user can still select someone
         const usedAllReps = reps.length === 0 && targetRegion && targetRegion.toLowerCase() !== 'all' && typeof DataManager.getSalesRepsByRegion === 'function';
         if (usedAllReps) {
-            reps = DataManager.getSalesRepsByRegion('all');
+            reps = await DataManager.getSalesRepsByRegion('all');
         }
 
         let options = '<option value="">Select Sales Rep...</option>';
@@ -770,7 +854,7 @@ const Activities = {
 
     handleSalesRepRegionChange(region) {
         this.currentSalesRepRegion = region || '';
-        this.populateSalesRepOptions(this.currentSalesRepRegion || 'all');
+        this.populateSalesRepOptions(this.currentSalesRepRegion || 'all').catch(() => {});
         if (typeof UI !== 'undefined' && UI.clearFieldError) {
             const regionSelect = document.getElementById('salesRepRegionSelect');
             if (regionSelect) {
@@ -787,13 +871,13 @@ const Activities = {
     showActivityFields() {
         const activityTypeSelect = document.getElementById('activityTypeSelect');
         if (!activityTypeSelect) return;
-        
+
         const type = activityTypeSelect.value;
         const container = document.getElementById('activityFields');
         if (!container) return;
 
         let html = '';
-        
+
         if (this.activityType === 'internal') {
             html = this.getInternalActivityFields();
         } else if (this.activityType === 'external') {
@@ -810,7 +894,7 @@ const Activities = {
                 html = ''; // No fields for pricing
             }
         }
-        
+
         container.innerHTML = html;
     },
 
@@ -998,7 +1082,7 @@ const Activities = {
         const dropdown = document.getElementById(dropdownId);
         if (dropdown) {
             dropdown.classList.toggle('active');
-            
+
             // Close other dropdowns
             document.querySelectorAll('.multi-select-dropdown').forEach(d => {
                 if (d.id !== dropdownId) {
@@ -1012,11 +1096,11 @@ const Activities = {
         if (typeof event !== 'undefined' && event && typeof event.stopPropagation === 'function') {
             event.stopPropagation();
         }
-        
+
         let selectedArray;
         let displayId;
         let otherTextId = null;
-        
+
         if (category === 'useCase') {
             selectedArray = this.selectedUseCases;
             displayId = 'useCaseSelected';
@@ -1030,7 +1114,7 @@ const Activities = {
             displayId = 'projectProductsSelected';
             otherTextId = 'projectProductsOtherText';
         }
-        
+
         const index = selectedArray.indexOf(value);
         const optionEl = (typeof event !== 'undefined' && event) ? event.currentTarget : null;
         const checkbox = optionEl ? optionEl.querySelector('input[type="checkbox"]') : null;
@@ -1069,14 +1153,14 @@ const Activities = {
     updateMultiSelectDisplay(displayId, selectedArray) {
         const display = document.getElementById(displayId);
         if (!display) return;
-        
+
         if (selectedArray.length === 0) {
             display.textContent = displayId.includes('useCase') ? 'Select use cases...' :
-                                 displayId.includes('products') ? 'Select products...' :
-                                 displayId.includes('channels') ? 'Select channels...' :
-                                 'Select products...';
+                displayId.includes('products') ? 'Select products...' :
+                    displayId.includes('channels') ? 'Select channels...' :
+                        'Select products...';
         } else {
-            display.innerHTML = selectedArray.map(item => 
+            display.innerHTML = selectedArray.map(item =>
                 `<span class="multi-select-tag">${item}</span>`
             ).join('');
         }
@@ -1114,14 +1198,14 @@ const Activities = {
                 otherText.required = false;
             }
         }
-        this.refreshUseCaseOptions(value === 'Other' ? '' : value);
+        this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => {});
     },
 
-    refreshUseCaseOptions(industry) {
+    async refreshUseCaseOptions(industry) {
         const dropdown = document.getElementById('useCaseDropdown');
         if (!dropdown) return;
         const useCases = (typeof DataManager !== 'undefined' && industry)
-            ? DataManager.getUseCasesForIndustry(industry)
+            ? await DataManager.getUseCasesForIndustry(industry)
             : [];
         const list = useCases.length ? useCases : ['Marketing', 'Commerce', 'Support'];
         const keepSelected = this.selectedUseCases.filter(uc => uc !== 'Other' && list.includes(uc));
@@ -1140,11 +1224,11 @@ const Activities = {
     },
 
     // Load account dropdown (with inline search)
-    loadAccountDropdown() {
+    async loadAccountDropdown() {
         const dropdown = document.getElementById('accountDropdown');
         if (!dropdown) return;
 
-        this.allAccounts = DataManager.getAccounts();
+        this.allAccounts = await DataManager.getAccounts();
         const optionsHtml = this.renderAccountOptions(this.allAccounts);
 
         dropdown.innerHTML = `
@@ -1173,12 +1257,12 @@ const Activities = {
         }).join('');
     },
 
-    filterAccountDropdown(query = '') {
+    async filterAccountDropdown(query = '') {
         const list = document.getElementById('accountDropdownList');
         if (!list) return;
 
         const normalized = query.trim().toLowerCase();
-        const accounts = this.allAccounts || DataManager.getAccounts();
+        const accounts = this.allAccounts || await DataManager.getAccounts();
         const filtered = normalized
             ? accounts.filter(acc => acc.name.toLowerCase().includes(normalized))
             : accounts;
@@ -1264,7 +1348,7 @@ const Activities = {
         this.clearProjectFields();
     },
 
-    selectAccount(id, name) {
+    async selectAccount(id, name) {
         const selectedAccountId = document.getElementById('selectedAccountId');
         const accountDisplay = document.getElementById('accountDisplay');
         const accountDropdown = document.getElementById('accountDropdown');
@@ -1280,24 +1364,24 @@ const Activities = {
             newAccountName.value = '';
         }
         this.clearProjectFields();
-        
+
         // Auto-populate Sales Rep and Industry from account
-        const account = DataManager.getAccountById(id);
+        const account = await DataManager.getAccountById(id);
         if (account) {
-            const accountRegion = account.salesRepRegion || this.getDefaultSalesRepRegion();
-            this.populateSalesRepRegionOptions(accountRegion);
-            this.populateSalesRepOptions(accountRegion);
+            const accountRegion = account.salesRepRegion || await this.getDefaultSalesRepRegion();
+            await this.populateSalesRepRegionOptions(accountRegion);
+            await this.populateSalesRepOptions(accountRegion);
 
             const salesRepSelect = document.getElementById('salesRepSelect');
             const industrySelect = document.getElementById('industry');
-            
+
             if (salesRepSelect && account.salesRep) {
-                const resolvedEmail = account.salesRepEmail || (() => {
+                const resolvedEmail = account.salesRepEmail || (await (async () => {
                     const rep = typeof DataManager.getGlobalSalesRepByName === 'function'
-                        ? DataManager.getGlobalSalesRepByName(account.salesRep)
+                        ? await DataManager.getGlobalSalesRepByName(account.salesRep)
                         : null;
                     return rep?.email || '';
-                })();
+                })());
                 if (resolvedEmail) {
                     const option = Array.from(salesRepSelect.options).find(opt => opt.value === resolvedEmail);
                     if (option) {
@@ -1306,7 +1390,7 @@ const Activities = {
                 }
             }
             if (industrySelect && account.industry) {
-                const standardIndustries = (typeof DataManager.getIndustries === 'function' ? DataManager.getIndustries() : []) || [];
+                const standardIndustries = (typeof DataManager.getIndustries === 'function' ? await DataManager.getIndustries() : []) || [];
                 const isCustomIndustry = !standardIndustries.includes(account.industry);
                 if (isCustomIndustry) {
                     industrySelect.value = 'Other';
@@ -1323,7 +1407,7 @@ const Activities = {
                 }
             }
         }
-        
+
         // Enable project dropdown and load projects
         const projectDisplayContainer = document.getElementById('projectDisplayContainer');
         if (projectDisplayContainer) {
@@ -1344,7 +1428,7 @@ const Activities = {
     },
 
     // Load project dropdown (show all projects immediately)
-    loadProjectDropdown() {
+    async loadProjectDropdown() {
         const accountId = document.getElementById('selectedAccountId').value;
         const dropdown = document.getElementById('projectDropdown');
         if (!dropdown || !accountId) {
@@ -1362,7 +1446,7 @@ const Activities = {
             `;
         } else {
             // For existing accounts, show all projects
-            const accounts = DataManager.getAccounts();
+            const accounts = await DataManager.getAccounts();
             const account = accounts.find(a => a.id === accountId);
             const projects = account?.projects || [];
             this.currentProjectOptions = projects;
@@ -1411,7 +1495,7 @@ const Activities = {
             <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
         `;
     },
-    
+
     // Toggle project dropdown
     toggleProjectDropdown() {
         const accountId = document.getElementById('selectedAccountId').value;
@@ -1419,7 +1503,7 @@ const Activities = {
             UI.showNotification('Please select an account first', 'error');
             return;
         }
-        
+
         // For new accounts, ensure account name is entered
         if (accountId === 'new') {
             const accountName = document.getElementById('newAccountName')?.value;
@@ -1428,10 +1512,10 @@ const Activities = {
                 return;
             }
         }
-        
+
         const dropdown = document.getElementById('projectDropdown');
         if (!dropdown) return;
-        
+
         const isVisible = dropdown.style.display !== 'none';
         if (isVisible) {
             dropdown.style.display = 'none';
@@ -1447,7 +1531,7 @@ const Activities = {
             }
         }
     },
-    
+
     // Show new project fields
     showNewProjectFields() {
         const projectDropdown = document.getElementById('projectDropdown');
@@ -1470,8 +1554,8 @@ const Activities = {
             newProjectName.value = searchInput.value.trim();
         }
     },
-    
-    selectProject(id, name) {
+
+    async selectProject(id, name) {
         const selectedProjectId = document.getElementById('selectedProjectId');
         if (selectedProjectId) selectedProjectId.value = id;
         const projectDisplay = document.getElementById('projectDisplay');
@@ -1485,13 +1569,13 @@ const Activities = {
             newProjectName.required = false;
             newProjectName.value = '';
         }
-        
+
         // Load and pre-populate project data if existing project
         if (id && id !== 'new') {
             this.loadProjectData(id);
             const pastSection = document.getElementById('pastActivitiesSection');
             if (pastSection) pastSection.classList.remove('hidden');
-            this.renderPastActivitiesForProject(id);
+            await this.renderPastActivitiesForProject(id);
         } else {
             // Clear project fields for new project
             this.clearProjectFields();
@@ -1511,10 +1595,10 @@ const Activities = {
         if (arrow) arrow.textContent = isExpanded ? '▼' : '▶';
     },
 
-    renderPastActivitiesForProject(projectId) {
+    async renderPastActivitiesForProject(projectId) {
         const list = document.getElementById('pastActivitiesList');
         if (!list || typeof DataManager === 'undefined' || !DataManager.getActivitiesByProject) return;
-        const activities = DataManager.getActivitiesByProject(projectId);
+        const activities = await DataManager.getActivitiesByProject(projectId);
         const sorted = [...activities].sort((a, b) => {
             const dA = a.date || a.createdAt || '';
             const dB = b.date || b.createdAt || '';
@@ -1530,7 +1614,7 @@ const Activities = {
                 const safeId = String(a.id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 return `<div class="past-activity-row" style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #e2e8f0;">
                     <span>${dateStr} – ${typeLabel}</span>
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="Activities.openActivityModal({ mode: 'edit', activity: Activities._getActivityById('${safeId}'), isInternal: false })">Edit</button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="Activities.openActivityModalByActivityId('${safeId}')">Edit</button>
                 </div>`;
             }).join('');
         }
@@ -1542,6 +1626,14 @@ const Activities = {
     _getActivityById(activityId) {
         const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? DataManager.getActivities() : [];
         return activities.find(a => a.id === activityId) || null;
+    },
+
+    async openActivityModalByActivityId(activityId) {
+        const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? await DataManager.getActivities() : [];
+        const activity = activities.find(a => a.id === activityId) || null;
+        if (activity) {
+            await this.openActivityModal({ mode: 'edit', activity, isInternal: false });
+        }
     },
 
     getDetailsFromRow(rowIndex) {
@@ -1589,20 +1681,20 @@ const Activities = {
         }
         return {};
     },
-    
+
     // Load project data and pre-populate fields
-    loadProjectData(projectId) {
+    async loadProjectData(projectId) {
         const accountId = document.getElementById('selectedAccountId')?.value;
         if (!accountId || !projectId) return;
-        
+
         this.clearProjectFields();
-        
-        const account = DataManager.getAccountById(accountId);
+
+        const account = await DataManager.getAccountById(accountId);
         if (!account || !account.projects) return;
-        
+
         const project = account.projects.find(p => p.id === projectId);
         if (!project) return;
-        
+
         // Pre-populate SFDC Link
         const sfdcLink = document.getElementById('sfdcLink');
         const noSfdcLink = document.getElementById('noSfdcLink');
@@ -1618,7 +1710,7 @@ const Activities = {
         }
         const projectLocation = document.getElementById('projectLocation');
         if (projectLocation) projectLocation.value = project.location || '';
-        
+
         // Pre-populate Use Cases
         if (project.useCases && project.useCases.length > 0) {
             this.selectedUseCases = [];
@@ -1638,7 +1730,7 @@ const Activities = {
             this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
             this.syncMultiSelectState('useCase', this.selectedUseCases);
         }
-        
+
         // Pre-populate Products Interested
         if (project.productsInterested && project.productsInterested.length > 0) {
             this.selectedProjectProducts = [];
@@ -1658,7 +1750,7 @@ const Activities = {
             this.updateMultiSelectDisplay('projectProductsSelected', this.selectedProjectProducts);
             this.syncMultiSelectState('projectProducts', this.selectedProjectProducts);
         }
-        
+
         // Pre-populate Channels
         if (project.channels && project.channels.length > 0) {
             this.selectedChannels = [];
@@ -1679,7 +1771,7 @@ const Activities = {
             this.syncMultiSelectState('channels', this.selectedChannels);
         }
     },
-    
+
     // Clear project fields for new project
     clearProjectFields() {
         // Clear SFDC
@@ -1690,7 +1782,7 @@ const Activities = {
         if (sfdcLink) sfdcLink.style.display = 'block';
         const projectLocation = document.getElementById('projectLocation');
         if (projectLocation) projectLocation.value = '';
-        
+
         // Clear Use Cases
         this.selectedUseCases = [];
         const useCaseOtherText = document.getElementById('useCaseOtherText');
@@ -1701,7 +1793,7 @@ const Activities = {
         }
         this.updateMultiSelectDisplay('useCaseSelected', []);
         this.syncMultiSelectState('useCase', []);
-        
+
         // Clear Products
         this.selectedProjectProducts = [];
         const productsOtherText = document.getElementById('projectProductsOtherText');
@@ -1712,7 +1804,7 @@ const Activities = {
         }
         this.updateMultiSelectDisplay('projectProductsSelected', []);
         this.syncMultiSelectState('projectProducts', []);
-        
+
         // Clear Channels
         this.selectedChannels = [];
         const channelsOtherText = document.getElementById('channelsOtherText');
@@ -1734,35 +1826,32 @@ const Activities = {
     },
 
     // Save activity (unified for Internal and External)
-    saveActivity(event) {
+    async saveActivity(event) {
         event.preventDefault();
-        
+
         try {
             const currentUser = Auth.getCurrentUser();
             if (!currentUser) {
                 UI.showNotification('User not authenticated', 'error');
                 return;
             }
-            
+
             const activityCategory = document.querySelector('input[name="activityCategory"]:checked')?.value;
             if (!activityCategory) {
                 UI.showNotification('Please select activity category (Internal/External)', 'error');
                 return;
             }
-            
+
             // Remove required attributes from hidden fields to prevent validation errors
             const accountSection = document.getElementById('accountSection');
             const projectSection = document.getElementById('projectSection');
-            
+
             if (activityCategory === 'internal') {
                 // For internal, ALWAYS remove required from account/project fields (even if hidden)
                 if (accountSection) {
                     // Remove required from all fields in account section
-                    const accountFields = accountSection.querySelectorAll('[required], [data-was-required="true"]');
-                    accountFields.forEach(field => {
-                        field.removeAttribute('required');
-                        field.setAttribute('data-was-required', 'true');
-                    });
+                    const inputs = accountSection.querySelectorAll('input, select, textarea');
+                    inputs.forEach(input => input.required = false);
                     // Also clear values to prevent validation issues
                     const industrySelect = document.getElementById('industry');
                     const salesRepSelect = document.getElementById('salesRepSelect');
@@ -1800,15 +1889,15 @@ const Activities = {
                     });
                 }
             }
-            
+
             const date = document.getElementById('activityDate').value;
             const activityType = document.getElementById('activityTypeSelect').value;
-            
+
             if (!date || !activityType) {
                 UI.showNotification('Please fill in all required fields', 'error');
                 return;
             }
-            
+
             const editingContext = this.editingContext;
             const isEditing = !!editingContext;
             const originalCategoryIsInternal = editingContext ? editingContext.isInternal : null;
@@ -1819,24 +1908,25 @@ const Activities = {
                 return;
             }
 
-            const saveOptions = {
-                isEditing,
-                original: editingContext ? editingContext.activity : null
-            };
-
             if (currentIsInternal) {
-                this.saveInternalActivityUnified(currentUser, date, activityType, saveOptions);
+                await this.saveInternalActivityUnified(currentUser, date, activityType, {
+                    isEditing: !!(this.editingContext && this.editingContext.activity),
+                    original: this.editingContext ? this.editingContext.activity : null
+                });
             } else {
-                this.saveExternalActivityUnified(currentUser, date, activityType, saveOptions);
+                await this.saveExternalActivityUnified(currentUser, date, activityType, {
+                    isEditing: !!(this.editingContext && this.editingContext.activity),
+                    original: this.editingContext ? this.editingContext.activity : null
+                });
             }
         } catch (error) {
-            console.error('Error saving activity:', error);
-            UI.showNotification('Error saving activity: ' + error.message, 'error');
+            console.error('Error in saveActivity:', error);
+            UI.showNotification('An error occurred while saving the activity.', 'error');
         }
     },
 
     // Save internal activity (unified)
-    saveInternalActivityUnified(currentUser, date, activityType, options = {}) {
+    async saveInternalActivityUnified(currentUser, date, activityType, options = {}) {
         const { isEditing = false, original = null } = options || {};
 
         const timeSpentType = document.querySelector('input[name="timeSpentType"]:checked')?.value;
@@ -1875,7 +1965,7 @@ const Activities = {
         };
 
         if (isEditing && original) {
-            const updated = DataManager.updateInternalActivity(original.id, {
+            const updated = await DataManager.updateInternalActivity(original.id, {
                 date,
                 type: activityType,
                 timeSpent,
@@ -1894,7 +1984,7 @@ const Activities = {
             UI.showNotification('Internal activity updated successfully!', 'success');
         } else {
             try {
-                DataManager.addInternalActivity(payload);
+                await DataManager.addInternalActivity(payload);
                 if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
                     Drafts.removeDraft(this.editingContext.fromDraftId);
                 }
@@ -1907,14 +1997,14 @@ const Activities = {
         }
 
         if (window.app) {
-            window.app.loadDashboard();
-            window.app.loadActivitiesView();
-            if (window.app.loadDraftsView) window.app.loadDraftsView();
+            await window.app.loadDashboard();
+            await window.app.loadActivitiesView();
+            if (window.app.loadDraftsView) await window.app.loadDraftsView();
         }
     },
 
     // Save external activity (unified)
-    saveExternalActivityUnified(currentUser, date, activityType, options = {}) {
+    async saveExternalActivityUnified(currentUser, date, activityType, options = {}) {
         const { isEditing = false, original = null } = options || {};
         const editingContext = this.editingContext || {};
 
@@ -1930,12 +2020,12 @@ const Activities = {
         UI.clearFieldError(newProjectNameInput);
         UI.clearFieldError(salesRepRegionSelect);
         UI.clearFieldError(salesRepSelect);
-        
+
         if (!accountIdEl || !salesRepRegionSelect || !salesRepSelect || !industryEl) {
             UI.showNotification('Please fill in all required account fields', 'error');
             return;
         }
-        
+
         const accountId = accountIdEl.value;
         let accountName = document.getElementById('accountDisplay')?.textContent || '';
         if (accountId === 'new') {
@@ -1952,39 +2042,39 @@ const Activities = {
             }
             industry = industryOtherText;
             if (typeof DataManager !== 'undefined' && DataManager.addPendingIndustry) {
-                DataManager.addPendingIndustry(industryOtherText, { suggestedBy: currentUser.username });
+                await DataManager.addPendingIndustry(industryOtherText, { suggestedBy: currentUser.username });
             }
         }
-        
+
         // Get project info (now from Project Information section)
         const projectId = projectIdEl ? projectIdEl.value : '';
         let projectName = document.getElementById('projectDisplay')?.textContent || '';
         if (projectId === 'new') {
             projectName = document.getElementById('newProjectName')?.value || '';
         }
-        
+
         if (!accountId || !accountName || !industry) {
             UI.showNotification('Please fill in all required account fields', 'error');
             return;
         }
-        
+
         if (accountId === 'new' && !accountName.trim()) {
             UI.setFieldError(newAccountNameInput, 'Account name is required.');
             UI.showNotification('Please enter an account name', 'error');
             return;
         }
-        
+
         if (!projectId || (!projectName && projectId !== 'new')) {
             UI.showNotification('Please select or create a project', 'error');
             return;
         }
-        
+
         if (projectId === 'new' && !projectName.trim()) {
             UI.setFieldError(newProjectNameInput, 'Project name is required.');
             UI.showNotification('Please enter a project name', 'error');
             return;
         }
-        
+
         // Handle sales rep (from dropdown only - no adding new)
         const salesRepRegion = salesRepRegionSelect.value;
         if (!salesRepRegion) {
@@ -1996,113 +2086,48 @@ const Activities = {
         const selectedOption = salesRepSelect.options[salesRepSelect.selectedIndex];
         const salesRep = selectedOption ? selectedOption.getAttribute('data-name') || selectedOption.text : '';
         const salesRepEmail = salesRepSelect.value;
-        
+
         if (!salesRep || !salesRepSelect.value) {
             UI.setFieldError(salesRepSelect, 'Select a sales rep');
             UI.showNotification('Please select a sales rep', 'error');
             return;
         }
-        
-        // Create or get account
+
+        // --- Logic to resolve final IDs ---
         let finalAccountId = accountId;
+        let finalProjectId = projectId;
+
         if (accountId === 'new') {
-            const newAccount = DataManager.addAccount({
+            const result = await DataManager.addAccount({
                 name: accountName,
                 industry: industry,
                 salesRep: salesRep,
                 salesRepEmail: salesRepEmail,
                 salesRepRegion: salesRepRegion,
-                createdBy: currentUser.id
+                projects: []
             });
-            finalAccountId = newAccount.id;
-        } else {
-            // Update account with sales rep if changed
-            const account = DataManager.getAccountById(accountId);
-            if (account && (account.salesRep !== salesRep || account.salesRepEmail !== salesRepEmail || account.salesRepRegion !== salesRepRegion || account.industry !== industry)) {
-                DataManager.updateAccount(accountId, {
-                    salesRep: salesRep,
-                    salesRepEmail: salesRepEmail,
-                    salesRepRegion: salesRepRegion,
-                    industry: industry
-                });
-            }
+            finalAccountId = result.id;
         }
-        
-        // Get project information
-        const noSfdcLink = document.getElementById('noSfdcLink')?.checked || false;
-        const sfdcLink = noSfdcLink ? '' : (document.getElementById('sfdcLink')?.value || '');
-        
-        // Get use cases (handle Other)
-        let useCases = [...this.selectedUseCases];
-        const useCaseOtherText = document.getElementById('useCaseOtherText')?.value?.trim();
-        if (useCases.includes('Other') && useCaseOtherText) {
-            const otherIndex = useCases.indexOf('Other');
-            useCases[otherIndex] = `Other: ${useCaseOtherText}`;
-            if (typeof DataManager !== 'undefined' && DataManager.addPendingUseCase && industry) {
-                DataManager.addPendingUseCase(useCaseOtherText, industry, { suggestedBy: currentUser.username });
-            }
-        }
-        
-        // Validate use cases (mandatory for new external activities)
-        if (useCases.length === 0) {
-            UI.showNotification('Please select at least one use case for the project', 'error');
-            const useCaseSelected = document.getElementById('useCaseSelected');
-            if (useCaseSelected) {
-                useCaseSelected.style.borderColor = '#dc3545';
-                useCaseSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            return;
-        }
-        
-        const projectLocation = (document.getElementById('projectLocation')?.value || '').trim();
-        
-        // Get project products (handle Other) - Required for external activities
-        let projectProducts = this.getProjectProductsWithOther();
-        
-        // Get channels (handle Other) - Required for external activities
-        let projectChannels = this.getChannelsWithOther();
-        
-        // Validate project products (required for external)
-        if (projectProducts.length === 0) {
-            UI.showNotification('Please select at least one product interested for the project', 'error');
-            return;
-        }
-        
-        // Validate channels (required for external)
-        if (projectChannels.length === 0) {
-            UI.showNotification('Please select at least one channel for the project', 'error');
-            return;
-        }
-        
-        // Create or get project
-        let finalProjectId = projectId;
-        if (projectId === 'new' && projectName) {
-            const newProject = DataManager.addProject(finalAccountId, {
+
+        if (projectId === 'new') {
+            const projectResult = await DataManager.addProject(finalAccountId, {
                 name: projectName,
-                sfdcLink: sfdcLink,
-                useCases: useCases,
-                productsInterested: projectProducts,
-                channels: projectChannels,
-                location: projectLocation || undefined,
-                createdBy: currentUser.id
+                status: 'active'
             });
-            finalProjectId = newProject.id;
-        } else if (projectId && projectId !== 'new') {
-            // Update existing project if SFDC link, use cases, products, channels, or location changed
-            const accounts = DataManager.getAccounts();
+            finalProjectId = projectResult.id;
+        } else {
+            // If project exists, we might need to update its location or products
+            const accounts = await DataManager.getAccounts();
             const account = accounts.find(a => a.id === finalAccountId);
-            const project = account?.projects?.find(p => p.id === projectId);
+            const project = account?.projects?.find(p => p.id === finalProjectId);
             if (project) {
-                if (sfdcLink !== undefined) project.sfdcLink = sfdcLink;
-                if (useCases.length > 0) project.useCases = useCases;
-                if (projectProducts.length > 0) project.productsInterested = projectProducts;
-                if (projectChannels.length > 0) project.channels = projectChannels;
+                const projectLocation = document.getElementById('projectLocation')?.value;
                 if (projectLocation !== undefined) project.location = projectLocation || '';
-                DataManager.saveAccounts(accounts);
+                await DataManager.saveAccounts(accounts);
             }
         }
-        
-        const activeAccount = DataManager.getAccountById(finalAccountId);
+
+        const activeAccount = await DataManager.getAccountById(finalAccountId);
         if (activeAccount && activeAccount.name) {
             accountName = activeAccount.name;
         }
@@ -2130,7 +2155,7 @@ const Activities = {
             details: {},
             isInternal: false
         };
-        
+
         // Add type-specific details
         if (activityType === 'customerCall') {
             const callDescription = document.getElementById('callDescription')?.value || '';
@@ -2152,7 +2177,7 @@ const Activities = {
                 accessType: accessType,
                 useCaseDescription: document.getElementById('useCaseDescription')?.value || ''
             };
-            
+
             if (accessType === 'Sandbox') {
                 activity.details.startDate = document.getElementById('pocStartDate')?.value || '';
                 activity.details.endDate = document.getElementById('pocEndDate')?.value || '';
@@ -2174,7 +2199,7 @@ const Activities = {
             // No details for pricing
             activity.details = {};
         }
-        
+
         const originalAccountId = editingContext.originalAccountId ?? original?.accountId ?? null;
         const originalProjectId = editingContext.originalProjectId ?? original?.projectId ?? null;
 
@@ -2194,13 +2219,13 @@ const Activities = {
                 isInternal: false
             };
 
-            const updated = DataManager.updateActivity(original.id, updates);
+            const updated = await DataManager.updateActivity(original.id, updates);
             if (!updated) {
                 UI.showNotification('Unable to update activity. Please try again.', 'error');
                 return;
             }
 
-            this.syncProjectActivityReference({
+            await this.syncProjectActivityReference({
                 activity: updated,
                 targetAccountId: updated.accountId,
                 targetProjectId: updated.projectId,
@@ -2252,8 +2277,8 @@ const Activities = {
                         isInternal: false
                     };
                     try {
-                        const created = DataManager.addActivity(rowActivity);
-                        this.syncProjectActivityReference({
+                        const created = await DataManager.addActivity(rowActivity);
+                        await this.syncProjectActivityReference({
                             activity: created,
                             targetAccountId: created.accountId,
                             targetProjectId: created.projectId
@@ -2266,14 +2291,14 @@ const Activities = {
                 this.closeActivityModal();
                 if (draftsCount > 0) {
                     UI.showNotification('Logged ' + createdCount + ' activities. ' + draftsCount + ' could not be saved and were added to Drafts.', 'warning');
-                    if (window.app && window.app.loadDraftsView) window.app.loadDraftsView();
+                    if (window.app && window.app.loadDraftsView) await window.app.loadDraftsView();
                 } else {
                     UI.showNotification('Logged ' + createdCount + ' activities!', 'success');
                 }
             } else {
                 try {
-                    const created = DataManager.addActivity(activity);
-                    this.syncProjectActivityReference({
+                    const created = await DataManager.addActivity(activity);
+                    await this.syncProjectActivityReference({
                         activity: created,
                         targetAccountId: created.accountId,
                         targetProjectId: created.projectId
@@ -2285,15 +2310,15 @@ const Activities = {
                     UI.showNotification('Activity logged successfully!', 'success');
                 } catch (err) {
                     UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
-                    if (window.app && window.app.loadDraftsView) window.app.loadDraftsView();
+                    if (window.app && window.app.loadDraftsView) await window.app.loadDraftsView();
                 }
             }
         }
-        
+
         if (window.app) {
-            window.app.loadDashboard();
-            window.app.loadActivitiesView();
-            if (window.app.loadDraftsView) window.app.loadDraftsView();
+            await window.app.loadDashboard();
+            await window.app.loadActivitiesView();
+            if (window.app.loadDraftsView) await window.app.loadDraftsView();
         }
     },
 
@@ -2319,10 +2344,10 @@ const Activities = {
         return channels;
     },
 
-    syncProjectActivityReference({ activity, targetAccountId, targetProjectId, previousAccountId = null, previousProjectId = null }) {
+    async syncProjectActivityReference({ activity, targetAccountId, targetProjectId, previousAccountId = null, previousProjectId = null }) {
         if (!activity) return;
 
-        const accounts = DataManager.getAccounts();
+        const accounts = await DataManager.getAccounts();
         let mutated = false;
 
         if (previousAccountId && previousProjectId && (previousAccountId !== targetAccountId || previousProjectId !== targetProjectId)) {
@@ -2368,17 +2393,17 @@ const Activities = {
         }
 
         if (mutated) {
-            DataManager.saveAccounts(accounts);
+            await DataManager.saveAccounts(accounts);
         }
     },
 
     // Set activity category (Internal/External)
-    setActivityCategory(category) {
+    async setActivityCategory(category) {
         this.activityType = category;
         const accountSection = document.getElementById('accountSection');
         const projectSection = document.getElementById('projectSection');
         const activityTypeSelect = document.getElementById('activityTypeSelect');
-        
+
         if (category === 'internal') {
             // Hide Account and Project sections for Internal
             if (accountSection) {
@@ -2407,7 +2432,7 @@ const Activities = {
                 });
             }
             this.updateAddAnotherActivityButtonVisibility();
-            
+
             // Populate Internal activity types
             if (activityTypeSelect) {
                 activityTypeSelect.innerHTML = `
@@ -2446,15 +2471,15 @@ const Activities = {
             if (selectedProjectId && selectedProjectId !== 'new') {
                 const pastSection = document.getElementById('pastActivitiesSection');
                 if (pastSection) pastSection.classList.remove('hidden');
-                this.renderPastActivitiesForProject(selectedProjectId);
+                await this.renderPastActivitiesForProject(selectedProjectId);
             } else {
                 const pastSection = document.getElementById('pastActivitiesSection');
                 if (pastSection) pastSection.classList.add('hidden');
             }
             const industrySelect = document.getElementById('industry');
-            this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '');
+            this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '').catch(() => {});
             this.updateAddAnotherActivityButtonVisibility();
-            
+
             // Populate External activity types
             if (activityTypeSelect) {
                 activityTypeSelect.innerHTML = `
@@ -2467,7 +2492,7 @@ const Activities = {
                 `;
             }
         }
-        
+
         // Clear activity fields when category changes
         const activityFields = document.getElementById('activityFields');
         if (activityFields) activityFields.innerHTML = '';
@@ -2512,9 +2537,9 @@ const Activities = {
     handleSalesRepChange() {
         const select = document.getElementById('salesRepSelect');
         const newFields = document.getElementById('newSalesRepFields');
-        
+
         if (!select || !newFields) return;
-        
+
         if (select.value === '__new__') {
             newFields.style.display = 'block';
             document.getElementById('newSalesRepName').required = true;
@@ -2533,22 +2558,22 @@ const Activities = {
     },
 
     // Reset activity form
-    resetActivityForm() {
+    async resetActivityForm() {
         this.activityType = null;
         this.selectedUseCases = [];
         this.selectedChannels = [];
         this.selectedProjectProducts = [];
-        this.currentSalesRepRegion = this.getDefaultSalesRepRegion();
-        
+        this.currentSalesRepRegion = await this.getDefaultSalesRepRegion();
+
         const form = document.getElementById('activityForm');
         if (form) form.reset();
-        
+
         // Reset all sections
         const accountSection = document.getElementById('accountSection');
         const projectSection = document.getElementById('projectSection');
         if (accountSection) accountSection.classList.add('hidden');
         if (projectSection) projectSection.classList.add('hidden');
-        
+
         const accountDisplay = document.getElementById('accountDisplay');
         if (accountDisplay) accountDisplay.textContent = 'Select account...';
         const selectedAccountId = document.getElementById('selectedAccountId');
@@ -2560,7 +2585,7 @@ const Activities = {
             newAccountName.value = '';
             newAccountName.required = false;
         }
-        
+
         const projectDisplayContainer = document.getElementById('projectDisplayContainer');
         if (projectDisplayContainer) {
             projectDisplayContainer.style.background = '#e5e7eb';
@@ -2577,24 +2602,24 @@ const Activities = {
             newProjectName.value = '';
             newProjectName.required = false;
         }
-        
+
         this.clearProjectFields();
-        
+
         const industryOtherText = document.getElementById('industryOtherText');
         if (industryOtherText) {
             industryOtherText.style.display = 'none';
             industryOtherText.required = false;
             industryOtherText.value = '';
         }
-        
+
         const activityFields = document.getElementById('activityFields');
         if (activityFields) activityFields.innerHTML = '';
         this.removeExtraActivityRows();
-        
+
         // Reset radio buttons
         const radios = document.querySelectorAll('input[name="activityCategory"]');
         radios.forEach(radio => radio.checked = false);
-        
+
         // Set default date
         const today = new Date().toISOString().split('T')[0];
         const dateInput = document.getElementById('activityDate');

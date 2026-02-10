@@ -5,6 +5,7 @@ const Auth = {
     pendingPasswordChangeUser: null,
     currentLoginTab: 'presales',
     analyticsGuestCounter: 0,
+    currentSessionId: null, // Track session ID for logout logging
 
     getSessionStore() {
         try {
@@ -47,12 +48,18 @@ const Auth = {
     },
 
     writeSession(payload) {
-        const store = this.getSessionStore();
-        if (!store) return;
         try {
-            store.setItem('currentSession', JSON.stringify(payload));
+            const store = this.getSessionStore();
+            if (!store) return;
+            const data = {
+                userId: payload.userId,
+                loginTime: payload.loginTime,
+                sessionId: payload.sessionId // Store session ID
+            };
+            store.setItem('session', JSON.stringify(data));
+            this.currentSessionId = payload.sessionId; // Keep in memory
         } catch (error) {
-            console.warn('Failed to persist session token', error);
+            console.error('Failed to write session:', error);
         }
     },
 
@@ -151,7 +158,7 @@ const Auth = {
     },
 
     // Initialize authentication
-    init() {
+    async init() {
         // Check for existing session
         this.clearRemoteSessionArtifact();
         const sessionData = this.readSession();
@@ -166,7 +173,7 @@ const Auth = {
         }
 
         if (sessionData && sessionData.userId) {
-            const user = DataManager.getUserById(sessionData.userId);
+            const user = await DataManager.getUserById(sessionData.userId);
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
                     this.clearSession();
@@ -182,22 +189,22 @@ const Auth = {
     },
 
     // Login
-    login(username, password) {
+    async login(username, password) {
         try {
             // Ensure default users exist
-            DataManager.ensureDefaultUsers();
-            
-            const users = DataManager.getUsers();
-            
+            await DataManager.ensureDefaultUsers();
+
+            const users = await DataManager.getUsers();
+
             // Trim username and password to avoid whitespace issues
             const trimmedUsername = username.trim();
             const trimmedPassword = password.trim();
-            
+
             const user = users.find(u => {
                 const match = u.username === trimmedUsername && u.password === trimmedPassword;
                 return match;
             });
-            
+
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
                     this.reportLoginEvent('success', {
@@ -228,7 +235,7 @@ const Auth = {
                 this.showMainApp();
                 return { success: true, user, requiresPasswordChange: false };
             }
-            
+
             // Debug: show what we're comparing
             const foundUser = users.find(u => u.username === trimmedUsername);
             if (foundUser) {
@@ -240,7 +247,7 @@ const Auth = {
                 username: trimmedUsername,
                 message: 'Invalid credentials'
             });
-            
+
             return { success: false, message: 'Invalid credentials' };
         } catch (error) {
             console.error('Login error:', error);
@@ -252,13 +259,13 @@ const Auth = {
         }
     },
 
-    loginAnalytics(password, options = {}) {
+    async loginAnalytics(password, options = {}) {
         try {
             const trimmedPassword = (password || '').trim();
             if (!trimmedPassword) {
                 return { success: false, message: 'Enter the analytics password.' };
             }
-            const config = DataManager.getAnalyticsAccessConfig();
+            const config = await DataManager.getAnalyticsAccessConfig();
             const expectedPassword = (config.password || 'Gup$hup.io').trim();
             if (trimmedPassword !== expectedPassword) {
                 return { success: false, message: 'Incorrect analytics password.' };
@@ -289,10 +296,21 @@ const Auth = {
 
     // Logout
     logout() {
+        const sessionId = this.currentSessionId; // Get session ID before clearing
         this.currentUser = null;
         this.pendingPasswordChangeUser = null;
         this.clearSession();
+        this.clearRemoteSessionArtifact();
         this.showLoginScreen();
+
+        // Send logout event to server if session ID exists
+        if (sessionId) {
+            fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId })
+            }).catch(err => console.warn('Logout logging failed:', err));
+        }
     },
 
     // Show login screen
@@ -319,12 +337,12 @@ const Auth = {
         try {
             const loginScreen = document.getElementById('loginScreen');
             const mainApp = document.getElementById('mainApp');
-            
+
             if (!loginScreen || !mainApp) {
                 console.error('Login screen or main app element not found');
                 return;
             }
-            
+
             loginScreen.classList.add('hidden');
             mainApp.classList.remove('hidden');
             // Prevent hidden login forms from triggering "invalid form control not focusable"
@@ -436,7 +454,7 @@ const Auth = {
         }
     },
 
-    submitForcedPasswordChange(newPassword, confirmPassword) {
+    async submitForcedPasswordChange(newPassword, confirmPassword) {
         try {
             const pendingUser = this.pendingPasswordChangeUser;
             if (!pendingUser) {
@@ -459,7 +477,7 @@ const Auth = {
                 return;
             }
 
-            const updated = DataManager.updateUser(pendingUser.id, {
+            const updated = await DataManager.updateUser(pendingUser.id, {
                 password: trimmedPassword,
                 forcePasswordChange: false
             });
@@ -522,7 +540,7 @@ const Auth = {
         const adminNav = document.getElementById('adminNav');
         const systemAdminNav = document.getElementById('systemAdminNav');
         const configurationNav = document.getElementById('configurationNav');
-        
+
         // Hide legacy admin nav, show new ones
         if (adminNav) {
             adminNav.classList.add('hidden');
@@ -533,7 +551,7 @@ const Auth = {
         if (configurationNav) {
             configurationNav.classList.toggle('hidden', !isAdmin);
         }
-        
+
         document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
             el.classList.toggle('hidden', !this.isAdmin());
         });
@@ -572,7 +590,7 @@ const Auth = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
-            }).catch(() => {});
+            }).catch(() => { });
         } catch (error) {
             console.warn('Failed to report login event', error);
         }

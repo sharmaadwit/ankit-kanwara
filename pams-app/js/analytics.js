@@ -231,7 +231,7 @@ const Analytics = (() => {
         `;
     }
 
-    function renderCharts({ prefix, analytics }) {
+    async function renderCharts({ prefix, analytics }) {
         destroyCharts(prefix);
 
         renderTargetChart(prefix, analytics);
@@ -239,9 +239,9 @@ const Analytics = (() => {
         renderUserStackChart(prefix, analytics);
         renderProductsByIndustryChart(prefix, analytics);
         renderIndustryVolumeChart(prefix, analytics);
-        renderWinLossTrend(prefix, analytics);
-        renderChannelOutcomeChart(prefix, analytics);
-        renderPocFunnelChart(prefix, analytics);
+        await renderWinLossTrend(prefix, analytics);
+        await renderChannelOutcomeChart(prefix, analytics);
+        await renderPocFunnelChart(prefix, analytics);
     }
 
     function destroyCharts(prefix) {
@@ -552,11 +552,11 @@ const Analytics = (() => {
         registerChart(prefix, 'industry', chart);
     }
 
-    function renderWinLossTrend(prefix, analytics) {
+    async function renderWinLossTrend(prefix, analytics) {
         const canvas = document.getElementById(`${prefix}WinLossTrendChart`);
         if (!prepareCanvas(canvas)) return;
 
-        const trendData = DataManager.getWinLossTrend(6);
+        const trendData = await DataManager.getWinLossTrend(6);
         if (!trendData.length) {
             renderEmptyState(canvas, 'No win/loss updates recorded in recent months.');
             return;
@@ -598,11 +598,11 @@ const Analytics = (() => {
         registerChart(prefix, 'trend', chart);
     }
 
-    function renderChannelOutcomeChart(prefix, analytics) {
+    async function renderChannelOutcomeChart(prefix, analytics) {
         const canvas = document.getElementById(`${prefix}ChannelOutcomeChart`);
         if (!prepareCanvas(canvas)) return;
 
-        const channelStats = DataManager.getChannelOutcomeStats(analytics.month);
+        const channelStats = await DataManager.getChannelOutcomeStats(analytics.month);
         const channelEntries = Object.entries(channelStats).map(([channel, counts]) => ({
             channel,
             total: (counts.won || 0) + (counts.lost || 0),
@@ -658,11 +658,11 @@ const Analytics = (() => {
         registerChart(prefix, 'channels', chart);
     }
 
-    function renderPocFunnelChart(prefix, analytics) {
+    async function renderPocFunnelChart(prefix, analytics) {
         const canvas = document.getElementById(`${prefix}PocFunnelChart`);
         if (!prepareCanvas(canvas)) return;
 
-        const pocStats = DataManager.getPocFunnelStats(analytics.month);
+        const pocStats = await DataManager.getPocFunnelStats(analytics.month);
         const funnelEntries = Object.entries(pocStats.types || {}).map(([accessType, stats]) => ({
             accessType,
             requests: stats.requests || 0,

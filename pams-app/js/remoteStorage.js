@@ -59,6 +59,37 @@
     const ACTIVITIES_KEY = 'activities';
     const ACTIVITIES_MANIFEST_KEY = '__shard_manifest:activities__';
     const LOCAL_BACKUP_PREFIX = '__pams_backup__';
+    const CACHE_BUSTER_KEY = '__pams_cache_version__';
+    // Increment this version on each deployment to clear stale local caches
+    const CACHE_BUSTER_VERSION = '2026-02-09-v1';
+
+    /** Clear all local backup keys if the cache buster version has changed. */
+    const clearStaleLocalBackups = () => {
+        try {
+            if (typeof originalLocalStorage.getItem !== 'function') return;
+            const storedVersion = originalLocalStorage.getItem(CACHE_BUSTER_KEY);
+            if (storedVersion === CACHE_BUSTER_VERSION) return;
+            // Version mismatch: clear all __pams_backup__ keys
+            const keysToRemove = [];
+            for (let i = 0; i < originalLocalStorage.length; i++) {
+                const key = originalLocalStorage.key(i);
+                if (key && key.startsWith(LOCAL_BACKUP_PREFIX)) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(k => {
+                try { originalLocalStorage.removeItem(k); } catch (e) { }
+            });
+            originalLocalStorage.setItem(CACHE_BUSTER_KEY, CACHE_BUSTER_VERSION);
+            if (typeof console !== 'undefined' && console.log) {
+                console.log('[RemoteStorage] Cache buster: cleared ' + keysToRemove.length + ' stale backup keys for version ' + CACHE_BUSTER_VERSION);
+            }
+        } catch (e) {
+            // ignore
+        }
+    };
+    // Run cache buster on load
+    clearStaleLocalBackups();
 
     /** Write last-good payload to browser localStorage so we can recover if overwrite happens. */
     const saveLocalBackup = (storageKey, serializedValue) => {
@@ -473,6 +504,7 @@
         const url = buildUrl(suffix);
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false);
+        xhr.withCredentials = true;
         xhr.setRequestHeader('Accept', 'application/json');
 
         let requestHeaders = {};
@@ -515,7 +547,7 @@
             let conflictBody = null;
             try {
                 conflictBody = xhr.responseText ? JSON.parse(xhr.responseText) : null;
-            } catch (_) {}
+            } catch (_) { }
             const error = new Error(
                 conflictBody?.message || `Remote storage conflict: ${method} ${url} -> 409`
             );
@@ -531,6 +563,129 @@
         );
         error.status = xhr.status;
         throw error;
+    };
+
+    /** Async transport for Phase 2 S2.1: same contract as performRequest but returns Promise. Does not block main thread. */
+    const performRequestAsync = (method, suffix, body, opts) => {
+        const url = buildUrl(suffix);
+        const skipIfMatch = (opts && opts.skipIfMatch === true) || (typeof window !== 'undefined' && window.__REMOTE_STORAGE_RECONCILE_PUT__ === true);
+        const requestHeaders = {};
+        if (method === 'PUT' && suffix && suffix.startsWith('/') && !skipIfMatch) {
+            const key = decodeURIComponent(suffix.replace(/^\//, ''));
+            if (key && lastVersion[key] != null) requestHeaders['If-Match'] = lastVersion[key];
+        }
+        const headers = { Accept: 'application/json', ...buildHeaders(requestHeaders) };
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        const init = { method, headers, credentials: 'include' };
+        if (body !== undefined) init.body = JSON.stringify(body);
+        return fetch(url, init).then((res) => {
+            if (res.status === 404) return null;
+            if (res.status === 401) {
+                if (typeof window !== 'undefined') {
+                    try {
+                        // Delay so setItemAsyncWithDraft's .catch runs first and updates the draft
+                        window.setTimeout(function () {
+                            window.dispatchEvent(new CustomEvent('remotestorage:unauthorized', { detail: { status: 401, url } }));
+                        }, 0);
+                    } catch (_) { }
+                }
+                const err = new Error('Session expired or invalid. Please sign in again.');
+                err.status = 401;
+                throw err;
+            }
+            if (res.status >= 200 && res.status < 300) {
+                return res.json().then((result) => {
+                    if (result && result.key != null && result.updated_at != null) lastVersion[result.key] = result.updated_at;
+                    return result;
+                }).catch(() => null);
+            }
+            if (res.status === 409) {
+                return res.json().then((conflictBody) => {
+                    const err = new Error(conflictBody?.message || `Remote storage conflict: ${method} ${url} -> 409`);
+                    err.status = 409;
+                    err.conflict = true;
+                    err.value = conflictBody?.value;
+                    err.updated_at = conflictBody?.updated_at;
+                    throw err;
+                }).catch((e) => { if (e.status === 409) throw e; throw new Error(`Remote storage conflict: ${method} ${url} -> 409`); });
+            }
+            const err = new Error(`Remote storage request failed: ${method} ${url} -> ${res.status}`);
+            err.status = res.status;
+            throw err;
+        });
+    };
+
+    /** Async get (S2.1). For 'activities' key, still uses sync load under the hood; use for non-activity keys first. */
+    const getItemAsync = (key) => {
+        if (!key) return Promise.resolve(null);
+        if (key === ACTIVITIES_KEY) return Promise.resolve(loadActivitiesValue());
+        return performRequestAsync('GET', `/${encodeURIComponent(key)}`).then((result) => {
+            if (!result || typeof result.value !== 'string') return null;
+            return maybeDecompressValue(result.value);
+        }).catch(() => null);
+    };
+
+    /** Async set (S2.1). For accounts/internalActivities only; activities need shard path. */
+    const setItemAsync = (key, value) => {
+        if (!key) return Promise.reject(new Error('Key is required for setItem'));
+        const payload = value === null || value === undefined ? '' : String(value);
+        return performRequestAsync('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) }).then(() => { });
+    };
+
+    /**
+     * Async set with draft: adds draft in "Submitting…" state first, then saves. On success removes draft; on failure updates draft so "Try again" / "Submit all" makes sense.
+     * @param {string} key - storage key (e.g. 'accounts', 'internalActivities', 'activities')
+     * @param {string|object|array} value - value to save (stringified if not string)
+     * @param {{ type?: 'internal'|'external', label?: string }} options - optional type for draft
+     * @returns {Promise<void>} - resolves when saved; rejects on failure (draft is updated with error, user can retry)
+     */
+    const setItemAsyncWithDraft = (key, value, options) => {
+        const payloadStr = value === null || value === undefined ? '' : (typeof value === 'string' ? value : JSON.stringify(value));
+        const { type } = options || {};
+        const draftType = type || (key === 'internalActivities' ? 'internal' : 'external');
+        let payloadForDraft = value;
+        if (typeof payloadForDraft === 'string' && payloadForDraft) {
+            try { payloadForDraft = JSON.parse(payloadForDraft); } catch (_) { }
+        }
+        let draft = null;
+        if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+            draft = window.Drafts.addDraft({
+                type: draftType,
+                payload: payloadForDraft,
+                errorMessage: 'Submitting…',
+                storageKey: key
+            });
+        }
+        return setItemAsync(key, payloadStr)
+            .then(() => {
+                if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
+                    window.Drafts.removeDraft(draft.id);
+                    try {
+                        window.dispatchEvent(new CustomEvent('remotestorage:save-succeeded', { detail: { key } }));
+                    } catch (_) { }
+                }
+            })
+            .catch((err) => {
+                const errorMessage = (err && err.status === 401)
+                    ? 'Session expired. Please sign in again.'
+                    : (err && err.status === 409)
+                        ? 'Conflict – someone else saved. Submit again to merge.'
+                        : ((err && err.message) || 'Data not saved.');
+                if (draft && draft.id && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+                    window.Drafts.updateDraft(draft.id, { errorMessage: errorMessage });
+                } else if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+                    window.Drafts.addDraft({
+                        type: draftType,
+                        payload: payloadForDraft,
+                        errorMessage: errorMessage,
+                        storageKey: key
+                    });
+                }
+                try {
+                    window.dispatchEvent(new CustomEvent('remotestorage:save-failed', { detail: { key, error: err, message: errorMessage } }));
+                } catch (_) { }
+                throw err;
+            });
     };
 
     try {
@@ -624,7 +779,7 @@
                         try {
                             var arr = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
                             if (Array.isArray(arr)) count = arr.length;
-                        } catch (_) {}
+                        } catch (_) { }
                         Audit.log({
                             action: 'storage.save',
                             entity: 'storage',
@@ -632,7 +787,7 @@
                             detail: { key: storageKey, count: count }
                         });
                     }
-                } catch (_) {}
+                } catch (_) { }
             };
 
             try {
@@ -644,12 +799,11 @@
                         err.code = 'REMOTE_ACTIVITIES_LOAD_FAILED';
                         throw err;
                     }
-                    let merged = mergeArrayById(serverJson, serializedValue);
-                    var mergedArr = safeJsonParse(merged);
+                    let mergedArr = mergeArrayByIdNewerWins(safeJsonParse(serverJson), safeJsonParse(serializedValue));
                     if (Array.isArray(mergedArr)) {
                         mergedArr = dedupeActivitiesBySignature(mergedArr);
-                        merged = JSON.stringify(mergedArr);
                     }
+                    let merged = JSON.stringify(mergedArr);
                     serializedValue = merged;
                     var draft = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
                         type: 'external',
@@ -688,7 +842,7 @@
                     }
                     let merged = key === 'accounts'
                         ? mergeAccountsDeep(serverStr, serializedValue)
-                        : mergeArrayById(serverStr, serializedValue);
+                        : JSON.stringify(mergeArrayByIdNewerWins(safeJsonParse(serverStr), safeJsonParse(serializedValue)));
                     var mergedArr = safeJsonParse(merged);
                     if (Array.isArray(mergedArr) && key === 'internalActivities') {
                         mergedArr = dedupeInternalBySignature(mergedArr);
@@ -721,8 +875,10 @@
                 if (error.status === 409 && error.conflict && canMergeOnConflict) {
                     let merged;
                     if (key === ACTIVITIES_KEY) {
-                        const serverJson = loadActivitiesValue();
-                        merged = mergeArrayById(serverJson, serializedValue);
+                        const serverJson409 = loadActivitiesValue();
+                        let mergedArr = mergeArrayByIdNewerWins(safeJsonParse(serverJson409), safeJsonParse(serializedValue));
+                        mergedArr = dedupeActivitiesBySignature(mergedArr);
+                        merged = JSON.stringify(mergedArr);
                         serializedValue = merged;
                         doActivitiesSave(merged);
                         saveLocalBackup(ACTIVITIES_KEY, serializedValue);
@@ -734,7 +890,7 @@
                         }
                         merged = key === 'accounts'
                             ? mergeAccountsDeep(serverStr409, serializedValue)
-                            : mergeArrayById(serverStr409, serializedValue);
+                            : JSON.stringify(mergeArrayByIdNewerWins(safeJsonParse(serverStr409), safeJsonParse(serializedValue)));
                         doPut(merged);
                         serializedValue = merged;
                         saveLocalBackup(key, serializedValue);
@@ -787,19 +943,36 @@
 
     /** On login: merge server + local backup (newer wins), add missing, dedupe, then PUT so drift is fixed. */
     /** Uses skipIfMatch so reconcile PUTs don't get 409 (intent is to push merged state). Per-key try/catch so one failure doesn't block the rest. */
-    const reconcileOnLogin = () => {
-        if (typeof window !== 'undefined') window.__REMOTE_STORAGE_RECONCILE_PUT__ = true;
+    const reconcileOnLogin = async () => {
+        if (typeof window !== 'undefined') {
+            window.__REMOTE_STORAGE_RECONCILE_PUT__ = true;
+            try {
+                window.dispatchEvent(new CustomEvent('remotestorage:reconcile-start'));
+            } catch (_) { }
+        }
         try {
-            reconcileOnLoginImpl();
+            await reconcileOnLoginImpl();
         } finally {
-            if (typeof window !== 'undefined') window.__REMOTE_STORAGE_RECONCILE_PUT__ = false;
+            if (typeof window !== 'undefined') {
+                window.__REMOTE_STORAGE_RECONCILE_PUT__ = false;
+                try {
+                    window.dispatchEvent(new CustomEvent('remotestorage:reconcile-end'));
+                } catch (_) { }
+            }
         }
     };
-    const reconcileOnLoginImpl = () => {
+    const reconcileOnLoginImpl = async () => {
         const keys = ['internalActivities', 'accounts'];
-        keys.forEach((key) => {
+        // Process keys sequentially to avoid overwhelming the server
+        for (const key of keys) {
             try {
-                const serverRaw = remoteStorage.getItem(key);
+                // Use async getItemAsync if available, fallback to sync
+                let serverRaw;
+                if (typeof getItemAsync === 'function') {
+                    serverRaw = await getItemAsync(key);
+                } else {
+                    serverRaw = remoteStorage.getItem(key);
+                }
                 const localRaw = getLocalBackup(key);
                 const serverArr = safeJsonParse(serverRaw);
                 const localArr = safeJsonParse(localRaw);
@@ -809,9 +982,14 @@
                 if (key === 'internalActivities' && merged.length) {
                     merged = dedupeInternalBySignature(merged);
                 }
-                if (merged.length === 0 && serverA.length === 0 && localA.length === 0) return;
+                if (merged.length === 0 && serverA.length === 0 && localA.length === 0) continue;
                 const payload = JSON.stringify(merged);
-                performRequest('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) });
+                // Use async setItemAsync if available, fallback to sync
+                if (typeof setItemAsync === 'function') {
+                    await setItemAsync(key, maybeCompressValue(payload));
+                } else {
+                    performRequest('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) });
+                }
                 saveLocalBackup(key, payload);
                 if (typeof console !== 'undefined' && console.log) {
                     console.log('[RemoteStorage] Reconcile on login: ' + key + ' merged to ' + merged.length + ' items.');
@@ -821,9 +999,15 @@
                     console.warn('[RemoteStorage] Reconcile on login failed for ' + key + ':', err.message);
                 }
             }
-        });
+        }
         try {
-            const serverActivities = loadActivitiesValue();
+            // Use async getItemAsync for activities if available, fallback to sync
+            let serverActivities;
+            if (typeof getItemAsync === 'function') {
+                serverActivities = await getItemAsync(ACTIVITIES_KEY);
+            } else {
+                serverActivities = loadActivitiesValue();
+            }
             const localActivitiesRaw = getLocalBackup(ACTIVITIES_KEY);
             const serverAct = safeJsonParse(serverActivities);
             const localAct = safeJsonParse(localActivitiesRaw);
@@ -834,8 +1018,17 @@
             if (mergedAct.length > 0) {
                 const mergedStr = JSON.stringify(mergedAct);
                 if (shardActivities(mergedStr)) {
+                    // Activities need special sharding path - use the existing shard save logic
+                    // Note: setItemAsync doesn't handle activities sharding, so we use the sync path for now
+                    // In future, we could make a setItemAsyncActivities that handles sharding
+                    const doActivitiesSave = (payload) => {
+                        if (shardActivities(payload)) {
+                            saveLocalBackup(ACTIVITIES_KEY, payload);
+                            shardCache[ACTIVITIES_KEY] = { version: null, value: payload };
+                        }
+                    };
+                    doActivitiesSave(mergedStr);
                     saveLocalBackup(ACTIVITIES_KEY, mergedStr);
-                    shardCache[ACTIVITIES_KEY] = { version: null, value: mergedStr };
                     if (typeof console !== 'undefined' && console.log) {
                         console.log('[RemoteStorage] Reconcile on login: activities merged to ' + mergedAct.length + ' items.');
                     }
@@ -864,6 +1057,7 @@
         window.__REMOTE_STORAGE_ENABLED__ = true;
         window.__BROWSER_LOCAL_STORAGE__ = originalLocalStorage;
         window.__REMOTE_STORAGE_RECONCILE__ = reconcileOnLogin;
+        window.__REMOTE_STORAGE_ASYNC__ = { getItemAsync, setItemAsync, setItemAsyncWithDraft, performRequestAsync };
     } catch (error) {
         console.error(
             '[RemoteStorage] Failed to install remote storage proxy:',
