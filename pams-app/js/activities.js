@@ -23,6 +23,22 @@ const Activities = {
     currentProjectOptions: [],
     currentSalesRepRegion: null,
 
+    /** Build 4 (FB4): Remember last activity date per user (localStorage). */
+    getLastActivityDateForUser(userId) {
+        if (!userId || typeof localStorage === 'undefined') return null;
+        try {
+            return localStorage.getItem('__pams_last_activity_date_' + userId) || null;
+        } catch (e) {
+            return null;
+        }
+    },
+    setLastActivityDateForUser(userId, dateYyyyMmDd) {
+        if (!userId || !dateYyyyMmDd || typeof localStorage === 'undefined') return;
+        try {
+            localStorage.setItem('__pams_last_activity_date_' + userId, String(dateYyyyMmDd).slice(0, 10));
+        } catch (e) { }
+    },
+
     // Open unified activity modal
     async openActivityModal(context = {}) {
         await this.resetActivityForm();
@@ -92,6 +108,12 @@ const Activities = {
             } else if ((isEdit || fromDraftId) && activity) {
                 await this.populateEditForm(activity, !!isInternal);
             } else {
+                const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+                const lastDate = currentUser && this.getLastActivityDateForUser(currentUser.id);
+                if (lastDate) {
+                    const dateInput = document.getElementById('activityDate');
+                    if (dateInput) dateInput.value = lastDate.slice(0, 10);
+                }
                 this.refreshUseCaseOptions('');
             }
             this.updateAddAnotherActivityButtonVisibility();
@@ -1982,6 +2004,7 @@ const Activities = {
 
             this.closeActivityModal();
             UI.showNotification('Internal activity updated successfully!', 'success');
+            this.setLastActivityDateForUser(currentUser.id, date);
         } else {
             try {
                 await DataManager.addInternalActivity(payload);
@@ -1990,6 +2013,7 @@ const Activities = {
                 }
                 this.closeActivityModal();
                 UI.showNotification('Internal activity logged successfully!', 'success');
+                this.setLastActivityDateForUser(currentUser.id, date);
             } catch (err) {
                 UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
                 if (window.app) window.app.loadDraftsView && window.app.loadDraftsView();
@@ -2235,6 +2259,15 @@ const Activities = {
 
             this.closeActivityModal();
             UI.showNotification('Activity updated successfully!', 'success');
+            this.setLastActivityDateForUser(currentUser.id, date);
+            if (window.app) {
+                if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+                    DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
+                }
+                await window.app.loadDashboard();
+                await window.app.loadActivitiesView();
+                if (window.app.loadDraftsView) await window.app.loadDraftsView();
+            }
         } else {
             const rows = document.querySelectorAll('.activity-detail-row');
             if (rows.length > 1) {
@@ -2256,6 +2289,7 @@ const Activities = {
                 }
                 let createdCount = 0;
                 let draftsCount = 0;
+                let lastSavedDate = date;
                 for (let i = 0; i < rows.length; i++) {
                     const dateVal = i === 0 ? date : document.getElementById('activityDate_' + i)?.value;
                     const typeVal = i === 0 ? activityType : document.getElementById('activityTypeSelect_' + i)?.value;
@@ -2284,10 +2318,12 @@ const Activities = {
                             targetProjectId: created.projectId
                         });
                         createdCount++;
+                        lastSavedDate = dateVal;
                     } catch (err) {
                         draftsCount++;
                     }
                 }
+                this.setLastActivityDateForUser(currentUser.id, lastSavedDate);
                 this.closeActivityModal();
                 if (draftsCount > 0) {
                     UI.showNotification('Logged ' + createdCount + ' activities. ' + draftsCount + ' could not be saved and were added to Drafts.', 'warning');
@@ -2308,6 +2344,7 @@ const Activities = {
                     }
                     this.closeActivityModal();
                     UI.showNotification('Activity logged successfully!', 'success');
+                    this.setLastActivityDateForUser(currentUser.id, date);
                 } catch (err) {
                     UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
                     if (window.app && window.app.loadDraftsView) await window.app.loadDraftsView();
@@ -2316,6 +2353,9 @@ const Activities = {
         }
 
         if (window.app) {
+            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+                DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
+            }
             await window.app.loadDashboard();
             await window.app.loadActivitiesView();
             if (window.app.loadDraftsView) await window.app.loadDraftsView();

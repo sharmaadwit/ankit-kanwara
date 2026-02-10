@@ -36,6 +36,19 @@ jobs:
           mkdir -p backups
           node server/scripts/export-storage-snapshot.js "" "backups/storage-snapshot-latest.json"
 
+      - name: Create dated snapshot (15-day retention)
+        run: |
+          if [ -f backups/storage-snapshot-latest.json ]; then
+            cp backups/storage-snapshot-latest.json "backups/storage-snapshot-$(date +%Y-%m-%d).json"
+          fi
+
+      - name: Retain only last 15 dated snapshots
+        run: |
+          # List dated files (storage-snapshot-YYYY-MM-DD.json), sort descending, keep first 15, delete rest
+          for f in $(ls backups/storage-snapshot-20*.json 2>/dev/null | grep -E 'storage-snapshot-[0-9]{4}-[0-9]{2}-[0-9]{2}\.json$' | sort -r | tail -n +16); do
+            [ -f "$f" ] && rm -f "$f" && echo "Removed old snapshot: $f"
+          done
+
       - name: List backups (debug)
         run: |
           echo "Contents of backups/:"
@@ -52,6 +65,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add backups/storage-snapshot-latest.json
+          git add backups/storage-snapshot-latest.json backups/storage-snapshot-20*.json 2>/dev/null || true
           git status
-          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: daily storage snapshot backup [skip ci]" && git push)
+          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: daily storage snapshot backup (15-day retention) [skip ci]" && git push)
