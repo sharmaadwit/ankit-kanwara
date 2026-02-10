@@ -1943,7 +1943,7 @@ const App = {
         if (!activitiesView) return;
 
         const allActivities = await DataManager.getAllActivities();
-        const activities = this.applyActivityFilters(allActivities);
+        const activities = await this.applyActivityFilters(allActivities);
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
             ? Auth.getCurrentUser()
             : null;
@@ -4190,7 +4190,15 @@ const App = {
             regionSelect.value = this.activityFilters.region || 'all';
         }
 
-        // Populate Channel filter
+        // Populate Activity Type filter (sidebar) – id is activityFilterActivityType
+        const activityTypeSelect = document.getElementById('activityFilterActivityType');
+        if (activityTypeSelect) {
+            activityTypeSelect.innerHTML = '<option value="all">All Types</option>' +
+                activityTypes.map(t => `<option value="${t}">${UI.getActivityTypeLabel(t)}</option>`).join('');
+            activityTypeSelect.value = this.activityFilters.activityType || 'all';
+        }
+
+        // Populate Channel filter (legacy / other views)
         const channelSelect = document.getElementById('activityFilterChannel');
         if (channelSelect) {
             channelSelect.innerHTML = '<option value="all">All Channels</option>' +
@@ -4329,6 +4337,7 @@ const App = {
     },
 
     async applyActivityFilters(activities = []) {
+        const list = Array.isArray(activities) ? activities : [];
         const filters = this.activityFilters || {};
         const searchTerm = (filters.search || '').toLowerCase().trim();
         const typeFilter = filters.type || 'all';
@@ -4351,17 +4360,23 @@ const App = {
             accountMap[account.id] = account;
         });
 
+        const users = await DataManager.getUsers();
+        const userMap = new Map();
+        users.forEach(u => {
+            if (u && u.id) userMap.set(u.id, u);
+        });
+
         const now = new Date();
 
-        return activities.filter(activity => {
+        return list.filter(activity => {
             // Type filter (Internal/External)
             if (typeFilter !== 'all') {
                 if (typeFilter === 'internal' && !activity.isInternal) return false;
                 if (typeFilter === 'external' && activity.isInternal) return false;
             }
 
-            // Activity type filter
-            if (activityTypeFilter) {
+            // Activity type filter (skip when 'all' or empty)
+            if (activityTypeFilter && activityTypeFilter !== 'all') {
                 const activityType = (activity.type || '').toLowerCase();
                 if (activityType !== activityTypeFilter) return false;
             }
@@ -4417,19 +4432,19 @@ const App = {
                 }
             }
 
-            // Industry filter
-            if (industryFilter) {
+            // Industry filter (skip when 'all' or empty)
+            if (industryFilter && industryFilter !== 'all') {
                 if (activity.isInternal) return false;
                 const industry = (activity.industry || accountMap[activity.accountId]?.industry || '').toLowerCase();
                 if (!industry || industry !== industryFilter) return false;
             }
 
-            // Region filter
-            if (regionFilter) {
+            // Region filter (skip when 'all' or empty; use pre-built userMap so we don't call async getUserById in filter)
+            if (regionFilter && regionFilter !== 'all') {
                 const account = accountMap[activity.accountId];
-                const user = DataManager.getUserById(activity.userId);
-                const region = DataManager.resolveActivityRegion(activity, account, user) || '';
-                if (region.toLowerCase() !== regionFilter) return false;
+                const user = userMap.get(activity.userId) || userMap.get(activity.createdBy) || null;
+                const region = (DataManager.resolveActivityRegion && DataManager.resolveActivityRegion(activity, account, user)) || '';
+                if ((region || '').toLowerCase() !== regionFilter) return false;
             }
 
             // Search filter
@@ -4447,14 +4462,19 @@ const App = {
                 if (!haystack.includes(searchTerm)) return false;
             }
 
-            // Owner filter
+            // Owner filter: match userId or createdBy (activities may use either); normalize to string for comparison
+            const isOwnedBy = (ownerId) => {
+                if (!ownerId) return false;
+                const id = String(ownerId);
+                return (activity.userId != null && String(activity.userId) === id) || (activity.createdBy != null && String(activity.createdBy) === id);
+            };
             if (ownerFilterValue !== 'all') {
                 const targetOwnerId = ownerFilterValue === 'mine' ? currentUser?.id : ownerFilterValue;
-                if (!targetOwnerId || activity.userId !== targetOwnerId) {
+                if (!isOwnedBy(targetOwnerId)) {
                     return false;
                 }
             } else if (!isAdmin && currentUser?.id && ownerFilterRaw === 'mine') {
-                if (activity.userId !== currentUser.id) {
+                if (!isOwnedBy(currentUser.id)) {
                     return false;
                 }
             }
