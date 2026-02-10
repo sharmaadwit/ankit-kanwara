@@ -81,8 +81,8 @@ const createPool = () => {
     connectionString,
     ssl: useSsl
       ? {
-          rejectUnauthorized: false
-        }
+        rejectUnauthorized: false
+      }
       : undefined,
     max: parseInt(process.env.PGPOOL_MAX || '10', 10),
     idleTimeoutMillis: 30_000,
@@ -111,23 +111,48 @@ const initDb = async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS login_logs (
         id SERIAL PRIMARY KEY,
+        transaction_id TEXT,
         username TEXT,
-        status TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unknown',
         message TEXT,
         user_agent TEXT,
         ip_address TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        session_id TEXT,
+        logout_at TIMESTAMPTZ,
+        session_duration_seconds INTEGER
       );
     `);
 
+    // Add new columns to existing login_logs table if they don't exist
     await client.query(`
       ALTER TABLE login_logs
       ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE login_logs
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'unknown';
+    `);
+    await client.query(`
+      ALTER TABLE login_logs
+      ADD COLUMN IF NOT EXISTS session_id TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE login_logs
+      ADD COLUMN IF NOT EXISTS logout_at TIMESTAMPTZ;
+    `);
+    await client.query(`
+      ALTER TABLE login_logs
+      ADD COLUMN IF NOT EXISTS session_duration_seconds INTEGER;
     `);
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_login_logs_created_at
       ON login_logs (created_at DESC);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_login_logs_session_id
+      ON login_logs (session_id) WHERE session_id IS NOT NULL;
     `);
 
     await client.query(`
@@ -181,6 +206,45 @@ const initDb = async () => {
       CREATE INDEX IF NOT EXISTS idx_storage_history_key_archived
       ON storage_history (key, archived_at DESC);
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT,
+        password_hash TEXT NOT NULL,
+        roles TEXT[] NOT NULL DEFAULT '{}',
+        regions TEXT[] NOT NULL DEFAULT '{}',
+        sales_reps TEXT[] NOT NULL DEFAULT '{}',
+        default_region TEXT DEFAULT '',
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        force_password_change BOOLEAN NOT NULL DEFAULT false,
+        password_updated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_is_active ON users (is_active);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
+    `);
   } finally {
     client.release();
   }
@@ -193,9 +257,21 @@ const closePool = async () => {
   }
 };
 
+/** Returns true if DB is reachable, false otherwise. Use for health checks. */
+const checkHealth = async () => {
+  try {
+    const p = getPool();
+    await p.query('SELECT 1');
+    return true;
+  } catch (_) {
+    return false;
+  }
+};
+
 module.exports = {
   getPool,
   initDb,
-  closePool
+  closePool,
+  checkHealth
 };
 

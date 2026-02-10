@@ -15,13 +15,15 @@ const logLoginAttempt = async ({
   message,
   userAgent,
   ipAddress,
-  transactionId
+  transactionId,
+  sessionId
 }) => {
   const pool = getPool();
-  await pool.query(
+  const { rows } = await pool.query(
     `
-      INSERT INTO login_logs (transaction_id, username, status, message, user_agent, ip_address)
-      VALUES ($1, $2, $3, $4, $5, $6);
+      INSERT INTO login_logs (transaction_id, username, status, message, user_agent, ip_address, session_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, session_id AS "sessionId";
     `,
     [
       (() => {
@@ -32,9 +34,59 @@ const logLoginAttempt = async ({
       normalizeStatus(status),
       message ? String(message).trim() : null,
       userAgent ? String(userAgent).trim() : null,
-      ipAddress ? String(ipAddress).trim() : null
+      ipAddress ? String(ipAddress).trim() : null,
+      sessionId ? String(sessionId).trim() : null
     ]
   );
+  return rows[0] || {};
+};
+
+const logLogoutEvent = async ({ sessionId, transactionId }) => {
+  if (!sessionId) {
+    return { success: false, message: 'Session ID required' };
+  }
+
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `
+      UPDATE login_logs
+      SET 
+        logout_at = NOW(),
+        session_duration_seconds = EXTRACT(EPOCH FROM (NOW() - created_at))::INTEGER
+      WHERE session_id = $1 AND logout_at IS NULL
+      RETURNING id, session_id AS "sessionId", session_duration_seconds AS "sessionDuration";
+    `,
+    [String(sessionId).trim()]
+  );
+
+  if (rows.length === 0) {
+    return { success: false, message: 'Session not found or already logged out' };
+  }
+
+  return { success: true, ...rows[0] };
+};
+
+const getActiveSessions = async (limit = 50) => {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `
+      SELECT
+        id,
+        session_id AS "sessionId",
+        username,
+        created_at AS "createdAt",
+        user_agent AS "userAgent",
+        ip_address AS "ipAddress"
+      FROM login_logs
+      WHERE session_id IS NOT NULL 
+        AND logout_at IS NULL
+        AND status = 'success'
+      ORDER BY created_at DESC
+      LIMIT $1;
+    `,
+    [limit]
+  );
+  return rows;
 };
 
 const getRecentLoginLogs = async (limit = 100, offset = 0) => {
@@ -56,7 +108,10 @@ const getRecentLoginLogs = async (limit = 100, offset = 0) => {
         message,
         user_agent AS "userAgent",
         ip_address AS "ipAddress",
-        created_at AS "createdAt"
+        created_at AS "createdAt",
+        session_id AS "sessionId",
+        logout_at AS "logoutAt",
+        session_duration_seconds AS "sessionDuration"
       FROM login_logs
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2;
@@ -128,6 +183,8 @@ const getUsageMetrics = async () => {
 
 module.exports = {
   logLoginAttempt,
+  logLogoutEvent,
+  getActiveSessions,
   getRecentLoginLogs,
   getUsageMetrics
 };

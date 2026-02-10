@@ -10,6 +10,7 @@ const { requireAdminAuth } = require('../middleware/auth');
 const logger = require('../logger');
 
 router.post('/', async (req, res) => {
+  const startMs = Date.now();
   try {
     const { username, status, message, userAgent } = req.body || {};
     await logLoginAttempt({
@@ -19,6 +20,12 @@ router.post('/', async (req, res) => {
       userAgent,
       ipAddress: req.ip,
       transactionId: req.transactionId
+    });
+    logger.info('login_attempt', {
+      transactionId: req.transactionId,
+      username: username || 'unknown',
+      status: status || 'unknown',
+      durationMs: Date.now() - startMs
     });
     res.status(204).send();
   } catch (error) {

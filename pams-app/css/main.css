@@ -167,6 +167,25 @@ body {
     pointer-events: none;
 }
 
+.sync-indicator {
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    z-index: 1500;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    color: var(--text-primary, #1A202C);
+    background: var(--surface-color, #fff);
+    border: 1px solid var(--border-soft, rgba(94, 52, 241, 0.08));
+    border-radius: 9999px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.sync-indicator.hidden {
+    display: none !important;
+}
+
 .app-loading-content {
     display: flex;
     flex-direction: column;

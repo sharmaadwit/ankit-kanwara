@@ -2,10 +2,15 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
 const { rateLimit } = require('express-rate-limit');
 
 const storageRouter = require('./routes/storage');
+const authRouter = require('./routes/auth');
+const usersRouter = require('./routes/users');
+const entitiesRouter = require('./routes/entities');
+const { checkHealth } = require('./db');
 const adminLogsRouter = require('./routes/adminLogs');
 const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
@@ -101,6 +106,7 @@ const createApp = (options = {}) => {
   );
   const jsonBodyLimit = process.env.API_JSON_LIMIT || '20mb';
   app.use(express.json({ limit: jsonBodyLimit }));
+  app.use(cookieParser());
   app.use((req, res, next) => {
     const start = process.hrtime.bigint();
     const pathName = req.originalUrl || req.url;
@@ -165,13 +171,39 @@ const createApp = (options = {}) => {
     skip: (req) => req.method === 'GET' || req.method === 'HEAD'
   });
 
-  app.use('/api/storage', storageLimiter, requireStorageAuth, storageRouter);
+  const storageRequestLogger = (req, res, next) => {
+    req._storageStart = Date.now();
+    res.on('finish', () => {
+      const key = (req.params && req.params.key !== undefined)
+        ? req.params.key
+        : (req.path && req.path !== '/' ? req.path.replace(/^\//, '') : '');
+      logger.info('storage_request', {
+        transactionId: req.transactionId,
+        key: key || undefined,
+        method: req.method,
+        status: res.statusCode,
+        user: req.get('X-Admin-User') || req.get('x-admin-user') || 'anonymous',
+        durationMs: Date.now() - req._storageStart
+      });
+    });
+    next();
+  };
+  app.use('/api/auth', authRouter);
+  app.use('/api/users', usersRouter);
+  app.use('/api/entities', requireStorageAuth, entitiesRouter);
+  app.use('/api/storage', storageRequestLogger, storageLimiter, requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
   app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
   app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
+  app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
 
   app.get('/api/health', async (req, res) => {
+    const dbOk = await checkHealth();
+    if (!dbOk) {
+      logger.warn('health_check_failed', { reason: 'database_unreachable' });
+      return res.status(503).json({ status: 'unhealthy', reason: 'database_unreachable' });
+    }
     res.json({ status: 'ok' });
   });
 

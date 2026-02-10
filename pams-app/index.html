@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +12,7 @@
     <link rel="stylesheet" href="css/reports-v2.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 </head>
+
 <body>
     <div id="appLoadingOverlay">
         <div class="app-loading-content">
@@ -18,12 +20,14 @@
             <p id="appLoadingMessage">Loading PAMS…</p>
         </div>
     </div>
+    <div id="syncIndicator" class="sync-indicator hidden" aria-live="polite">Syncing your data…</div>
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <p class="login-subtitle" id="loginSubtitle">Presales Activity Management System</p>
             <div class="login-tabs">
-                <button type="button" class="login-tab active" data-tab="presales" onclick="Auth.switchLoginTab('presales')">
+                <button type="button" class="login-tab active" data-tab="presales"
+                    onclick="Auth.switchLoginTab('presales')">
                     Presales User Login
                 </button>
                 <button type="button" class="login-tab" data-tab="analytics" onclick="Auth.switchLoginTab('analytics')">
@@ -49,11 +53,13 @@
             <form id="passwordResetForm" class="login-form hidden">
                 <div class="form-group">
                     <label class="form-label">New Password</label>
-                    <input type="password" id="newPassword" class="form-control" required autocomplete="new-password" minlength="6">
+                    <input type="password" id="newPassword" class="form-control" required autocomplete="new-password"
+                        minlength="6">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Confirm Password</label>
-                    <input type="password" id="confirmPassword" class="form-control" required autocomplete="new-password" minlength="6">
+                    <input type="password" id="confirmPassword" class="form-control" required
+                        autocomplete="new-password" minlength="6">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Update Password</button>
                 <p class="login-helper">Tip: use at least 6 characters and avoid default passwords.</p>
@@ -61,7 +67,8 @@
             <form id="analyticsAccessForm" class="login-form hidden">
                 <div class="form-group">
                     <label class="form-label">Analytics Password</label>
-                    <input type="password" id="analyticsAccessPassword" class="form-control" required autocomplete="off">
+                    <input type="password" id="analyticsAccessPassword" class="form-control" required
+                        autocomplete="off">
                     <small class="text-muted">Admins can share this read-only password for analytics access.</small>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Enter Analytics</button>
@@ -77,11 +84,13 @@
             <div class="header-content">
                 <div class="header-left">
                     <button id="sidebarToggle" class="sidebar-toggle" title="Toggle Sidebar">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12h18M3 6h18M3 18h18"/>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 12h18M3 6h18M3 18h18" />
                         </svg>
                     </button>
-                    <button class="app-home-button" onclick="App.switchView('dashboard')" title="Presales Activity Management System">
+                    <button class="app-home-button" onclick="App.switchView('dashboard')"
+                        title="Presales Activity Management System">
                         <span class="app-home-acronym">PAMS</span>
                         <span class="app-home-title">Presales Activity Management System</span>
                     </button>
@@ -98,77 +107,92 @@
             <nav id="sidebar" class="sidebar">
                 <ul class="sidebar-menu">
                     <li data-dashboard="dashboard"><a href="#" data-view="dashboard" class="sidebar-link active">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                        </svg>
-                        <span>Dashboard</span>
-                    </a></li>
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            <span>Dashboard</span>
+                        </a></li>
                     <li data-dashboard="activities"><a href="#" data-view="activities" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                        <span>Activities</span>
-                    </a></li>
-                    <li data-feature="winLoss" data-dashboard="winLoss"><a href="#" data-view="winloss" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                        </svg>
-                        <span>Win/Loss</span>
-                    </a></li>
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            <span>Activities</span>
+                        </a></li>
+                    <li data-feature="winLoss" data-dashboard="winLoss"><a href="#" data-view="winloss"
+                            class="sidebar-link">
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                            <span>Win/Loss</span>
+                        </a></li>
                     <li data-dashboard="drafts" id="draftsNavItem"><a href="#" data-view="drafts" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <span>My drafts</span>
-                        <span id="draftsNavBadge" class="drafts-badge hidden" aria-hidden="true">0</span>
-                    </a></li>
-                    <li data-feature="csvImport" data-dashboard="csvImport"><a href="#" data-view="import" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-                            <polyline points="7 9 12 4 17 9"></polyline>
-                            <line x1="12" y1="4" x2="12" y2="16"></line>
-                        </svg>
-                        <span>Import Activities</span>
-                    </a></li>
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                            </svg>
+                            <span>My drafts</span>
+                            <span id="draftsNavBadge" class="drafts-badge hidden" aria-hidden="true">0</span>
+                        </a></li>
+                    <li data-feature="csvImport" data-dashboard="csvImport"><a href="#" data-view="import"
+                            class="sidebar-link">
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+                                <polyline points="7 9 12 4 17 9"></polyline>
+                                <line x1="12" y1="4" x2="12" y2="16"></line>
+                            </svg>
+                            <span>Import Activities</span>
+                        </a></li>
                     <li data-dashboard="reports"><a href="#" data-view="reports" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v18h18"></path>
-                            <path d="M18 7v11"></path>
-                            <path d="M13 11v7"></path>
-                            <path d="M8 15v3"></path>
-                        </svg>
-                        <span>Reports</span>
-                    </a></li>
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M3 3v18h18"></path>
+                                <path d="M18 7v11"></path>
+                                <path d="M13 11v7"></path>
+                                <path d="M8 15v3"></path>
+                            </svg>
+                            <span>Reports</span>
+                        </a></li>
                     <li data-dashboard="suggestionsBugs"><a href="#" data-view="suggestionsBugs" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        <span>Suggestions and Bugs</span>
-                    </a></li>
-                    <li id="systemAdminNav" class="hidden" data-dashboard="systemAdmin" data-admin-only="true"><a href="#" data-view="systemAdmin" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-                            <path d="M2 17l10 5 10-5"></path>
-                            <path d="M2 12l10 5 10-5"></path>
-                        </svg>
-                        <span>System Admin</span>
-                    </a></li>
-                    <li id="configurationNav" class="hidden" data-dashboard="configuration" data-admin-only="true"><a href="#" data-view="configuration" class="sidebar-link">
-                        <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"></path>
-                        </svg>
-                        <span>Configuration</span>
-                    </a></li>
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                            <span>Suggestions and Bugs</span>
+                        </a></li>
+                    <li id="systemAdminNav" class="hidden" data-dashboard="systemAdmin" data-admin-only="true"><a
+                            href="#" data-view="systemAdmin" class="sidebar-link">
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                <path d="M2 17l10 5 10-5"></path>
+                                <path d="M2 12l10 5 10-5"></path>
+                            </svg>
+                            <span>System Admin</span>
+                        </a></li>
+                    <li id="configurationNav" class="hidden" data-dashboard="configuration" data-admin-only="true"><a
+                            href="#" data-view="configuration" class="sidebar-link">
+                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24">
+                                </path>
+                            </svg>
+                            <span>Configuration</span>
+                        </a></li>
                 </ul>
             </nav>
 
@@ -184,10 +208,14 @@
                     <div class="drafts-layout">
                         <div class="drafts-header">
                             <h1 class="page-title">My drafts</h1>
-                            <p class="page-subtitle">Your failed activities on this device. Use <strong>Submit all</strong> to retry saving, or <strong>Delete</strong> to clear drafts you no longer need.</p>
+                            <p class="page-subtitle">Your failed activities on this device. Use <strong>Submit
+                                    all</strong> to retry saving, or <strong>Delete</strong> to clear drafts you no
+                                longer need.</p>
                             <div class="drafts-header-actions" id="draftsHeaderActions" style="display: none;">
-                                <button type="button" class="btn btn-primary" id="draftsSubmitAllBtn">Submit all</button>
-                                <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete all</button>
+                                <button type="button" class="btn btn-primary" id="draftsSubmitAllBtn">Submit
+                                    all</button>
+                                <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete
+                                    all</button>
                             </div>
                         </div>
                         <div id="draftsListContainer" class="drafts-list-container">
@@ -203,14 +231,16 @@
                         <div class="activities-sidebar">
                             <div class="activities-sidebar-header">
                                 <h3>Filters & Sort</h3>
-                                <button class="btn btn-link btn-sm" onclick="App.toggleActivitiesSidebar()" style="padding: 0.25rem;">
+                                <button class="btn btn-link btn-sm" onclick="App.toggleActivitiesSidebar()"
+                                    style="padding: 0.25rem;">
                                     <span id="activitiesSidebarToggleIcon">▼</span>
                                 </button>
                             </div>
                             <div class="activities-sidebar-content" id="activitiesSidebarContent">
                                 <div class="activities-filter-section">
                                     <label class="form-label">Type</label>
-                                    <select id="activityFilterType" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <select id="activityFilterType" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                         <option value="all">All Activities</option>
                                         <option value="external">External</option>
                                         <option value="internal">Internal</option>
@@ -218,25 +248,29 @@
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Industry</label>
-                                    <select id="activityFilterIndustry" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <select id="activityFilterIndustry" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                         <option value="">All Industries</option>
                                     </select>
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Region</label>
-                                    <select id="activityFilterRegion" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <select id="activityFilterRegion" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                         <option value="">All Regions</option>
                                     </select>
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Activity Type</label>
-                                    <select id="activityFilterActivityType" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <select id="activityFilterActivityType" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                         <option value="">All Types</option>
                                     </select>
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Date Range</label>
-                                    <select id="activityFilterTimeframe" class="form-control" onchange="App.handleActivityFiltersChange(); App.toggleCustomDateRange();">
+                                    <select id="activityFilterTimeframe" class="form-control"
+                                        onchange="App.handleActivityFiltersChange(); App.toggleCustomDateRange();">
                                         <option value="all">All Time</option>
                                         <option value="thisMonth">This Month</option>
                                         <option value="lastMonth">Last Month</option>
@@ -244,21 +278,26 @@
                                         <option value="custom">Custom Range</option>
                                     </select>
                                 </div>
-                                <div class="activities-filter-section" id="activityCustomDateRange" style="display: none;">
+                                <div class="activities-filter-section" id="activityCustomDateRange"
+                                    style="display: none;">
                                     <label class="form-label">From</label>
-                                    <input type="date" id="activityFilterDateFrom" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <input type="date" id="activityFilterDateFrom" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                     <label class="form-label" style="margin-top: 0.5rem;">To</label>
-                                    <input type="date" id="activityFilterDateTo" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <input type="date" id="activityFilterDateTo" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Entered By</label>
-                                    <select id="activityFilterOwner" class="form-control" onchange="App.handleActivityFiltersChange()">
+                                    <select id="activityFilterOwner" class="form-control"
+                                        onchange="App.handleActivityFiltersChange()">
                                         <option value="all">All Users</option>
                                     </select>
                                 </div>
                                 <div class="activities-filter-section">
                                     <label class="form-label">Sort By</label>
-                                    <select id="activitySortBy" class="form-control" onchange="App.handleActivitySortChange()">
+                                    <select id="activitySortBy" class="form-control"
+                                        onchange="App.handleActivitySortChange()">
                                         <option value="dateDesc">Date (Newest First)</option>
                                         <option value="dateAsc">Date (Oldest First)</option>
                                         <option value="accountAsc">Account Name (A-Z)</option>
@@ -270,7 +309,8 @@
                                     </select>
                                 </div>
                                 <div class="activities-filter-section">
-                                    <button class="btn btn-secondary btn-block" onclick="App.resetActivityFilters()">Reset Filters</button>
+                                    <button class="btn btn-secondary btn-block"
+                                        onclick="App.resetActivityFilters()">Reset Filters</button>
                                 </div>
                             </div>
                         </div>
@@ -282,29 +322,37 @@
                                     <h1 class="page-title">All Activities</h1>
                                     <p class="page-subtitle">View and manage all activities</p>
                                 </div>
-                            <div class="activities-header-actions">
-                                <button class="btn btn-outline btn-sm" id="activitiesSidebarToggleBtn" onclick="App.toggleActivitiesSidebar()" style="display: none;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="3" y1="12" x2="21" y2="12"></line>
-                                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                                        <line x1="3" y1="18" x2="21" y2="18"></line>
-                                    </svg>
-                                    Filters
-                                </button>
-                                <div class="activities-view-toggle">
-                                    <button class="btn btn-sm btn-outline" id="activitiesViewModeCards" onclick="App.setActivitiesViewMode('cards')">Cards</button>
-                                    <button class="btn btn-sm btn-outline" id="activitiesViewModeTable" onclick="App.setActivitiesViewMode('table')">Table</button>
-                                </div>
-                                    <div class="activities-search">
-                                        <input type="text" class="form-control" placeholder="Search activities..." id="activitySearch" oninput="App.handleActivitySearch(this.value)">
+                                <div class="activities-header-actions">
+                                    <button class="btn btn-outline btn-sm" id="activitiesSidebarToggleBtn"
+                                        onclick="App.toggleActivitiesSidebar()" style="display: none;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                                        </svg>
+                                        Filters
+                                    </button>
+                                    <div class="activities-view-toggle">
+                                        <button class="btn btn-sm btn-outline" id="activitiesViewModeCards"
+                                            onclick="App.setActivitiesViewMode('cards')">Cards</button>
+                                        <button class="btn btn-sm btn-outline" id="activitiesViewModeTable"
+                                            onclick="App.setActivitiesViewMode('table')">Table</button>
                                     </div>
-                                    <button class="btn btn-primary" onclick="Activities.openActivityModal()">+ Log Activity</button>
+                                    <div class="activities-search">
+                                        <input type="text" class="form-control" placeholder="Search activities..."
+                                            id="activitySearch" oninput="App.handleActivitySearch(this.value)">
+                                    </div>
+                                    <button class="btn btn-primary" onclick="Activities.openActivityModal()">+ Log
+                                        Activity</button>
                                 </div>
                             </div>
                             <div class="activities-nav-buttons">
                                 <button class="btn btn-outline" onclick="App.switchView('accounts')">Accounts</button>
-                                <button class="btn btn-outline" onclick="App.switchView('projectHealth')">Project Health</button>
-                                <button class="btn btn-outline" onclick="App.switchView('sfdcCompliance')">SFDC Compliance</button>
+                                <button class="btn btn-outline" onclick="App.switchView('projectHealth')">Project
+                                    Health</button>
+                                <button class="btn btn-outline" onclick="App.switchView('sfdcCompliance')">SFDC
+                                    Compliance</button>
                             </div>
                             <div id="activitiesContent"></div>
                         </div>
@@ -320,24 +368,28 @@
 
                     <div class="action-bar">
                         <div class="search-bar">
-                            <input type="text" class="form-control" placeholder="Search projects..." id="winlossSearch" onkeyup="App.filterWinLoss()">
+                            <input type="text" class="form-control" placeholder="Search projects..." id="winlossSearch"
+                                onkeyup="App.filterWinLoss()">
                         </div>
                         <div class="filter-group">
                             <label class="form-label" style="font-size: 0.75rem;">Month of win/loss</label>
-                            <select id="winlossMonthFilter" class="form-control" onchange="App.handleWinLossMonthChange(this.value)">
+                            <select id="winlossMonthFilter" class="form-control"
+                                onchange="App.handleWinLossMonthChange(this.value)">
                                 <option value="">All months</option>
                             </select>
                         </div>
                         <div class="filter-group">
                             <label class="form-label" style="font-size: 0.75rem;">Status</label>
-                            <select id="winlossStatusFilter" class="form-control" onchange="App.handleWinLossStatusFilterChange(this.value)">
+                            <select id="winlossStatusFilter" class="form-control"
+                                onchange="App.handleWinLossStatusFilterChange(this.value)">
                                 <option value="all">Wins &amp; Losses</option>
                                 <option value="won">Wins only</option>
                                 <option value="lost">Losses only</option>
                             </select>
                         </div>
                         <div class="filter-group">
-                            <select id="winlossOwnerFilter" class="form-control" onchange="App.handleWinLossOwnerChange(this.value)">
+                            <select id="winlossOwnerFilter" class="form-control"
+                                onchange="App.handleWinLossOwnerChange(this.value)">
                                 <option value="all">All Projects</option>
                             </select>
                         </div>
@@ -355,7 +407,8 @@
                 <div id="reportsView" class="view hidden">
                     <div class="page-header">
                         <h1 class="page-title">Reports & Analytics</h1>
-                        <p class="page-subtitle">Explore activity trends, product insights, regional performance, and custom tables.</p>
+                        <p class="page-subtitle">Explore activity trends, product insights, regional performance, and
+                            custom tables.</p>
                     </div>
                     <div id="reportsContent"></div>
                 </div>
@@ -364,9 +417,11 @@
                 <div id="suggestionsBugsView" class="view hidden">
                     <div class="page-header suggestions-bugs-header">
                         <h1 class="page-title">Suggestions and Bugs</h1>
-                        <p class="page-subtitle">Share feedback, suggestions, or report bugs. Everyone can view and comment; only the author or an admin can edit or delete.</p>
+                        <p class="page-subtitle">Share feedback, suggestions, or report bugs. Everyone can view and
+                            comment; only the author or an admin can edit or delete.</p>
                         <div class="action-bar" style="margin-top: 0.75rem;">
-                            <button type="button" class="btn btn-primary" id="suggestionsBugsNewBtn" onclick="App.openSuggestionsBugsModal()">+ New suggestion or bug</button>
+                            <button type="button" class="btn btn-primary" id="suggestionsBugsNewBtn"
+                                onclick="App.openSuggestionsBugsModal()">+ New suggestion or bug</button>
                         </div>
                     </div>
                     <div id="suggestionsBugsList" class="suggestions-bugs-list"></div>
@@ -381,7 +436,8 @@
 
                     <div class="action-bar">
                         <div class="search-bar">
-                            <input type="text" class="form-control" placeholder="Search accounts..." id="accountSearch" onkeyup="App.searchAccounts()">
+                            <input type="text" class="form-control" placeholder="Search accounts..." id="accountSearch"
+                                onkeyup="App.searchAccounts()">
                         </div>
                     </div>
 
@@ -421,10 +477,12 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="users" onclick="Admin.openAdminSection('users', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="users"
+                                            onclick="Admin.openAdminSection('users', event)">
                                             <span>System Users</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="sales" onclick="Admin.openAdminSection('sales', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="sales"
+                                            onclick="Admin.openAdminSection('sales', event)">
                                             <span>Sales Users</span>
                                         </a>
                                     </div>
@@ -435,7 +493,8 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="regions" onclick="Admin.openAdminSection('regions', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="regions"
+                                            onclick="Admin.openAdminSection('regions', event)">
                                             <span>Regions</span>
                                         </a>
                                     </div>
@@ -446,13 +505,16 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="login" onclick="Admin.openAdminSection('login', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="login"
+                                            onclick="Admin.openAdminSection('login', event)">
                                             <span>Login Activity</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="audit" onclick="Admin.openAdminSection('audit', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="audit"
+                                            onclick="Admin.openAdminSection('audit', event)">
                                             <span>Audit Log</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="storageDrafts" onclick="Admin.openAdminSection('storageDrafts', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="storageDrafts"
+                                            onclick="Admin.openAdminSection('storageDrafts', event)">
                                             <span>All drafts</span>
                                         </a>
                                     </div>
@@ -463,145 +525,179 @@
                         <!-- Admin Content Area -->
                         <div class="admin-content">
                             <div id="systemAdminSectionsContainer">
-                        <!-- System Users -->
-                        <div class="admin-section hidden" data-admin-section="users">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3>System Users</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem;">
-                                        <div class="form-group" style="margin-bottom:0; min-width: 160px;">
-                                            <label class="form-label">Status</label>
-                                            <select id="usersFilterStatus" class="form-control" onchange="Admin.loadUsers()">
-                                                <option value="active">Active only</option>
-                                                <option value="inactive">Inactive only</option>
-                                                <option value="all">All</option>
-                                            </select>
+                                <!-- System Users -->
+                                <div class="admin-section hidden" data-admin-section="users">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>System Users</h3>
                                         </div>
-                                        <button id="addUserBtn" class="btn btn-primary" onclick="Admin.showAddUserModal()">Add New User</button>
+                                        <div class="card-body">
+                                            <div class="admin-config-toolbar"
+                                                style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem;">
+                                                <div class="form-group" style="margin-bottom:0; min-width: 160px;">
+                                                    <label class="form-label">Status</label>
+                                                    <select id="usersFilterStatus" class="form-control"
+                                                        onchange="Admin.loadUsers()">
+                                                        <option value="active">Active only</option>
+                                                        <option value="inactive">Inactive only</option>
+                                                        <option value="all">All</option>
+                                                    </select>
+                                                </div>
+                                                <button id="addUserBtn" class="btn btn-primary"
+                                                    onclick="Admin.showAddUserModal()">Add New User</button>
+                                                <button id="forcePasswordChangeBtn" class="btn btn-warning"
+                                                    onclick="Admin.forcePasswordChangeAll()"
+                                                    title="Force all users with default passwords to change on next login">Force
+                                                    Password Change</button>
+                                            </div>
+                                            <div id="usersList" class="space-y-2"></div>
+                                        </div>
                                     </div>
-                                    <div id="usersList" class="space-y-2"></div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Sales Users -->
-                        <div class="admin-section hidden" data-admin-section="sales">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3>Sales Users</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="admin-config-toolbar" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
-                                        <div class="form-group" style="min-width: 140px;">
-                                            <label class="form-label">Status</label>
-                                            <select id="salesRepFilterStatus" class="form-control">
-                                                <option value="active">Active only</option>
-                                                <option value="inactive">Inactive only</option>
-                                                <option value="all">All</option>
-                                            </select>
+                                <!-- Sales Users -->
+                                <div class="admin-section hidden" data-admin-section="sales">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>Sales Users</h3>
                                         </div>
-                                        <div class="form-group" style="min-width: 200px;">
-                                            <label class="form-label">Region</label>
-                                            <select id="salesRepFilterRegion" class="form-control">
-                                                <option value="all">All Regions</option>
-                                            </select>
+                                        <div class="card-body">
+                                            <div class="admin-config-toolbar"
+                                                style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+                                                <div class="form-group" style="min-width: 140px;">
+                                                    <label class="form-label">Status</label>
+                                                    <select id="salesRepFilterStatus" class="form-control">
+                                                        <option value="active">Active only</option>
+                                                        <option value="inactive">Inactive only</option>
+                                                        <option value="all">All</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group" style="min-width: 200px;">
+                                                    <label class="form-label">Region</label>
+                                                    <select id="salesRepFilterRegion" class="form-control">
+                                                        <option value="all">All Regions</option>
+                                                    </select>
+                                                </div>
+                                                <div class="form-group" style="flex: 1; min-width: 200px;">
+                                                    <label class="form-label">Search</label>
+                                                    <input type="text" id="salesRepFilterSearch" class="form-control"
+                                                        placeholder="Search by name or email">
+                                                </div>
+                                                <button class="btn btn-secondary" id="salesRepResetFilters"
+                                                    style="white-space: nowrap;">Reset</button>
+                                            </div>
+                                            <div class="text-muted" id="salesRepsSummary" style="margin-bottom: 1rem;">
+                                            </div>
+                                            <button id="addSalesRepBtn" class="btn btn-primary mb-4"
+                                                onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
+                                            <div id="salesRepsList" class="space-y-2"></div>
                                         </div>
-                                        <div class="form-group" style="flex: 1; min-width: 200px;">
-                                            <label class="form-label">Search</label>
-                                            <input type="text" id="salesRepFilterSearch" class="form-control" placeholder="Search by name or email">
-                                        </div>
-                                        <button class="btn btn-secondary" id="salesRepResetFilters" style="white-space: nowrap;">Reset</button>
                                     </div>
-                                    <div class="text-muted" id="salesRepsSummary" style="margin-bottom: 1rem;"></div>
-                                    <button id="addSalesRepBtn" class="btn btn-primary mb-4" onclick="Admin.showAddSalesRepModal()">Add New Sales User</button>
-                                    <div id="salesRepsList" class="space-y-2"></div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Regions -->
-                        <div class="admin-section hidden" data-admin-section="regions">
-                            <div class="card">
-                                <div class="card-header">
-                                    <h3>Regions</h3>
-                                    <div class="card-header-actions">
-                                        <button class="btn btn-secondary btn-sm" onclick="Admin.pruneUnusedRegions()">Remove Unused</button>
-                                        <button class="btn btn-primary btn-sm" onclick="Admin.showAddRegionModal()">+ Add</button>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <div id="regionsList" class="space-y-compact"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Login Activity & Usage -->
-                        <div class="admin-section hidden" data-admin-section="login">
-                            <div class="card">
-                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h3>Login Activity & Usage</h3>
-                                    <div style="display:flex; gap:0.75rem;">
-                                        <button class="btn btn-secondary btn-sm" onclick="Admin.loadLoginLogs(true)">Refresh</button>
-                                        <button class="btn btn-outline btn-sm" onclick="App.switchView('adminLoginLogs')">Open Detailed Log</button>
-                                    </div>
-                                </div>
-                                <div class="card-body">
-                                    <div id="loginMetricsSummary" class="login-metrics-summary"></div>
-                                    <div class="login-metrics-grid">
-                                        <div class="login-metrics-panel">
-                                            <h4>Activity (Last 14 days)</h4>
-                                            <div id="loginMetricsByDate" class="metric-list"></div>
+                                <!-- Regions -->
+                                <div class="admin-section hidden" data-admin-section="regions">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>Regions</h3>
+                                            <div class="card-header-actions">
+                                                <button class="btn btn-secondary btn-sm"
+                                                    onclick="Admin.pruneUnusedRegions()">Remove Unused</button>
+                                                <button class="btn btn-primary btn-sm"
+                                                    onclick="Admin.showAddRegionModal()">+ Add</button>
+                                            </div>
                                         </div>
-                                        <div class="login-metrics-panel">
-                                            <h4>Top Users (7 days)</h4>
-                                            <div id="loginTopUsers" class="metric-list"></div>
+                                        <div class="card-body">
+                                            <div id="regionsList" class="space-y-compact"></div>
                                         </div>
                                     </div>
-                                    <div class="table-responsive" style="margin-top: 1.5rem;">
-                                        <div class="text-muted" id="loginLogCardNote">Detailed entries available in the Login Activity page.</div>
-                                    </div>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Activity Audit Log -->
-                        <div class="admin-section hidden" data-admin-section="audit">
-                            <div class="card">
-                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                                    <h3>Activity Audit Log</h3>
-                                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
-                                        <span class="text-muted" style="font-size: 0.9rem;">Show:</span>
-                                        <button type="button" class="btn btn-outline btn-sm" id="auditFilter24h" onclick="Admin.loadActivityLogs(true, 24)">Last 24 hours</button>
-                                        <button type="button" class="btn btn-outline btn-sm" id="auditFilter14d" onclick="Admin.loadActivityLogs(true)">Last 14 days</button>
-                                        <button class="btn btn-danger btn-sm" onclick="Admin.promptClearAllActivities()">Clear All Activities</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="Admin.loadActivityLogs(true)">Refresh</button>
+                                <!-- Login Activity & Usage -->
+                                <div class="admin-section hidden" data-admin-section="login">
+                                    <div class="card">
+                                        <div class="card-header"
+                                            style="display: flex; justify-content: space-between; align-items: center;">
+                                            <h3>Login Activity & Usage</h3>
+                                            <div style="display:flex; gap:0.75rem;">
+                                                <button class="btn btn-secondary btn-sm"
+                                                    onclick="Admin.loadLoginLogs(true)">Refresh</button>
+                                                <button class="btn btn-outline btn-sm"
+                                                    onclick="App.switchView('adminLoginLogs')">Open Detailed
+                                                    Log</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="loginMetricsSummary" class="login-metrics-summary"></div>
+                                            <div class="login-metrics-grid">
+                                                <div class="login-metrics-panel">
+                                                    <h4>Activity (Last 14 days)</h4>
+                                                    <div id="loginMetricsByDate" class="metric-list"></div>
+                                                </div>
+                                                <div class="login-metrics-panel">
+                                                    <h4>Top Users (7 days)</h4>
+                                                    <div id="loginTopUsers" class="metric-list"></div>
+                                                </div>
+                                            </div>
+                                            <div class="table-responsive" style="margin-top: 1.5rem;">
+                                                <div class="text-muted" id="loginLogCardNote">Detailed entries available
+                                                    in the Login Activity page.</div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="card-body" id="activityLogsTable">
-                                    <div class="text-muted">Click &ldquo;Last 24 hours&rdquo; or &ldquo;Refresh&rdquo; to load activity audit records.</div>
-                                </div>
-                            </div>
-                        </div>
 
-                        <!-- All drafts (server-side pending saves after 409; admin only) -->
-                        <div class="admin-section hidden" data-admin-section="storageDrafts">
-                            <div class="card">
-                                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                                    <h3>All drafts</h3>
-                                    <div style="display: flex; gap: 0.5rem;">
-                                        <button type="button" class="btn btn-primary btn-sm" id="adminStorageDraftsSubmitAllBtn" onclick="Admin.storageDraftsSubmitAll()">Submit all</button>
-                                        <button type="button" class="btn btn-secondary btn-sm" onclick="Admin.loadStorageDraftsSection()">Refresh</button>
+                                <!-- Activity Audit Log -->
+                                <div class="admin-section hidden" data-admin-section="audit">
+                                    <div class="card">
+                                        <div class="card-header"
+                                            style="display: flex; justify-content: space-between; align-items: center;">
+                                            <h3>Activity Audit Log</h3>
+                                            <div
+                                                style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
+                                                <span class="text-muted" style="font-size: 0.9rem;">Show:</span>
+                                                <button type="button" class="btn btn-outline btn-sm" id="auditFilter24h"
+                                                    onclick="Admin.loadActivityLogs(true, 24)">Last 24 hours</button>
+                                                <button type="button" class="btn btn-outline btn-sm" id="auditFilter14d"
+                                                    onclick="Admin.loadActivityLogs(true)">Last 14 days</button>
+                                                <button class="btn btn-danger btn-sm"
+                                                    onclick="Admin.promptClearAllActivities()">Clear All
+                                                    Activities</button>
+                                                <button class="btn btn-secondary btn-sm"
+                                                    onclick="Admin.exportActivityLogsCsv()">Export CSV</button>
+                                                <button class="btn btn-secondary btn-sm"
+                                                    onclick="Admin.loadActivityLogs(true)">Refresh</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body" id="activityLogsTable">
+                                            <div class="text-muted">Click &ldquo;Last 24 hours&rdquo; or
+                                                &ldquo;Refresh&rdquo; to load activity audit records.</div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="card-body">
-                                    <p class="text-muted small">Drafts stored on the server after a save conflict (409). Apply them to merge into current data, or delete to discard.</p>
-                                    <div id="adminStorageDraftsList"></div>
+
+                                <!-- All drafts (server-side pending saves after 409; admin only) -->
+                                <div class="admin-section hidden" data-admin-section="storageDrafts">
+                                    <div class="card">
+                                        <div class="card-header"
+                                            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                            <h3>All drafts</h3>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                                <button type="button" class="btn btn-primary btn-sm"
+                                                    id="adminStorageDraftsSubmitAllBtn"
+                                                    onclick="Admin.storageDraftsSubmitAll()">Submit all</button>
+                                                <button type="button" class="btn btn-secondary btn-sm"
+                                                    onclick="Admin.loadStorageDraftsSection()">Refresh</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted small">Drafts stored on the server after a save
+                                                conflict (409). Apply them to merge into current data, or delete to
+                                                discard.</p>
+                                            <div id="adminStorageDraftsList"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
 
                             </div>
                         </div>
@@ -623,10 +719,12 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="industryUseCases" onclick="Admin.openAdminSection('industryUseCases', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="industryUseCases"
+                                            onclick="Admin.openAdminSection('industryUseCases', event)">
                                             <span>Industry & Use Cases</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="sandboxAccess" onclick="Admin.openAdminSection('sandboxAccess', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="sandboxAccess"
+                                            onclick="Admin.openAdminSection('sandboxAccess', event)">
                                             <span>Sandbox Access</span>
                                         </a>
                                     </div>
@@ -637,7 +735,8 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="interface" onclick="Admin.openAdminSection('interface', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="interface"
+                                            onclick="Admin.openAdminSection('interface', event)">
                                             <span>Interface Settings</span>
                                         </a>
                                     </div>
@@ -648,13 +747,16 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="analytics" onclick="Admin.openAdminSection('analytics', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="analytics"
+                                            onclick="Admin.openAdminSection('analytics', event)">
                                             <span>Targets</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="projectHealth" onclick="Admin.openAdminSection('projectHealth', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="projectHealth"
+                                            onclick="Admin.openAdminSection('projectHealth', event)">
                                             <span>Project Health</span>
                                         </a>
-                                        <a href="#" class="admin-nav-item" data-admin-nav="monthly" onclick="Admin.openAdminSection('monthly', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="monthly"
+                                            onclick="Admin.openAdminSection('monthly', event)">
                                             <span>Export</span>
                                         </a>
                                     </div>
@@ -665,7 +767,8 @@
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
                                     <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="features" onclick="Admin.openAdminSection('features', event)">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="features"
+                                            onclick="Admin.openAdminSection('features', event)">
                                             <span>Feature Flags</span>
                                         </a>
                                     </div>
@@ -684,59 +787,83 @@
                                         </div>
                                         <div class="card-body">
                                             <div class="admin-tabs">
-                                                <button class="admin-tab active" data-tab="industries" onclick="Admin.switchIndustryUseCaseTab('industries')">Industries</button>
-                                                <button class="admin-tab" data-tab="useCases" onclick="Admin.switchIndustryUseCaseTab('useCases')">Use Cases</button>
-                                                <button class="admin-tab" data-tab="pending" onclick="Admin.switchIndustryUseCaseTab('pending')">
+                                                <button class="admin-tab active" data-tab="industries"
+                                                    onclick="Admin.switchIndustryUseCaseTab('industries')">Industries</button>
+                                                <button class="admin-tab" data-tab="useCases"
+                                                    onclick="Admin.switchIndustryUseCaseTab('useCases')">Use
+                                                    Cases</button>
+                                                <button class="admin-tab" data-tab="pending"
+                                                    onclick="Admin.switchIndustryUseCaseTab('pending')">
                                                     Pending
-                                                    <span id="adminPendingBadgeConfig" class="admin-collapsible-badge" style="display: none; margin-left: 0.5rem;">0</span>
+                                                    <span id="adminPendingBadgeConfig" class="admin-collapsible-badge"
+                                                        style="display: none; margin-left: 0.5rem;">0</span>
                                                 </button>
                                             </div>
-                                            
+
                                             <!-- Industries Tab -->
                                             <div class="admin-tab-content active" data-tab-content="industries">
                                                 <div class="admin-inline-form">
-                                                    <input type="text" id="adminNewIndustryConfig" class="form-control" placeholder="New industry name">
-                                                    <button type="button" class="btn btn-primary btn-sm" onclick="Admin.addIndustryFromAdmin()">Add</button>
+                                                    <input type="text" id="adminNewIndustryConfig" class="form-control"
+                                                        placeholder="New industry name">
+                                                    <button type="button" class="btn btn-primary btn-sm"
+                                                        onclick="Admin.addIndustryFromAdmin()">Add</button>
                                                 </div>
-                                                <div id="adminIndustriesListConfig" class="space-y-compact" style="margin-top: 1rem;"></div>
+                                                <div id="adminIndustriesListConfig" class="space-y-compact"
+                                                    style="margin-top: 1rem;"></div>
                                             </div>
-                                            
+
                                             <!-- Use Cases Tab -->
                                             <div class="admin-tab-content" data-tab-content="useCases">
                                                 <div class="form-group">
                                                     <label class="form-label">Industry</label>
-                                                    <select id="adminUseCaseIndustrySelectConfig" class="form-control" onchange="Admin.renderUseCasesForIndustry()" style="max-width: 320px;">
+                                                    <select id="adminUseCaseIndustrySelectConfig" class="form-control"
+                                                        onchange="Admin.renderUseCasesForIndustry()"
+                                                        style="max-width: 320px;">
                                                         <option value="">Select industry...</option>
                                                     </select>
                                                 </div>
                                                 <div id="adminUseCasesPanelConfig" style="margin-top: 1rem;"></div>
                                             </div>
-                                            
+
                                             <!-- Pending Tab -->
                                             <div class="admin-tab-content" data-tab-content="pending">
-                                                <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 1rem;">Reject only removes the suggestion; it does not change existing accounts or projects. Use <strong>Merge into</strong> to map a pending value to an existing industry or use case and update all related data.</p>
+                                                <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 1rem;">
+                                                    Reject only removes the suggestion; it does not change existing
+                                                    accounts or projects. Use <strong>Merge into</strong> to map a
+                                                    pending value to an existing industry or use case and update all
+                                                    related data.</p>
                                                 <div class="admin-collapsible">
-                                                    <div class="admin-collapsible-header expanded" onclick="Admin.toggleCollapsible('pendingIndustriesConfig')">
+                                                    <div class="admin-collapsible-header expanded"
+                                                        onclick="Admin.toggleCollapsible('pendingIndustriesConfig')">
                                                         <h4>
                                                             Pending Industries
-                                                            <span id="adminPendingIndustriesBadgeConfig" class="admin-collapsible-badge" style="display: none;">0</span>
+                                                            <span id="adminPendingIndustriesBadgeConfig"
+                                                                class="admin-collapsible-badge"
+                                                                style="display: none;">0</span>
                                                         </h4>
                                                         <span class="admin-collapsible-icon">▼</span>
                                                     </div>
-                                                    <div class="admin-collapsible-content expanded" id="pendingIndustriesConfigContent">
-                                                        <div id="adminPendingIndustriesListConfig" class="space-y-compact"></div>
+                                                    <div class="admin-collapsible-content expanded"
+                                                        id="pendingIndustriesConfigContent">
+                                                        <div id="adminPendingIndustriesListConfig"
+                                                            class="space-y-compact"></div>
                                                     </div>
                                                 </div>
                                                 <div class="admin-collapsible" style="margin-top: 1rem;">
-                                                    <div class="admin-collapsible-header expanded" onclick="Admin.toggleCollapsible('pendingUseCasesConfig')">
+                                                    <div class="admin-collapsible-header expanded"
+                                                        onclick="Admin.toggleCollapsible('pendingUseCasesConfig')">
                                                         <h4>
                                                             Pending Use Cases
-                                                            <span id="adminPendingUseCasesBadgeConfig" class="admin-collapsible-badge" style="display: none;">0</span>
+                                                            <span id="adminPendingUseCasesBadgeConfig"
+                                                                class="admin-collapsible-badge"
+                                                                style="display: none;">0</span>
                                                         </h4>
                                                         <span class="admin-collapsible-icon">▼</span>
                                                     </div>
-                                                    <div class="admin-collapsible-content expanded" id="pendingUseCasesConfigContent">
-                                                        <div id="adminPendingUseCasesListConfig" class="space-y-compact"></div>
+                                                    <div class="admin-collapsible-content expanded"
+                                                        id="pendingUseCasesConfigContent">
+                                                        <div id="adminPendingUseCasesListConfig"
+                                                            class="space-y-compact"></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -753,23 +880,29 @@
                                         <div class="card-body">
                                             <div class="form-group">
                                                 <label class="form-label">Interface Layout</label>
-                                                <select id="interfaceSelectConfig" class="form-control" onchange="InterfaceManager.changeInterface(this.value)">
+                                                <select id="interfaceSelectConfig" class="form-control"
+                                                    onchange="InterfaceManager.changeInterface(this.value)">
                                                     <option value="card">Card Interface</option>
                                                     <option value="modern">Modern Sidebar</option>
                                                     <option value="compact">Compact Sidebar</option>
                                                     <option value="dashboard">Dashboard First</option>
                                                     <option value="minimal">Minimal Clean</option>
                                                 </select>
-                                                <small class="text-muted">Applies globally to all users on their next reload.</small>
+                                                <small class="text-muted">Applies globally to all users on their
+                                                    next
+                                                    reload.</small>
                                             </div>
                                             <div class="form-group" style="margin-top: 1.5rem;">
                                                 <label class="form-label">Color Scheme</label>
-                                                <select id="interfaceThemeSelectConfig" class="form-control" onchange="InterfaceManager.changeTheme(this.value)">
+                                                <select id="interfaceThemeSelectConfig" class="form-control"
+                                                    onchange="InterfaceManager.changeTheme(this.value)">
                                                     <option value="light">Light</option>
                                                     <option value="dark">Dark</option>
                                                     <option value="gupshup">Gupshup</option>
                                                 </select>
-                                                <small class="text-muted">Choose the default color palette. Users will see the change after refresh.</small>
+                                                <small class="text-muted">Choose the default color palette. Users
+                                                    will
+                                                    see the change after refresh.</small>
                                             </div>
                                         </div>
                                     </div>
@@ -783,13 +916,17 @@
                                         </div>
                                         <div class="card-body">
                                             <div class="admin-tabs" style="margin-bottom: 1rem;">
-                                                <button type="button" class="admin-tab active" data-sandbox-tab="active" onclick="Admin.switchSandboxTab('active')">Active</button>
-                                                <button type="button" class="admin-tab" data-sandbox-tab="closed" onclick="Admin.switchSandboxTab('closed')">Closed / Archive</button>
+                                                <button type="button" class="admin-tab active" data-sandbox-tab="active"
+                                                    onclick="Admin.switchSandboxTab('active')">Active</button>
+                                                <button type="button" class="admin-tab" data-sandbox-tab="closed"
+                                                    onclick="Admin.switchSandboxTab('closed')">Closed /
+                                                    Archive</button>
                                             </div>
                                             <div class="form-grid" style="margin-bottom:1rem;">
                                                 <div class="form-group">
                                                     <label class="form-label">Status</label>
-                                                    <select id="pocStatusFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                    <select id="pocStatusFilter" class="form-control"
+                                                        onchange="Admin.filterPOCSandbox()">
                                                         <option value="">All Status</option>
                                                         <option value="Assigned">Assigned</option>
                                                         <option value="Unassigned">Unassigned</option>
@@ -797,22 +934,28 @@
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="form-label">Account</label>
-                                                    <select id="pocAccountFilter" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                    <select id="pocAccountFilter" class="form-control"
+                                                        onchange="Admin.filterPOCSandbox()">
                                                         <option value="">All Accounts</option>
                                                     </select>
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="form-label">From Date</label>
-                                                    <input type="date" id="pocDateFrom" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                    <input type="date" id="pocDateFrom" class="form-control"
+                                                        onchange="Admin.filterPOCSandbox()">
                                                 </div>
                                                 <div class="form-group">
                                                     <label class="form-label">To Date</label>
-                                                    <input type="date" id="pocDateTo" class="form-control" onchange="Admin.filterPOCSandbox()">
+                                                    <input type="date" id="pocDateTo" class="form-control"
+                                                        onchange="Admin.filterPOCSandbox()">
                                                 </div>
                                             </div>
-                                            <div class="admin-config-toolbar" style="justify-content:flex-end; margin-bottom:1rem;">
-                                                <button class="btn btn-outline" onclick="Admin.loadPOCSandbox(true)">Refresh</button>
-                                                <button class="btn btn-primary" onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
+                                            <div class="admin-config-toolbar"
+                                                style="justify-content:flex-end; margin-bottom:1rem;">
+                                                <button class="btn btn-outline"
+                                                    onclick="Admin.loadPOCSandbox(true)">Refresh</button>
+                                                <button class="btn btn-primary"
+                                                    onclick="Admin.exportPocSandboxCsv()">Export CSV</button>
                                             </div>
                                             <div id="pocSandboxTable">
                                                 <div class="text-muted">Loading sandbox assignments…</div>
@@ -828,17 +971,23 @@
                                             <h3>Analytics Targets</h3>
                                         </div>
                                         <div class="card-body">
-                                            <form id="analyticsTargetFormConfig" onsubmit="Admin.savePresalesTarget(event)">
+                                            <form id="analyticsTargetFormConfig"
+                                                onsubmit="Admin.savePresalesTarget(event)">
                                                 <div class="form-group">
-                                                    <label class="form-label required">Monthly Activity Target per Presales User</label>
-                                                    <input type="number" class="form-control" id="presalesTargetInputConfig" min="0" step="1" required>
+                                                    <label class="form-label required">Monthly Activity Target per
+                                                        Presales User</label>
+                                                    <input type="number" class="form-control"
+                                                        id="presalesTargetInputConfig" min="0" step="1" required>
                                                 </div>
-                                                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                                    <button type="submit" class="btn btn-primary">Save Target</button>
+                                                <div
+                                                    style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                                    <button type="submit" class="btn btn-primary">Save
+                                                        Target</button>
                                                     <span class="text-muted" id="presalesTargetMetaConfig"></span>
                                                 </div>
                                             </form>
-                                            <p class="text-muted" id="presalesTargetSummaryConfig" style="margin-top: 1rem;"></p>
+                                            <p class="text-muted" id="presalesTargetSummaryConfig"
+                                                style="margin-top: 1rem;"></p>
                                         </div>
                                     </div>
                                     <div class="card" style="margin-top: 1.5rem;">
@@ -846,14 +995,21 @@
                                             <h3>Analytics Guest Access</h3>
                                         </div>
                                         <div class="card-body">
-                                            <form id="analyticsAccessAdminFormConfig" onsubmit="Admin.saveAnalyticsAccessPassword(event)">
+                                            <form id="analyticsAccessAdminFormConfig"
+                                                onsubmit="Admin.saveAnalyticsAccessPassword(event)">
                                                 <div class="form-group">
-                                                    <label class="form-label required">Shared Analytics Password</label>
-                                                    <input type="text" class="form-control" id="analyticsAccessPasswordInputConfig" required>
-                                                    <small class="text-muted">Provide this password to users who need read-only access to analytics.</small>
+                                                    <label class="form-label required">Shared Analytics
+                                                        Password</label>
+                                                    <input type="text" class="form-control"
+                                                        id="analyticsAccessPasswordInputConfig" required>
+                                                    <small class="text-muted">Provide this password to users who
+                                                        need
+                                                        read-only access to analytics.</small>
                                                 </div>
-                                                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                                    <button type="submit" class="btn btn-primary">Save Password</button>
+                                                <div
+                                                    style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                                    <button type="submit" class="btn btn-primary">Save
+                                                        Password</button>
                                                     <span class="text-muted" id="analyticsAccessMetaConfig"></span>
                                                 </div>
                                             </form>
@@ -881,10 +1037,12 @@
                                             <div class="form-grid">
                                                 <div class="form-group">
                                                     <label class="form-label">Select Month</label>
-                                                    <input type="month" id="adminReportMonthConfig" class="form-control">
+                                                    <input type="month" id="adminReportMonthConfig"
+                                                        class="form-control">
                                                 </div>
                                             </div>
-                                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download Monthly CSV</button>
+                                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download
+                                                Monthly CSV</button>
                                         </div>
                                     </div>
                                 </div>
@@ -896,8 +1054,12 @@
                                             <h3>Feature Flags</h3>
                                         </div>
                                         <div class="card-body">
-                                            <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable features for everyone except admins. Disabling hides related navigation links and prevents access.</p>
-                                            <div id="featureDashboardControlsConfig" class="admin-config-shell"></div>
+                                            <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable
+                                                features for everyone except admins. Disabling hides related
+                                                navigation
+                                                links and prevents access.</p>
+                                            <div id="featureDashboardControlsConfig" class="admin-config-shell">
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -910,8 +1072,10 @@
                 <div id="adminLoginLogsView" class="view hidden">
                     <div class="page-header">
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                            <button class="btn btn-outline btn-sm" onclick="App.switchView('admin')" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <button class="btn btn-outline btn-sm" onclick="App.switchView('admin')"
+                                style="display: flex; align-items: center; gap: 0.5rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
                                     <path d="M19 12H5M12 19l-7-7 7-7"></path>
                                 </svg>
                                 Back to Admin
@@ -932,15 +1096,20 @@
                                     <div id="loginLogsDetailTopUsers" class="metric-list"></div>
                                 </div>
                             </div>
-                            <div class="admin-config-toolbar" style="justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                            <div class="admin-config-toolbar"
+                                style="justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
                                 <div style="display:flex; gap:0.75rem; align-items:center;">
-                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('prev')" id="loginLogsPrevBtn" disabled>&larr; Previous</button>
-                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('next')" id="loginLogsNextBtn" disabled>Next &rarr;</button>
+                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('prev')"
+                                        id="loginLogsPrevBtn" disabled>&larr; Previous</button>
+                                    <button class="btn btn-secondary" onclick="Admin.loadLoginLogsPage('next')"
+                                        id="loginLogsNextBtn" disabled>Next &rarr;</button>
                                     <span id="loginLogsPageLabel" class="text-muted" style="font-size:0.875rem;"></span>
                                 </div>
                                 <div style="display:flex; gap:0.75rem;">
-                                    <button class="btn btn-outline" onclick="Admin.loadLoginLogsPage('refresh')">Refresh</button>
-                                    <button class="btn btn-primary" onclick="Admin.exportLoginLogs()">Export Current Page</button>
+                                    <button class="btn btn-outline"
+                                        onclick="Admin.loadLoginLogsPage('refresh')">Refresh</button>
+                                    <button class="btn btn-primary" onclick="Admin.exportLoginLogs()">Export Current
+                                        Page</button>
                                 </div>
                             </div>
                         </div>
@@ -963,7 +1132,8 @@
                                     <tbody>
                                         <tr>
                                             <td colspan="7">
-                                                <div class="text-muted" style="text-align:center;">Loading login activity…</div>
+                                                <div class="text-muted" style="text-align:center;">Loading login
+                                                    activity…</div>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -976,7 +1146,8 @@
                 <!-- Sandbox Access: data is shown in Configuration → Sandbox Access -->
                 <div id="adminPocView" class="view hidden">
                     <div class="page-header">
-                        <p class="text-muted">POC Sandbox data is in <strong>System Admin</strong> → <strong>POC Management</strong> → <strong>POC Sandbox</strong>. Redirecting…</p>
+                        <p class="text-muted">POC Sandbox data is in <strong>System Admin</strong> → <strong>POC
+                                Management</strong> → <strong>POC Sandbox</strong>. Redirecting…</p>
                     </div>
                 </div>
 
@@ -984,7 +1155,9 @@
                 <div id="importView" class="view hidden" data-feature="csvImport">
                     <div class="page-header">
                         <h1 class="page-title">Bulk Import Activities</h1>
-                        <p class="page-subtitle">Download a template, upload activities, preview the results, and commit the import.</p>
+                        <p class="page-subtitle">Download a template, upload activities, preview the results, and
+                            commit
+                            the import.</p>
                     </div>
                     <div id="csvImportDisabledBanner" class="feature-disabled-banner hidden">
                         CSV import is currently disabled by the administrator. Please check back later.
@@ -995,17 +1168,33 @@
                             <h3>Templates & Guidance</h3>
                         </div>
                         <div class="card-body" data-csv-import-section>
-                            <p style="margin-bottom: 1rem;">Start by downloading one of the templates. Populate the required columns and then upload your CSV file.</p>
+                            <p style="margin-bottom: 1rem;">Start by downloading one of the templates. Populate the
+                                required columns and then upload your CSV file.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
-                                <button class="btn btn-secondary" onclick="BulkImport.downloadTemplate('external')">Download External Activity Template</button>
-                                <button class="btn btn-secondary" onclick="BulkImport.downloadTemplate('internal')">Download Internal Activity Template</button>
-                                <button class="btn btn-secondary" onclick="BulkImport.downloadLookupReference()">Download Field Value Reference</button>
+                                <button class="btn btn-secondary"
+                                    onclick="BulkImport.downloadTemplate('external')">Download External Activity
+                                    Template</button>
+                                <button class="btn btn-secondary"
+                                    onclick="BulkImport.downloadTemplate('internal')">Download Internal Activity
+                                    Template</button>
+                                <button class="btn btn-secondary"
+                                    onclick="BulkImport.downloadLookupReference()">Download Field Value
+                                    Reference</button>
                             </div>
                             <ul class="text-muted" style="font-size: 0.85rem; line-height: 1.6;">
-                                <li>Use the external template for customer-facing workstreams and the internal template for presales enablement or back-office tasks.</li>
-                                <li>Activity Category will auto-populate based on the template filename—feel free to leave that column blank.</li>
-                                <li>Each CSV includes comment rows with key reminders; they are ignored during import.</li>
-                                <li>Multi-select values (Products, Channels, Use Cases) should be pipe separated, e.g. <code>WhatsApp | Web</code>. Reference lists are available in the Field Value download.</li>
+                                <li>Use the external template for customer-facing workstreams and the internal
+                                    template
+                                    for presales enablement or back-office tasks.</li>
+                                <li>Activity Category will auto-populate based on the template filename—feel free to
+                                    leave that column blank.</li>
+                                <li>Each CSV includes comment rows with key reminders; they are ignored during
+                                    import.
+                                </li>
+                                <li>Multi-select values (Products, Channels, Use Cases) should be pipe separated,
+                                    e.g.
+                                    <code>WhatsApp | Web</code>. Reference lists are available in the Field Value
+                                    download.
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -1016,29 +1205,40 @@
                         </div>
                         <div class="card-body" data-csv-import-section>
                             <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                <input type="file" id="importFileInput" accept=".csv" class="form-control" style="max-width: 320px;">
+                                <input type="file" id="importFileInput" accept=".csv" class="form-control"
+                                    style="max-width: 320px;">
                                 <button class="btn btn-primary" id="importDryRunBtn" disabled>Run Dry-Run</button>
-                                <div id="importLoadingIndicator" class="text-muted" style="display: none;">Processing...</div>
+                                <div id="importLoadingIndicator" class="text-muted" style="display: none;">
+                                    Processing...
+                                </div>
                             </div>
                             <p class="text-muted" style="margin-top: 0.75rem; font-size: 0.85rem;">
-                                The dry-run validates each row, auto-creates missing accounts/projects virtually, and reports duplicates/errors before import.
+                                The dry-run validates each row, auto-creates missing accounts/projects virtually,
+                                and
+                                reports duplicates/errors before import.
                             </p>
                         </div>
                     </div>
 
                     <div id="importPreviewSection" class="card hidden">
-                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="card-header"
+                            style="display: flex; justify-content: space-between; align-items: center;">
                             <h3>Dry-Run Results</h3>
                             <div style="display: flex; gap: 0.75rem;">
-                                <button class="btn btn-secondary btn-sm" id="importDownloadErrorsBtn" style="display: none;">Download Error Log</button>
-                                <button class="btn btn-primary btn-sm" id="importConfirmBtn">Commit Valid Rows</button>
+                                <button class="btn btn-secondary btn-sm" id="importDownloadErrorsBtn"
+                                    style="display: none;">Download Error Log</button>
+                                <button class="btn btn-primary btn-sm" id="importConfirmBtn">Commit Valid
+                                    Rows</button>
                             </div>
                         </div>
                         <div class="card-body" data-csv-import-section>
                             <div id="importSummary" style="margin-bottom: 1rem;"></div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
                                 <div class="text-muted" style="font-size: 0.85rem;">
-                                    Use the filter to focus on duplicates or rows with validation issues. Update your CSV and re-run the dry-run until all rows are ready.
+                                    Use the filter to focus on duplicates or rows with validation issues. Update
+                                    your
+                                    CSV and re-run the dry-run until all rows are ready.
                                 </div>
                                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                                     <label for="importPreviewFilter" class="form-label" style="margin: 0;">Show:</label>
@@ -1050,7 +1250,8 @@
                                     </select>
                                 </div>
                             </div>
-                            <div id="importIssuesPanel" class="card" style="border: 1px solid var(--gray-200); margin-bottom: 1.5rem; display: none;">
+                            <div id="importIssuesPanel" class="card"
+                                style="border: 1px solid var(--gray-200); margin-bottom: 1.5rem; display: none;">
                                 <div class="card-header" style="padding: 0.75rem 1rem;">
                                     <h4 style="margin: 0; font-size: 1rem;">Issues Detected</h4>
                                 </div>
@@ -1108,5 +1309,5 @@
     <script src="js/bulkImport.js"></script>
     <script src="js/app.js"></script>
 </body>
-</html>
 
+</html>
