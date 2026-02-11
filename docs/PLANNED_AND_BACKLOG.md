@@ -1,6 +1,6 @@
 # PAMS – Planned Work, Backlog & Thoughts
 
-Single place for **what is next**, **backlog items**, and **open decisions**. Items are numbered by category. **Build 1–4 are deployed**; remaining backlog and new features are below.
+Single place for **what is next**, **backlog items**, and **open decisions**. Items are numbered by category. **Build 1, 2, 4 are deployed**; remaining backlog and new features are below.
 
 ---
 
@@ -8,7 +8,6 @@ Single place for **what is next**, **backlog items**, and **open decisions**. It
 
 | No. | ID  | Name | Description | Decision / note |
 |-----|-----|------|-------------|-----------------|
-| 1.1 | #1  | Completed-all-activities button + report | “I have completed all activities for \<Month\>”; track who; report. | **Deployed.** |
 | 1.2 | #5  | Activity date default = last logged | Default activity date to last logged (project or user). | |
 | 1.3 | FB2 | Activities refresh on date change | Refetch/re-render so activity moves to correct month after date change. | **Deployed.** |
 | 1.4 | FB4 | Remember last activity date | Per user; default to last used date. | **Deployed.** |
@@ -17,12 +16,6 @@ Single place for **what is next**, **backlog items**, and **open decisions**. It
 
 ---
 
-## 2. Win/Loss & projects
-
-| No. | ID  | Name | Description | Decision / note |
-|-----|-----|------|-------------|-----------------|
-| 2.1 | FB6 | Wins: default project when only one | When account has only one project, default win/loss to it. | Clarify: display vs auto-set on save, then implement. |
-| 2.2 | #6  | Project names → use case + month | Naming guide/bulk; migration-only. | For migration run. |
 
 ---
 
@@ -79,29 +72,27 @@ Single place for **what is next**, **backlog items**, and **open decisions**. It
 | No. | Name | Description | Note |
 |-----|------|-------------|------|
 | 8.1 | Win of the month UI | UI highlight for featured win. | |
-| 8.2 | Completed-activities validation | Validate vs target when 1.1 is built. | Depends on 1.1. |
-| 8.3 | File attachments | Attach files to activities or accounts. | |
-| 8.4 | Calendar integration | Sync activities or deadlines to calendar. | |
-| 8.5 | Advanced analytics | Deeper analytics and visualizations. | |
+| 8.2 | File attachments | Attach files to activities or accounts. | |
+| 8.3 | Calendar integration | Sync activities or deadlines to calendar. | |
+| 8.4 | Advanced analytics | Deeper analytics and visualizations. | |
 
 ---
 
-## 9. Execution order – Build 1 to 4 (deployed)
+## 9. Execution order – Build 1, 2, 4 (deployed)
 
-**Status:** Build 1–4 have been implemented and **deployed**. Deploy = push to `main`; Railway (or host) builds and deploys.
+**Status:** Build 1, 2, 4 have been implemented and **deployed**. Deploy = push to `main`; Railway (or host) builds and deploys.
 
 | Build | Item   | What was done | Status |
 |-------|--------|----------------|--------|
 | **1** | **4.1** (FB7) | 15-day backup retention: dated snapshots + keep last 15 in daily workflow. | **Deployed.** |
 | **2** | **1.3** (FB2) | Activities refresh on date change: after save, invalidate cache and refetch so list/cards re-render; activity appears in correct month. | **Deployed.** |
-| **3** | **1.1** (#1) | Completed-all-activities: button “I completed all (this month)” + report section (who completed for which month). | **Deployed.** |
 | **4** | **1.4** (FB4) | Remember last activity date: per user in localStorage; default date input when opening form; update after save. | **Deployed.** |
 
 ---
 
 ## 10. Next backlog (suggested order)
 
-After Build 1–4, continue with:
+After Build 1, 2, 4, continue with:
 
 1. **2.1** (FB6) – Wins: default project when only one  
 2. **1.2** (#5) – Activity date default = last logged (if different from 1.4)  

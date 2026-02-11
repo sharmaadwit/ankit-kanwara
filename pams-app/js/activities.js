@@ -2020,6 +2020,9 @@ const Activities = {
             }
         }
 
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+            DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
+        }
         if (window.app) {
             await window.app.loadDashboard();
             await window.app.loadActivitiesView();

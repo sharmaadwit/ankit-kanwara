@@ -33,10 +33,9 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 - **Reconcile = refetch only** – On login, reconcile refetches entity keys from server and invalidates DataManager cache; no merge with local backup for those keys.
 - **Async callers** – Bulk import and activities use `await` for DataManager entity getters; no sync-only paths for entity data in those flows.
 
-### Build 1–4 (recently deployed)
+### Build 1, 2, 4 (recently deployed)
 - **4.1 (FB7) 15-day backup retention** – Daily backup workflow keeps last 15 dated snapshots; `storage-snapshot-latest.json` plus dated files.
 - **1.3 (FB2) Activities refresh on date change** – After activity save (create/update), activities cache is invalidated and list/cards refetch and re-render so the activity appears in the correct month.
-- **1.1 (#1) Completed-all-activities** – Button “I completed all (this month)” records current user + month; report section shows who completed for which month.
 - **1.4 (FB4) Remember last activity date** – Per user, last-used activity date stored in localStorage; activity form date input defaults to that value when opening; value updated after each successful save.
 
 ### Backups

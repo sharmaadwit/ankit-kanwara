@@ -2417,53 +2417,7 @@ const App = {
         setTimeout(() => {
             this.setActivitiesViewMode(this.activitiesViewMode);
         }, 50);
-        await this.renderCompletedAllActivitiesReport();
         await this.renderActivitiesList('activitiesContent');
-    },
-
-    /** Build 3 (1.1): Record "I completed all (this month)" and show report. */
-    async recordCompletedAllActivitiesForMonth() {
-        const user = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
-        if (!user || !user.id) {
-            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please sign in to record completion.', 'error');
-            return;
-        }
-        const now = new Date();
-        const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        if (typeof DataManager !== 'undefined' && DataManager.addCompletedAllActivityRecord) {
-            await DataManager.addCompletedAllActivityRecord(user.id, user.username, month);
-        }
-        await this.renderCompletedAllActivitiesReport();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Recorded: you completed all activities for ' + (DataManager && DataManager.formatMonth ? DataManager.formatMonth(month) : month) + '.', 'success');
-    },
-
-    async renderCompletedAllActivitiesReport() {
-        const el = document.getElementById('completedAllActivitiesReport');
-        if (!el) return;
-        const records = typeof DataManager !== 'undefined' && DataManager.getCompletedAllActivitiesRecords
-            ? await DataManager.getCompletedAllActivitiesRecords()
-            : [];
-        if (records.length === 0) {
-            el.classList.add('hidden');
-            el.innerHTML = '';
-            return;
-        }
-        el.classList.remove('hidden');
-        const byMonth = {};
-        records.forEach(r => {
-            const m = r.month || '';
-            if (!byMonth[m]) byMonth[m] = [];
-            byMonth[m].push(r);
-        });
-        const months = Object.keys(byMonth).sort().reverse();
-        let html = '<div class="card"><div class="card-header"><h3>Completed all activities (by month)</h3></div><div class="card-body"><table class="table table-sm"><thead><tr><th>Month</th><th>Who completed</th></tr></thead><tbody>';
-        months.forEach(month => {
-            const who = (byMonth[month] || []).map(r => r.username || r.userId || '—').join(', ');
-            const label = DataManager && DataManager.formatMonth ? DataManager.formatMonth(month) : month;
-            html += `<tr><td>${label}</td><td>${who}</td></tr>`;
-        });
-        html += '</tbody></table></div></div>';
-        el.innerHTML = html;
     },
 
     /**

@@ -2250,57 +2250,6 @@ const DataManager = {
         return target;
     },
 
-    /** Completed-all-activities records: who marked "I completed all" for which month (#1). */
-    const COMPLETED_ALL_RECORDS_KEY = 'completedAllActivitiesRecords';
-    async getCompletedAllActivitiesRecords() {
-        const key = COMPLETED_ALL_RECORDS_KEY;
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
-            try {
-                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
-                if (!stored) return [];
-                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
-                return Array.isArray(parsed) ? parsed : [];
-            } catch (e) {
-                console.warn('[DataManager] Async getCompletedAllActivitiesRecords failed:', e);
-            }
-        }
-        try {
-            const raw = localStorage.getItem(key);
-            return raw ? JSON.parse(raw) : [];
-        } catch (e) {
-            return [];
-        }
-    },
-
-    async saveCompletedAllActivitiesRecords(records) {
-        const key = COMPLETED_ALL_RECORDS_KEY;
-        const payload = JSON.stringify(Array.isArray(records) ? records : []);
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
-            try {
-                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
-                return;
-            } catch (e) {
-                console.warn('[DataManager] Async saveCompletedAllActivitiesRecords failed:', e);
-            }
-        }
-        localStorage.setItem(key, payload);
-    },
-
-    async addCompletedAllActivityRecord(userId, username, month) {
-        const records = await this.getCompletedAllActivitiesRecords();
-        const trimmed = (month && String(month).trim()) || '';
-        if (!trimmed) return;
-        const existing = records.some(r => r.userId === userId && r.month === trimmed);
-        if (existing) return;
-        records.push({
-            userId,
-            username: username || '',
-            month: trimmed,
-            recordedAt: new Date().toISOString()
-        });
-        await this.saveCompletedAllActivitiesRecords(records);
-    },
-
     async getWinLossTrend(limit = 6) {
         const accounts = await this.getAccounts();
         const trendMap = {};
