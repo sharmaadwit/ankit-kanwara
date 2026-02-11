@@ -23,19 +23,27 @@ const Activities = {
     currentProjectOptions: [],
     currentSalesRepRegion: null,
 
-    /** Build 4 (FB4): Remember last activity date per user (localStorage). */
+    /** Build 4 (FB4): Remember last activity date per user. Use browser localStorage only (not remote) – device-specific, avoid 404. */
+    _getLocalStorage() {
+        if (typeof window !== 'undefined' && window.__BROWSER_LOCAL_STORAGE__) {
+            return window.__BROWSER_LOCAL_STORAGE__;
+        }
+        return typeof localStorage !== 'undefined' ? localStorage : null;
+    },
     getLastActivityDateForUser(userId) {
-        if (!userId || typeof localStorage === 'undefined') return null;
+        const store = this._getLocalStorage();
+        if (!userId || !store) return null;
         try {
-            return localStorage.getItem('__pams_last_activity_date_' + userId) || null;
+            return store.getItem('__pams_last_activity_date_' + userId) || null;
         } catch (e) {
             return null;
         }
     },
     setLastActivityDateForUser(userId, dateYyyyMmDd) {
-        if (!userId || !dateYyyyMmDd || typeof localStorage === 'undefined') return;
+        const store = this._getLocalStorage();
+        if (!userId || !dateYyyyMmDd || !store) return;
         try {
-            localStorage.setItem('__pams_last_activity_date_' + userId, String(dateYyyyMmDd).slice(0, 10));
+            store.setItem('__pams_last_activity_date_' + userId, String(dateYyyyMmDd).slice(0, 10));
         } catch (e) { }
     },
 

@@ -25,6 +25,7 @@
 
                 fetch('/api/admin/activity', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json'
                     },
