@@ -32,9 +32,12 @@
             const storage = resolveDraftStorage();
             if (storage && typeof storage.setItem === 'function') {
                 storage.setItem(STORAGE_KEY, JSON.stringify(list));
+                return true;
             }
+            return false;
         } catch (e) {
             // quota or disabled
+            return false;
         }
     }
 
@@ -61,7 +64,8 @@
                 label: typeof label === 'string' ? label : null
             };
             list.unshift(draft);
-            setStorage(list);
+            const saved = setStorage(list);
+            if (!saved) return null;
             return draft;
         },
 

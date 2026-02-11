@@ -643,11 +643,27 @@
         const payloadStr = value === null || value === undefined ? '' : (typeof value === 'string' ? value : JSON.stringify(value));
         const { type } = options || {};
         const draftType = type || (key === 'internalActivities' ? 'internal' : 'external');
+        const ENTITY_LIST_KEYS = ['activities', 'internalActivities', 'accounts', 'users'];
+        const isEntityListKey = ENTITY_LIST_KEYS.indexOf(key) !== -1;
         let payloadForDraft = value;
-        if (typeof payloadForDraft === 'string' && payloadForDraft) {
+        if (isEntityListKey && typeof payloadStr === 'string' && payloadStr) {
+            let listCount = null;
+            try {
+                const parsed = JSON.parse(payloadStr);
+                if (Array.isArray(parsed)) listCount = parsed.length;
+            } catch (_) { }
+            // Keep large full-list drafts as compact envelope to avoid parse/copy spikes and UI freeze.
+            payloadForDraft = {
+                _fullList: true,
+                storageKey: key,
+                payloadJson: payloadStr,
+                count: listCount
+            };
+        } else if (typeof payloadForDraft === 'string' && payloadForDraft) {
             try { payloadForDraft = JSON.parse(payloadForDraft); } catch (_) { }
         }
         let draft = null;
+        let draftSaved = true;
         if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
             draft = window.Drafts.addDraft({
                 type: draftType,
@@ -655,6 +671,7 @@
                 errorMessage: 'Submitting…',
                 storageKey: key
             });
+            draftSaved = !!draft;
         }
         return setItemAsync(key, payloadStr)
             .then(() => {
@@ -674,15 +691,21 @@
                 if (draft && draft.id && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
                     window.Drafts.updateDraft(draft.id, { errorMessage: errorMessage });
                 } else if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
-                    window.Drafts.addDraft({
+                    const fallbackDraft = window.Drafts.addDraft({
                         type: draftType,
                         payload: payloadForDraft,
                         errorMessage: errorMessage,
                         storageKey: key
                     });
+                    draftSaved = !!fallbackDraft;
                 }
                 try {
-                    window.dispatchEvent(new CustomEvent('remotestorage:save-failed', { detail: { key, error: err, message: errorMessage } }));
+                    const finalMessage = draftSaved
+                        ? errorMessage
+                        : (errorMessage + ' Draft could not be saved locally (storage full).');
+                    window.dispatchEvent(new CustomEvent('remotestorage:save-failed', {
+                        detail: { key, error: err, message: finalMessage, draftSaved: draftSaved }
+                    }));
                 } catch (_) { }
                 throw err;
             });

@@ -2714,17 +2714,36 @@ const App = {
             return;
         }
 
+        const isFullListDraftPayload = (payload) => {
+            return (Array.isArray(payload) && payload.length > 0) ||
+                (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
+        };
+
+        const decodeFullListPayload = (payload) => {
+            if (Array.isArray(payload)) return payload;
+            if (payload && payload._fullList === true && typeof payload.payloadJson === 'string') {
+                try {
+                    const parsed = JSON.parse(payload.payloadJson);
+                    return Array.isArray(parsed) ? parsed : null;
+                } catch (_) {
+                    return null;
+                }
+            }
+            return null;
+        };
+
         const cards = drafts.map(function (d) {
             const isInternal = d.type === 'internal';
             const p = d.payload;
             const isWinlossForm = p && p._winlossForm === true;
             const isActivityForm = p && p._activityForm === true;
-            const isFullList = Array.isArray(p) && p.length > 0;
+            const isFullList = isFullListDraftPayload(p);
+            const fullListCount = Array.isArray(p) ? p.length : (p && Number.isFinite(Number(p.count)) ? Number(p.count) : null);
             const storageKey = d.storageKey || (isInternal ? 'internalActivities' : 'activities');
             const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || d.attemptedAt || '')).toString().slice(0, 10);
             const listLabel = storageKey === 'accounts'
-                ? 'Accounts (win/loss) (' + p.length + ' items)'
-                : isInternal ? 'Internal (' + p.length + ' items)' : 'Activities (' + p.length + ' items)';
+                ? 'Accounts (win/loss) (' + (fullListCount != null ? fullListCount : '?') + ' items)'
+                : isInternal ? 'Internal (' + (fullListCount != null ? fullListCount : '?') + ' items)' : 'Activities (' + (fullListCount != null ? fullListCount : '?') + ' items)';
             const label = d.label
                 ? d.label + (dateStr ? ' – ' + dateStr : '')
                 : isFullList
@@ -2778,10 +2797,12 @@ const App = {
                             App.loadDraftsView();
                             return;
                         }
-                        var isFullList = Array.isArray(p) && p.length > 0;
+                        var isFullList = isFullListDraftPayload(p);
                         var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                         if (isFullList) {
-                            await App.persistDraftListByKey(keyToSave, draft.payload, draft.type);
+                            const decodedList = decodeFullListPayload(draft.payload);
+                            if (!decodedList) throw new Error('Corrupt full-list draft payload');
+                            await App.persistDraftListByKey(keyToSave, decodedList, draft.type);
                         } else if (draft.type === 'internal') {
                             await DataManager.addInternalActivity(draft.payload);
                         } else {
@@ -2813,7 +2834,7 @@ const App = {
                     App.loadDraftsView();
                     return;
                 }
-                if (Array.isArray(p)) return;
+                if (isFullListDraftPayload(p)) return;
                 if (typeof Activities === 'undefined' || !Activities.openActivityModal) return;
                 Activities.openActivityModal({
                     mode: 'create',
@@ -2873,10 +2894,12 @@ const App = {
                 continue;
             }
             try {
-                const isFullList = Array.isArray(p) && p.length > 0;
+                const isFullList = isFullListDraftPayload(p);
                 const keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                 if (isFullList) {
-                    await this.persistDraftListByKey(keyToSave, draft.payload, draft.type);
+                    const decodedList = decodeFullListPayload(draft.payload);
+                    if (!decodedList) throw new Error('Corrupt full-list draft payload');
+                    await this.persistDraftListByKey(keyToSave, decodedList, draft.type);
                 } else if (draft.type === 'internal') {
                     await DataManager.addInternalActivity(draft.payload);
                 } else {
