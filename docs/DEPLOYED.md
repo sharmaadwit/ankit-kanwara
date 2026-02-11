@@ -33,6 +33,11 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 - **Reconcile = refetch only** – On login, reconcile refetches entity keys from server and invalidates DataManager cache; no merge with local backup for those keys.
 - **Async callers** – Bulk import and activities use `await` for DataManager entity getters; no sync-only paths for entity data in those flows.
 
+### Performance optimizations (load time)
+- **Bootstrap** – Init uses `GET /api/bootstrap` (config + user in one request) when cookie auth; avoids separate `/api/config` and `/api/auth/me` on first load.
+- **Deferred analytics presets** – `loadAnalyticsTablePresets` runs in background; does not block first paint.
+- **Batch reconcile** – On login, reconcile fetches `internalActivities`, `accounts`, `users` in one `GET /api/storage/batch?keys=...` instead of 3 separate requests; activities still fetched separately (sharded).
+
 ### Build 1, 2, 4 (recently deployed)
 - **4.1 (FB7) 15-day backup retention** – Daily backup workflow keeps last 15 dated snapshots; `storage-snapshot-latest.json` plus dated files.
 - **1.3 (FB2) Activities refresh on date change** – After activity save (create/update), activities cache is invalidated and list/cards refetch and re-render so the activity appears in the correct month.
@@ -55,6 +60,7 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 |-----------------|-------------|
 | Build ID        | `git rev-parse HEAD` or GitHub/Railway commit |
 | Health          | `GET /api/health` |
+| Bootstrap       | `GET /api/bootstrap` (config + user in one; init uses this when cookie auth) |
 | Config          | `GET /api/config` |
 | Backup run      | GitHub Actions → Daily storage backup (or deploy workflow) |
 | Cookie auth on  | Set `FORCE_COOKIE_AUTH=true`; run user migration if using DB users |

@@ -195,6 +195,51 @@ const createApp = (options = {}) => {
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
 
+  app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
+    const hostname = req.hostname || '';
+    const isLocalHost =
+      hostname.includes('localhost') ||
+      hostname.startsWith('127.') ||
+      hostname.endsWith('.local');
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || '').toLowerCase() === 'true';
+    try {
+      const config = await getAppConfig();
+      const configPayload = {
+        remoteStorage:
+          forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+        cookieAuth,
+        featureFlags: config.featureFlags,
+        dashboardVisibility: config.dashboardVisibility,
+        dashboardMonth: config.dashboardMonth
+      };
+      let user = null;
+      if (cookieAuth && req.user) {
+        user = {
+          userId: req.user.id,
+          username: req.user.username,
+          email: req.user.email || '',
+          roles: req.user.roles || [],
+          regions: req.user.regions || [],
+          salesReps: req.user.salesReps || [],
+          defaultRegion: req.user.defaultRegion || ''
+        };
+      }
+      res.json({ config: configPayload, user });
+    } catch (error) {
+      logger.error('bootstrap_failed', { message: error.message });
+      res.json({
+        config: {
+          remoteStorage: forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
+          cookieAuth,
+          featureFlags: {},
+          dashboardVisibility: {},
+          dashboardMonth: 'last'
+        },
+        user: null
+      });
+    }
+  });
+
   app.get('/api/health', async (req, res) => {
     const dbOk = await checkHealth();
     if (!dbOk) {

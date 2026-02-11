@@ -175,12 +175,29 @@ const App = {
             // Always setup event listeners (needed for login form)
             this.setupEventListeners();
 
-            await Promise.all([
-                this.loadAppConfig(),
-                this.loadAnalyticsTablePresets()
-            ]);
+            const bootstrap = await this.loadBootstrap();
+            this.setAppConfiguration(bootstrap.config || {});
 
-            const hasSession = await Auth.init();
+            this.loadAnalyticsTablePresetsDeferred();
+
+            let hasSession = false;
+            if (bootstrap.user) {
+                Auth.currentUser = {
+                    id: bootstrap.user.userId,
+                    username: bootstrap.user.username,
+                    email: bootstrap.user.email || '',
+                    roles: bootstrap.user.roles || [],
+                    regions: bootstrap.user.regions || [],
+                    salesReps: bootstrap.user.salesReps || [],
+                    defaultRegion: bootstrap.user.defaultRegion || '',
+                    isActive: true
+                };
+                Auth.writeSession({ userId: Auth.currentUser.id, loginTime: new Date().toISOString() });
+                Auth.showMainApp();
+                hasSession = true;
+            } else {
+                hasSession = await Auth.init();
+            }
             if (!hasSession) {
                 this.setLoading(false);
                 return;
@@ -701,6 +718,20 @@ const App = {
         }
     },
 
+    async loadBootstrap() {
+        try {
+            const response = await fetch('/api/bootstrap', { credentials: 'include', cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Bootstrap failed: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.warn('Bootstrap failed, falling back to config-only.', error);
+            const config = await this.loadAppConfig();
+            return { config: config || {}, user: null };
+        }
+    },
+
     async loadAppConfig() {
         try {
             const response = await fetch('/api/config', { cache: 'no-store' });
@@ -709,10 +740,18 @@ const App = {
             }
             const payload = await response.json();
             this.setAppConfiguration(payload || {});
+            return payload || {};
         } catch (error) {
             console.warn('Unable to load app config, falling back to defaults.', error);
             this.setAppConfiguration({});
+            return {};
         }
+    },
+
+    loadAnalyticsTablePresetsDeferred() {
+        this.loadAnalyticsTablePresets().catch((err) => {
+            console.warn('Background load of analytics presets failed:', err);
+        });
     },
 
     setAppConfiguration(config = {}) {

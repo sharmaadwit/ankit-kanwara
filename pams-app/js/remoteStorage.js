@@ -943,6 +943,31 @@
 
     /** Entity keys: reconcile = refetch only (no merge with local backup, no PUT). UI will refetch via DataManager. */
     const ENTITY_RECONCILE_KEYS = ['internalActivities', 'accounts', ACTIVITIES_KEY, 'users'];
+    const BATCH_RECONCILE_KEYS = ['internalActivities', 'accounts', 'users'];
+
+    /** Batch fetch multiple keys in one request. Updates lastVersion for each item. */
+    const fetchBatchAsync = (keys) => {
+        if (!keys || keys.length === 0) return Promise.resolve({ items: [] });
+        const url = buildUrl('/batch?keys=' + keys.map((k) => encodeURIComponent(k)).join(','));
+        const headers = buildHeaders({});
+        return fetch(url, {
+            method: 'GET',
+            headers: { Accept: 'application/json', ...headers },
+            credentials: 'include'
+        }).then((res) => {
+            if (!res.ok) throw new Error('Batch fetch failed: ' + res.status);
+            return res.json();
+        }).then((data) => {
+            const items = (data && data.items) || [];
+            items.forEach((item) => {
+                if (item && item.key != null && item.updated_at != null) {
+                    lastVersion[item.key] = item.updated_at;
+                }
+            });
+            return { items };
+        });
+    };
+
     /** On login: for entity keys refetch from server and invalidate cache only; no merge, no PUT. */
     const reconcileOnLogin = async () => {
         if (typeof window !== 'undefined') {
@@ -961,7 +986,7 @@
         }
     };
     const reconcileOnLoginImpl = async () => {
-        const refetch = async (key) => {
+        const refetchOne = async (key) => {
             try {
                 if (typeof getItemAsync === 'function') {
                     await getItemAsync(key);
@@ -979,7 +1004,18 @@
                 }
             }
         };
-        await Promise.all(ENTITY_RECONCILE_KEYS.map(refetch));
+        try {
+            await fetchBatchAsync(BATCH_RECONCILE_KEYS);
+            if (typeof console !== 'undefined' && console.log) {
+                console.log('[RemoteStorage] Reconcile on login: batch refetched ' + BATCH_RECONCILE_KEYS.join(', ') + '.');
+            }
+        } catch (err) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[RemoteStorage] Reconcile batch failed, falling back to per-key:', err.message);
+            }
+            await Promise.all(BATCH_RECONCILE_KEYS.map(refetchOne));
+        }
+        await refetchOne(ACTIVITIES_KEY);
         if (typeof DataManager !== 'undefined') {
             if (typeof DataManager.invalidateCache === 'function') {
                 DataManager.invalidateCache('activities', 'accounts', 'internalActivities', 'users', 'allActivities');

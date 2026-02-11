@@ -250,6 +250,33 @@ router.delete('/pending/:id', requireAdminAuth, async (req, res) => {
   }
 });
 
+/** Batch GET: fetch multiple keys in one request. ?keys=key1,key2,key3 */
+router.get('/batch', async (req, res) => {
+  try {
+    const keysParam = (req.query.keys || '').trim();
+    const keys = keysParam ? keysParam.split(',').map((k) => k.trim()).filter(Boolean) : [];
+    if (!keys.length || keys.length > 20) {
+      return res.status(400).json({ message: 'Provide 1–20 keys in ?keys=key1,key2' });
+    }
+    const { rows } = await getPool().query(
+      'SELECT key, value, updated_at FROM storage WHERE key = ANY($1::text[]);',
+      [keys]
+    );
+    const items = (rows || []).map((r) => ({
+      key: r.key,
+      value: maybeDecompressValue(r.value),
+      updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : null
+    }));
+    res.json({ items });
+  } catch (error) {
+    logger.error('storage_batch_failed', {
+      message: error.message,
+      transactionId: req.transactionId
+    });
+    res.status(500).json({ message: 'Failed to read keys' });
+  }
+});
+
 router.get('/:key', async (req, res) => {
   try {
     const row = await getValueWithVersion(req.params.key);
