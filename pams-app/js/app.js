@@ -584,6 +584,15 @@ const App = {
                 const view = e.currentTarget.dataset.view;
                 this.switchView(view);
             });
+
+            // Warm likely next view data on intent (hover/focus/touch) without rendering.
+            const intentPrefetch = (event) => {
+                const view = event.currentTarget?.dataset?.view;
+                this.queueViewPrefetch(view);
+            };
+            link.addEventListener('mouseenter', intentPrefetch);
+            link.addEventListener('focus', intentPrefetch);
+            link.addEventListener('touchstart', intentPrefetch, { passive: true });
         });
 
         // Sidebar toggle (mobile)
@@ -1165,6 +1174,71 @@ const App = {
                 break;
             default:
                 break;
+        }
+    },
+
+    canPrefetchView(viewName) {
+        if (!viewName || !this.isValidView(viewName)) return false;
+        if (viewName === this.currentView) return false;
+        if (!this.isAccessible(this.getDashboardVisibilityKey(viewName))) return false;
+        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
+            return false;
+        }
+        return true;
+    },
+
+    queueViewPrefetch(viewName) {
+        if (!this.canPrefetchView(viewName)) return;
+        if (!this._viewPrefetchTimers) this._viewPrefetchTimers = {};
+        if (!this._viewPrefetchMeta) this._viewPrefetchMeta = {};
+
+        const lastAt = this._viewPrefetchMeta[viewName]?.lastAt || 0;
+        if (Date.now() - lastAt < 60_000) return; // Throttle to avoid repeated server work.
+
+        clearTimeout(this._viewPrefetchTimers[viewName]);
+        this._viewPrefetchTimers[viewName] = setTimeout(() => {
+            const run = () => this.prefetchViewData(viewName);
+            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(run, { timeout: 400 });
+            } else {
+                setTimeout(run, 0);
+            }
+        }, 250);
+    },
+
+    async prefetchViewData(viewName) {
+        if (!this.canPrefetchView(viewName)) return;
+        if (!this._viewPrefetchMeta) this._viewPrefetchMeta = {};
+        if (this._viewPrefetchMeta[viewName]?.inFlight) return;
+
+        this._viewPrefetchMeta[viewName] = { ...(this._viewPrefetchMeta[viewName] || {}), inFlight: true };
+        try {
+            // Keep prefetch low-cost: warm only the core datasets each tab needs most.
+            switch (viewName) {
+                case 'activities':
+                    await DataManager.getAllActivities();
+                    break;
+                case 'accounts':
+                    await DataManager.getAccounts();
+                    break;
+                case 'winloss':
+                case 'projectHealth':
+                case 'sfdcCompliance':
+                case 'reports':
+                    await Promise.all([DataManager.getAccounts(), DataManager.getUsers()]);
+                    break;
+                case 'dashboard':
+                    await Promise.all([DataManager.getAllActivities(), DataManager.getAccounts(), DataManager.getUsers()]);
+                    break;
+                default:
+                    break;
+            }
+            this._viewPrefetchMeta[viewName] = { lastAt: Date.now(), inFlight: false };
+        } catch (error) {
+            this._viewPrefetchMeta[viewName] = { ...(this._viewPrefetchMeta[viewName] || {}), inFlight: false };
+            if (typeof console !== 'undefined' && console.debug) {
+                console.debug('[Prefetch] skipped/failed for view:', viewName, error?.message || error);
+            }
         }
     },
 

@@ -39,6 +39,7 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 - **Batch reconcile** – On login, reconcile fetches `internalActivities`, `accounts`, `users` in one `GET /api/storage/batch?keys=...` instead of 3 separate requests; activities still fetched separately (sharded).
 - **Dashboard-first refresh** – Data-changing actions refresh only the active tab/view; other tabs load when clicked (no eager multi-tab reload after each save/delete).
 - **Startup trim** – Removed unconditional `ensureDefaultUsers` call on `DOMContentLoaded`; legacy seeding still occurs on legacy login path.
+- **Intent prefetch** – Sidebar hover/focus/touch prefetches next-view core data with throttling + idle scheduling to keep tab switches snappy without heavy background load.
 
 ### Build 1, 2, 4 (recently deployed)
 - **4.1 (FB7) 15-day backup retention** – Daily backup workflow keeps last 15 dated snapshots; `storage-snapshot-latest.json` plus dated files.
