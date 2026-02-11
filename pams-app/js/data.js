@@ -931,8 +931,12 @@ const DataManager = {
                 this.invalidateCache('users', 'allActivities');
                 return;
             } catch (err) {
-                console.warn('[DataManager] Async saveUsers failed, falling back to sync:', err);
+                console.warn('[DataManager] Async saveUsers failed; preserving draft and aborting sync overwrite:', err);
+                throw err;
             }
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            throw new Error('Remote entity write path unavailable for users');
         }
         localStorage.setItem('users', payload);
         this.invalidateCache('users', 'allActivities');
@@ -1800,9 +1804,12 @@ const DataManager = {
                 this.invalidateCache('accounts', 'allActivities');
                 return;
             } catch (err) {
-                console.warn('[DataManager] Async saveAccounts failed, falling back to sync:', err);
-                // Fallback to sync when not entity-only path
+                console.warn('[DataManager] Async saveAccounts failed; preserving draft and aborting sync overwrite:', err);
+                throw err;
             }
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            throw new Error('Remote entity write path unavailable for accounts');
         }
         localStorage.setItem('accounts', payload);
         this.invalidateCache('accounts', 'allActivities');
@@ -1957,8 +1964,12 @@ const DataManager = {
                 this.invalidateCache('activities', 'allActivities');
                 return;
             } catch (err) {
-                console.warn('[DataManager] Async saveActivities failed, falling back to sync:', err);
+                console.warn('[DataManager] Async saveActivities failed; preserving draft and aborting sync overwrite:', err);
+                throw err;
             }
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            throw new Error('Remote entity write path unavailable for activities');
         }
         localStorage.setItem('activities', payload);
         this.invalidateCache('activities', 'allActivities');
@@ -2128,8 +2139,12 @@ const DataManager = {
                 this.invalidateCache('internalActivities', 'allActivities');
                 return;
             } catch (err) {
-                console.warn('[DataManager] Async saveInternalActivities failed, falling back to sync:', err);
+                console.warn('[DataManager] Async saveInternalActivities failed; preserving draft and aborting sync overwrite:', err);
+                throw err;
             }
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            throw new Error('Remote entity write path unavailable for internalActivities');
         }
         localStorage.setItem('internalActivities', payload);
         this.invalidateCache('internalActivities', 'allActivities');

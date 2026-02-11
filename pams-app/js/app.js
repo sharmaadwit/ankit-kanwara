@@ -1133,6 +1133,41 @@ const App = {
         }
     },
 
+    refreshCurrentViewData() {
+        switch (this.currentView) {
+            case 'dashboard':
+                this.loadDashboard();
+                break;
+            case 'activities':
+                this.loadActivitiesView();
+                break;
+            case 'drafts':
+                this.loadDraftsView();
+                break;
+            case 'winloss':
+                this.loadWinLossView();
+                break;
+            case 'reports':
+                if (InterfaceManager.getCurrentInterface() === 'card') {
+                    this.loadCardReportsView();
+                } else {
+                    this.loadReports();
+                }
+                break;
+            case 'accounts':
+                this.loadAccountsView();
+                break;
+            case 'projectHealth':
+                this.loadProjectHealthView();
+                break;
+            case 'sfdcCompliance':
+                this.loadSfdcComplianceView();
+                break;
+            default:
+                break;
+        }
+    },
+
     // Load dashboard
     loadDashboard() {
         // Always use the new card-based dashboard
@@ -2261,17 +2296,7 @@ const App = {
 
         await DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
         UI.showNotification('SFDC link updated successfully.', 'success');
-
-        this.loadAccountsView();
-        this.loadWinLossView();
-        this.loadProjectHealthView();
-        this.loadSfdcComplianceView();
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardAccountsView();
-            this.loadCardWinLossView();
-            this.loadCardProjectHealthView();
-            this.loadCardSfdcComplianceView();
-        }
+        this.refreshCurrentViewData();
     },
 
     async updateSfdcLinkFromInput(accountId, projectId, inputId) {
@@ -2291,16 +2316,7 @@ const App = {
         }
         await DataManager.updateProject(accountId, projectId, { sfdcLink: trimmed });
         UI.showNotification('SFDC link updated successfully.', 'success');
-        this.loadAccountsView();
-        this.loadWinLossView();
-        this.loadProjectHealthView();
-        this.loadSfdcComplianceView();
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            this.loadCardAccountsView();
-            this.loadCardWinLossView();
-            this.loadCardProjectHealthView();
-            this.loadCardSfdcComplianceView();
-        }
+        this.refreshCurrentViewData();
     },
 
     // Load card-based accounts view
@@ -2672,9 +2688,10 @@ const App = {
                         if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
                         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
                         App.loadDraftsView();
-                        App.loadDashboard();
-                        if (App.loadActivitiesView) App.loadActivitiesView();
-                        if (keyToSave === 'accounts' && typeof App.loadWinLossView === 'function') App.loadWinLossView();
+                        App.updateDraftsBadge();
+                        if (App.currentView !== 'drafts' && typeof App.refreshCurrentViewData === 'function') {
+                            App.refreshCurrentViewData();
+                        }
                     } catch (e) {
                         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Still could not save. Try again or edit the draft.', 'error');
                     }
@@ -2778,9 +2795,10 @@ const App = {
             }
         }
         App.loadDraftsView();
-        App.loadDashboard();
-        if (App.loadActivitiesView) App.loadActivitiesView();
-        if (typeof App.loadWinLossView === 'function') App.loadWinLossView();
+        App.updateDraftsBadge();
+        if (App.currentView !== 'drafts' && typeof App.refreshCurrentViewData === 'function') {
+            App.refreshCurrentViewData();
+        }
         if (typeof UI !== 'undefined' && UI.showNotification) {
             let msg = submitted + ' submitted.';
             if (failed > 0) msg += ' ' + failed + ' failed – check remaining drafts.';
@@ -7622,16 +7640,10 @@ const App = {
         }
 
         UI.showNotification('Activity deleted successfully', 'success');
-        await this.loadActivitiesView();
-        await this.loadDashboard();
-        await this.loadAccountsView();
-        await this.loadWinLossView();
-        await this.loadProjectHealthView();
-        await this.loadSfdcComplianceView();
-        if (InterfaceManager.getCurrentInterface() === 'card') {
-            await this.loadCardWinLossView();
-            await this.loadCardProjectHealthView();
-            await this.loadCardSfdcComplianceView();
+        if (this.currentView === 'activities') {
+            await this.loadActivitiesView();
+        } else {
+            this.refreshCurrentViewData();
         }
     },
     // Expose functions globally
@@ -7668,11 +7680,6 @@ window.resetUsers = async function () {
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing app...');
-    try {
-        await DataManager.ensureDefaultUsers();
-    } catch (e) {
-        console.warn('ensureDefaultUsers failed:', e);
-    }
     App.init().catch(error => {
         console.error('Failed to initialise application', error);
     });

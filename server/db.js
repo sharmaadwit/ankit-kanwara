@@ -7,6 +7,11 @@ const normalizeFlag = (value) =>
     .trim()
     .toLowerCase() === 'true';
 
+const parseEnvInt = (value, fallback) => {
+  const parsed = parseInt(String(value || ''), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 const buildConnectionString = () => {
   const directUrl =
     process.env.DATABASE_URL ||
@@ -84,9 +89,10 @@ const createPool = () => {
         rejectUnauthorized: false
       }
       : undefined,
-    max: parseInt(process.env.PGPOOL_MAX || '10', 10),
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000
+    // Conservative defaults for shared/free DB plans; override via env.
+    max: parseEnvInt(process.env.PGPOOL_MAX, 5),
+    idleTimeoutMillis: parseEnvInt(process.env.PGPOOL_IDLE_TIMEOUT_MS, 30_000),
+    connectionTimeoutMillis: parseEnvInt(process.env.PGPOOL_CONNECTION_TIMEOUT_MS, 5_000)
   });
 };
 

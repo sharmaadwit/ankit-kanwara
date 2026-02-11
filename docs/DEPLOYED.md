@@ -37,6 +37,8 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 - **Bootstrap** – Init uses `GET /api/bootstrap` (config + user in one request) when cookie auth; avoids separate `/api/config` and `/api/auth/me` on first load.
 - **Deferred analytics presets** – `loadAnalyticsTablePresets` runs in background; does not block first paint.
 - **Batch reconcile** – On login, reconcile fetches `internalActivities`, `accounts`, `users` in one `GET /api/storage/batch?keys=...` instead of 3 separate requests; activities still fetched separately (sharded).
+- **Dashboard-first refresh** – Data-changing actions refresh only the active tab/view; other tabs load when clicked (no eager multi-tab reload after each save/delete).
+- **Startup trim** – Removed unconditional `ensureDefaultUsers` call on `DOMContentLoaded`; legacy seeding still occurs on legacy login path.
 
 ### Build 1, 2, 4 (recently deployed)
 - **4.1 (FB7) 15-day backup retention** – Daily backup workflow keeps last 15 dated snapshots; `storage-snapshot-latest.json` plus dated files.
@@ -50,7 +52,10 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 
 ### Database and ops
 - **PostgreSQL** – `storage` table (key-value JSON), `sessions`, `users` (for Phase 3), `pending_storage_saves`, `activity_logs`, `admin_logs`, etc. See schema in codebase if needed.
-- **Env** – `DATABASE_URL`, `PORT`, `FORCE_REMOTE_STORAGE`, `STORAGE_API_KEY`; optional `SESSION_COOKIE_NAME`, `SESSION_TTL_SEC`, `FORCE_COOKIE_AUTH` for cookie auth; `CORS_ALLOW_ORIGINS`, `APP_PUBLIC_URL`; Gmail/OAuth for notifications if used.
+- **Pool tuning** – Conservative default pg pool (`PGPOOL_MAX=5`, `PGPOOL_CONNECTION_TIMEOUT_MS=5000`, `PGPOOL_IDLE_TIMEOUT_MS=30000`) with env override.
+- **Storage read cache** – In-memory hot-read cache for storage GET/batch (`STORAGE_READ_CACHE_TTL_MS`, default 3000ms) with invalidation on writes/deletes.
+- **Conflict safety** – Entity saves keep async draft path in remote mode; no sync fallback overwrite when async save fails.
+- **Env** – `DATABASE_URL`, `PORT`, `FORCE_REMOTE_STORAGE`, `STORAGE_API_KEY`; optional `SESSION_COOKIE_NAME`, `SESSION_TTL_SEC`, `FORCE_COOKIE_AUTH`, pool/cache env vars; `CORS_ALLOW_ORIGINS`, `APP_PUBLIC_URL`; Gmail/OAuth for notifications if used.
 
 ---
 

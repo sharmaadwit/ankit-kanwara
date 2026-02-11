@@ -7,6 +7,38 @@ const logger = require('../logger');
 const { requireAdminAuth } = require('../middleware/auth');
 
 const GZIP_PREFIX = '__gz__';
+const STORAGE_READ_CACHE_TTL_MS = Math.max(
+  0,
+  parseInt(process.env.STORAGE_READ_CACHE_TTL_MS || '3000', 10) || 3000
+);
+const storageReadCache = new Map();
+
+const getCachedStorageRow = (key) => {
+  if (!key || STORAGE_READ_CACHE_TTL_MS <= 0) return null;
+  const entry = storageReadCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    storageReadCache.delete(key);
+    return null;
+  }
+  return entry.row;
+};
+
+const setCachedStorageRow = (key, row) => {
+  if (!key || !row || STORAGE_READ_CACHE_TTL_MS <= 0) return;
+  storageReadCache.set(key, {
+    row,
+    expiresAt: Date.now() + STORAGE_READ_CACHE_TTL_MS
+  });
+};
+
+const invalidateStorageReadCache = (key) => {
+  if (!key) {
+    storageReadCache.clear();
+    return;
+  }
+  storageReadCache.delete(key);
+};
 
 /** Archive current value to storage_history before overwrite (The Insurance). */
 const archiveCurrentValue = async (client, key) => {
@@ -67,6 +99,10 @@ const getValue = async (key) => {
 
 /** Returns { value, updated_at } for optimistic locking. updated_at is ISO string. */
 const getValueWithVersion = async (key) => {
+  const cached = getCachedStorageRow(key);
+  if (cached) {
+    return cached;
+  }
   const { rows } = await getPool().query(
     'SELECT value, updated_at FROM storage WHERE key = $1;',
     [key]
@@ -75,10 +111,47 @@ const getValueWithVersion = async (key) => {
     return null;
   }
   const row = rows[0];
-  return {
+  const normalized = {
     value: row.value,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null
   };
+  setCachedStorageRow(key, normalized);
+  return normalized;
+};
+
+const getValuesWithVersionBatch = async (keys) => {
+  const uniqueKeys = Array.from(new Set((keys || []).filter(Boolean)));
+  if (!uniqueKeys.length) return [];
+
+  const rowsByKey = new Map();
+  const missingKeys = [];
+  uniqueKeys.forEach((key) => {
+    const cached = getCachedStorageRow(key);
+    if (cached) {
+      rowsByKey.set(key, cached);
+    } else {
+      missingKeys.push(key);
+    }
+  });
+
+  if (missingKeys.length) {
+    const { rows } = await getPool().query(
+      'SELECT key, value, updated_at FROM storage WHERE key = ANY($1::text[]);',
+      [missingKeys]
+    );
+    (rows || []).forEach((row) => {
+      const normalized = {
+        value: row.value,
+        updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null
+      };
+      rowsByKey.set(row.key, normalized);
+      setCachedStorageRow(row.key, normalized);
+    });
+  }
+
+  return uniqueKeys
+    .filter((key) => rowsByKey.has(key))
+    .map((key) => ({ key, ...rowsByKey.get(key) }));
 };
 
 /** Unconditional upsert. Archives old value first, then updates. Returns { updated_at }. */
@@ -97,6 +170,7 @@ const setValue = async (key, value) => {
       [key, value]
     );
     const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
+    invalidateStorageReadCache(key);
     return { updated_at: updatedAt };
   } finally {
     client.release();
@@ -120,6 +194,7 @@ const setValueIfMatch = async (key, value, ifMatch) => {
         `INSERT INTO storage (key, value, updated_at) VALUES ($1, $2, NOW());`,
         [key, value]
       );
+      invalidateStorageReadCache(key);
       return { updated_at: now };
     }
     if (ifMatch != null && ifMatch !== '') {
@@ -142,6 +217,7 @@ const setValueIfMatch = async (key, value, ifMatch) => {
       [key, value]
     );
     const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : now;
+    invalidateStorageReadCache(key);
     return { updated_at: updatedAt };
   } finally {
     client.release();
@@ -150,6 +226,7 @@ const setValueIfMatch = async (key, value, ifMatch) => {
 
 const deleteValue = async (key) => {
   await getPool().query('DELETE FROM storage WHERE key = $1;', [key]);
+  invalidateStorageReadCache(key);
 };
 
 /** Log storage PUT for Railway/in-app diagnostics and retrieval (key, who, count). */
@@ -183,6 +260,7 @@ const logStorageWrite = (key, serializedValue, conditional, transactionId, usern
 
 const clearAll = async () => {
   await getPool().query('TRUNCATE storage;');
+  invalidateStorageReadCache();
 };
 
 router.get('/', async (req, res) => {
@@ -258,14 +336,11 @@ router.get('/batch', async (req, res) => {
     if (!keys.length || keys.length > 20) {
       return res.status(400).json({ message: 'Provide 1–20 keys in ?keys=key1,key2' });
     }
-    const { rows } = await getPool().query(
-      'SELECT key, value, updated_at FROM storage WHERE key = ANY($1::text[]);',
-      [keys]
-    );
+    const rows = await getValuesWithVersionBatch(keys);
     const items = (rows || []).map((r) => ({
       key: r.key,
       value: maybeDecompressValue(r.value),
-      updated_at: r.updated_at ? new Date(r.updated_at).toISOString() : null
+      updated_at: r.updated_at
     }));
     res.json({ items });
   } catch (error) {
