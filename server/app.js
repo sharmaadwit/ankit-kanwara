@@ -42,6 +42,10 @@ const createApp = (options = {}) => {
   loadEnvironment();
 
   const app = express();
+  const getRuntimeStatus =
+    typeof options.getRuntimeStatus === 'function'
+      ? options.getRuntimeStatus
+      : () => ({});
   const forceRemoteStorage =
     String(process.env.FORCE_REMOTE_STORAGE || '').toLowerCase() === 'true';
 
@@ -66,7 +70,8 @@ const createApp = (options = {}) => {
     allowedOrigins: allowAllOrigins ? ['*'] : allowedOrigins
   });
 
-  app.set('trust proxy', true);
+  // Railway runs behind a proxy; trust only one hop to avoid permissive trust-proxy warnings.
+  app.set('trust proxy', 1);
   // Use CORS options delegate so we can allow same-origin (request host === origin host) when APP_PUBLIC_URL is unset (e.g. Railway).
   app.use(
     cors((req, callback) => {
@@ -247,6 +252,23 @@ const createApp = (options = {}) => {
       return res.status(503).json({ status: 'unhealthy', reason: 'database_unreachable' });
     }
     res.json({ status: 'ok' });
+  });
+
+  // Rich health endpoint for live incident debugging and auto-recovery visibility.
+  app.get('/api/healthz', async (req, res) => {
+    const dbOk = await checkHealth();
+    const runtime = getRuntimeStatus();
+    const payload = {
+      status: dbOk ? 'ok' : 'degraded',
+      db: {
+        reachable: dbOk
+      },
+      runtime
+    };
+    if (!dbOk) {
+      return res.status(503).json(payload);
+    }
+    return res.json(payload);
   });
 
   app.get('/api/config', async (req, res) => {
