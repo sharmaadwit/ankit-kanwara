@@ -219,6 +219,18 @@ const deleteValue = async (key) => {
 };
 
 /** Log storage PUT for Railway/in-app diagnostics and retrieval (key, who, count). */
+const extractPayloadCount = (key, serializedValue) => {
+  if (!(key === 'activities' || key === 'accounts' || key === 'internalActivities' || /^activities:\d{4}-\d{2}$/.test(key))) {
+    return null;
+  }
+  try {
+    const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
+    return Array.isArray(parsed) ? parsed.length : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 const logStorageWrite = (key, serializedValue, conditional, transactionId, username) => {
   const meta = {
     key,
@@ -226,24 +238,8 @@ const logStorageWrite = (key, serializedValue, conditional, transactionId, usern
     transactionId,
     username: username || null
   };
-  if (key === 'activities' || key === 'accounts' || key === 'internalActivities') {
-    try {
-      const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
-      if (Array.isArray(parsed)) {
-        meta.count = parsed.length;
-      }
-    } catch (_) {
-      // ignore parse errors
-    }
-  }
-  if (/^activities:\d{4}-\d{2}$/.test(key)) {
-    try {
-      const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
-      if (Array.isArray(parsed)) {
-        meta.count = parsed.length;
-      }
-    } catch (_) {}
-  }
+  const count = extractPayloadCount(key, serializedValue);
+  if (count != null) meta.count = count;
   logger.info('storage_write', meta);
 };
 
@@ -389,9 +385,17 @@ router.put('/:key', async (req, res) => {
         ifMatch
       );
       if (result.conflict) {
+        const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
+        const incomingCount = extractPayloadCount(req.params.key, serializedValue);
+        const currentCount = extractPayloadCount(req.params.key, result.value);
         logger.warn('storage_conflict', {
           key: req.params.key,
+          username: username || 'unknown',
           transactionId: req.transactionId,
+          ifMatch: ifMatch || null,
+          currentUpdatedAt: result.updated_at || null,
+          incomingCount: incomingCount != null ? incomingCount : undefined,
+          currentCount: currentCount != null ? currentCount : undefined,
           message: 'Key was updated by another request; client should merge and retry'
         });
         try {
@@ -399,10 +403,21 @@ router.put('/:key', async (req, res) => {
             req.params.key,
             serializedValue,
             'conflict',
-            req.get('X-Admin-User') || req.get('x-admin-user')
+            username
           );
+          logger.info('storage_pending_draft_saved', {
+            key: req.params.key,
+            username: username || 'unknown',
+            transactionId: req.transactionId,
+            reason: 'conflict'
+          });
         } catch (archiveErr) {
-          logger.warn('storage_pending_draft_failed', { message: archiveErr.message, key: req.params.key });
+          logger.warn('storage_pending_draft_failed', {
+            message: archiveErr.message,
+            key: req.params.key,
+            username: username || 'unknown',
+            transactionId: req.transactionId
+          });
         }
         const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
         return res.status(409).json({

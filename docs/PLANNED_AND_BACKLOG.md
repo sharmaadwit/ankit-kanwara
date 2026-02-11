@@ -43,6 +43,34 @@ Numbering is global (`P-001`, `P-002`, ...), grouped by project stream.
 
 ---
 
+## 2.1) Backlog Feature List (Quick Read)
+
+- **P-001 Activity date default = last logged** - Auto-fill activity date from latest user/project submission to speed daily logging.
+- **P-002 Sort + owner defaults** - Keep activities ordered by logged date and default to "My activities" on open.
+- **P-003 Enablement optional warning** - Allow save without days/hours for enablement with visible warning instead of hard stop.
+- **P-004 Single-project default** - Auto-select project in win/loss flows when only one project exists for an account.
+- **P-005 Industry/use-case merge UX** - Guided merge flow with base selection, rename, and confirm step.
+- **P-006 Cookie-only final cutover** - Remove legacy header/API-key fallback once cookie auth migration is complete.
+- **P-007 Non-entity async hardening** - Continue replacing sync fallbacks to keep write/read paths async and safer under load.
+- **P-008 Draft-first conflict UX** - Improve conflict handling in Drafts with clearer retry and recovery behavior.
+- **P-009 Activities at scale API path** - Use month-scoped/batched activity reads for better multi-user performance.
+- **P-010 View-level prefetch tuning** - Calibrate prefetch scope/timing to improve responsiveness without extra server load.
+- **P-011 Migration cleanup plan** - Finalize migrated data cleanup logic, merge flow, and overwrite safeguards.
+- **P-012 Migration runbook** - Prepare repeatable migration checklist with validation and rollback guidance.
+- **P-013 Reports enhancements** - Continue reports UI/insight improvements and preset usability upgrades.
+- **P-014 Export suite** - Expand exports across reports/admin to CSV/XLSX/PDF where relevant.
+- **P-015 Download email package** - Generate downloadable monthly email content/assets for manual periodic distribution.
+- **P-016 Email notifications** - Extend notifications for failures, anomalies, and optional periodic digests.
+- **P-017 Backup verification automation** - Automate backup validation plus restore-check reporting.
+- **P-018 Production metrics baseline** - Establish latency/error dashboards and practical service thresholds.
+- **P-019 Admin panel split/cleanup** - Simplify and de-duplicate admin navigation and controls.
+- **P-020 Win of the month UI** - Add a spotlight card for featured wins.
+- **P-021 File attachments** - Enable controlled attachments for activities/accounts.
+- **P-022 Calendar integration** - Support optional sync of key activity dates to calendars.
+- **P-023 Advanced analytics** - Add deeper trend, funnel, and cohort analysis capabilities.
+
+---
+
 ## 3) Deployed Items (Historical Tracking)
 
 | Build | Item | Description | Status |
