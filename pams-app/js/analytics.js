@@ -212,25 +212,6 @@ const Analytics = (() => {
         `;
     }
 
-    function buildLoadingMarkup(variant = 'standard') {
-        const wrapperClass = variant === 'card' ? 'content-card' : 'card';
-        const headerClass = variant === 'card' ? 'content-card-header' : 'card-header';
-        const bodyClass = variant === 'card' ? 'analytics-card-body' : 'card-body';
-        return `
-            <div class="${wrapperClass}">
-                <div class="${headerClass}">
-                    <h3>Loading analytics…</h3>
-                </div>
-                <div class="${bodyClass}">
-                    <div class="analytics-loading">
-                        <div class="spinner"></div>
-                        <span>Crunching the latest activity insights…</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
     async function renderCharts({ prefix, analytics }) {
         destroyCharts(prefix);
 
@@ -712,7 +693,6 @@ const Analytics = (() => {
     return {
         config,
         buildMarkup,
-        buildLoadingMarkup,
         renderCharts,
         destroyCharts,
         renderEmptyState

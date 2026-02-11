@@ -56,16 +56,10 @@ const setFeatureFlags = async (flags = {}) => {
   return merged;
 };
 
-const isFeatureEnabled = async (flagName) => {
-  const flags = await getFeatureFlags();
-  return flags[flagName] !== false;
-};
-
 module.exports = {
   defaultFlags,
   getFeatureFlags,
-  setFeatureFlags,
-  isFeatureEnabled
+  setFeatureFlags
 };
 
 

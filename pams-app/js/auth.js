@@ -33,11 +33,12 @@ const Auth = {
         const store = this.getSessionStore();
         if (!store) return null;
         try {
-            const raw = store.getItem('currentSession');
+            const raw = store.getItem('session') || store.getItem('currentSession');
             if (!raw) return null;
             return JSON.parse(raw);
         } catch (error) {
             try {
+                store.removeItem('session');
                 store.removeItem('currentSession');
             } catch (cleanupError) {
                 console.warn('Unable to clear corrupt session token', cleanupError);
@@ -67,6 +68,7 @@ const Auth = {
         const store = this.getSessionStore();
         if (store) {
             try {
+                store.removeItem('session');
                 store.removeItem('currentSession');
             } catch (error) {
                 console.warn('Unable to clear session token', error);
@@ -84,6 +86,7 @@ const Auth = {
             ) {
                 return;
             }
+            window.localStorage.removeItem('session');
             window.localStorage.removeItem('currentSession');
         } catch (error) {
             console.warn('Unable to clear shared session token', error);

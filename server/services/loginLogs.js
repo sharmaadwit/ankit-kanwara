@@ -66,29 +66,6 @@ const logLogoutEvent = async ({ sessionId, transactionId }) => {
   return { success: true, ...rows[0] };
 };
 
-const getActiveSessions = async (limit = 50) => {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `
-      SELECT
-        id,
-        session_id AS "sessionId",
-        username,
-        created_at AS "createdAt",
-        user_agent AS "userAgent",
-        ip_address AS "ipAddress"
-      FROM login_logs
-      WHERE session_id IS NOT NULL 
-        AND logout_at IS NULL
-        AND status = 'success'
-      ORDER BY created_at DESC
-      LIMIT $1;
-    `,
-    [limit]
-  );
-  return rows;
-};
-
 const getRecentLoginLogs = async (limit = 100, offset = 0) => {
   const pool = getPool();
   const parsedLimit = Number.isFinite(Number(limit))
@@ -184,7 +161,6 @@ const getUsageMetrics = async () => {
 module.exports = {
   logLoginAttempt,
   logLogoutEvent,
-  getActiveSessions,
   getRecentLoginLogs,
   getUsageMetrics
 };

@@ -22,25 +22,14 @@ const requestContextMiddleware = (req, res, next) => {
   );
 };
 
-const getContext = () => storage.getStore() || {};
-
 const getTransactionId = () => {
-  const context = getContext();
+  const context = storage.getStore() || {};
   return context.transactionId;
-};
-
-const setContextValue = (key, value) => {
-  const context = storage.getStore();
-  if (context) {
-    context[key] = value;
-  }
 };
 
 module.exports = {
   requestContextMiddleware,
-  getContext,
-  getTransactionId,
-  setContextValue
+  getTransactionId
 };
 
 

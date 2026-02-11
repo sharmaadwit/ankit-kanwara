@@ -86,17 +86,6 @@ const listKeys = async () => {
   return rows.map((row) => row.key);
 };
 
-const getValue = async (key) => {
-  const { rows } = await getPool().query(
-    'SELECT value FROM storage WHERE key = $1;',
-    [key]
-  );
-  if (!rows.length) {
-    return null;
-  }
-  return rows[0].value;
-};
-
 /** Returns { value, updated_at } for optimistic locking. updated_at is ISO string. */
 const getValueWithVersion = async (key) => {
   const cached = getCachedStorageRow(key);

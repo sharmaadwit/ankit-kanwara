@@ -1242,6 +1242,42 @@ const App = {
         }
     },
 
+    async persistDraftListByKey(keyToSave, listPayload, draftType = 'external') {
+        const payloadArray = Array.isArray(listPayload) ? listPayload : [];
+
+        if (keyToSave === 'accounts' && DataManager.saveAccounts) {
+            await DataManager.saveAccounts(payloadArray);
+            return;
+        }
+        if (keyToSave === 'users' && DataManager.saveUsers) {
+            await DataManager.saveUsers(payloadArray);
+            return;
+        }
+        if (keyToSave === 'activities' && DataManager.saveActivities) {
+            await DataManager.saveActivities(payloadArray);
+            return;
+        }
+        if (keyToSave === 'internalActivities' && DataManager.saveInternalActivities) {
+            await DataManager.saveInternalActivities(payloadArray);
+            return;
+        }
+
+        // Non-entity fallback path.
+        const payload = JSON.stringify(listPayload);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
+            await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft(keyToSave, payload, {
+                type: draftType === 'internal' ? 'internal' : 'external'
+            });
+            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
+            return;
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            throw new Error('Remote storage async write path unavailable for draft list key: ' + keyToSave);
+        }
+        localStorage.setItem(keyToSave, payload);
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
+    },
+
     // Load dashboard
     loadDashboard() {
         // Always use the new card-based dashboard
@@ -2745,15 +2781,7 @@ const App = {
                         var isFullList = Array.isArray(p) && p.length > 0;
                         var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                         if (isFullList) {
-                            const payload = JSON.stringify(draft.payload);
-                            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
-                                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft(keyToSave, payload, {
-                                    type: keyToSave === 'internalActivities' ? 'internal' : 'external'
-                                });
-                            } else {
-                                localStorage.setItem(keyToSave, payload);
-                            }
-                            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
+                            await App.persistDraftListByKey(keyToSave, draft.payload, draft.type);
                         } else if (draft.type === 'internal') {
                             await DataManager.addInternalActivity(draft.payload);
                         } else {
@@ -2848,15 +2876,7 @@ const App = {
                 const isFullList = Array.isArray(p) && p.length > 0;
                 const keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                 if (isFullList) {
-                    const payload = JSON.stringify(draft.payload);
-                    if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
-                        await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft(keyToSave, payload, {
-                            type: keyToSave === 'internalActivities' ? 'internal' : 'external'
-                        });
-                    } else {
-                        localStorage.setItem(keyToSave, payload);
-                    }
-                    if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) DataManager.invalidateCache(keyToSave);
+                    await this.persistDraftListByKey(keyToSave, draft.payload, draft.type);
                 } else if (draft.type === 'internal') {
                     await DataManager.addInternalActivity(draft.payload);
                 } else {

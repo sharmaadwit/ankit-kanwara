@@ -74,6 +74,5 @@ module.exports = {
   createSession,
   getSession,
   destroySession,
-  cleanupExpiredSessions,
-  SESSION_TTL_SEC
+  cleanupExpiredSessions
 };

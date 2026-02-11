@@ -1,111 +1,75 @@
-# PAMS – Planned Work, Backlog & Thoughts
+# PAMS - Planned Work and Backlog
 
-Single place for **what is next**, **backlog items**, and **open decisions**. Items are numbered by category. **Build 1, 2, 4 are deployed**; remaining backlog and new features are below.
-
----
-
-## 1. Activities
-
-| No. | ID  | Name | Description | Decision / note |
-|-----|-----|------|-------------|-----------------|
-| 1.2 | #5  | Activity date default = last logged | Default activity date to last logged (project or user). | |
-| 1.3 | FB2 | Activities refresh on date change | Refetch/re-render so activity moves to correct month after date change. | **Deployed.** |
-| 1.4 | FB4 | Remember last activity date | Per user; default to last used date. | **Deployed.** |
-| 1.5 | FB5 | Sort by logged + default “My activities” | Sort by logged date; default filter “My activities”. | **Sort by logged date;** default **“My activities”**. |
-| 1.6 | FB1 | Enablement: optional with warning | When Enablement type and days/hours empty: allow save with warning. | **Optional** with warning when days/hours empty. |
+Single source of truth for roadmap, backlog, and deployment priorities.
+Numbering is global (`P-001`, `P-002`, ...), grouped by project stream.
 
 ---
 
+## 1) Current Status Snapshot
+
+- Deployed: backup retention, activity date refresh, remember last date, bootstrap init, batch reconcile, dashboard-first load, conflict-safe draft flow.
+- Platform direction: keep first paint fast, protect against data loss/conflicts, minimize DB load on Railway free tier.
+- Reference for live state: `docs/DEPLOYED.md`.
 
 ---
 
-## 3. Industries & use cases
+## 2) Product and Engineering Backlog (Master List)
 
-| No. | ID  | Name | Description | Decision / note |
-|-----|-----|------|-------------|-----------------|
-| 3.1 | FB3 | Industry/use case merge UX | Merge: type merged name, pick base candidate, tweak, confirm. | **Type merged name**, pick one candidate as base, tweak, confirm. |
-
----
-
-## 4. Backups & operations
-
-| No. | ID  | Name | Description | Decision / note |
-|-----|-----|------|-------------|-----------------|
-| 4.1 | FB7 | 15-day snapshot retention | Dated backup files + latest; keep last 15. | **Deployed** (daily-backup.yml). |
-| 4.2 | FB8 | Async callers | All callers use async DataManager APIs. | Largely done; verify in production. |
-
----
-
-## 5. Auth & technical (stabilization)
-
-| No. | Name | Description | Note |
-|-----|------|-------------|------|
-| 5.1 | Phase 3 cookie cutover | Set `FORCE_COOKIE_AUTH=true`, run user migration; client uses POST /api/auth/login + cookie. | Code deployed (cookie-first with header fallback). |
-| 5.2 | Cookie-only (remove header fallback) | After all clients use cookie auth, remove X-Admin-User / API-key fallback. | Optional, after cutover. |
-| 5.3 | Server-only fetch (optional) | Remove or narrow local backup for non-entity keys; optional “last fetch” TTL. | Entity keys already phased. |
-| 5.4 | Reconcile (optional) | “Submit all drafts” then refetch. | Already refetch-only for entity keys. |
-| 5.5 | Analytics at scale | For 20–30 concurrent viewers: prefer GET /api/entities/activities?month= or batched reads. | |
-
----
-
-## 6. Migration
-
-| No. | Name | Description | Note |
-|-----|------|-------------|------|
-| 6.1 | Migration cleanup plan | Migrated Data tab, Account/Project merge, work on copy, admin overwrite. | Full flow when running migration. |
+| No. | Stream | Project | Description | Status | Priority |
+|-----|--------|---------|-------------|--------|----------|
+| P-001 | Activities | Activity date default = last logged | Default new activity date to the user/project last logged date. | Planned | High |
+| P-002 | Activities | Sort + owner defaults | Sort activities by logged date and default filter to My activities. | Planned | High |
+| P-003 | Activities | Enablement optional warning | Allow save without days/hours for Enablement with explicit warning. | Planned | Medium |
+| P-004 | Accounts/Win-Loss | Single-project default | If account has one project, auto-select it in win/loss forms. | Planned | High |
+| P-005 | Industries | Industry/use-case merge UX | Merge flow: enter merged name, choose base, tweak, confirm. | Planned | Medium |
+| P-006 | Auth | Cookie-only final cutover | Remove header/API-key fallback after all users are on cookie auth. | Planned | High |
+| P-007 | Async/Data Safety | Non-entity async hardening | Continue replacing sync fallbacks where remote async is expected. | In progress | High |
+| P-008 | Async/Data Safety | Draft-first conflict UX | Improve conflict messaging and retry path from Drafts for full-list saves. | Planned | High |
+| P-009 | Performance | Activities at scale API path | Prefer month-scoped entity endpoint and/or batched reads for large activity datasets. | Planned | High |
+| P-010 | Performance | View-level prefetch tuning | Tune prefetch cadence and scope based on production telemetry. | Planned | Medium |
+| P-011 | Migration | Migration cleanup plan | Finalize migrated data tab flow, merge behavior, overwrite controls, checks. | Planned | High |
+| P-012 | Migration | Migration runbook | Step-by-step validated migration checklist for repeatable execution. | Planned | High |
+| P-013 | Reports | Reports enhancements | Continue analytics and reports UI/logic improvements and presets. | Planned | Medium |
+| P-014 | Reports | Export suite | Expand CSV/XLSX/PDF export coverage for reports and admin views. | Planned | Medium |
+| P-015 | Communications | Download email package | Generate downloadable monthly email body/assets for manual periodic send. | Planned | High |
+| P-016 | Communications | Email notifications | Alerting for login anomalies, failures, feature events, optional report digests. | Planned | Medium |
+| P-017 | Ops/Backups | Backup verification automation | Add recurring verification and restore test checklist/report. | Planned | Medium |
+| P-018 | Ops/Observability | Production metrics baseline | Add request/latency/error dashboards and SLO thresholds. | Planned | Medium |
+| P-019 | Admin | Admin panel split/cleanup | Streamline admin sections and remove stale controls/duplicate flows. | Planned | Medium |
+| P-020 | Optional | Win of the month UI | Featured win callout module. | Backlog | Low |
+| P-021 | Optional | File attachments | Attach files to activities/accounts with controlled storage policy. | Backlog | Low |
+| P-022 | Optional | Calendar integration | Optional sync of important dates and activity schedules. | Backlog | Low |
+| P-023 | Optional | Advanced analytics | Additional funnels, cohort trends, and leaderboards. | Backlog | Low |
 
 ---
 
-## 7. Reports & communications (discussed / planned)
+## 3) Deployed Items (Historical Tracking)
 
-| No. | Name | Description | Note |
-|-----|------|-------------|------|
-| 7.1 | Reports enhancements | Presales reports improvements; analytics table presets; PDF export for reports. | Align with other agents’ reports work. |
-| 7.2 | **Download mail for periodic sending** | Feature to generate and **download** an email (body/content) that can be sent periodically (e.g. monthly summary). User downloads the mail, then sends it manually or via their mail client on a schedule. | Discussed for periodic distribution. |
-| 7.3 | Email notifications | Notifications (e.g. feature toggle, CSV failure, login anomaly) via Gmail OAuth; extend to optional report digests. | Server has `email.js` and `notifications.js`; env: GMAIL_*. |
-| 7.4 | Export functionality | Export data (activities, accounts, reports) to CSV/Excel or PDF. | General export beyond “download mail”. |
-
----
-
-## 8. Optional / nice-to-have
-
-| No. | Name | Description | Note |
-|-----|------|-------------|------|
-| 8.1 | Win of the month UI | UI highlight for featured win. | |
-| 8.2 | File attachments | Attach files to activities or accounts. | |
-| 8.3 | Calendar integration | Sync activities or deadlines to calendar. | |
-| 8.4 | Advanced analytics | Deeper analytics and visualizations. | |
+| Build | Item | Description | Status |
+|-------|------|-------------|--------|
+| B-001 | Backup retention | Keep latest + dated snapshots with retention window. | Deployed |
+| B-002 | Activity date refresh | Re-fetch/re-render after date changes so month placement is correct. | Deployed |
+| B-003 | Last activity date memory | Persist last-used date per user for faster entry. | Deployed |
+| B-004 | First-load performance | Bootstrap endpoint + batch reconcile + deferred presets. | Deployed |
+| B-005 | Dashboard-first perf/safety | Lazy refresh strategy, draft-safe entity saves, storage read cache, pool tuning. | Deployed |
+| B-006 | Intent prefetch | Sidebar hover/focus/touch prefetch with throttle and idle scheduling. | Deployed |
 
 ---
 
-## 9. Execution order – Build 1, 2, 4 (deployed)
+## 4) Next Execution Plan (Suggested Order)
 
-**Status:** Build 1, 2, 4 have been implemented and **deployed**. Deploy = push to `main`; Railway (or host) builds and deploys.
-
-| Build | Item   | What was done | Status |
-|-------|--------|----------------|--------|
-| **1** | **4.1** (FB7) | 15-day backup retention: dated snapshots + keep last 15 in daily workflow. | **Deployed.** |
-| **2** | **1.3** (FB2) | Activities refresh on date change: after save, invalidate cache and refetch so list/cards re-render; activity appears in correct month. | **Deployed.** |
-| **4** | **1.4** (FB4) | Remember last activity date: per user in localStorage; default date input when opening form; update after save. | **Deployed.** |
-
----
-
-## 10. Next backlog (suggested order)
-
-After Build 1, 2, 4, continue with:
-
-1. **2.1** (FB6) – Wins: default project when only one  
-2. **1.2** (#5) – Activity date default = last logged (if different from 1.4)  
-3. **1.5** (FB5) – Sort by logged + default “My activities”  
-4. **1.6** (FB1) – Enablement optional with warning  
-5. **3.1** (FB3) – Industry/use case merge UX  
-6. **6.1** – Migration cleanup plan  
-7. **7.1–7.4** – Reports & communications (reports enhancements, download mail for periodic sending, email notifications, export) as prioritised
+1. **P-006** Cookie-only final cutover (post user migration confirmation).
+2. **P-008** Improve Drafts conflict UX for full-list retries and visibility.
+3. **P-009** Month-scoped activity reads in high-volume paths.
+4. **P-011 + P-012** Migration cleanup + runbook finalization.
+5. **P-015** Download email package for periodic reporting.
+6. **P-014 + P-013** Export suite and reports enhancement follow-up.
+7. **P-016** Email notifications expansion (digest optional).
 
 ---
 
-## 11. Reference
+## 5) References
 
-- **Deployed:** See `docs/DEPLOYED.md`.
-- **Build ID / rollback:** Git commit SHA; deploy from that commit to roll back.
-- **Deploy method:** Push to `main` (or run GitHub Actions “Deploy” workflow with branch to merge into `main`).
+- Deployment state: `docs/DEPLOYED.md`
+- Recovery and safety docs: `docs/DATA_BACK_TO_104_RECOVERY.md`, `docs/DATA_LOSS_ROOT_CAUSE_AND_RECOVERY.md`
+- Cleanup and migration plans: `docs/MIGRATION_CLEANUP_PLAN.md`, `docs/CLEANUP_PLAN.md`
