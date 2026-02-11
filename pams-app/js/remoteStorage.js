@@ -482,6 +482,78 @@
 
     /** Per-key version cache for optimistic locking (parallel / multi-tab safe). */
     const lastVersion = {};
+    const OUTBOX_STORAGE_KEY = '__pams_remote_outbox__';
+    const OUTBOX_MAX_ITEMS = 200;
+    const OUTBOX_RETRY_BASE_MS = 2000;
+    const OUTBOX_RETRY_MAX_MS = 60000;
+    const OUTBOX_PROCESS_BATCH_SIZE = 2;
+    let isFlushingOutbox = false;
+    let outboxFlushTimer = null;
+
+    const nowIso = () => new Date().toISOString();
+    const generateMutationId = () =>
+        'mut_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+
+    const safeReadOutbox = () => {
+        try {
+            if (!originalLocalStorage || typeof originalLocalStorage.getItem !== 'function') return [];
+            const raw = originalLocalStorage.getItem(OUTBOX_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
+    };
+
+    const safeWriteOutbox = (items) => {
+        try {
+            if (!originalLocalStorage || typeof originalLocalStorage.setItem !== 'function') return false;
+            originalLocalStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(items));
+            return true;
+        } catch (_) {
+            return false;
+        }
+    };
+
+    const updateOutbox = (updater) => {
+        const current = safeReadOutbox();
+        const next = updater(Array.isArray(current) ? current : []);
+        if (!Array.isArray(next)) return false;
+        return safeWriteOutbox(next);
+    };
+
+    const removeOutboxEntry = (id) => {
+        if (!id) return;
+        updateOutbox((items) => items.filter((item) => item && item.id !== id));
+    };
+
+    const updateOutboxEntry = (id, patch) => {
+        if (!id) return false;
+        return updateOutbox((items) => items.map((item) => {
+            if (!item || item.id !== id) return item;
+            return { ...item, ...patch };
+        }));
+    };
+
+    const enqueueOutboxEntry = (entry) => {
+        if (!entry || !entry.id) return false;
+        return updateOutbox((items) => {
+            const filtered = items.filter((item) => item && item.id !== entry.id);
+            filtered.unshift(entry);
+            if (filtered.length > OUTBOX_MAX_ITEMS) {
+                return filtered.slice(0, OUTBOX_MAX_ITEMS);
+            }
+            return filtered;
+        });
+    };
+
+    const computeRetryDelayMs = (attempts) => {
+        const safeAttempts = Math.max(1, Number(attempts) || 1);
+        const exp = Math.min(OUTBOX_RETRY_MAX_MS, OUTBOX_RETRY_BASE_MS * Math.pow(2, safeAttempts - 1));
+        const jitter = Math.floor(Math.random() * 500);
+        return exp + jitter;
+    };
 
     const buildHeaders = (extraHeaders) => {
         const headers = {
@@ -511,9 +583,15 @@
         const skipIfMatch = (opts && opts.skipIfMatch === true) || (typeof window !== 'undefined' && window.__REMOTE_STORAGE_RECONCILE_PUT__ === true);
         if (method === 'PUT' && suffix && suffix.startsWith('/') && !skipIfMatch) {
             const key = decodeURIComponent(suffix.replace(/^\//, ''));
-            if (key && lastVersion[key] != null) {
-                requestHeaders['If-Match'] = lastVersion[key];
+            const ifMatchValue = opts && Object.prototype.hasOwnProperty.call(opts, 'ifMatchValue')
+                ? opts.ifMatchValue
+                : lastVersion[key];
+            if (key && ifMatchValue != null) {
+                requestHeaders['If-Match'] = ifMatchValue;
             }
+        }
+        if (opts && opts.extraHeaders && typeof opts.extraHeaders === 'object') {
+            requestHeaders = { ...requestHeaders, ...opts.extraHeaders };
         }
         const headers = buildHeaders(requestHeaders);
         Object.keys(headers).forEach((key) => {
@@ -572,7 +650,15 @@
         const requestHeaders = {};
         if (method === 'PUT' && suffix && suffix.startsWith('/') && !skipIfMatch) {
             const key = decodeURIComponent(suffix.replace(/^\//, ''));
-            if (key && lastVersion[key] != null) requestHeaders['If-Match'] = lastVersion[key];
+            const ifMatchValue = opts && Object.prototype.hasOwnProperty.call(opts, 'ifMatchValue')
+                ? opts.ifMatchValue
+                : lastVersion[key];
+            if (key && ifMatchValue != null) requestHeaders['If-Match'] = ifMatchValue;
+        }
+        if (opts && opts.extraHeaders && typeof opts.extraHeaders === 'object') {
+            Object.keys(opts.extraHeaders).forEach((headerKey) => {
+                requestHeaders[headerKey] = opts.extraHeaders[headerKey];
+            });
         }
         const headers = { Accept: 'application/json', ...buildHeaders(requestHeaders) };
         if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -626,10 +712,86 @@
     };
 
     /** Async set (S2.1). For accounts/internalActivities only; activities need shard path. */
-    const setItemAsync = (key, value) => {
+    const setItemAsync = (key, value, opts) => {
         if (!key) return Promise.reject(new Error('Key is required for setItem'));
         const payload = value === null || value === undefined ? '' : String(value);
-        return performRequestAsync('PUT', `/${encodeURIComponent(key)}`, { value: maybeCompressValue(payload) }).then(() => { });
+        return performRequestAsync(
+            'PUT',
+            `/${encodeURIComponent(key)}`,
+            { value: maybeCompressValue(payload) },
+            opts
+        ).then(() => { });
+    };
+
+    const scheduleOutboxFlush = (delayMs) => {
+        if (outboxFlushTimer) return;
+        const delay = Math.max(0, Number(delayMs) || 0);
+        outboxFlushTimer = window.setTimeout(() => {
+            outboxFlushTimer = null;
+            void flushOutbox();
+        }, delay);
+    };
+
+    const processOutboxEntry = async (entry) => {
+        if (!entry || !entry.id || !entry.key) return;
+        try {
+            await setItemAsync(entry.key, entry.value, {
+                ifMatchValue: Object.prototype.hasOwnProperty.call(entry, 'ifMatchValue')
+                    ? entry.ifMatchValue
+                    : undefined,
+                extraHeaders: entry.clientMutationId
+                    ? { 'X-Client-Mutation-Id': entry.clientMutationId }
+                    : undefined
+            });
+            removeOutboxEntry(entry.id);
+            if (entry.draftId && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
+                window.Drafts.removeDraft(entry.draftId);
+            }
+        } catch (err) {
+            if (err && err.status === 409) {
+                removeOutboxEntry(entry.id);
+                if (entry.draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+                    window.Drafts.updateDraft(entry.draftId, {
+                        errorMessage: 'Conflict detected. Open Drafts and submit again to merge safely.'
+                    });
+                }
+                return;
+            }
+            const attempts = (Number(entry.attempts) || 0) + 1;
+            const retryDelay = computeRetryDelayMs(attempts);
+            updateOutboxEntry(entry.id, {
+                attempts,
+                lastError: (err && err.message) || 'retry_failed',
+                lastErrorAt: nowIso(),
+                nextAttemptAt: Date.now() + retryDelay
+            });
+        }
+    };
+
+    const flushOutbox = async () => {
+        if (isFlushingOutbox) return;
+        isFlushingOutbox = true;
+        try {
+            const queue = safeReadOutbox();
+            if (!Array.isArray(queue) || queue.length === 0) return;
+            const due = queue
+                .filter((entry) => (Number(entry && entry.nextAttemptAt) || 0) <= Date.now())
+                .slice(0, OUTBOX_PROCESS_BATCH_SIZE);
+            if (due.length === 0) {
+                const nextAt = queue
+                    .map((entry) => Number(entry && entry.nextAttemptAt) || 0)
+                    .filter((v) => v > 0)
+                    .sort((a, b) => a - b)[0];
+                if (nextAt) scheduleOutboxFlush(Math.max(0, nextAt - Date.now()));
+                return;
+            }
+            for (const entry of due) {
+                await processOutboxEntry(entry);
+            }
+            if (safeReadOutbox().length > 0) scheduleOutboxFlush(1000);
+        } finally {
+            isFlushingOutbox = false;
+        }
     };
 
     /**
@@ -664,6 +826,21 @@
         }
         let draft = null;
         let draftSaved = true;
+        const ifMatchSnapshot = Object.prototype.hasOwnProperty.call(lastVersion, key) ? lastVersion[key] : null;
+        const outboxId = generateMutationId();
+        const outboxEntry = {
+            id: outboxId,
+            key: key,
+            value: payloadStr,
+            ifMatchValue: ifMatchSnapshot,
+            clientMutationId: outboxId,
+            draftId: null,
+            attempts: 0,
+            nextAttemptAt: Date.now() + 15000,
+            createdAt: nowIso(),
+            type: draftType
+        };
+        const queued = enqueueOutboxEntry(outboxEntry);
         if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
             draft = window.Drafts.addDraft({
                 type: draftType,
@@ -672,9 +849,16 @@
                 storageKey: key
             });
             draftSaved = !!draft;
+            if (draft && draft.id) {
+                updateOutboxEntry(outboxId, { draftId: draft.id });
+            }
         }
-        return setItemAsync(key, payloadStr)
+        return setItemAsync(key, payloadStr, {
+            ifMatchValue: ifMatchSnapshot,
+            extraHeaders: { 'X-Client-Mutation-Id': outboxId }
+        })
             .then(() => {
+                removeOutboxEntry(outboxId);
                 if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
                     window.Drafts.removeDraft(draft.id);
                     try {
@@ -687,7 +871,21 @@
                     ? 'Session expired. Please sign in again.'
                     : (err && err.status === 409)
                         ? 'Conflict – someone else saved. Submit again to merge.'
-                        : ((err && err.message) || 'Data not saved.');
+                        : ((err && err.message) || (queued ? 'Saved locally. Auto-retry queued.' : 'Data not saved.'));
+                if (err && err.status === 409) {
+                    // Conflict must be reviewed manually; stop auto retry for this entry.
+                    removeOutboxEntry(outboxId);
+                } else {
+                    const currentEntry = safeReadOutbox().find((x) => x && x.id === outboxId) || {};
+                    const attempts = (Number(currentEntry.attempts) || 0) + 1;
+                    updateOutboxEntry(outboxId, {
+                        attempts,
+                        lastError: (err && err.message) || 'save_failed',
+                        lastErrorAt: nowIso(),
+                        nextAttemptAt: Date.now() + computeRetryDelayMs(attempts)
+                    });
+                    scheduleOutboxFlush(1500);
+                }
                 if (draft && draft.id && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
                     window.Drafts.updateDraft(draft.id, { errorMessage: errorMessage });
                 } else if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
@@ -710,6 +908,15 @@
                 throw err;
             });
     };
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('online', function () {
+            scheduleOutboxFlush(500);
+        });
+        window.addEventListener('focus', function () {
+            scheduleOutboxFlush(500);
+        });
+    }
 
     try {
         // Probe the API before overriding the storage.
@@ -1062,7 +1269,8 @@
         window.__REMOTE_STORAGE_ENABLED__ = true;
         window.__BROWSER_LOCAL_STORAGE__ = originalLocalStorage;
         window.__REMOTE_STORAGE_RECONCILE__ = reconcileOnLogin;
-        window.__REMOTE_STORAGE_ASYNC__ = { getItemAsync, setItemAsync, setItemAsyncWithDraft, performRequestAsync };
+        window.__REMOTE_STORAGE_ASYNC__ = { getItemAsync, setItemAsync, setItemAsyncWithDraft, performRequestAsync, flushOutbox };
+        scheduleOutboxFlush(1000);
     } catch (error) {
         console.error(
             '[RemoteStorage] Failed to install remote storage proxy:',

@@ -11,6 +11,7 @@ const STORAGE_READ_CACHE_TTL_MS = Math.max(
   0,
   parseInt(process.env.STORAGE_READ_CACHE_TTL_MS || '3000', 10) || 3000
 );
+const CLIENT_MUTATION_ID_MAX_LENGTH = 120;
 const storageReadCache = new Map();
 
 const getCachedStorageRow = (key) => {
@@ -38,6 +39,13 @@ const invalidateStorageReadCache = (key) => {
     return;
   }
   storageReadCache.delete(key);
+};
+
+const normalizeMutationId = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > CLIENT_MUTATION_ID_MAX_LENGTH) return null;
+  return trimmed;
 };
 
 /** Archive current value to storage_history before overwrite (The Insurance). */
@@ -144,8 +152,9 @@ const getValuesWithVersionBatch = async (keys) => {
 };
 
 /** Unconditional upsert. Archives old value first, then updates. Returns { updated_at }. */
-const setValue = async (key, value) => {
-  const client = await getPool().connect();
+const setValue = async (key, value, externalClient) => {
+  const client = externalClient || await getPool().connect();
+  const ownsClient = !externalClient;
   try {
     await archiveCurrentValue(client, key);
     const { rows } = await client.query(
@@ -162,13 +171,16 @@ const setValue = async (key, value) => {
     invalidateStorageReadCache(key);
     return { updated_at: updatedAt };
   } finally {
-    client.release();
+    if (ownsClient) {
+      client.release();
+    }
   }
 };
 
 /** Conditional update: only if current updated_at matches ifMatch. Returns { updated_at } or null on conflict. */
-const setValueIfMatch = async (key, value, ifMatch) => {
-  const client = await getPool().connect();
+const setValueIfMatch = async (key, value, ifMatch, externalClient) => {
+  const client = externalClient || await getPool().connect();
+  const ownsClient = !externalClient;
   try {
     const existing = await client.query(
       'SELECT updated_at FROM storage WHERE key = $1;',
@@ -209,7 +221,9 @@ const setValueIfMatch = async (key, value, ifMatch) => {
     invalidateStorageReadCache(key);
     return { updated_at: updatedAt };
   } finally {
-    client.release();
+    if (ownsClient) {
+      client.release();
+    }
   }
 };
 
@@ -241,6 +255,49 @@ const logStorageWrite = (key, serializedValue, conditional, transactionId, usern
   const count = extractPayloadCount(key, serializedValue);
   if (count != null) meta.count = count;
   logger.info('storage_write', meta);
+};
+
+/**
+ * Creates or locks a mutation row so retries with same id are idempotent.
+ * Returns:
+ * - { replay: true, updated_at } when mutation was already applied.
+ * - { replay: false } when caller should apply write now.
+ */
+const lockClientMutation = async (client, mutationId, storageKey) => {
+  await client.query(
+    `INSERT INTO storage_mutations (mutation_id, storage_key, response_updated_at, created_at)
+     VALUES ($1, $2, NULL, NOW())
+     ON CONFLICT (mutation_id) DO NOTHING;`,
+    [mutationId, storageKey]
+  );
+  const { rows } = await client.query(
+    `SELECT mutation_id, storage_key, response_updated_at
+     FROM storage_mutations
+     WHERE mutation_id = $1
+     FOR UPDATE;`,
+    [mutationId]
+  );
+  const row = rows[0];
+  if (!row) return { replay: false };
+  if (row.storage_key !== storageKey) {
+    return { conflict: true };
+  }
+  if (row.response_updated_at) {
+    return {
+      replay: true,
+      updated_at: new Date(row.response_updated_at).toISOString()
+    };
+  }
+  return { replay: false };
+};
+
+const completeClientMutation = async (client, mutationId, updatedAtIso) => {
+  await client.query(
+    `UPDATE storage_mutations
+     SET response_updated_at = $2::timestamptz
+     WHERE mutation_id = $1;`,
+    [mutationId, updatedAtIso]
+  );
 };
 
 const clearAll = async () => {
@@ -377,6 +434,124 @@ router.put('/:key', async (req, res) => {
     const serializedValue =
       value === null || value === undefined ? '' : String(value);
     const ifMatch = req.get('If-Match') || req.get('if-match');
+    const rawClientMutationId = req.get('X-Client-Mutation-Id') || req.get('x-client-mutation-id');
+    const clientMutationId = rawClientMutationId ? normalizeMutationId(rawClientMutationId) : null;
+    if (rawClientMutationId && !clientMutationId) {
+      return res.status(400).json({
+        message: `Invalid X-Client-Mutation-Id (max ${CLIENT_MUTATION_ID_MAX_LENGTH} chars)`
+      });
+    }
+
+    if (clientMutationId) {
+      const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
+      const client = await getPool().connect();
+      try {
+        await client.query('BEGIN');
+        const mutationState = await lockClientMutation(client, clientMutationId, req.params.key);
+        if (mutationState.conflict) {
+          await client.query('ROLLBACK');
+          logger.warn('storage_mutation_conflict', {
+            key: req.params.key,
+            mutationId: clientMutationId,
+            transactionId: req.transactionId,
+            message: 'Mutation id already used for a different key'
+          });
+          return res.status(409).json({
+            message: 'Conflict: mutation id already used for another key'
+          });
+        }
+        if (mutationState.replay) {
+          await client.query('COMMIT');
+          logger.info('storage_mutation_replay', {
+            key: req.params.key,
+            mutationId: clientMutationId,
+            transactionId: req.transactionId
+          });
+          return res.status(200).json({
+            key: req.params.key,
+            updated_at: mutationState.updated_at,
+            replayed: true
+          });
+        }
+
+        if (ifMatch !== undefined && ifMatch !== '') {
+          const result = await setValueIfMatch(
+            req.params.key,
+            serializedValue,
+            ifMatch,
+            client
+          );
+          if (result.conflict) {
+            await client.query('ROLLBACK');
+            const incomingCount = extractPayloadCount(req.params.key, serializedValue);
+            const currentCount = extractPayloadCount(req.params.key, result.value);
+            logger.warn('storage_conflict', {
+              key: req.params.key,
+              username: username || 'unknown',
+              transactionId: req.transactionId,
+              ifMatch: ifMatch || null,
+              currentUpdatedAt: result.updated_at || null,
+              incomingCount: incomingCount != null ? incomingCount : undefined,
+              currentCount: currentCount != null ? currentCount : undefined,
+              mutationId: clientMutationId,
+              message: 'Key was updated by another request; client should merge and retry'
+            });
+            try {
+              await savePendingDraft(
+                req.params.key,
+                serializedValue,
+                'conflict',
+                username
+              );
+              logger.info('storage_pending_draft_saved', {
+                key: req.params.key,
+                username: username || 'unknown',
+                transactionId: req.transactionId,
+                reason: 'conflict'
+              });
+            } catch (archiveErr) {
+              logger.warn('storage_pending_draft_failed', {
+                message: archiveErr.message,
+                key: req.params.key,
+                username: username || 'unknown',
+                transactionId: req.transactionId
+              });
+            }
+            const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
+            return res.status(409).json({
+              message: 'Conflict: key was updated by another request',
+              value: conflictValue,
+              updated_at: result.updated_at
+            });
+          }
+          await completeClientMutation(client, clientMutationId, result.updated_at);
+          await client.query('COMMIT');
+          logStorageWrite(req.params.key, serializedValue, true, req.transactionId, username);
+          return res.status(200).json({
+            key: req.params.key,
+            updated_at: result.updated_at
+          });
+        }
+
+        const setResult = await setValue(req.params.key, serializedValue, client);
+        await completeClientMutation(client, clientMutationId, setResult.updated_at);
+        await client.query('COMMIT');
+        logStorageWrite(req.params.key, serializedValue, false, req.transactionId, username);
+        return res.status(200).json({
+          key: req.params.key,
+          updated_at: setResult.updated_at
+        });
+      } catch (mutationErr) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (_) {
+          // Best effort rollback for failed mutation transaction.
+        }
+        throw mutationErr;
+      } finally {
+        client.release();
+      }
+    }
 
     if (ifMatch !== undefined && ifMatch !== '') {
       const result = await setValueIfMatch(

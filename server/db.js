@@ -99,6 +99,21 @@ const createPool = () => {
 const getPool = () => {
   if (!pool) {
     pool = createPool();
+    // Prevent process crashes from idle client socket errors when DB flakes.
+    pool.on('error', (error) => {
+      try {
+        // Lazy require to avoid circular import at module top level.
+        const logger = require('./logger');
+        logger.error('pg_pool_error', {
+          message: error && error.message,
+          code: error && error.code,
+          stack: error && error.stack
+        });
+      } catch (_) {
+        // Fallback if logger is unavailable for any reason.
+        console.error('[db] pg_pool_error', error && error.message);
+      }
+    });
   }
   return pool;
 };
@@ -211,6 +226,18 @@ const initDb = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_storage_history_key_archived
       ON storage_history (key, archived_at DESC);
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS storage_mutations (
+        mutation_id TEXT PRIMARY KEY,
+        storage_key TEXT NOT NULL,
+        response_updated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_storage_mutations_created_at
+      ON storage_mutations (created_at DESC);
     `);
 
     await client.query(`

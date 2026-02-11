@@ -37,6 +37,14 @@ jest.mock('../db', () => {
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS storage_mutations (
+          mutation_id TEXT PRIMARY KEY,
+          storage_key TEXT NOT NULL,
+          response_updated_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
     };
     state.pool = pool;
     state.ensureSchema = ensureSchema;
@@ -69,6 +77,7 @@ jest.mock('../db', () => {
       await state.pool.query('TRUNCATE storage;');
       await state.pool.query('TRUNCATE storage_history;');
       await state.pool.query('TRUNCATE pending_storage_saves;');
+      await state.pool.query('TRUNCATE storage_mutations;');
     }
   };
 });
@@ -152,6 +161,42 @@ describe('Storage API', () => {
     expect(conflictRes.status).toBe(409);
     expect(conflictRes.body.value).toBe('v2');
     expect(conflictRes.body.updated_at).toBeDefined();
+  });
+
+  test('replays idempotent mutation id without overwriting newer value', async () => {
+    const first = await request(app)
+      .put('/api/storage/idempotent-key')
+      .set('X-Client-Mutation-Id', 'mut-a1')
+      .send({ value: 'one' });
+    expect(first.status).toBe(200);
+    expect(first.body.updated_at).toBeDefined();
+
+    // Simulate a stale retry carrying a different payload but same mutation id.
+    const replay = await request(app)
+      .put('/api/storage/idempotent-key')
+      .set('X-Client-Mutation-Id', 'mut-a1')
+      .send({ value: 'two' });
+    expect(replay.status).toBe(200);
+    expect(replay.body.updated_at).toBe(first.body.updated_at);
+    expect(replay.body.replayed).toBe(true);
+
+    const fetched = await request(app).get('/api/storage/idempotent-key');
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.value).toBe('one');
+  });
+
+  test('rejects mutation id reuse across different keys', async () => {
+    await request(app)
+      .put('/api/storage/key-a')
+      .set('X-Client-Mutation-Id', 'mut-same')
+      .send({ value: 'alpha' })
+      .expect(200);
+
+    const conflict = await request(app)
+      .put('/api/storage/key-b')
+      .set('X-Client-Mutation-Id', 'mut-same')
+      .send({ value: 'beta' });
+    expect(conflict.status).toBe(409);
   });
 
   test('clears all keys', async () => {

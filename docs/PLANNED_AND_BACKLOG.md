@@ -101,3 +101,4 @@ Numbering is global (`P-001`, `P-002`, ...), grouped by project stream.
 - Deployment state: `docs/DEPLOYED.md`
 - Recovery and safety docs: `docs/DATA_BACK_TO_104_RECOVERY.md`, `docs/DATA_LOSS_ROOT_CAUSE_AND_RECOVERY.md`
 - Cleanup and migration plans: `docs/MIGRATION_CLEANUP_PLAN.md`, `docs/CLEANUP_PLAN.md`
+- Incident operations runbook: `docs/INCIDENT_RUNBOOK_DB_FLAP.md`

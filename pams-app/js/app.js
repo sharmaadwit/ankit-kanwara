@@ -776,7 +776,8 @@ const App = {
             ? config.dashboardMonth.trim()
             : 'last';
         if (typeof window !== 'undefined') {
-            window.__USE_COOKIE_AUTH__ = config.cookieAuth === true;
+            // Default to cookie auth unless explicitly disabled in config.
+            window.__USE_COOKIE_AUTH__ = config.cookieAuth !== false;
         }
         this._configFetchedAt = Date.now();
         this.applyAppConfiguration();
