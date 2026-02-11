@@ -5,10 +5,20 @@
 (function (global) {
     const STORAGE_KEY = '__pams_drafts__';
 
+    function resolveDraftStorage() {
+        try {
+            // Always prefer real browser localStorage for drafts, never remote proxy storage.
+            if (global.__BROWSER_LOCAL_STORAGE__) return global.__BROWSER_LOCAL_STORAGE__;
+            if (typeof global.localStorage !== 'undefined') return global.localStorage;
+        } catch (_) { }
+        return null;
+    }
+
     function getStorage() {
         try {
-            if (typeof global.localStorage === 'undefined') return [];
-            const raw = global.localStorage.getItem(STORAGE_KEY);
+            const storage = resolveDraftStorage();
+            if (!storage || typeof storage.getItem !== 'function') return [];
+            const raw = storage.getItem(STORAGE_KEY);
             if (!raw) return [];
             const parsed = JSON.parse(raw);
             return Array.isArray(parsed) ? parsed : [];
@@ -19,8 +29,9 @@
 
     function setStorage(list) {
         try {
-            if (typeof global.localStorage !== 'undefined') {
-                global.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+            const storage = resolveDraftStorage();
+            if (storage && typeof storage.setItem === 'function') {
+                storage.setItem(STORAGE_KEY, JSON.stringify(list));
             }
         } catch (e) {
             // quota or disabled
