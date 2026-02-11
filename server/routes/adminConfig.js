@@ -21,6 +21,7 @@ const {
   setDashboardMonth,
   DEFAULT_DASHBOARD_MONTH
 } = require('../services/dashboardMonth');
+const { invalidateConfigCache } = require('../services/appConfig');
 
 router.get('/feature-flags', async (req, res) => {
   try {
@@ -36,6 +37,7 @@ router.put('/feature-flags', async (req, res) => {
   try {
     const flags = req.body?.featureFlags || {};
     const updated = await setFeatureFlags(flags);
+    invalidateConfigCache();
 
     const actor = req.get('x-admin-user') || 'Administrator';
     sendEventNotification('featureToggle', {
@@ -69,6 +71,7 @@ router.put('/dashboard-visibility', async (req, res) => {
   try {
     const visibility = req.body?.visibility || {};
     const updated = await setDashboardVisibility(visibility);
+    invalidateConfigCache();
     res.json({ visibility: updated });
   } catch (error) {
     console.error('Failed to update dashboard visibility', error);
@@ -92,6 +95,7 @@ router.put('/dashboard-month', async (req, res) => {
   try {
     const value = req.body?.dashboardMonth;
     const updated = await setDashboardMonth(value);
+    invalidateConfigCache();
     res.json({ dashboardMonth: updated });
   } catch (error) {
     console.error('Failed to update dashboard month', error);

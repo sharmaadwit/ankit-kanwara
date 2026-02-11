@@ -3080,6 +3080,11 @@ const Admin = {
         const container = document.getElementById('activityLogsTable');
         if (!container) return;
 
+        if (typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && !Auth.isAdmin()) {
+            container.innerHTML = '<div class="text-muted">Admin access required.</div>';
+            return;
+        }
+
         this._activityLogsHoursFilter = typeof hours === 'number' ? hours : undefined;
         if (!force) {
             container.innerHTML = '<div class="text-muted">Loading activity logs…</div>';
@@ -3092,12 +3097,17 @@ const Admin = {
             headers: this.getAdminHeaders()
         })
             .then(response => {
+                if (response.status === 401) {
+                    container.innerHTML = '<div class="text-muted">Session expired or admin access required. Please sign in again.</div>';
+                    return null;
+                }
                 if (!response.ok) {
                     throw new Error('Failed to fetch activity logs');
                 }
                 return response.json();
             })
             .then(payload => {
+                if (payload == null) return;
                 const logs = Array.isArray(payload?.logs) ? payload.logs : [];
                 if (!logs.length) {
                     container.innerHTML = '<div class="text-muted">No activity records yet.</div>';

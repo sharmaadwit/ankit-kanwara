@@ -175,8 +175,10 @@ const App = {
             // Always setup event listeners (needed for login form)
             this.setupEventListeners();
 
-            await this.loadAppConfig();
-            this.loadAnalyticsTablePresets();
+            await Promise.all([
+                this.loadAppConfig(),
+                this.loadAnalyticsTablePresets()
+            ]);
 
             const hasSession = await Auth.init();
             if (!hasSession) {
@@ -677,7 +679,10 @@ const App = {
 
             InterfaceManager.init();
             try {
-                await this.refreshAppConfiguration();
+                const configAge = this._configFetchedAt ? Date.now() - this._configFetchedAt : Infinity;
+                if (configAge > 3000) {
+                    await this.refreshAppConfiguration();
+                }
             } catch (error) {
                 console.warn('Configuration refresh after login failed.', error);
             }
@@ -725,6 +730,7 @@ const App = {
         if (typeof window !== 'undefined') {
             window.__USE_COOKIE_AUTH__ = config.cookieAuth === true;
         }
+        this._configFetchedAt = Date.now();
         this.applyAppConfiguration();
     },
 

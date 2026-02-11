@@ -15,11 +15,7 @@ const adminLogsRouter = require('./routes/adminLogs');
 const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
 const logger = require('./logger');
-const { getFeatureFlags } = require('./services/featureFlags');
-const {
-  getDashboardVisibility
-} = require('./services/dashboardVisibility');
-const { getDashboardMonth } = require('./services/dashboardMonth');
+const { getAppConfig } = require('./services/appConfig');
 const {
   sessionMiddleware,
   requireStorageAuth,
@@ -216,16 +212,14 @@ const createApp = (options = {}) => {
       hostname.endsWith('.local');
     const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || '').toLowerCase() === 'true';
     try {
-      const featureFlags = await getFeatureFlags();
-      const dashboardVisibility = await getDashboardVisibility();
-      const dashboardMonth = await getDashboardMonth();
+      const config = await getAppConfig();
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
-        featureFlags,
-        dashboardVisibility,
-        dashboardMonth
+        featureFlags: config.featureFlags,
+        dashboardVisibility: config.dashboardVisibility,
+        dashboardMonth: config.dashboardMonth
       });
     } catch (error) {
       logger.error('config_fetch_failed', { message: error.message });

@@ -961,7 +961,7 @@
         }
     };
     const reconcileOnLoginImpl = async () => {
-        for (const key of ENTITY_RECONCILE_KEYS) {
+        const refetch = async (key) => {
             try {
                 if (typeof getItemAsync === 'function') {
                     await getItemAsync(key);
@@ -978,7 +978,8 @@
                     console.warn('[RemoteStorage] Reconcile on login failed for ' + key + ':', err.message);
                 }
             }
-        }
+        };
+        await Promise.all(ENTITY_RECONCILE_KEYS.map(refetch));
         if (typeof DataManager !== 'undefined') {
             if (typeof DataManager.invalidateCache === 'function') {
                 DataManager.invalidateCache('activities', 'accounts', 'internalActivities', 'users', 'allActivities');
