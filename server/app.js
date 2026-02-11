@@ -206,7 +206,7 @@ const createApp = (options = {}) => {
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
-    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || '').toLowerCase() === 'true';
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'true').toLowerCase() !== 'false';
     try {
       const config = await getAppConfig();
       const configPayload = {
@@ -277,7 +277,7 @@ const createApp = (options = {}) => {
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
-    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || '').toLowerCase() === 'true';
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'true').toLowerCase() !== 'false';
     try {
       const config = await getAppConfig();
       res.json({

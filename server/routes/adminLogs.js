@@ -33,7 +33,8 @@ router.post('/', async (req, res) => {
       message: error.message,
       transactionId: req.transactionId
     });
-    res.status(500).json({ message: 'Failed to record login attempt' });
+    // Logging endpoint must never break login UX.
+    res.status(204).send();
   }
 });
 
