@@ -57,7 +57,8 @@ const App = {
         csvImport: true,
         csvExport: true,
         winLoss: true,
-        adminCsvExport: true
+        adminCsvExport: true,
+        migrationMode: false
     },
     featureFlags: {},
     defaultDashboardVisibility: {
@@ -937,6 +938,10 @@ const App = {
         return messages[key]?.[type] || 'This section is currently unavailable.';
     },
 
+    isMigrationMode() {
+        return this.featureFlags.migrationMode === true;
+    },
+
     applyAppConfiguration() {
         document.querySelectorAll('[data-feature]').forEach((element) => {
             const flagKey = element.getAttribute('data-feature');
@@ -958,9 +963,36 @@ const App = {
             }
         });
 
+        const migrationModeOn = this.isMigrationMode();
+        document.body.classList.toggle('migration-mode-on', migrationModeOn);
+
+        let migrationBanner = document.getElementById('migrationModeBanner');
+        if (migrationModeOn) {
+            if (!migrationBanner) {
+                migrationBanner = document.createElement('div');
+                migrationBanner.id = 'migrationModeBanner';
+                migrationBanner.setAttribute('role', 'alert');
+                migrationBanner.className = 'migration-mode-banner';
+                const header = document.querySelector('.app-header');
+                if (header && header.nextSibling) {
+                    header.parentNode.insertBefore(migrationBanner, header.nextSibling);
+                } else {
+                    document.querySelector('.app-container')?.prepend(migrationBanner);
+                }
+            }
+            migrationBanner.innerHTML = '<strong>Migration mode is ON</strong> — Only migration-related views are available. Turn off in <a href="#" onclick="App.switchView(\'configuration\'); return false;">Configuration → Feature Flags</a>.';
+            migrationBanner.classList.remove('hidden');
+        } else if (migrationBanner) {
+            migrationBanner.classList.add('hidden');
+        }
+
         document.querySelectorAll('[data-dashboard]').forEach((element) => {
             const key = element.getAttribute('data-dashboard');
-            const visible = this.isDashboardVisible(key) && this.isFeatureEnabled(key);
+            let visible = this.isDashboardVisible(key) && this.isFeatureEnabled(key);
+            if (migrationModeOn) {
+                const migrationNav = ['dashboard', 'activities', 'reports', 'suggestionsBugs', 'configuration'];
+                visible = migrationNav.indexOf(key) !== -1 && visible;
+            }
             element.classList.toggle('dashboard-hidden', !visible);
         });
 
