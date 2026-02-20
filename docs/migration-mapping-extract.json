@@ -1,0 +1,7314 @@
+{
+  "generatedAt": "2026-02-13T06:32:17.784Z",
+  "sourceCsv": "pams_migration_ready_v3.csv",
+  "accountCount": 1821,
+  "duplicateGroupCount": 161,
+  "bestFitPerAccount": [
+    {
+      "accountName": "[Webinar] The WhatsApp Voice Advantage",
+      "rowCount": 1,
+      "topSourceIndustry": "[Webinar] The WhatsApp Voice Advantage",
+      "allSourceIndustries": {
+        "[Webinar] The WhatsApp Voice Advantage": 1
+      },
+      "suggestedPamsIndustry": "[Webinar] The WhatsApp Voice Advantage (add to canonical?)",
+      "salesReps": [
+        "[Webinar] The WhatsApp Voice Advantage"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "&Whyte",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "000 inbound messages per month.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "11X",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "12Bet",
+      "rowCount": 1,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 1
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "2Safe/Acordo Fácil",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "3 complementary",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "360INC",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "36nine",
+      "rowCount": 2,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 2
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Ketan Tomar",
+        "Ketan tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "3A Capita",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "brendon castelino"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "3A Financial Services",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Brendon Castelino"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "3sbrokers.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "6th Steet",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth Swamy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "6th Street",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth",
+        "Hemanth Swamy"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "6th street",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "6th Streeyt",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "9 star",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Ronneta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "91Trucks",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Jash Patel"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "A-One Steels India Ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "Manufacturing",
+      "allSourceIndustries": {
+        "Manufacturing": 1
+      },
+      "suggestedPamsIndustry": "Manufacturing (add to canonical?)",
+      "salesReps": [
+        "Sanjeev Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "a1 Steels",
+      "rowCount": 1,
+      "topSourceIndustry": "Steel",
+      "allSourceIndustries": {
+        "Steel": 1
+      },
+      "suggestedPamsIndustry": "Steel (add to canonical?)",
+      "salesReps": [
+        "Duga laxmi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AAA Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abbas M",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Dubizzle"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abbot",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ABC",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "ABC"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ABFRL",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "abfrl",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Abhishek Phillips",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Amit Pandey"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abode Poperty",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abode Property",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abode Property - buyer",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abode Property - Seller Bot",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Abott - Capillary",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ABSL",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ABSLI",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Absolute Barbeque",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Santosh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ABSYZ Software Consulting",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "accessmatrix",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Accor",
+      "rowCount": 3,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 3
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ace Turtle",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Mahato"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Acerto",
+      "rowCount": 1,
+      "topSourceIndustry": "Collecting",
+      "allSourceIndustries": {
+        "Collecting": 1
+      },
+      "suggestedPamsIndustry": "Collecting (add to canonical?)",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Acko",
+      "rowCount": 8,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 8
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sandeep Das",
+        "Sandeep",
+        "sandeep"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "acko",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sandeep Das"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Act Fibernet",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ADANI Labs",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Sakshi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Adani Realty",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Rohan Repal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ADBI Ai Agent",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rohan Repal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aditya Birla",
+      "rowCount": 5,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 5
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dheeraj",
+        "Dheeraj Purohit",
+        "Nityanand"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "aditya birla",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "dheeraj"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Aditya Birla Capital Sun Life Insurance",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aditya Birla Housing Finance",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aditya Birla Sun Life Insurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AECC",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aegea Saneamento",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Affolife Retail Pvt Ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Durga Laxmi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ageas federal",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ageasfederal",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rohan Repal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "agents",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Agile telecom",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "agiletelecom",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Agiletelecom",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Sandra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Agrim App",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Agrosaf",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ahorro Service Now",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Javier Bracho"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AHS Windows",
+      "rowCount": 1,
+      "topSourceIndustry": "Manufacturing",
+      "allSourceIndustries": {
+        "Manufacturing": 1
+      },
+      "suggestedPamsIndustry": "Manufacturing (add to canonical?)",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AI Growth",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Abhishek B"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ai4Process",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AIG Hospital",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Rupam Nandi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "airasia",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "AirAsia",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Airtel",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Sanchit"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AIS Windows",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Verma",
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "aiwizelabs.com",
+      "rowCount": 2,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 2
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Rajesh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ajio",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ajman Bank",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Akshaykalpa",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Ain Pharmacy",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Borg",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Nayeem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Essa",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hannan Khan",
+        "Nayeem"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "AL Essa",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hannan Khan"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Al Essa - NOICE",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nayeem M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Falah",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Forsan",
+      "rowCount": 2,
+      "topSourceIndustry": "Fitness",
+      "allSourceIndustries": {
+        "Fitness": 1,
+        "Sports/Experience Booking": 1
+      },
+      "suggestedPamsIndustry": "Fitness (add to canonical?)",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Forsan - new",
+      "rowCount": 1,
+      "topSourceIndustry": "Fitness",
+      "allSourceIndustries": {
+        "Fitness": 1
+      },
+      "suggestedPamsIndustry": "Fitness (add to canonical?)",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Futtaim",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al ghurair",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George",
+        "Bittu G"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Al Ghurair",
+      "rowCount": 4,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 4
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu",
+        "Bittu  G",
+        "SFDC",
+        "Bittu G"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Al Ghurair Center",
+      "rowCount": 3,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 3
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George",
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Ghurair Facility Managment",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Ghurair FM",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu G"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Ghurair Properties",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Hamra",
+      "rowCount": 3,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 3
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Gaurav",
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Hamra Real Estate Development",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Gaurav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al harfash group",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hannan"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Karama Motors",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Maali",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Nayeem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Majed Oud",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth Swamy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Matar",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nayeem M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al shaya",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al Tayer",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Al-Futtaim Ikea",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AL-salaam Bank",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Nayeem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "aldanube.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "algurg.ae",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "alhamra.ae",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1,
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Gaurav tomar",
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Alicorp",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Paulo Pinto"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AlKhamsan",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Nayeem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Allen",
+      "rowCount": 3,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 3
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Kanishka"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Allien Tattos",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Rishabh Jain"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Almap/Volkswagen",
+      "rowCount": 3,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 3
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Almap/VW",
+      "rowCount": 3,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 3
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Alp Consulting Limited",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Santosh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aman Lil Afia Clinic",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "amanlilafiaclinic.ae",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Abba M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amar Ujala",
+      "rowCount": 7,
+      "topSourceIndustry": "Newspaper",
+      "allSourceIndustries": {
+        "Newspaper": 3,
+        "Media": 1,
+        "F&B": 1,
+        "BFSI": 1,
+        "CPG": 1
+      },
+      "suggestedPamsIndustry": "Newspaper (add to canonical?)",
+      "salesReps": [
+        "Kanishka",
+        "Ankit",
+        "Ankit Malhotra",
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AmarUjala",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Kanishka"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amazon",
+      "rowCount": 2,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1,
+        "HR": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Souvik Bhattacharjee",
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "amazon",
+      "rowCount": 4,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1,
+        "Software Provider": 2,
+        "HR": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Dheeraj",
+        "Dheeraj Purohit",
+        "Ankit Kohli"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Amazon Pay",
+      "rowCount": 4,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "BFSI": 1,
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Souvik",
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amazon/PineLabs",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Kiran Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ambercomm",
+      "rowCount": 2,
+      "topSourceIndustry": "Marketing Agency",
+      "allSourceIndustries": {
+        "Marketing Agency": 2
+      },
+      "suggestedPamsIndustry": "Marketing Agency (add to canonical?)",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AmbujaNeotia",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ambujaneotia.",
+      "rowCount": 1,
+      "topSourceIndustry": "Manufacturing",
+      "allSourceIndustries": {
+        "Manufacturing": 1
+      },
+      "suggestedPamsIndustry": "Manufacturing (add to canonical?)",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AMD",
+      "rowCount": 1,
+      "topSourceIndustry": "Embedded systems",
+      "allSourceIndustries": {
+        "Embedded systems": 1
+      },
+      "suggestedPamsIndustry": "Embedded systems (add to canonical?)",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amity",
+      "rowCount": 2,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 2
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Sakshi",
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amity Noida",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Sakhshi Dhaundiyal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amity University",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ample foods",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Avinahs khasnis"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amway",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vikas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Amway India",
+      "rowCount": 4,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 4
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vikas Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ANA Porsche",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ananas Insurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Mohammed Nayeem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Anand",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Pincode by PhonePe"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Anandilal Podar",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Rohan Repal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Anandilal Podar School",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Rohan Repal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and better visibility.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and booking processes—reducing load on the call centre.,,,,,",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and comprehensive automated communications. This results in missed opportunities and inefficiencies in engaging with both potential and existing customers.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and continuous learning.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and credit cards.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and custom journey support if DIY insufficient.,,,,,",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and integration with Conversion APIs (CAPI) across Meta and TikTok.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and issue description.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and manage complaints via guided flows.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and Reporting Managers details.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "and the complexity and number of journeys to be built.",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "And Whyte",
+      "rowCount": 3,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 3
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Andwhyte",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Esther Khoo"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "AndWhyte",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Esther Khoo"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "angelone",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Chirag"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Annapurna Finance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Antara Senior care",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Antara Senior Care",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Anveya Living",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AO Smith",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Cyrus"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Apex",
+      "rowCount": 2,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 2
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Joseph Green",
+        "Sandra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "ApiBee",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Appreal group",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AppsForBharat",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Appsforbharat",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Mahato"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Aptamitra consulting",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Chandru Sethuraman"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aptech",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ara",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Ricardo Alvarez"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Arabia Insurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Md Abbas"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Arabia insurance",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1,
+        "Insurance": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Md abbas",
+        "Abbas"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Arada",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George",
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aramex",
+      "rowCount": 2,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1,
+        "Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Hemanth",
+        "Mohyeldein E"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aramex UAE",
+      "rowCount": 2,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 2
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "mohyeldein.elbaroudy@gupshup.io"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Arezzo AI",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Gabriel Queiroz",
+        "na"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "aristocrat",
+      "rowCount": 2,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 2
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Sandra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Armetis",
+      "rowCount": 2,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 2
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Roneeta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Arya Clinic",
+      "rowCount": 4,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 4
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Md Abbas",
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aryatech",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Roneeta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AS Watsons",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AS Watsons RFP",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "asca.chirag",
+      "rowCount": 1,
+      "topSourceIndustry": "Telephony forwarding",
+      "allSourceIndustries": {
+        "Telephony forwarding": 1
+      },
+      "suggestedPamsIndustry": "Telephony forwarding (add to canonical?)",
+      "salesReps": [
+        "Rajesh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ashiyana ClayPot",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Asian Paints",
+      "rowCount": 7,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 7
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Cyrus"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "asianpaints",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Cyrus"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Assembly travel",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Athen Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Auna",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Paulo Pinto"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ausnutria",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Autostrad",
+      "rowCount": 4,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 4
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Md abbas",
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Autostrad - Rent a car",
+      "rowCount": 4,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 4
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Autostrad- Rent a car",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 2
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Autotronics",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Auxanotech Technical",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Joseph Cobbinah"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "availability",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [
+        "and service center locations—all via WhatsApp chat.,,,,,"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aveer Lifestyle",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "avendusspark.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Narender"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aviva",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sudhanshu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aviva India",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Sudhanshu Yadav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AWS",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Archna"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Axestrack",
+      "rowCount": 3,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 3
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Axio",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "axis",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "neerav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Axis Bank",
+      "rowCount": 26,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 26
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav",
+        "Neerav Chib",
+        "Neerav ChIb Singh",
+        "Neerav Singh Chip",
+        "Neerav Singh Chib"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "axis bank",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav Chib",
+        "neerav chib"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Axis bank",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Axis Bank mk",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Axis Bank MK",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "axisbank",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Neerav Singh Chib",
+        "Neerav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "AxisInsurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Md Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ayefinance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Anshul"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Azadea",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth Swamy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Azadea group",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Mayank Malhotra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Azadea Group",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Hemanth Swamy",
+        "Hemanth"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "azerion.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Mohd Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Azim Premji Foundation",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "azimpremji foundation",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Abhishek Phillips"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Aziz Premji Foundation",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Babyplanetonline",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "babyplanetonline",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Babyshop",
+      "rowCount": 6,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 6
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu George",
+        "Bittu G"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bajaj Allianz",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Akash Shetty"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bajaj Capital Insurance Broking Ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sudhanshu Yadav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bajaj Capital Insurance Broking Pvt Ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sudhanshu Yadav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Banco BV",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Banglalink",
+      "rowCount": 1,
+      "topSourceIndustry": "Communication",
+      "allSourceIndustries": {
+        "Communication": 1
+      },
+      "suggestedPamsIndustry": "Communication (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "bangtaomuaythai",
+      "rowCount": 1,
+      "topSourceIndustry": "Fitness",
+      "allSourceIndustries": {
+        "Fitness": 1
+      },
+      "suggestedPamsIndustry": "Fitness (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Baniyaspike",
+      "rowCount": 1,
+      "topSourceIndustry": "Trading",
+      "allSourceIndustries": {
+        "Trading": 1
+      },
+      "suggestedPamsIndustry": "Trading (add to canonical?)",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bank of Baroda",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dipanjan Deb",
+        "Avadhesh Chaturvedi"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Bank of baroda",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "bankofbaroda",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Avadhesh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Banrisul",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Barbeque Nation",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Santosh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Baroda BNP Paribas MF",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dhiren Khantwal",
+        "Dhiren"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Barsha Interest",
+      "rowCount": 1,
+      "topSourceIndustry": null,
+      "allSourceIndustries": {},
+      "suggestedPamsIndustry": null,
+      "salesReps": [
+        "for segmentation.- In built CRM(Personalize/Customer 360) can capture this information ; can do segmentation as per business need and customizable ;Gargi to share more details and documents on this module as well as the estimates and timelines"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Basic Homeloan",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Preety SHarma",
+        "Preety Sharma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Battery Smart",
+      "rowCount": 1,
+      "topSourceIndustry": "Utility : energy, gas",
+      "allSourceIndustries": {
+        "Utility : energy, gas": 1
+      },
+      "suggestedPamsIndustry": "Industrial",
+      "salesReps": [
+        "Rishabh Jain"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bayari",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bayut",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas",
+        "Abba M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bazat",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BB - Campanha Imagens",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BCCL",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BCG - Casas Bahia",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BCG mk",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "neerav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BCG/Casas Bahia",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BCP",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Ricardo Alvarez"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Be beautiful",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Cyrus"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BearBrand - Nestle",
+      "rowCount": 1,
+      "topSourceIndustry": "FMCG",
+      "allSourceIndustries": {
+        "FMCG": 1
+      },
+      "suggestedPamsIndustry": "FMCG (add to canonical?)",
+      "salesReps": [
+        "Tanmay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Beenow",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Prem"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "beenow",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Prem"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "behtarzindagi",
+      "rowCount": 1,
+      "topSourceIndustry": "Agriculture",
+      "allSourceIndustries": {
+        "Agriculture": 1
+      },
+      "suggestedPamsIndustry": "Agriculture (add to canonical?)",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Belagavi Police Department",
+      "rowCount": 1,
+      "topSourceIndustry": "Government",
+      "allSourceIndustries": {
+        "Government": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Belagavi Police department",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Belagavi police department",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "BeMinimalist",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vikas Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bemol",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bennett Coleman & Co. Limited",
+      "rowCount": 3,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 3
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "benow",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Prem"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bestofme",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Betterlife",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "betterplace",
+      "rowCount": 3,
+      "topSourceIndustry": "HR",
+      "allSourceIndustries": {
+        "HR": 3
+      },
+      "suggestedPamsIndustry": "HR (add to canonical?)",
+      "salesReps": [
+        "Abhishek Joy",
+        "Abhishek joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Beyond Odds",
+      "rowCount": 2,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 2
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Beyond Odds - Emversity",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Abhishek Mahato"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BFIL",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bharat Pe",
+      "rowCount": 4,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 4
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Preety Sharma",
+        "Narender Singh",
+        "Preety SHarma",
+        "Preety sharma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "bharatpe.com",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bharti Airtel",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Sanchot"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bhartpe",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Preety"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bhima Jewels",
+      "rowCount": 3,
+      "topSourceIndustry": "Jewelers",
+      "allSourceIndustries": {
+        "Jewelers": 1,
+        "Retail & eCommerce": 1,
+        "Jewellery": 1
+      },
+      "suggestedPamsIndustry": "Jewelers (add to canonical?)",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Big Basker",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Anand"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Big Basket",
+      "rowCount": 10,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 9,
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Anand",
+        "ANand"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Big basket",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Anand"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "BigBasket",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Anand"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bioage",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Birkenstock India",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Sanchit"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bitla",
+      "rowCount": 7,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 3,
+        "Transportation/Logistics": 4
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bitla Soft",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bitla Software",
+      "rowCount": 2,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 2
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Ravindra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Blackbuck",
+      "rowCount": 3,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 3
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Blallab",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Gaurav Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Blaupunk Auto",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Blaupunkt",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Blaupunkt Audio India",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bloom Holdings",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "bloomholding.com",
+      "rowCount": 2,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1,
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BlueTokaiCoffee",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Avinash Khasnis"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "blueverseindia",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BMME",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1,
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BMS",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Vishal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BNP Paribas",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dhiren"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BOB Card",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "bob card",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "BodyKraft salon",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Abhishek Philips"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Booking.com",
+      "rowCount": 3,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 3
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Dheeraj",
+        "Dheeraj Purohit"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Boost",
+      "rowCount": 5,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 5
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Borderless Access",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Anand abraham"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bosch",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vinod Yadav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BPTP",
+      "rowCount": 4,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 4
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bradesco",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Brandworld",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Akash Shetty"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bricknbolt",
+      "rowCount": 1,
+      "topSourceIndustry": "Construction",
+      "allSourceIndustries": {
+        "Construction": 1
+      },
+      "suggestedPamsIndustry": "Construction (add to canonical?)",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Brigade",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abhishek Badoria"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Brigade Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abhishek Badoria"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bright Champs",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Rishabh Jain"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Broadway",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sanchit"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BSMSK Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BSNL",
+      "rowCount": 2,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1,
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Nitin Marwah",
+        "Rashid Raza"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BSNL CpaaS",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Nitin Marwah"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BulkMart",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sunil"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bullla",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bullmart",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sunil GUpta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Bullmen Realty",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Rajesh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "businessonbot",
+      "rowCount": 2,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1,
+        "Tech - SaaS": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Moin"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "BXI",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Akash Shetty"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Byr insurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Nitin Marwah"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "C&A",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Bruno Montoro"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "C2",
+      "rowCount": 6,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Partner agency": 1,
+        "Automotive": 5
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Gaurav Tomar",
+        "Gaurav tomar",
+        "Gaurav"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "C6 Bank",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cadvil",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Caedu",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "cambridge.org",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Kaniska"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Canadian Hospital",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Canara Bank",
+      "rowCount": 11,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 11
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rupam",
+        "Rupam Nandi",
+        "Rupam Nanadi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "cancerhealercenter.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Canrod India",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Panchaal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Capgemini",
+      "rowCount": 3,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 3
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Anshul Kumar",
+        "Anshul"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Capitol Tower",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Esther Khoo"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Car Trade",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1,
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Brendon"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Caratlane",
+      "rowCount": 1,
+      "topSourceIndustry": "Jewelers",
+      "allSourceIndustries": {
+        "Jewelers": 1
+      },
+      "suggestedPamsIndustry": "Jewelers (add to canonical?)",
+      "salesReps": [
+        "Abhishek B"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Carl Zeiss",
+      "rowCount": 5,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 4,
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Jetal",
+        "Jtal",
+        "Sourav Rakshit",
+        "Sourav",
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Carl zeiss",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vinod",
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "carmen",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Carmen",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 2
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Carmen Auto",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Esther khoo"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cars 24",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1,
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Vikas Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cars 24 UAE",
+      "rowCount": 2,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1,
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Vikas Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cars24",
+      "rowCount": 5,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 5
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Vikas Kumar",
+        "Vikas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cars24 UAE",
+      "rowCount": 7,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 7
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Vikas Kumar",
+        "Naveen Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "cartea.com",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Casas Bahia",
+      "rowCount": 4,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 4
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Casas Bahia BCG",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cashnow",
+      "rowCount": 1,
+      "topSourceIndustry": "NBFC",
+      "allSourceIndustries": {
+        "NBFC": 1
+      },
+      "suggestedPamsIndustry": "NBFC (add to canonical?)",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CC Self serve - JB, How to videos",
+      "rowCount": 1,
+      "topSourceIndustry": "Marketing Team - Aparna",
+      "allSourceIndustries": {
+        "Marketing Team - Aparna": 1
+      },
+      "suggestedPamsIndustry": "Marketing Team - Aparna (add to canonical?)",
+      "salesReps": [
+        "Marketing Team - Aparna"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CeeW",
+      "rowCount": 4,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 4
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ranjay Tiwari"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "CEEW",
+      "rowCount": 2,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 2
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ranjay Tiwari"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Ceipal",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1,
+        "HR": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Moin",
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CEMEX",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Ricardo Alvarez",
+        "Paulo Pinto"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Centurply",
+      "rowCount": 1,
+      "topSourceIndustry": "Plywood & Veneers",
+      "allSourceIndustries": {
+        "Plywood & Veneers": 1
+      },
+      "suggestedPamsIndustry": "Plywood & Veneers (add to canonical?)",
+      "salesReps": [
+        "Arpan Dutta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Centuryply",
+      "rowCount": 2,
+      "topSourceIndustry": "Manufacturing",
+      "allSourceIndustries": {
+        "Manufacturing": 2
+      },
+      "suggestedPamsIndustry": "Manufacturing (add to canonical?)",
+      "salesReps": [
+        "Arpan Dutta",
+        "Arpan dutta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CEO Forum",
+      "rowCount": 2,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 2
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Bruno Montoro"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chalo",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Ratan"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chandni",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Chandni"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "changejar",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhisek Mahato"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chavara Matrimony",
+      "rowCount": 1,
+      "topSourceIndustry": "Matrimony",
+      "allSourceIndustries": {
+        "Matrimony": 1
+      },
+      "suggestedPamsIndustry": "Matrimony (add to canonical?)",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "chavaramatrimony.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Matrimony",
+      "allSourceIndustries": {
+        "Matrimony": 1
+      },
+      "suggestedPamsIndustry": "Matrimony (add to canonical?)",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chhattisgarh Housing Board",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ranjay Tiwari"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CHI Limited",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sandra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chips",
+      "rowCount": 2,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 2
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ranjay Tiwari"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CHIPS CG",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Ranjay Tiwari"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chirag",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Chirag"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Chola",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Souvik Bhattacharjee"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cholamandalam",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Souvik"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cipla",
+      "rowCount": 3,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 3
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Meet Nandu"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "cipla",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Meet Nandu"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "circles",
+      "rowCount": 1,
+      "topSourceIndustry": "Telecom",
+      "allSourceIndustries": {
+        "Telecom": 1
+      },
+      "suggestedPamsIndustry": "Telecom (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Civil Defense",
+      "rowCount": 3,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 3
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Hannan",
+        "Hannan K",
+        "Mohyeldein"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Civil Defense KSA",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Hannan Khan"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Clarity App",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Ronneta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Claro Colombia",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Paulo Pinto"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cleartrip",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Ankit Kohli"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Clip",
+      "rowCount": 11,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 11
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Cristobal Bugeda",
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "clix capital",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cloudkitchens",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "cloudsteer.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Rajshree"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cloudster",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Rajshri"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Club Concierge Services",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Codere",
+      "rowCount": 5,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 5
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Cristobal Bugeda",
+        "Javier Bracho"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Codere MX",
+      "rowCount": 1,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 1
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Ricardo Alvarez"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "codewave",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Esther Koo"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Coding Ninja",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Preety Sharma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "colmexpro",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Joe Green",
+        "Cyrus"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Colmexpro",
+      "rowCount": 8,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 4,
+        "Software Provider": 2,
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Sandra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "colmexpro.com",
+      "rowCount": 2,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1,
+        "Trading": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Joseph Green"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "complaints",
+      "rowCount": 1,
+      "topSourceIndustry": "and registration needs",
+      "allSourceIndustries": {
+        "and registration needs": 1
+      },
+      "suggestedPamsIndustry": "and registration needs (add to canonical?)",
+      "salesReps": [
+        "streaks"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Concretia Rock Products",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Durga"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "coromandel",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rupam Nandi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Cosmopro",
+      "rowCount": 2,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1,
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Mark Kreuiter"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Coto Community",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "COTO Community",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Dheeraj"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "CP Plus",
+      "rowCount": 7,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3,
+        "Software Provider": 4
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Rahul Verma",
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Cp Plus",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "CP+",
+      "rowCount": 2,
+      "topSourceIndustry": "Security & Surveillance",
+      "allSourceIndustries": {
+        "Security & Surveillance": 1,
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Security & Surveillance (add to canonical?)",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "cpcdiagnostics",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CPV Arabia",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohyeldein Elbaroudy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Creambell",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1,
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sanchit",
+        "Ronneta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "creambell.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Roneeta"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CRED",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Ankith Kholi"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Cred",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Ankit Kholi"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Credgenics",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Shubham Chaudhary",
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "credgenics.com",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Narender SIngh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "credilio.in",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Credit Mantri",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Abhishek Bhadoria",
+        "Abhishek bhadoria"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Credresolve",
+      "rowCount": 3,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 3
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Narender Singh",
+        "Narender singh",
+        "Narender"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "CRIS",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Kumar Amrendra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Cris",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Kumar Amrendra"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Critical Path Technologies pvt ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Roneeta Basak"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Critical Path Technologies Pvt Ltd",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Roneeta"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "CSB Bank",
+      "rowCount": 2,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 2
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Abhishek Joy",
+        "Rupam"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "curefit",
+      "rowCount": 1,
+      "topSourceIndustry": "Fitness",
+      "allSourceIndustries": {
+        "Fitness": 1
+      },
+      "suggestedPamsIndustry": "Fitness (add to canonical?)",
+      "salesReps": [
+        "Abhishek B"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Curefit",
+      "rowCount": 2,
+      "topSourceIndustry": "Fitness",
+      "allSourceIndustries": {
+        "Fitness": 2
+      },
+      "suggestedPamsIndustry": "Fitness (add to canonical?)",
+      "salesReps": [
+        "Abhishek B",
+        "Abhisheks B"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "CYBX",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Katik Walekha"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dabur",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Rahul Verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Daikan India",
+      "rowCount": 2,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Mayank Malhotra",
+        "Mayank"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Daikin",
+      "rowCount": 4,
+      "topSourceIndustry": "Electronics",
+      "allSourceIndustries": {
+        "Manufacturer": 1,
+        "Electronics": 3
+      },
+      "suggestedPamsIndustry": "Electronics (add to canonical?)",
+      "salesReps": [
+        "Gaurav",
+        "Gaurav Tomar",
+        "Gaurav tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Daikin india",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Mayank Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Damas",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Damas Medical Center",
+      "rowCount": 2,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 2
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Gaurav Tomar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Damsun Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Nitin Bhatia"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Danube Group",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Danube Home",
+      "rowCount": 10,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 9,
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abbas M",
+        "Abba M",
+        "Mohd Abbas M",
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Danube Homes",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abbas M",
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Danube HR bot",
+      "rowCount": 1,
+      "topSourceIndustry": "HR",
+      "allSourceIndustries": {
+        "HR": 1
+      },
+      "suggestedPamsIndustry": "HR (add to canonical?)",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Danube Properties",
+      "rowCount": 7,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 7
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas M",
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "danubeproperties.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DAO Clinic",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Hemanth"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DCM agriculture",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sanchit agarwal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DCM Sriram",
+      "rowCount": 4,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 4
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sanchit Agarwal"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DE Sourcing and Support",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Vikas Kumar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Decathlon",
+      "rowCount": 6,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 6
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Cyrus",
+        "Souvik"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Decca Properties",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Deepak Fertilizers",
+      "rowCount": 2,
+      "topSourceIndustry": "Fertiizers",
+      "allSourceIndustries": {
+        "Fertiizers": 1,
+        "Fertilizers": 1
+      },
+      "suggestedPamsIndustry": "Fertiizers (add to canonical?)",
+      "salesReps": [
+        "Narender SIngh",
+        "Naendr SIngh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Delhi Capitals",
+      "rowCount": 1,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 1
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dell Technologies",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "deloitte",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Cliffton"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Denkentech",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Rashid Raza"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Densu- berger",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Cyrus"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "devaisolution",
+      "rowCount": 1,
+      "topSourceIndustry": "Software Provider",
+      "allSourceIndustries": {
+        "Software Provider": 1
+      },
+      "suggestedPamsIndustry": "Software Provider (add to canonical?)",
+      "salesReps": [
+        "Esther"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dezerv",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dhan",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Chandini Shetty"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "dhan",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Chandni Shetty"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "DHL",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Hemanth Swamy"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "dhl",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Vishal Pansari"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Diageo",
+      "rowCount": 11,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "F&B": 4,
+        "Media": 1,
+        "Retail & eCommerce": 5,
+        "FMCG": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Idowu Adetule",
+        "Ricardo Alvarez",
+        "Gabriel Queiroz",
+        "Shashi Bhushna",
+        "Fernando Bueno"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo - Cocktail Festival 2025",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo Cocktail Festival 2025",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Diageo Cocktail festival 2025",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Diageo Coctail Festival 2025",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo Colombia",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Ricardo Alvarez"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo Global",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Bruno Montoro"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo MX Baileys",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Paulo Pinto"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo WCOT",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diageo World Class",
+      "rowCount": 5,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 5
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Gabriel Queiroz"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DIC Punjab",
+      "rowCount": 2,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 2
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Rashid Raza"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DIFC",
+      "rowCount": 1,
+      "topSourceIndustry": "Freezone/Consulting",
+      "allSourceIndustries": {
+        "Freezone/Consulting": 1
+      },
+      "suggestedPamsIndustry": "Freezone/Consulting (add to canonical?)",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Diginerve",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Amit Malhotra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Digital Yodha",
+      "rowCount": 1,
+      "topSourceIndustry": "NGO",
+      "allSourceIndustries": {
+        "NGO": 1
+      },
+      "suggestedPamsIndustry": "NGO (add to canonical?)",
+      "salesReps": [
+        "Rahul verma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Digitas",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DIPR Punjab",
+      "rowCount": 4,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 4
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Rashid Raza"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Dipr Punjab",
+      "rowCount": 1,
+      "topSourceIndustry": "Goverment",
+      "allSourceIndustries": {
+        "Goverment": 1
+      },
+      "suggestedPamsIndustry": "Gov / Citizen Services",
+      "salesReps": [
+        "Rashid Raza"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "directshelf",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dis-Chem",
+      "rowCount": 2,
+      "topSourceIndustry": "Pharma",
+      "allSourceIndustries": {
+        "Pharma": 2
+      },
+      "suggestedPamsIndustry": "Pharma & Life Sciences",
+      "salesReps": [
+        "Mark"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DisChem",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Mark Kreuiter"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "discoverspace",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Pankaj Sharma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Ditto Insurance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Abhishek Joy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DiveX",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Durga"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "dmartindia",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Healthcare": 1,
+        "Retail & eCommerce": 2
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Meet Nandu",
+        "Vishal Pansari"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DMI Finance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Preety Sharma"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "doctortowels",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Ratan Saha"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dollar Rent a Car",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DP World",
+      "rowCount": 1,
+      "topSourceIndustry": "Transportation/Logistics",
+      "allSourceIndustries": {
+        "Transportation/Logistics": 1
+      },
+      "suggestedPamsIndustry": "Transportation/Logistics (add to canonical?)",
+      "salesReps": [
+        "Mohd Abbas"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "DP world",
+      "rowCount": 1,
+      "topSourceIndustry": "Sports",
+      "allSourceIndustries": {
+        "Sports": 1
+      },
+      "suggestedPamsIndustry": "Sports",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": true
+    },
+    {
+      "accountName": "Dpworld",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Sandra"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dr Nutrition",
+      "rowCount": 2,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 2
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Mohyeldein Elbaroudy"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dr.Reddy's Labs",
+      "rowCount": 1,
+      "topSourceIndustry": "Healthcare",
+      "allSourceIndustries": {
+        "Healthcare": 1
+      },
+      "suggestedPamsIndustry": "Healthcare",
+      "salesReps": [
+        "Abhishek Philips"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dream 11",
+      "rowCount": 1,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 1
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Souvik"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dream Dubai",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dream11",
+      "rowCount": 2,
+      "topSourceIndustry": "Gaming",
+      "allSourceIndustries": {
+        "Gaming": 2
+      },
+      "suggestedPamsIndustry": "Gaming (add to canonical?)",
+      "salesReps": [
+        "Souvik"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "drive7.com",
+      "rowCount": 1,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 1
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Hannan"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Driven Properties",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George",
+        "Bittu G"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Drivex",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 2
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Durga Laxmi",
+        "Durga"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DS group",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Vikas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai Autodrome",
+      "rowCount": 2,
+      "topSourceIndustry": "Automotive",
+      "allSourceIndustries": {
+        "Automotive": 2
+      },
+      "suggestedPamsIndustry": "Automotive",
+      "salesReps": [
+        "Mohammed Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai Duty free",
+      "rowCount": 1,
+      "topSourceIndustry": "duty free operations",
+      "allSourceIndustries": {
+        "duty free operations": 1
+      },
+      "suggestedPamsIndustry": "duty free operations (add to canonical?)",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai Holdigs",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai holding",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai Holdings",
+      "rowCount": 2,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 2
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Bittu George"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai Islamic Bank",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Abbas"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubai World Trade Centre",
+      "rowCount": 1,
+      "topSourceIndustry": "Events",
+      "allSourceIndustries": {
+        "Events": 1
+      },
+      "suggestedPamsIndustry": "Events (add to canonical?)",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DubaiWorld Trade Center",
+      "rowCount": 1,
+      "topSourceIndustry": "Media",
+      "allSourceIndustries": {
+        "Media": 1
+      },
+      "suggestedPamsIndustry": "Media & Entertainment",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dubizzle",
+      "rowCount": 1,
+      "topSourceIndustry": "Real Estate",
+      "allSourceIndustries": {
+        "Real Estate": 1
+      },
+      "suggestedPamsIndustry": "Real Estate",
+      "salesReps": [
+        "Abbas M"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dunkin",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Duroflex",
+      "rowCount": 3,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 3
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Santosh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dvara Health",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rupam Nandi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dvara Health Finance",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rupam Nandi"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dvara Money",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Rupam"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dvara.com",
+      "rowCount": 1,
+      "topSourceIndustry": "BFSI",
+      "allSourceIndustries": {
+        "BFSI": 1
+      },
+      "suggestedPamsIndustry": "Banking",
+      "salesReps": [
+        "Dhananjay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dwidaya",
+      "rowCount": 3,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 3
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Tanmay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "dwidaya travel",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Tanmay"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "DWTC",
+      "rowCount": 2,
+      "topSourceIndustry": "Events",
+      "allSourceIndustries": {
+        "Events": 1,
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Events (add to canonical?)",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Dzerv",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Narender"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "easebuzz",
+      "rowCount": 1,
+      "topSourceIndustry": "Utility : energy, gas",
+      "allSourceIndustries": {
+        "Utility : energy, gas": 1
+      },
+      "suggestedPamsIndustry": "Industrial",
+      "salesReps": [
+        "rohan"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Eataly",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Eatly",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Bittu"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Eazeebox",
+      "rowCount": 1,
+      "topSourceIndustry": "Retail & eCommerce",
+      "allSourceIndustries": {
+        "Retail & eCommerce": 1
+      },
+      "suggestedPamsIndustry": "Retail / eCommerce",
+      "salesReps": [
+        "Karthik Walhekar"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Eazy diner",
+      "rowCount": 1,
+      "topSourceIndustry": "F&B",
+      "allSourceIndustries": {
+        "F&B": 1
+      },
+      "suggestedPamsIndustry": "CPG & FMCG",
+      "salesReps": [
+        "Narender Singh"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "EazyDiner Concierge External Inbox",
+      "rowCount": 1,
+      "topSourceIndustry": "Travel & Hospitality",
+      "allSourceIndustries": {
+        "Travel & Hospitality": 1
+      },
+      "suggestedPamsIndustry": "Hospitality",
+      "salesReps": [
+        "Narender"
+      ],
+      "isDuplicateVariant": false
+    },
+    {
+      "accountName": "Edu Spark",
+      "rowCount": 1,
+      "topSourceIndustry": "Education",
+      "allSourceIndustries": {
+        "Education": 1
+      },
+      "suggestedPamsIndustry": "Education",
+      "salesReps": [
+        "Mayank"
+      ],
+      "isDuplicateVariant": false
+    }
+  ],
+  "duplicateCandidates": [
+    {
+      "normalized": "6th street",
+      "variants": [
+        "6th Street",
+        "6th street"
+      ]
+    },
+    {
+      "normalized": "abfrl",
+      "variants": [
+        "ABFRL",
+        "abfrl"
+      ]
+    },
+    {
+      "normalized": "acko",
+      "variants": [
+        "Acko",
+        "acko"
+      ]
+    },
+    {
+      "normalized": "aditya birla",
+      "variants": [
+        "Aditya Birla",
+        "aditya birla"
+      ]
+    },
+    {
+      "normalized": "agiletelecom",
+      "variants": [
+        "Agiletelecom",
+        "agiletelecom"
+      ]
+    },
+    {
+      "normalized": "airasia",
+      "variants": [
+        "AirAsia",
+        "airasia"
+      ]
+    },
+    {
+      "normalized": "al essa",
+      "variants": [
+        "AL Essa",
+        "Al Essa"
+      ]
+    },
+    {
+      "normalized": "al ghurair",
+      "variants": [
+        "Al Ghurair",
+        "Al ghurair"
+      ]
+    },
+    {
+      "normalized": "amazon",
+      "variants": [
+        "Amazon",
+        "amazon"
+      ]
+    },
+    {
+      "normalized": "andwhyte",
+      "variants": [
+        "AndWhyte",
+        "Andwhyte"
+      ]
+    },
+    {
+      "normalized": "antara senior care",
+      "variants": [
+        "Antara Senior Care",
+        "Antara Senior care"
+      ]
+    },
+    {
+      "normalized": "appsforbharat",
+      "variants": [
+        "AppsForBharat",
+        "Appsforbharat"
+      ]
+    },
+    {
+      "normalized": "arabia insurance",
+      "variants": [
+        "Arabia Insurance",
+        "Arabia insurance"
+      ]
+    },
+    {
+      "normalized": "axis bank",
+      "variants": [
+        "Axis Bank",
+        "Axis bank",
+        "axis bank"
+      ]
+    },
+    {
+      "normalized": "axis bank mk",
+      "variants": [
+        "Axis Bank MK",
+        "Axis Bank mk"
+      ]
+    },
+    {
+      "normalized": "azadea group",
+      "variants": [
+        "Azadea Group",
+        "Azadea group"
+      ]
+    },
+    {
+      "normalized": "babyplanetonline",
+      "variants": [
+        "Babyplanetonline",
+        "babyplanetonline"
+      ]
+    },
+    {
+      "normalized": "bank of baroda",
+      "variants": [
+        "Bank of Baroda",
+        "Bank of baroda"
+      ]
+    },
+    {
+      "normalized": "beenow",
+      "variants": [
+        "Beenow",
+        "beenow"
+      ]
+    },
+    {
+      "normalized": "belagavi police department",
+      "variants": [
+        "Belagavi Police Department",
+        "Belagavi Police department",
+        "Belagavi police department"
+      ]
+    },
+    {
+      "normalized": "big basket",
+      "variants": [
+        "Big Basket",
+        "Big basket"
+      ]
+    },
+    {
+      "normalized": "bob card",
+      "variants": [
+        "BOB Card",
+        "bob card"
+      ]
+    },
+    {
+      "normalized": "carl zeiss",
+      "variants": [
+        "Carl Zeiss",
+        "Carl zeiss"
+      ]
+    },
+    {
+      "normalized": "carmen",
+      "variants": [
+        "Carmen",
+        "carmen"
+      ]
+    },
+    {
+      "normalized": "ceew",
+      "variants": [
+        "CEEW",
+        "CeeW"
+      ]
+    },
+    {
+      "normalized": "cipla",
+      "variants": [
+        "Cipla",
+        "cipla"
+      ]
+    },
+    {
+      "normalized": "colmexpro",
+      "variants": [
+        "Colmexpro",
+        "colmexpro"
+      ]
+    },
+    {
+      "normalized": "coto community",
+      "variants": [
+        "COTO Community",
+        "Coto Community"
+      ]
+    },
+    {
+      "normalized": "cp plus",
+      "variants": [
+        "CP Plus",
+        "Cp Plus"
+      ]
+    },
+    {
+      "normalized": "cred",
+      "variants": [
+        "CRED",
+        "Cred"
+      ]
+    },
+    {
+      "normalized": "cris",
+      "variants": [
+        "CRIS",
+        "Cris"
+      ]
+    },
+    {
+      "normalized": "critical path technologies pvt ltd",
+      "variants": [
+        "Critical Path Technologies Pvt Ltd",
+        "Critical Path Technologies pvt ltd"
+      ]
+    },
+    {
+      "normalized": "curefit",
+      "variants": [
+        "Curefit",
+        "curefit"
+      ]
+    },
+    {
+      "normalized": "dhan",
+      "variants": [
+        "Dhan",
+        "dhan"
+      ]
+    },
+    {
+      "normalized": "dhl",
+      "variants": [
+        "DHL",
+        "dhl"
+      ]
+    },
+    {
+      "normalized": "diageo cocktail festival 2025",
+      "variants": [
+        "Diageo Cocktail Festival 2025",
+        "Diageo Cocktail festival 2025"
+      ]
+    },
+    {
+      "normalized": "dipr punjab",
+      "variants": [
+        "DIPR Punjab",
+        "Dipr Punjab"
+      ]
+    },
+    {
+      "normalized": "dp world",
+      "variants": [
+        "DP World",
+        "DP world"
+      ]
+    },
+    {
+      "normalized": "equentis",
+      "variants": [
+        "Equentis",
+        "equentis"
+      ]
+    },
+    {
+      "normalized": "everyworks",
+      "variants": [
+        "Everyworks",
+        "everyworks"
+      ]
+    },
+    {
+      "normalized": "eyewa",
+      "variants": [
+        "Eyewa",
+        "eyewa"
+      ]
+    },
+    {
+      "normalized": "fcbsix",
+      "variants": [
+        "FCBSix",
+        "fcbsix"
+      ]
+    },
+    {
+      "normalized": "federal bank",
+      "variants": [
+        "Federal Bank",
+        "federal bank"
+      ]
+    },
+    {
+      "normalized": "fedex",
+      "variants": [
+        "FedEx",
+        "Fedex"
+      ]
+    },
+    {
+      "normalized": "fedex apac",
+      "variants": [
+        "FedEx APAC",
+        "Fedex Apac"
+      ]
+    },
+    {
+      "normalized": "fedex lac",
+      "variants": [
+        "FedEx LAC",
+        "FedEx Lac",
+        "Fedex LAC"
+      ]
+    },
+    {
+      "normalized": "fedex latam",
+      "variants": [
+        "FedEx LATAM",
+        "Fedex Latam"
+      ]
+    },
+    {
+      "normalized": "fibe",
+      "variants": [
+        "Fibe",
+        "fibe"
+      ]
+    },
+    {
+      "normalized": "finnable",
+      "variants": [
+        "Finnable",
+        "finnable"
+      ]
+    },
+    {
+      "normalized": "flipkart",
+      "variants": [
+        "FlipKart",
+        "Flipkart",
+        "flipkart"
+      ]
+    },
+    {
+      "normalized": "general motors",
+      "variants": [
+        "General Motors",
+        "General motors"
+      ]
+    },
+    {
+      "normalized": "grayquest",
+      "variants": [
+        "Grayquest",
+        "grayquest"
+      ]
+    },
+    {
+      "normalized": "groww",
+      "variants": [
+        "Groww",
+        "groww"
+      ]
+    },
+    {
+      "normalized": "gsk",
+      "variants": [
+        "GSK",
+        "gsk"
+      ]
+    },
+    {
+      "normalized": "hcl tech",
+      "variants": [
+        "HCL Tech",
+        "HCL tech"
+      ]
+    },
+    {
+      "normalized": "hdfc ergo",
+      "variants": [
+        "HDFC Ergo",
+        "hdfc ergo"
+      ]
+    },
+    {
+      "normalized": "hdfc life",
+      "variants": [
+        "HDFC Life",
+        "Hdfc Life"
+      ]
+    },
+    {
+      "normalized": "hdfc sky",
+      "variants": [
+        "HDFC SKY",
+        "HDFC Sky"
+      ]
+    },
+    {
+      "normalized": "hero insurance",
+      "variants": [
+        "Hero insurance",
+        "hero insurance"
+      ]
+    },
+    {
+      "normalized": "hexahealth",
+      "variants": [
+        "HexaHealth",
+        "hexahealth"
+      ]
+    },
+    {
+      "normalized": "hoyoverse",
+      "variants": [
+        "Hoyoverse",
+        "hoyoverse"
+      ]
+    },
+    {
+      "normalized": "hsl",
+      "variants": [
+        "HSL",
+        "hsl"
+      ]
+    },
+    {
+      "normalized": "icarros comprador certo",
+      "variants": [
+        "Icarros comprador certo",
+        "icarros comprador certo"
+      ]
+    },
+    {
+      "normalized": "icici bank",
+      "variants": [
+        "ICICI Bank",
+        "ICICI bank"
+      ]
+    },
+    {
+      "normalized": "idbi bank",
+      "variants": [
+        "IDBI BAnk",
+        "IDBI Bank"
+      ]
+    },
+    {
+      "normalized": "iifl",
+      "variants": [
+        "IIFL",
+        "Iifl"
+      ]
+    },
+    {
+      "normalized": "indusind",
+      "variants": [
+        "Indusind",
+        "indusind"
+      ]
+    },
+    {
+      "normalized": "indusind bank",
+      "variants": [
+        "IndusInd Bank",
+        "IndusInd bank",
+        "Indusind Bank"
+      ]
+    },
+    {
+      "normalized": "ingram micro",
+      "variants": [
+        "Ingram Micro",
+        "Ingram micro"
+      ]
+    },
+    {
+      "normalized": "itvedant",
+      "variants": [
+        "ITVedant",
+        "itvedant"
+      ]
+    },
+    {
+      "normalized": "jio financial services",
+      "variants": [
+        "Jio Financial Services",
+        "Jio Financial services"
+      ]
+    },
+    {
+      "normalized": "jkdtl",
+      "variants": [
+        "JKDTL",
+        "jkdtl"
+      ]
+    },
+    {
+      "normalized": "jupiter money",
+      "variants": [
+        "Jupiter Money",
+        "Jupiter money"
+      ]
+    },
+    {
+      "normalized": "justdail",
+      "variants": [
+        "JustDail",
+        "Justdail"
+      ]
+    },
+    {
+      "normalized": "justlife",
+      "variants": [
+        "JustLife",
+        "Justlife"
+      ]
+    },
+    {
+      "normalized": "kotak",
+      "variants": [
+        "Kotak",
+        "kotak"
+      ]
+    },
+    {
+      "normalized": "kreditbee",
+      "variants": [
+        "KreditBee",
+        "Kreditbee"
+      ]
+    },
+    {
+      "normalized": "l'oreal colombia",
+      "variants": [
+        "L'Oreal Colombia",
+        "L'oreal Colombia"
+      ]
+    },
+    {
+      "normalized": "l'oreal latam",
+      "variants": [
+        "L'Oreal Latam",
+        "L'oreal Latam"
+      ]
+    },
+    {
+      "normalized": "lectrix ev",
+      "variants": [
+        "Lectrix EV",
+        "Lectrix.ev"
+      ]
+    },
+    {
+      "normalized": "level shoes",
+      "variants": [
+        "Level Shoes",
+        "Level shoes"
+      ]
+    },
+    {
+      "normalized": "loreal",
+      "variants": [
+        "Loreal",
+        "loreal"
+      ]
+    },
+    {
+      "normalized": "lulu exchange",
+      "variants": [
+        "LULU Exchange",
+        "Lulu Exchange"
+      ]
+    },
+    {
+      "normalized": "lupin",
+      "variants": [
+        "Lupin",
+        "lupin"
+      ]
+    },
+    {
+      "normalized": "medgulf",
+      "variants": [
+        "MedGulf",
+        "Medgulf"
+      ]
+    },
+    {
+      "normalized": "mep   ksa",
+      "variants": [
+        "MEP , KSA",
+        "MEP - KSA"
+      ]
+    },
+    {
+      "normalized": "meta",
+      "variants": [
+        "META",
+        "Meta"
+      ]
+    },
+    {
+      "normalized": "metispay",
+      "variants": [
+        "MetiSpay",
+        "Metispay"
+      ]
+    },
+    {
+      "normalized": "mobisy",
+      "variants": [
+        "MOBISY",
+        "Mobisy",
+        "mobisy"
+      ]
+    },
+    {
+      "normalized": "mpvvcl",
+      "variants": [
+        "MPVVCL",
+        "MpVVCL"
+      ]
+    },
+    {
+      "normalized": "muthoot",
+      "variants": [
+        "Muthoot",
+        "muthoot"
+      ]
+    },
+    {
+      "normalized": "myntra",
+      "variants": [
+        "Myntra",
+        "myntra"
+      ]
+    },
+    {
+      "normalized": "nescafe",
+      "variants": [
+        "NESCAFE",
+        "Nescafe"
+      ]
+    },
+    {
+      "normalized": "nespresso",
+      "variants": [
+        "Nespresso",
+        "nespresso"
+      ]
+    },
+    {
+      "normalized": "nestle",
+      "variants": [
+        "Nestle",
+        "nestle"
+      ]
+    },
+    {
+      "normalized": "nestle pak",
+      "variants": [
+        "Nestle PAK",
+        "Nestle Pak"
+      ]
+    },
+    {
+      "normalized": "noon",
+      "variants": [
+        "Noon",
+        "noon"
+      ]
+    },
+    {
+      "normalized": "noon minutes",
+      "variants": [
+        "Noon Minutes",
+        "Noon minutes"
+      ]
+    },
+    {
+      "normalized": "ola",
+      "variants": [
+        "OLA",
+        "Ola"
+      ]
+    },
+    {
+      "normalized": "onecard",
+      "variants": [
+        "OneCard",
+        "Onecard"
+      ]
+    }
+  ],
+  "canonicalIndustries": [
+    "Banking",
+    "Fintech",
+    "Insurance",
+    "Retail / eCommerce",
+    "Healthcare",
+    "B2B / Manufacturing",
+    "Automotive",
+    "Real Estate",
+    "Hospitality",
+    "Transportation",
+    "Sports",
+    "Gov / Citizen Services",
+    "Education",
+    "Media & Entertainment",
+    "IT & Software",
+    "CPG & FMCG",
+    "Pharma & Life Sciences",
+    "Logistics & Supply Chain",
+    "Industrial",
+    "Agritech",
+    "Professional Services"
+  ]
+}

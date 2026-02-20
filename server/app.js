@@ -191,7 +191,7 @@ const createApp = (options = {}) => {
     next();
   };
   app.use('/api/auth', authRouter);
-  app.use('/api/users', usersRouter);
+  app.use('/api/users', sessionMiddleware, requireStorageAuth, usersRouter);
   app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);
   app.use('/api/storage', storageRequestLogger, storageLimiter, sessionMiddleware, requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
@@ -299,6 +299,22 @@ const createApp = (options = {}) => {
         dashboardMonth: 'last'
       });
     }
+  });
+
+  // Build/version for pre-deploy snapshot and “current production build” capture. No auth.
+  app.get('/api/version', (req, res) => {
+    let version = process.env.APP_VERSION || process.env.npm_package_version || '';
+    if (!version) {
+      try {
+        const pkgPath = path.join(__dirname, '..', 'package.json');
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        version = pkg.version || '0.0.0';
+      } catch (_) {
+        version = '0.0.0';
+      }
+    }
+    const buildId = process.env.BUILD_ID || process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_DEPLOYMENT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || '';
+    res.json({ version, buildId: buildId || null });
   });
 
   if (!options.disableStatic) {
