@@ -14,6 +14,7 @@ const { checkHealth } = require('./db');
 const adminLogsRouter = require('./routes/adminLogs');
 const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
+const migrationRouter = require('./routes/migration');
 const logger = require('./logger');
 const { getAppConfig } = require('./services/appConfig');
 const {
@@ -199,6 +200,7 @@ const createApp = (options = {}) => {
   app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
+  app.use('/api/migration', sessionMiddleware, requireStorageAuth, migrationRouter);
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const hostname = req.hostname || '';

@@ -866,6 +866,8 @@ const App = {
 
     getDashboardVisibilityKey(viewName) {
         switch (viewName) {
+            case 'migrationDashboard':
+                return 'dashboard';
             case 'dashboard':
                 return 'dashboard';
             case 'import':
@@ -986,12 +988,18 @@ const App = {
             migrationBanner.classList.add('hidden');
         }
 
+        document.querySelectorAll('[data-migration-hide]').forEach((el) => {
+            el.classList.toggle('hidden', migrationModeOn);
+        });
+
         document.querySelectorAll('[data-dashboard]').forEach((element) => {
             const key = element.getAttribute('data-dashboard');
             let visible = this.isDashboardVisible(key) && this.isFeatureEnabled(key);
             if (migrationModeOn) {
-                const migrationNav = ['dashboard', 'activities', 'reports', 'suggestionsBugs', 'configuration'];
+                const migrationNav = ['migrationDashboard', 'accounts', 'activities', 'projectHealth', 'suggestionsBugs', 'winloss', 'configuration'];
                 visible = migrationNav.indexOf(key) !== -1 && visible;
+            } else if (key === 'migrationDashboard') {
+                visible = false;
             }
             element.classList.toggle('dashboard-hidden', !visible);
         });
@@ -1004,6 +1012,9 @@ const App = {
             if (currentViewKey !== 'dashboard') {
                 this.switchView('dashboard');
             }
+        }
+        if (migrationModeOn && (this.currentView === 'dashboard' || this.currentView === 'reports' || this.currentView === 'suggestionsBugs')) {
+            this.switchView('migrationDashboard');
         }
     },
 
@@ -1026,6 +1037,9 @@ const App = {
             return 'reports';
         }
 
+        if (this.isMigrationMode() && this.isValidView('migrationDashboard')) {
+            return 'migrationDashboard';
+        }
         return 'dashboard';
     },
 
@@ -1048,8 +1062,10 @@ const App = {
             return;
         }
 
+        const migrationViews = ['migrationDashboard', 'accounts', 'activities', 'projectHealth', 'suggestionsBugs', 'winloss', 'configuration'];
         const accessKey = this.getDashboardVisibilityKey(viewName);
-        if (accessKey) {
+        const allowInMigrationMode = this.isMigrationMode() && migrationViews.indexOf(viewName) !== -1;
+        if (!allowInMigrationMode && accessKey) {
             if (!this.isFeatureEnabled(accessKey)) {
                 UI.showNotification(this.getAccessMessage(accessKey, 'feature'), 'info');
                 return;
@@ -1172,6 +1188,9 @@ const App = {
             case 'suggestionsBugs':
                 this.loadSuggestionsBugsView();
                 break;
+            case 'migrationDashboard':
+                this.loadMigrationDashboard();
+                break;
         }
     },
 
@@ -1182,6 +1201,9 @@ const App = {
                 break;
             case 'activities':
                 this.loadActivitiesView();
+                break;
+            case 'migrationDashboard':
+                this.loadMigrationDashboard();
                 break;
             case 'drafts':
                 this.loadDraftsView();
@@ -1213,7 +1235,9 @@ const App = {
     canPrefetchView(viewName) {
         if (!viewName || !this.isValidView(viewName)) return false;
         if (viewName === this.currentView) return false;
-        if (!this.isAccessible(this.getDashboardVisibilityKey(viewName))) return false;
+        const migrationViews = ['migrationDashboard', 'accounts', 'activities', 'projectHealth', 'suggestionsBugs', 'winloss', 'configuration'];
+        const allowInMigrationMode = this.isMigrationMode() && migrationViews.indexOf(viewName) !== -1;
+        if (!allowInMigrationMode && !this.isAccessible(this.getDashboardVisibilityKey(viewName))) return false;
         if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
             return false;
         }
@@ -1522,7 +1546,7 @@ const App = {
         let html = `
             <!-- Log Activity + Admin month selector -->
             <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <button class="btn btn-primary" onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
+                <button class="btn btn-primary log-activity-btn" data-migration-hide onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
                     + Log Activity
                 </button>
                 ${isAdmin ? `
@@ -1979,8 +2003,10 @@ const App = {
 
     // Navigate to card view (for card interface)
     navigateToCardView(viewName) {
+        const migrationViews = ['migrationDashboard', 'accounts', 'activities', 'projectHealth', 'suggestionsBugs', 'winloss', 'configuration'];
         const accessKey = this.getDashboardVisibilityKey(viewName);
-        if (accessKey) {
+        const allowInMigrationMode = this.isMigrationMode() && migrationViews.indexOf(viewName) !== -1;
+        if (!allowInMigrationMode && accessKey) {
             if (!this.isFeatureEnabled(accessKey)) {
                 UI.showNotification(this.getAccessMessage(accessKey, 'feature'), 'info');
                 return;
@@ -2195,7 +2221,7 @@ const App = {
             </a>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                 <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">All Activities</h1>
-                <button class="btn btn-primary" onclick="Activities.openActivityModal()">+ Log Activity</button>
+                <button class="btn btn-primary log-activity-btn" data-migration-hide onclick="Activities.openActivityModal()">+ Log Activity</button>
             </div>
             <div class="analytics-filter-bar">
                 <div class="form-group" style="flex: 1; min-width: 220px;">
@@ -2605,6 +2631,162 @@ const App = {
 
     loadCardConfigurationView() {
         Admin.loadConfigurationPanel();
+    },
+
+    _migrationDashboardBound: false,
+
+    async loadMigrationDashboard() {
+        const statusEl = document.getElementById('migrationDataStatus');
+        const accountsEl = document.getElementById('migrationStatsAccounts');
+        const projectsEl = document.getElementById('migrationStatsProjects');
+        const activitiesEl = document.getElementById('migrationStatsActivities');
+        const loadSection = document.getElementById('migrationLoadSection');
+        const loadMessage = document.getElementById('migrationLoadMessage');
+        const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
+
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+        if (typeof Auth !== 'undefined' && Auth.getCurrentUser) {
+            const user = Auth.getCurrentUser();
+            if (user && user.username) headers['X-Admin-User'] = user.username;
+        }
+
+        try {
+            const res = await fetch('/api/migration/stats', { credentials: 'include', headers });
+            const data = res.ok ? await res.json() : {};
+            const loaded = !!data.loaded;
+            if (statusEl) {
+                statusEl.innerHTML = loaded
+                    ? '<strong>Migration data:</strong> Loaded. ' + (data.importedAt ? 'Imported at ' + new Date(data.importedAt).toLocaleString() + '.' : '')
+                    : '<strong>Migration data:</strong> Not loaded yet. Use the form below to load the migration CSV.';
+            }
+            if (accountsEl) accountsEl.textContent = loaded ? String(data.accountCount) : '—';
+            if (projectsEl) projectsEl.textContent = loaded ? String(data.projectCount) : '—';
+            if (activitiesEl) {
+                activitiesEl.textContent = loaded
+                    ? (data.activityConfirmed != null ? data.activityConfirmed + ' / ' + data.activityCount : data.activityCount + ' total')
+                    : '— / —';
+            }
+            const monthListEl = document.getElementById('migrationMonthList');
+            if (monthListEl) {
+                if (loaded && data.activityMonths && data.activityMonths.length) {
+                    monthListEl.textContent = 'Months (confirm first, reverse from Dec 2025): ' + data.activityMonths.join(', ');
+                    monthListEl.classList.remove('hidden');
+                } else {
+                    monthListEl.classList.add('hidden');
+                }
+            }
+            if (loadSection) loadSection.style.display = isAdmin ? '' : 'none';
+            const confirmSection = document.getElementById('migrationConfirmSection');
+            const confirmMsg = document.getElementById('migrationConfirmMessage');
+            if (confirmSection) confirmSection.style.display = loaded && isAdmin ? '' : 'none';
+            if (confirmMsg) confirmMsg.textContent = '';
+        } catch (e) {
+            if (statusEl) statusEl.innerHTML = '<strong>Migration data:</strong> Could not load stats.';
+            if (accountsEl) accountsEl.textContent = '—';
+            if (projectsEl) projectsEl.textContent = '—';
+            if (activitiesEl) activitiesEl.textContent = '— / —';
+        }
+
+        if (!this._migrationDashboardBound && isAdmin) {
+            this._migrationDashboardBound = true;
+            const fileInput = document.getElementById('migrationCsvFileInput');
+            const loadBtn = document.getElementById('migrationLoadCsvBtn');
+            if (loadBtn && fileInput) {
+                loadBtn.addEventListener('click', async () => {
+                    const file = fileInput.files && fileInput.files[0];
+                    if (!file) {
+                        if (loadMessage) loadMessage.textContent = 'Select a CSV file first.';
+                        return;
+                    }
+                    loadMessage.textContent = 'Loading…';
+                    loadBtn.disabled = true;
+                    try {
+                        const csv = await new Promise((resolve, reject) => {
+                            const r = new FileReader();
+                            r.onload = () => resolve(r.result);
+                            r.onerror = () => reject(new Error('Failed to read file'));
+                            r.readAsText(file, 'utf8');
+                        });
+                        const importRes = await fetch('/api/migration/import', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers,
+                            body: JSON.stringify({ csv })
+                        });
+                        const result = await importRes.json().catch(() => ({}));
+                        if (importRes.ok) {
+                            if (loadMessage) loadMessage.textContent = 'Loaded: ' + (result.accountCount || 0) + ' accounts, ' + (result.activityCount || 0) + ' activities.';
+                            fileInput.value = '';
+                            this.loadMigrationDashboard();
+                        } else {
+                            if (loadMessage) loadMessage.textContent = result.message || 'Import failed.';
+                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Import failed', 'error');
+                        }
+                    } catch (err) {
+                        if (loadMessage) loadMessage.textContent = 'Error: ' + (err.message || 'failed');
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(err.message || 'Import failed', 'error');
+                        } finally {
+                        loadBtn.disabled = false;
+                    }
+                });
+            }
+            const confirmDraftBtn = document.getElementById('migrationConfirmDraftBtn');
+            const promoteBtn = document.getElementById('migrationPromoteBtn');
+            const confirmMsgEl = document.getElementById('migrationConfirmMessage');
+            if (isAdmin && confirmDraftBtn && !confirmDraftBtn.dataset.bound) {
+                confirmDraftBtn.dataset.bound = '1';
+                confirmDraftBtn.addEventListener('click', async () => {
+                    confirmDraftBtn.disabled = true;
+                    if (confirmMsgEl) confirmMsgEl.textContent = '';
+                    try {
+                        const res = await fetch('/api/migration/confirm', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Admin-User': (typeof Auth !== 'undefined' && Auth.getCurrentUser && Auth.getCurrentUser())?.username || '' },
+                            body: JSON.stringify({ action: 'copy_draft_to_confirmed' })
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok) {
+                            if (confirmMsgEl) confirmMsgEl.textContent = data.message || 'Draft confirmed.';
+                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(data.message || 'Draft confirmed.', 'success');
+                            this.loadMigrationDashboard();
+                        } else {
+                            if (confirmMsgEl) confirmMsgEl.textContent = data.message || 'Failed.';
+                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(data.message || 'Failed', 'error');
+                        }
+                    } finally {
+                        confirmDraftBtn.disabled = false;
+                    }
+                });
+            }
+            if (isAdmin && promoteBtn && !promoteBtn.dataset.bound) {
+                promoteBtn.dataset.bound = '1';
+                promoteBtn.addEventListener('click', async () => {
+                    if (!confirm('Promote confirmed migration data to main storage? This cannot be undone without a backup.')) return;
+                    promoteBtn.disabled = true;
+                    if (confirmMsgEl) confirmMsgEl.textContent = '';
+                    try {
+                        const res = await fetch('/api/migration/confirm', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Admin-User': (typeof Auth !== 'undefined' && Auth.getCurrentUser && Auth.getCurrentUser())?.username || '' },
+                            body: JSON.stringify({ action: 'promote_to_main' })
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (res.ok) {
+                            if (confirmMsgEl) confirmMsgEl.textContent = data.message || 'Promoted.';
+                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(data.message || 'Promoted to main.', 'success');
+                            this.loadMigrationDashboard();
+                        } else {
+                            if (confirmMsgEl) confirmMsgEl.textContent = data.message || 'Failed.';
+                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(data.message || 'Failed', 'error');
+                        }
+                    } finally {
+                        promoteBtn.disabled = false;
+                    }
+                });
+            }
+        }
     },
 
     // Load activities view (async so callers can await refetch + re-render after save – FB2)
@@ -6295,7 +6477,7 @@ const App = {
         if (!card.querySelector('.chart-empty')) {
             const note = document.createElement('p');
             note.className = 'chart-empty text-muted';
-            note.innerHTML = `${message}<br><button class="btn btn-link btn-sm" style="padding-left: 0;" onclick="Activities.openActivityModal()">Log Activity</button>`;
+            note.innerHTML = `${message}<br><button class="btn btn-link btn-sm" style="padding-left: 0;" data-migration-hide onclick="Activities.openActivityModal()">Log Activity</button>`;
             card.appendChild(note);
         }
     },

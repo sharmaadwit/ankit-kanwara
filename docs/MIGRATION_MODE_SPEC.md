@@ -118,6 +118,8 @@ Source: **pams_migration_ready_v3.csv** (columns below). PAMS stores **accounts*
 - **Internal Activity Name / Topic / Description** (15–17) → for rows with Category = internal; map to **internalActivities** schema (name, topic, description).  
   **Uncertainty:** Internal activity schema in PAMS (exact field names).
 
+- **Industry for internal activities:** **Ignore.** Do not set or suggest industry for internal activities (previous form had challenges with industry on internal). Only external accounts get industry (best-guess from column 7).
+
 ---
 
 ## 4. Date rule (no submission timestamp for activity date)

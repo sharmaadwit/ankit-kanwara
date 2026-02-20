@@ -234,9 +234,18 @@ const deleteValue = async (key) => {
 
 /** Log storage PUT for Railway/in-app diagnostics and retrieval (key, who, count). */
 const extractPayloadCount = (key, serializedValue) => {
-  if (!(key === 'activities' || key === 'accounts' || key === 'internalActivities' || /^activities:\d{4}-\d{2}$/.test(key))) {
-    return null;
-  }
+  const isKnown =
+    key === 'activities' ||
+    key === 'accounts' ||
+    key === 'internalActivities' ||
+    /^activities:\d{4}-\d{2}$/.test(key) ||
+    key === 'migration_draft_accounts' ||
+    key === 'migration_draft_internalActivities' ||
+    key === 'migration_confirmed_accounts' ||
+    key === 'migration_confirmed_internalActivities' ||
+    /^migration_draft_activities:\d{4}-\d{2}$/.test(key) ||
+    /^migration_confirmed_activities:\d{4}-\d{2}$/.test(key);
+  if (!isKnown) return null;
   try {
     const parsed = typeof serializedValue === 'string' ? JSON.parse(serializedValue) : serializedValue;
     return Array.isArray(parsed) ? parsed.length : null;
