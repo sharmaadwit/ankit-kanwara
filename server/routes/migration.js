@@ -1,11 +1,13 @@
 /**
  * Migration mode API:
- * POST /api/migration/import - upload CSV, parse, write draft (admin)
+ * POST /api/migration/import - load from source file (no upload). Reads pams_migration_ready_v3.csv from migration-source path.
  * GET /api/migration/stats - return draft counts for dashboard
- * GET /api/migration/draft?keys=... - return draft data (accounts, activities:YYYY-MM, internalActivities)
- * POST /api/migration/confirm - move draft item(s) to confirmed or promote confirmed to main (admin)
+ * GET /api/migration/draft?keys=... - return draft data
+ * POST /api/migration/confirm - copy draft to confirmed or promote to main (admin)
  */
 
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const router = express.Router();
 const { getPool } = require('../db');
@@ -15,6 +17,27 @@ const {
   parseMigrationCSV,
   writeDraftToStorage
 } = require('../services/migrationImport');
+
+const MIGRATION_CSV_FILENAME = 'pams_migration_ready_v3.csv';
+
+function getMigrationCsvPath() {
+  const envPath = process.env.MIGRATION_CSV_PATH;
+  if (envPath && typeof envPath === 'string' && envPath.trim()) {
+    return path.resolve(envPath.trim());
+  }
+  const cwd = process.cwd();
+  const candidates = [
+    path.join(cwd, 'migration-source', MIGRATION_CSV_FILENAME),
+    path.join(cwd, 'Migration Source Data', MIGRATION_CSV_FILENAME),
+    path.join(cwd, '..', 'Project-PAT-LocalArchive', '2026-02-11_161551', MIGRATION_CSV_FILENAME)
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch (_) { /* ignore */ }
+  }
+  return null;
+}
 
 const maybeDecompress = (value) => {
   if (typeof value !== 'string') return value;
@@ -52,12 +75,25 @@ const setStorageValue = async (key, value) => {
   );
 };
 
-/** POST /api/migration/import - body: { csv: "<raw csv string>" } */
+/** POST /api/migration/import - loads from source file (migration-source/pams_migration_ready_v3.csv or MIGRATION_CSV_PATH). No upload. */
 router.post('/import', requireAdminAuth, async (req, res) => {
   try {
-    const csv = req.body && req.body.csv;
-    if (typeof csv !== 'string' || !csv.trim()) {
-      return res.status(400).json({ message: 'Request body must include csv (string).' });
+    let csv = req.body && req.body.csv;
+    if (typeof csv === 'string' && csv.trim()) {
+      // optional: still allow inline csv if provided
+    } else {
+      const csvPath = getMigrationCsvPath();
+      if (!csvPath) {
+        return res.status(400).json({
+          message: 'Migration CSV file not found. Place pams_migration_ready_v3.csv in "migration-source" or set MIGRATION_CSV_PATH.'
+        });
+      }
+      try {
+        csv = fs.readFileSync(csvPath, 'utf8');
+      } catch (readErr) {
+        logger.error('migration_read_file_failed', { path: csvPath, message: readErr.message });
+        return res.status(500).json({ message: 'Could not read migration CSV file.', path: csvPath });
+      }
     }
     const { accounts, activitiesByMonth, internalActivities, errors } = parseMigrationCSV(csv);
     if (errors.length && !accounts.length && !internalActivities.length) {
@@ -119,6 +155,9 @@ router.get('/stats', async (req, res) => {
     const internalList = await getStorageValue('migration_draft_internalActivities');
     const internalCount = Array.isArray(internalList) ? internalList.length : 0;
 
+    const winsList = await getStorageValue('migration_wins');
+    const winsCount = Array.isArray(winsList) ? winsList.length : 0;
+
     const activityMonths = (meta && Array.isArray(meta.activityMonths)) ? meta.activityMonths.sort() : [];
     const monthsReverse = activityMonths.slice().reverse();
 
@@ -129,6 +168,7 @@ router.get('/stats', async (req, res) => {
       activityCount: totalActivities,
       activityConfirmed: confirmedActivities,
       internalCount,
+      winsCount,
       confirmedAccountCount: Array.isArray(confirmedAccounts) ? confirmedAccounts.length : 0,
       importedAt: meta && meta.importedAt,
       activityMonths: monthsReverse

@@ -2640,8 +2640,6 @@ const App = {
         const accountsEl = document.getElementById('migrationStatsAccounts');
         const projectsEl = document.getElementById('migrationStatsProjects');
         const activitiesEl = document.getElementById('migrationStatsActivities');
-        const loadSection = document.getElementById('migrationLoadSection');
-        const loadMessage = document.getElementById('migrationLoadMessage');
         const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
 
         const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
@@ -2656,8 +2654,8 @@ const App = {
             const loaded = !!data.loaded;
             if (statusEl) {
                 statusEl.innerHTML = loaded
-                    ? '<strong>Migration data:</strong> Loaded. ' + (data.importedAt ? 'Imported at ' + new Date(data.importedAt).toLocaleString() + '.' : '')
-                    : '<strong>Migration data:</strong> Not loaded yet. Use the form below to load the migration CSV.';
+                    ? '<strong>Migration data:</strong> Preloaded at server startup (migration CSV + wins).' + (data.importedAt ? ' ' + new Date(data.importedAt).toLocaleString() : '')
+                    : '<strong>Migration data:</strong> Preloading at startup—refresh to see counts.';
             }
             if (accountsEl) accountsEl.textContent = loaded ? String(data.accountCount) : '—';
             if (projectsEl) projectsEl.textContent = loaded ? String(data.projectCount) : '—';
@@ -2666,6 +2664,8 @@ const App = {
                     ? (data.activityConfirmed != null ? data.activityConfirmed + ' / ' + data.activityCount : data.activityCount + ' total')
                     : '— / —';
             }
+            const winsStatusEl = document.getElementById('migrationWinsStatus');
+            if (winsStatusEl) winsStatusEl.textContent = (data.winsCount != null && data.winsCount > 0) ? ('Wins: ' + data.winsCount + ' rows preloaded.') : '';
             const monthListEl = document.getElementById('migrationMonthList');
             if (monthListEl) {
                 if (loaded && data.activityMonths && data.activityMonths.length) {
@@ -2675,7 +2675,6 @@ const App = {
                     monthListEl.classList.add('hidden');
                 }
             }
-            if (loadSection) loadSection.style.display = isAdmin ? '' : 'none';
             const confirmSection = document.getElementById('migrationConfirmSection');
             const confirmMsg = document.getElementById('migrationConfirmMessage');
             if (confirmSection) confirmSection.style.display = loaded && isAdmin ? '' : 'none';
@@ -2689,47 +2688,6 @@ const App = {
 
         if (!this._migrationDashboardBound && isAdmin) {
             this._migrationDashboardBound = true;
-            const fileInput = document.getElementById('migrationCsvFileInput');
-            const loadBtn = document.getElementById('migrationLoadCsvBtn');
-            if (loadBtn && fileInput) {
-                loadBtn.addEventListener('click', async () => {
-                    const file = fileInput.files && fileInput.files[0];
-                    if (!file) {
-                        if (loadMessage) loadMessage.textContent = 'Select a CSV file first.';
-                        return;
-                    }
-                    loadMessage.textContent = 'Loading…';
-                    loadBtn.disabled = true;
-                    try {
-                        const csv = await new Promise((resolve, reject) => {
-                            const r = new FileReader();
-                            r.onload = () => resolve(r.result);
-                            r.onerror = () => reject(new Error('Failed to read file'));
-                            r.readAsText(file, 'utf8');
-                        });
-                        const importRes = await fetch('/api/migration/import', {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers,
-                            body: JSON.stringify({ csv })
-                        });
-                        const result = await importRes.json().catch(() => ({}));
-                        if (importRes.ok) {
-                            if (loadMessage) loadMessage.textContent = 'Loaded: ' + (result.accountCount || 0) + ' accounts, ' + (result.activityCount || 0) + ' activities.';
-                            fileInput.value = '';
-                            this.loadMigrationDashboard();
-                        } else {
-                            if (loadMessage) loadMessage.textContent = result.message || 'Import failed.';
-                            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.message || 'Import failed', 'error');
-                        }
-                    } catch (err) {
-                        if (loadMessage) loadMessage.textContent = 'Error: ' + (err.message || 'failed');
-                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(err.message || 'Import failed', 'error');
-                        } finally {
-                        loadBtn.disabled = false;
-                    }
-                });
-            }
             const confirmDraftBtn = document.getElementById('migrationConfirmDraftBtn');
             const promoteBtn = document.getElementById('migrationPromoteBtn');
             const confirmMsgEl = document.getElementById('migrationConfirmMessage');

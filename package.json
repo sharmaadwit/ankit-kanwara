@@ -32,7 +32,8 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.2.1",
     "googleapis": "^133.0.0",
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "jest": "^29.7.0",

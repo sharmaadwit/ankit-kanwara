@@ -235,16 +235,8 @@
                     <div class="card mb-4">
                         <div class="card-body">
                             <h3 class="h5 mb-3">Status</h3>
-                            <p class="text-muted mb-2" id="migrationDataStatus"><strong>Migration data:</strong> Not loaded yet.</p>
-                            <div id="migrationLoadSection" class="mb-3">
-                                <label class="form-label">Load migration CSV (<code>pams_migration_ready_v3.csv</code>)</label>
-                                <div class="d-flex flex-wrap gap-2 align-items-center">
-                                    <input type="file" id="migrationCsvFileInput" accept=".csv" class="form-control form-control-sm" style="max-width: 280px;">
-                                    <button type="button" class="btn btn-primary btn-sm" id="migrationLoadCsvBtn">Load CSV</button>
-                                    <span class="text-muted small" id="migrationLoadMessage"></span>
-                                </div>
-                                <p class="small text-muted mt-1">Only rows with activity date on or before Jan 31, 2026 are imported. Internal activities have no industry (ignored).</p>
-                            </div>
+                            <p class="text-muted mb-2" id="migrationDataStatus"><strong>Migration data:</strong> Preloaded at server startup (migration CSV + wins).</p>
+                            <p class="small text-muted mb-0" id="migrationWinsStatus"></p>
                             <hr>
                             <div class="row g-3 mb-3">
                                 <div class="col-md-4">

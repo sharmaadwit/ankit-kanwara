@@ -3,6 +3,7 @@ const http = require('http');
 const { createApp } = require('./app');
 const { initDb, closePool } = require('./db');
 const logger = require('./logger');
+const { runPreload } = require('./services/preloadMigration');
 
 const PORT = parseInt(process.env.PORT, 10) || 8080;
 let server;
@@ -45,6 +46,7 @@ const ensureDbInitialized = async () => {
     runtimeStatus.dbLastErrorCode = null;
     runtimeStatus.dbLastErrorMessage = null;
     logger.info('db_init_succeeded');
+    runPreload().catch((err) => logger.error('preload_after_init_failed', { message: err.message }));
   } catch (error) {
     runtimeStatus.dbInitialized = false;
     runtimeStatus.dbInitRetryCount += 1;
