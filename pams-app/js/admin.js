@@ -21,6 +21,11 @@ const Admin = {
             label: 'Admin Monthly Export',
             description: 'Allow admins to download monthly analytics CSV snapshots.',
             dashboardKey: null
+        },
+        migrationMode: {
+            label: 'Migration Mode',
+            description: 'When enabled, show only migration UI: Accounts, Projects, Activities, Suggestions, Wins, Merge/update, and Migration dashboard. Normal dashboard and full nav are hidden. Default Off.',
+            dashboardKey: null
         }
     },
     currentFeatureFlags: {},

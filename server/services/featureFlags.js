@@ -6,7 +6,8 @@ const defaultFlags = {
   csvImport: true,
   csvExport: true,
   winLoss: true,
-  adminCsvExport: true
+  adminCsvExport: true,
+  migrationMode: false
 };
 
 const sanitizeFlags = (flags = {}) => {
