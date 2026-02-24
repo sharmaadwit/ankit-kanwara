@@ -3,7 +3,7 @@
 const Auth = {
     currentUser: null,
     pendingPasswordChangeUser: null,
-    currentLoginTab: 'presales',
+    currentLoginTab: 'analytics',
     analyticsGuestCounter: 0,
     currentSessionId: null, // Track session ID for logout logging
 
@@ -370,21 +370,19 @@ const Auth = {
         }).catch(err => console.warn('Logout logging failed:', err));
     },
 
-    // Show login screen
+    // Show login screen (Analytics tab first so password entry is the default)
     showLoginScreen() {
         this.resetLoginForms();
+        this.currentLoginTab = 'analytics';
+        this.switchLoginTab('analytics', { skipFocus: true });
         const loginScreen = document.getElementById('loginScreen');
         const mainApp = document.getElementById('mainApp');
-        const usernameInput = document.getElementById('username');
-        const passwordInput = document.getElementById('password');
+        const analyticsPasswordInput = document.getElementById('analyticsAccessPassword');
         loginScreen?.classList.remove('hidden');
         mainApp?.classList.add('hidden');
-        if (usernameInput) {
-            usernameInput.value = '';
-            usernameInput.focus();
-        }
-        if (passwordInput) {
-            passwordInput.value = '';
+        if (analyticsPasswordInput) {
+            analyticsPasswordInput.value = '';
+            setTimeout(() => analyticsPasswordInput.focus(), 50);
         }
         this.updateUserInfo();
     },
@@ -457,8 +455,8 @@ const Auth = {
             analyticsForm.setAttribute('novalidate', 'novalidate');
             analyticsForm.reset();
         }
-        this.currentLoginTab = 'presales';
-        this.switchLoginTab('presales', { skipFocus: true });
+        this.currentLoginTab = 'analytics';
+        this.switchLoginTab('analytics', { skipFocus: true });
         if (typeof App !== 'undefined' && typeof App.setLoading === 'function') {
             App.setLoading(false);
         }

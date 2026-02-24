@@ -1503,6 +1503,42 @@ body.migration-mode-on [data-migration-hide] {
     align-items: center;
 }
 
+.account-activities,
+.account-notes {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+.account-activities-title,
+.account-notes-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 0.5rem;
+}
+
+.account-activity-row {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--gray-600);
+    padding: 0.25rem 0;
+    border-top: 1px solid var(--gray-100);
+}
+
+.account-activity-row:first-child {
+    border-top: none;
+}
+
+.account-activity-date {
+    margin-right: 0.5rem;
+}
+
+.account-notes-text {
+    font-size: 0.875rem;
+    color: var(--gray-700);
+}
+
 @media (max-width: 768px) {
     .analytics-grid {
         grid-template-columns: 1fr;

@@ -325,6 +325,7 @@ const Admin = {
         return {
             users: () => this.loadUsers(),
             sales: () => this.loadSalesReps(),
+            salesLeaders: () => this.renderSalesLeadersPanel(),
             regions: () => this.renderRegionsPanel(),
             industryUseCases: () => this.loadIndustryUseCasesSection(),
             interface: () => { },
@@ -2122,6 +2123,58 @@ const Admin = {
         }
 
         container.innerHTML = html;
+    },
+
+    async renderSalesLeadersPanel() {
+        const container = document.getElementById('salesLeadersList');
+        if (!container) return;
+
+        const [regions, leaders, users] = await Promise.all([
+            DataManager.getRegions(),
+            DataManager.getSalesLeaders(),
+            DataManager.getUsers()
+        ]);
+        const userList = Array.isArray(users) ? users : [];
+
+        const optionsHtml = '<option value="">— None —</option>' + userList
+            .filter(u => u && (u.username || u.email))
+            .map(u => `<option value="${(u.id || '').toString().replace(/"/g, '&quot;')}">${(u.username || u.email || u.id || 'Unknown').replace(/</g, '&lt;')}</option>`)
+            .join('');
+
+        let html = '';
+        for (const region of regions) {
+            const currentId = leaders[region] || '';
+            const selectId = 'salesLeaderSelect_' + region.replace(/[^a-zA-Z0-9]/g, '_');
+            html += `
+                <div class="admin-list-row" style="align-items: center;">
+                    <div style="flex: 1; font-weight: 500;">${region.replace(/</g, '&lt;')}</div>
+                    <div style="min-width: 220px;">
+                        <select id="${selectId}" class="form-control form-control-sm" data-region="${region.replace(/"/g, '&quot;')}">
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html || '<p class="text-muted">No regions configured. Add regions under Regions first.</p>';
+
+        container.querySelectorAll('select[data-region]').forEach(select => {
+            const region = select.getAttribute('data-region');
+            const currentLeaders = leaders || {};
+            const currentId = String(currentLeaders[region] || '');
+            if (currentId && select.querySelector(`option[value="${currentId.replace(/"/g, '&quot;')}"]`)) {
+                select.value = currentId;
+            }
+            select.addEventListener('change', async () => {
+                const userId = select.value || '';
+                const updated = { ...(await DataManager.getSalesLeaders()) };
+                if (userId) updated[region] = userId;
+                else delete updated[region];
+                await DataManager.saveSalesLeaders(updated);
+                UI.showNotification('Sales leader saved for ' + region, 'success');
+            });
+        });
     },
 
     async handleRegionDelete(event) {

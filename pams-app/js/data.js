@@ -3103,6 +3103,43 @@ const DataManager = {
         return payload;
     },
 
+    SALES_LEADERS_KEY: 'pams_salesLeaders',
+
+    async getSalesLeaders() {
+        const key = this.SALES_LEADERS_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (!stored) return {};
+                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch (e) {
+                console.warn('[DataManager] getSalesLeaders async failed:', e);
+            }
+        }
+        try {
+            const stored = localStorage.getItem(key);
+            if (!stored) return {};
+            return JSON.parse(stored);
+        } catch (e) {
+            return {};
+        }
+    },
+
+    async saveSalesLeaders(map) {
+        const key = this.SALES_LEADERS_KEY;
+        const payload = JSON.stringify(typeof map === 'object' && map !== null ? map : {});
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] saveSalesLeaders async failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
+    },
+
     async getAnalyticsTablePresets() {
         const key = ANALYTICS_TABLE_PRESETS_KEY;
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
