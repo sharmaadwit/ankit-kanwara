@@ -706,7 +706,7 @@ const Activities = {
                                 <div id="pastActivitiesList" class="past-activities-list" style="display: none; margin-top: 0.5rem; max-height: 200px; overflow-y: auto;"></div>
                             </div>
                             <div class="form-grid">
-                                <div class="form-group">
+                                <div class="form-group" id="projectUseCasesGroup">
                                     <label class="form-label required">Primary Use Case</label>
                                     <div class="multi-select-container">
                                         <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('useCaseDropdown')">
@@ -724,7 +724,7 @@ const Activities = {
                                     <input type="text" class="form-control" id="projectLocation" placeholder="e.g. store, region, territory (Retail & others)">
                                 </div>
                             </div>
-                            <div class="form-group">
+                            <div class="form-group" id="projectProductsGroup">
                                 <label class="form-label required">Products Interested</label>
                                 <div class="multi-select-container">
                                     <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('projectProductsDropdown')">
@@ -884,7 +884,7 @@ const Activities = {
 
     handleSalesRepRegionChange(region) {
         this.currentSalesRepRegion = region || '';
-        this.populateSalesRepOptions(this.currentSalesRepRegion || 'all').catch(() => {});
+        this.populateSalesRepOptions(this.currentSalesRepRegion || 'all').catch(() => { });
         if (typeof UI !== 'undefined' && UI.clearFieldError) {
             const regionSelect = document.getElementById('salesRepRegionSelect');
             if (regionSelect) {
@@ -906,8 +906,19 @@ const Activities = {
         const container = document.getElementById('activityFields');
         if (!container) return;
 
-        let html = '';
+        // Toggle project fields visibility (Issue #1)
+        const projectUseCasesGroup = document.getElementById('projectUseCasesGroup');
+        const projectProductsGroup = document.getElementById('projectProductsGroup');
+        const isRedundantType = type === 'customerCall' || type === 'poc';
 
+        if (projectUseCasesGroup) {
+            projectUseCasesGroup.style.display = isRedundantType ? 'none' : 'block';
+        }
+        if (projectProductsGroup) {
+            projectProductsGroup.style.display = isRedundantType ? 'none' : 'block';
+        }
+
+        let html = '';
         if (this.activityType === 'internal') {
             html = this.getInternalActivityFields();
         } else if (this.activityType === 'external') {
@@ -1168,6 +1179,8 @@ const Activities = {
                 if (otherText) {
                     otherText.style.display = 'block';
                     otherText.required = true;
+                    // Issue #4: Ensure focus and clear if needed
+                    otherText.focus();
                 }
             }
         }
@@ -1228,7 +1241,7 @@ const Activities = {
                 otherText.required = false;
             }
         }
-        this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => {});
+        this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => { });
     },
 
     async refreshUseCaseOptions(industry) {
@@ -2158,6 +2171,22 @@ const Activities = {
             if (project) {
                 const projectLocation = document.getElementById('projectLocation')?.value;
                 if (projectLocation !== undefined) project.location = projectLocation || '';
+
+                // Issue #9: Save Products and Use Cases back to project
+                if (this.selectedProjectProducts && this.selectedProjectProducts.length > 0) {
+                    const productsOtherText = document.getElementById('projectProductsOtherText')?.value || '';
+                    project.productsInterested = this.selectedProjectProducts.map(p =>
+                        p === 'Other' ? `Other: ${productsOtherText}` : p
+                    );
+                }
+
+                if (this.selectedUseCases && this.selectedUseCases.length > 0) {
+                    const useCaseOtherText = document.getElementById('useCaseOtherText')?.value || '';
+                    project.useCases = this.selectedUseCases.map(uc =>
+                        uc === 'Other' ? `Other: ${useCaseOtherText}` : uc
+                    );
+                }
+
                 await DataManager.saveAccounts(accounts);
             }
         }
@@ -2528,7 +2557,7 @@ const Activities = {
                 if (pastSection) pastSection.classList.add('hidden');
             }
             const industrySelect = document.getElementById('industry');
-            this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '').catch(() => {});
+            this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '').catch(() => { });
             this.updateAddAnotherActivityButtonVisibility();
 
             // Populate External activity types
