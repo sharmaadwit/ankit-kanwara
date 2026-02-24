@@ -3140,6 +3140,45 @@ const DataManager = {
         localStorage.setItem(key, payload);
     },
 
+    LEADERS_KEY: 'pams_leaders',
+
+    async getLeaders() {
+        const key = this.LEADERS_KEY;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (!stored) return [];
+                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                return Array.isArray(parsed) ? parsed.filter(e => typeof e === 'string' && e.trim()) : [];
+            } catch (e) {
+                console.warn('[DataManager] getLeaders async failed:', e);
+            }
+        }
+        try {
+            const stored = localStorage.getItem(key);
+            if (!stored) return [];
+            const parsed = JSON.parse(stored);
+            return Array.isArray(parsed) ? parsed.filter(e => typeof e === 'string' && e.trim()) : [];
+        } catch (e) {
+            return [];
+        }
+    },
+
+    async saveLeaders(emails) {
+        const key = this.LEADERS_KEY;
+        const list = Array.isArray(emails) ? emails.filter(e => typeof e === 'string' && e.trim()) : [];
+        const payload = JSON.stringify(list);
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsync) {
+            try {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+                return;
+            } catch (e) {
+                console.warn('[DataManager] saveLeaders async failed:', e);
+            }
+        }
+        localStorage.setItem(key, payload);
+    },
+
     async getAnalyticsTablePresets() {
         const key = ANALYTICS_TABLE_PRESETS_KEY;
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {

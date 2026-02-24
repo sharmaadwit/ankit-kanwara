@@ -1686,6 +1686,122 @@ body.migration-mode-on [data-migration-hide] {
     flex-wrap: wrap;
 }
 
+/* Accounts Layout (left filters like Activities) */
+.accounts-layout {
+    display: flex;
+    min-height: 60vh;
+    overflow: hidden;
+}
+
+.accounts-sidebar {
+    width: 280px;
+    background: var(--gray-50, #f9fafb);
+    border-right: 1px solid var(--gray-200, #e5e7eb);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+.accounts-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--gray-200, #e5e7eb);
+    background: white;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.accounts-sidebar-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.accounts-sidebar-content {
+    padding: 1rem;
+}
+
+.accounts-filter-section {
+    margin-bottom: 1.5rem;
+}
+
+.accounts-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+    background: white;
+}
+
+.accounts-stats-bar {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    align-items: start;
+}
+
+.accounts-stats-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.accounts-stat-card {
+    background: var(--gray-50, #f9fafb);
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    min-width: 140px;
+}
+
+.accounts-stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--gray-900, #111827);
+}
+
+.accounts-stat-card .stat-label {
+    font-size: 0.8125rem;
+    color: var(--gray-600, #4b5563);
+    margin-top: 0.25rem;
+}
+
+.accounts-top5-chart {
+    background: var(--gray-50, #f9fafb);
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+}
+
+.accounts-top5-chart h4 {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.accounts-top5-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.accounts-top5-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0;
+    font-size: 0.875rem;
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+}
+
+.accounts-top5-list li:last-child {
+    border-bottom: none;
+}
+
 /* Activity Display Styles */
 .activity-item {
     padding: 1rem;

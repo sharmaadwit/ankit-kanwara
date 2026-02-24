@@ -25,17 +25,9 @@
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
             <p class="login-subtitle" id="loginSubtitle">Presales Activity Management System</p>
-            <div class="login-tabs">
-                <button type="button" class="login-tab active" data-tab="analytics" onclick="Auth.switchLoginTab('analytics')">
-                    Analytics Access
-                </button>
-                <button type="button" class="login-tab" data-tab="presales" onclick="Auth.switchLoginTab('presales')">
-                    Presales User Login
-                </button>
-            </div>
-            <form id="loginForm" class="login-form hidden">
+            <form id="loginForm" class="login-form">
                 <div class="form-group">
-                    <label class="form-label">Username</label>
+                    <label class="form-label">Username or email</label>
                     <input type="text" id="username" class="form-control" required autocomplete="username">
                 </div>
                 <div class="form-group">
@@ -43,7 +35,7 @@
                     <input type="password" id="password" class="form-control" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Login</button>
-                <p class="login-helper">Use your PAMS credentials to continue.</p>
+                <p class="login-helper">Presales, Sales leaders, and Leaders (CXO) use the same login.</p>
             </form>
             <div id="forcePasswordBanner" class="login-banner hidden">
                 <strong id="forcePasswordUser"></strong>
@@ -62,16 +54,6 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">Update Password</button>
                 <p class="login-helper">Tip: use at least 6 characters and avoid default passwords.</p>
-            </form>
-            <form id="analyticsAccessForm" class="login-form">
-                <div class="form-group">
-                    <label class="form-label">Analytics Password</label>
-                    <input type="password" id="analyticsAccessPassword" class="form-control" required
-                        autocomplete="off">
-                    <small class="text-muted">Admins can share this read-only password for analytics access.</small>
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">Enter Analytics</button>
-                <p class="login-helper">Default password: <span class="monospace">Gup$hup.io</span></p>
             </form>
         </div>
     </div>
@@ -564,6 +546,10 @@
                                             onclick="Admin.openAdminSection('salesLeaders', event)">
                                             <span>Sales Leaders</span>
                                         </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="leaders"
+                                            onclick="Admin.openAdminSection('leaders', event)">
+                                            <span>Leaders (CXO)</span>
+                                        </a>
                                     </div>
                                 </div>
                                 <div class="admin-nav-group">
@@ -692,15 +678,32 @@
                                     </div>
                                 </div>
 
-                                <!-- Sales Leaders (region → user for future sales leader login) -->
+                                <!-- Sales Leaders (region → sales user email; leaders are from Sales Users, name shown in that region) -->
                                 <div class="admin-section hidden" data-admin-section="salesLeaders">
                                     <div class="card">
                                         <div class="card-header">
                                             <h3>Sales Leaders</h3>
-                                            <p class="text-muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">Assign one leader per region. They will get login access later; data will be limited to their region.</p>
+                                            <p class="text-muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">Assign one leader per region from <strong>Sales Users</strong> (by name in that region). They log in with Presales credentials; reports are scoped to their region.</p>
                                         </div>
                                         <div class="card-body">
                                             <div id="salesLeadersList" class="space-y-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Leaders (CXO) – see all regions in analytics -->
+                                <div class="admin-section hidden" data-admin-section="leaders">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>Leaders (CXO)</h3>
+                                            <p class="text-muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">Emails that get Leader access: Reports only, all regions, slice-and-dice. They log in with Presales credentials (same user table).</p>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="form-inline" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                                                <input type="email" id="leaderEmailInput" class="form-control" placeholder="Add leader email" style="max-width: 280px;">
+                                                <button type="button" class="btn btn-primary" onclick="Admin.addLeaderEmail()">Add</button>
+                                            </div>
+                                            <div id="leadersList" class="space-y-2"></div>
                                         </div>
                                     </div>
                                 </div>

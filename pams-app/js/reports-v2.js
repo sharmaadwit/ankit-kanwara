@@ -4,7 +4,7 @@ const ReportsV2 = {
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
-    activeTab: 'presales', // 'presales', 'sales', 'regional', 'ai'
+    activeTab: 'presales', // 'presales', 'sales', 'regional', 'monthly', 'ai'
     activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
 
     // Plugin to show value on pie/doughnut segments and bar tops (matches dashboard)
@@ -84,7 +84,7 @@ const ReportsV2 = {
         const isYear = this.currentPeriodType === 'year';
         const cutoff = this.REPORTS_ACTIVITY_CUTOFF || '2026-01';
 
-        const filtered = allActivities.filter(activity => {
+        let filtered = allActivities.filter(activity => {
             const activityDate = activity.date || activity.createdAt;
             if (!activityDate) return false;
             if (activityDate < cutoff) return false;
@@ -97,6 +97,20 @@ const ReportsV2 = {
                 return activityMonth === period;
             }
         });
+
+        // Sales leader: scope to their region only
+        const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+        if (currentUser && currentUser.role === 'sales_leader' && currentUser.salesLeaderRegion) {
+            const region = currentUser.salesLeaderRegion;
+            const accounts = await DataManager.getAccounts();
+            const accountMap = accounts.reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
+            filtered = filtered.filter(activity => {
+                const activityRegion = activity.salesRepRegion || activity.region ||
+                    (accountMap[activity.accountId] && (accountMap[activity.accountId].salesRepRegion || accountMap[activity.accountId].region)) ||
+                    '';
+                return activityRegion === region;
+            });
+        }
 
         console.log(`ReportsV2: Found ${filtered.length} activities for period ${period} (${isYear ? 'year' : 'month'})`);
         return filtered;
@@ -341,6 +355,10 @@ const ReportsV2 = {
                         onclick="ReportsV2.switchTab('regional')">
                     Regional Data
                 </button>
+                <button class="reports-v2-tab ${this.activeTab === 'monthly' ? 'active' : ''}" 
+                        onclick="ReportsV2.switchTab('monthly')">
+                    Monthly report (PDF)
+                </button>
                 <button class="reports-v2-tab ${this.activeTab === 'ai' ? 'active' : ''}" 
                         onclick="ReportsV2.switchTab('ai')">
                     AI Intelligence
@@ -361,11 +379,184 @@ const ReportsV2 = {
                 `;
             case 'regional':
                 return await this.renderRegionalData(activities);
+            case 'monthly':
+                return await this.renderMonthlyReportPdf(activities);
             case 'ai':
                 return this.renderAIIntelligencePlaceholder();
             default:
                 return await this.renderPresalesReports(activities);
         }
+    },
+
+    // Monthly report (PDF-style): 8-page structure per MONTHLY_EMAIL_REPORT_SPEC – single scrollable view + Download PDF
+    async renderMonthlyReportPdf(activities) {
+        const periodLabel = this.formatPeriod(this.currentPeriod);
+        const total = activities.length;
+        const internalCount = activities.filter(a => a.isInternal).length;
+        const externalCount = activities.filter(a => !a.isInternal).length;
+        const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
+        let winsPeriod = 0;
+        let lossesPeriod = 0;
+        const periodMonth = this.currentPeriodType === 'month' ? this.currentPeriod : null;
+        if (periodMonth && accounts.length) {
+            accounts.forEach(account => {
+                account.projects?.forEach(project => {
+                    if (project.status === 'won' || project.status === 'lost') {
+                        const monthForWinLoss = project.winLossData?.monthOfWin ||
+                            (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                        if (monthForWinLoss === periodMonth) {
+                            if (project.status === 'won') winsPeriod++;
+                            else if (project.status === 'lost') lossesPeriod++;
+                        }
+                    }
+                });
+            });
+        }
+        const breakdown = {
+            'Customer Calls': activities.filter(a => a.type === 'customerCall').length,
+            'Internal': internalCount,
+            'Pricing': activities.filter(a => a.type === 'pricing').length,
+            'POC': activities.filter(a => a.type === 'poc').length,
+            'SOW': activities.filter(a => a.type === 'sow').length,
+            'RFx': activities.filter(a => a.type === 'rfx').length
+        };
+        const callTypeData = (this.cachedData && this.cachedData.callTypeData) || {};
+        const regionCounts = {};
+        activities.filter(a => !a.isInternal).forEach(a => {
+            const account = accounts.find(ac => ac.id === a.accountId);
+            const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
+            regionCounts[region] = (regionCounts[region] || 0) + 1;
+        });
+        const missingSfdcByRegion = {};
+        activities.filter(a => !a.isInternal).forEach(a => {
+            const account = accounts.find(ac => ac.id === a.accountId);
+            const project = account && account.projects ? account.projects.find(p => p.id === a.projectId) : null;
+            const hasSfdc = (account && account.sfdcLink) || (project && project.sfdcLink);
+            if (!hasSfdc) {
+                const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
+                missingSfdcByRegion[region] = (missingSfdcByRegion[region] || 0) + 1;
+            }
+        });
+        const userActivityMap = new Map();
+        activities.forEach(activity => {
+            const userId = activity.userId || activity.assignedUserEmail || 'unknown';
+            const userName = activity.userName || 'Unknown';
+            if (!userActivityMap.has(userId)) userActivityMap.set(userId, { userName, count: 0 });
+            userActivityMap.get(userId).count++;
+        });
+        const userActivityData = Array.from(userActivityMap.entries())
+            .map(([id, o]) => ({ id, name: o.userName, count: o.count }))
+            .sort((a, b) => b.count - a.count);
+
+        const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
+        const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
+
+        return `
+            <div class="reports-v2-section monthly-report-pdf-section" id="monthlyReportPdfContent">
+                <div class="reports-v2-monthly-pdf-actions">
+                    <h2 class="reports-v2-section-title">Monthly report (PDF)</h2>
+                    <p class="text-muted">Same structure as the email report. Use <strong>Download PDF</strong> to print or save as PDF.</p>
+                    <button type="button" class="btn btn-primary" onclick="window.print(); return false;">Download PDF</button>
+                </div>
+                <div class="monthly-report-pages">
+                    <!-- Page 1 – Summary -->
+                    <div class="monthly-report-page">
+                        <h3>Presales Update – ${periodLabel}</h3>
+                        <div class="monthly-report-summary-box">
+                            <div class="monthly-report-summary-total">${total}</div>
+                            <div class="monthly-report-summary-label">Total Activity</div>
+                            <div class="monthly-report-summary-period">${periodLabel}</div>
+                            <div class="monthly-report-summary-pills">
+                                <span>Internal ${internalCount}</span>
+                                <span>External ${externalCount}</span>
+                                <span>Wins ${winsPeriod}</span>
+                            </div>
+                        </div>
+                        <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
+                        <h4>Cube Analysis Top Highlights – Global</h4>
+                    </div>
+                    <!-- Page 2 – Use cases (simplified) -->
+                    <div class="monthly-report-page">
+                        <h3>Use cases across industries</h3>
+                        <p class="text-muted">What each use case is, where it shows up, and takeaways from the data.</p>
+                        <div class="monthly-report-use-cases">
+                            <div class="monthly-report-use-case-card">Lead gen & onboarding – industries and regional highlights from pipeline.</div>
+                            <div class="monthly-report-use-case-card">Loyalty & retention – win themes by region.</div>
+                            <div class="monthly-report-use-case-card">Support & FAQ – pipeline share by region.</div>
+                            <div class="monthly-report-use-case-card">Sales discovery & AI recommendation – regional strengths.</div>
+                            <div class="monthly-report-use-case-card">Operational automation – regional examples.</div>
+                        </div>
+                    </div>
+                    <!-- Page 3 – Wins -->
+                    <div class="monthly-report-page">
+                        <h3>Wins – ${periodLabel}</h3>
+                        <p class="text-muted">Won projects in this period. Add/remove wins in Admin or Project Health for the report.</p>
+                        <div class="monthly-report-wins-grid">
+                            ${periodMonth && winsPeriod > 0 ? (() => {
+                                const wins = [];
+                                accounts.forEach(account => {
+                                    account.projects?.forEach(project => {
+                                        if (project.status !== 'won') return;
+                                        const monthForWinLoss = project.winLossData?.monthOfWin || (project.winLossData?.updatedAt || project.updatedAt || '').toString().substring(0, 7);
+                                        if (monthForWinLoss === periodMonth) {
+                                            const mrr = project.winLossData?.mrr ?? project.mrr ?? '—';
+                                            const uc = (project.useCases && project.useCases[0]);
+                                            const useCaseText = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '—';
+                                            const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                            wins.push(`<div class="monthly-report-win-card"><strong>${safe(account.name || 'Unknown')}</strong><br/>MRR: ${safe(mrr)} | Use case: ${safe(useCaseText)}</div>`);
+                                        }
+                                    });
+                                });
+                                return wins.slice(0, 9).join('');
+                            })() : '<p class="text-muted">No wins in this period.</p>'}
+                        </div>
+                    </div>
+                    <!-- Page 4 – Activity breakdown -->
+                    <div class="monthly-report-page">
+                        <h3>Activity breakdown</h3>
+                        <p class="text-muted">Overall Activity</p>
+                        <div class="monthly-report-breakdown-center">${total} Total</div>
+                        <ul class="monthly-report-breakdown-list">
+                            ${Object.entries(breakdown).map(([label, count]) => `<li><strong>${label}</strong> ${count}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <!-- Page 5 – Call types -->
+                    <div class="monthly-report-page">
+                        <h3>Call types</h3>
+                        <div class="monthly-report-call-types">
+                            ${callTypeOrder.map(label => {
+                                const count = callTypeData[label] || 0;
+                                return count > 0 ? `<div class="monthly-report-call-type-row"><span>${label}</span><strong>${count}</strong></div>` : '';
+                            }).filter(Boolean).join('') || '<p class="text-muted">No call type data.</p>'}
+                        </div>
+                    </div>
+                    <!-- Page 6 – Region activity -->
+                    <div class="monthly-report-page">
+                        <h3>Regional intelligence</h3>
+                        <p class="text-muted">${periodLabel} (External only)</p>
+                        <div class="monthly-report-region-bars">
+                            ${regionsOrdered.map(region => `<div class="monthly-report-region-row"><span>${region.replace(/</g, '&lt;')}</span><strong>${regionCounts[region] || 0}</strong></div>`).join('') || '<p class="text-muted">No regional data.</p>'}
+                        </div>
+                    </div>
+                    <!-- Page 7 – Missing SFDC -->
+                    <div class="monthly-report-page">
+                        <h3>Missing SFDC opportunities</h3>
+                        <p class="text-muted">External activities where project/account has no SFDC link. ${periodLabel}.</p>
+                        <div class="monthly-report-region-bars">
+                            ${Object.keys(missingSfdcByRegion).length ? Object.entries(missingSfdcByRegion).sort((a, b) => b[1] - a[1]).map(([region, count]) => `<div class="monthly-report-region-row"><span>${region.replace(/</g, '&lt;')}</span><strong>${count}</strong></div>`).join('') : '<p class="text-muted">None.</p>'}
+                        </div>
+                    </div>
+                    <!-- Page 8 – Presales individual activity -->
+                    <div class="monthly-report-page">
+                        <h3>Presales individual activity</h3>
+                        <p class="text-muted">Activities by user – ${periodLabel}</p>
+                        <div class="monthly-report-user-bars">
+                            ${userActivityData.length ? userActivityData.map(u => `<div class="monthly-report-user-row"><span>${String(u.name || u.id || '—').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</span><strong>${u.count}</strong></div>`).join('') : '<p class="text-muted">No user data.</p>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     },
 
     // AI Intelligence tab – placeholder; data/analysis will be wired later

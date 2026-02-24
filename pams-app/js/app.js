@@ -39,7 +39,8 @@ const App = {
         search: '',
         industry: '',
         salesRep: '',
-        region: ''
+        region: '',
+        monthFilter: 'thisMonth'
     },
     winLossFilters: {
         owner: 'all',
@@ -544,24 +545,6 @@ const App = {
                 } else {
                     this.setLoading(false);
                     UI.showNotification(result.message || 'Invalid credentials', 'error');
-                }
-            });
-        }
-
-        const analyticsAccessForm = document.getElementById('analyticsAccessForm');
-        if (analyticsAccessForm) {
-            analyticsAccessForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const passwordInput = document.getElementById('analyticsAccessPassword');
-                const password = passwordInput ? passwordInput.value : '';
-                this.setLoading(true, 'Preparing analytics…');
-                const result = await Auth.loginAnalytics(password);
-                if (result.success) {
-                    this.analyticsPeriodMode = 'month';
-                    this.handleSuccessfulLogin();
-                } else {
-                    this.setLoading(false);
-                    UI.showNotification(result.message || 'Unable to open analytics workspace.', 'error');
                 }
             });
         }
@@ -2500,7 +2483,7 @@ const App = {
         if (!accountsView) return;
 
         if (!this.accountFilters) {
-            this.accountFilters = { search: '', industry: '', salesRep: '', region: '' };
+            this.accountFilters = { search: '', industry: '', salesRep: '', region: '', monthFilter: 'thisMonth' };
         }
         const accountFilters = this.accountFilters;
         const searchTerm = (accountFilters.search || '').toLowerCase().trim();
@@ -2508,11 +2491,16 @@ const App = {
         const industryFilter = accountFilters.industry || '';
         const salesRepFilter = accountFilters.salesRep || '';
 
-        const [accounts, allActivities, ownerMap] = await Promise.all([
+        const [accounts, allActivities, ownerMap, users] = await Promise.all([
             DataManager.getAccounts(),
             DataManager.getAllActivities(),
-            this.getProjectOwnerMap()
+            this.getProjectOwnerMap(),
+            DataManager.getUsers ? DataManager.getUsers() : []
         ]);
+        const userMap = (users || []).reduce((acc, u) => {
+            if (u && u.id) acc[u.id] = u.username || u.email || u.name || String(u.id);
+            return acc;
+        }, {});
 
         const filtered = accounts.filter(account => {
             const matchesSearch = !searchTerm ||
@@ -2558,7 +2546,7 @@ const App = {
                     ]
                     : [];
                 const projectsMarkup = await this.buildAccountProjectsMarkup(account, 'card', ownerMap);
-                const activitiesMarkup = await this.buildAccountActivitiesMarkup(account, 'card', 8, allActivities);
+                const activitiesMarkup = await this.buildAccountActivitiesMarkup(account, 'card', 8, allActivities, 'all', userMap);
                 const notesMarkup = this.buildAccountNotesMarkup(account, 'card');
                 const safeName = this.escapeHtml(account.name || '');
                 const safeIndustry = this.escapeHtml(account.industry || 'N/A');
@@ -6536,8 +6524,11 @@ const App = {
 
         try {
             if (!this.accountFilters) {
-                this.accountFilters = { search: '', industry: '', salesRep: '', region: '' };
+                this.accountFilters = { search: '', industry: '', salesRep: '', region: '', monthFilter: 'thisMonth' };
             }
+            const accountFilters = this.accountFilters;
+            if (!accountFilters.monthFilter) accountFilters.monthFilter = 'thisMonth';
+
             const accounts = await DataManager.getAccounts();
             const container = document.getElementById('accountsContent');
             if (!container) {
@@ -6545,11 +6536,11 @@ const App = {
                 return;
             }
 
-            const accountFilters = this.accountFilters;
             const searchTerm = (accountFilters.search || '').toLowerCase().trim();
             const industryFilter = accountFilters.industry || '';
             const salesRepFilter = accountFilters.salesRep || '';
             const regionFilter = accountFilters.region || '';
+            const monthFilter = accountFilters.monthFilter || 'thisMonth';
 
             const filtered = accounts.filter(account => {
                 const matchesSearch = !searchTerm ||
@@ -6566,10 +6557,33 @@ const App = {
             const salesReps = [...new Set(accounts.map(a => a.salesRep).filter(Boolean))].sort();
             const regions = (await DataManager.getRegions()).sort((a, b) => a.localeCompare(b));
 
-            const [ownerMap, allActivities] = await Promise.all([
+            const [ownerMap, allActivities, users] = await Promise.all([
                 this.getProjectOwnerMap(),
-                DataManager.getAllActivities()
+                DataManager.getAllActivities(),
+                DataManager.getUsers ? DataManager.getUsers() : []
             ]);
+            const userMap = (users || []).reduce((acc, u) => {
+                if (u && u.id) acc[u.id] = u.username || u.email || u.name || String(u.id);
+                return acc;
+            }, {});
+
+            const activitiesInPeriod = this.getActivitiesInPeriodForAccounts(allActivities, monthFilter);
+            const activityCountByAccount = {};
+            (activitiesInPeriod || []).forEach(a => {
+                const id = a.accountId;
+                if (id) activityCountByAccount[id] = (activityCountByAccount[id] || 0) + 1;
+            });
+            const totalActivitiesInPeriod = activitiesInPeriod ? activitiesInPeriod.length : 0;
+            const top5Accounts = filtered
+                .map(a => ({ account: a, count: activityCountByAccount[a.id] || 0 }))
+                .sort((x, y) => y.count - x.count)
+                .slice(0, 5);
+            const avgPerAccount = filtered.length ? (totalActivitiesInPeriod / filtered.length).toFixed(1) : '0';
+
+            const periodLabel = monthFilter === 'all' ? 'All time' : monthFilter === 'lastMonth'
+                ? (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); })()
+                : (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); })();
+            const periodLabelDisplay = monthFilter === 'all' ? 'All time' : (DataManager.formatMonth && DataManager.formatMonth(periodLabel)) || periodLabel;
 
             const backLink = `
                 <div class="view-header-utility">
@@ -6580,43 +6594,89 @@ const App = {
                 </div>
             `;
 
-            const filterBar = `
-                <div class="activity-filters">
-                    <div class="form-group" style="flex: 2;">
-                        <label class="form-label">Search</label>
-                        <input type="text" id="accountSearch" class="form-control" placeholder="Search by name or rep..." value="${String(accountFilters.search || '').replace(/"/g, '&quot;')}" oninput="App.searchAccounts()">
+            const sidebarFilters = `
+                <div class="accounts-layout">
+                    <div class="accounts-sidebar">
+                        <div class="accounts-sidebar-header">
+                            <h3>Filters</h3>
+                        </div>
+                        <div class="accounts-sidebar-content">
+                            <div class="accounts-filter-section">
+                                <label class="form-label">Period</label>
+                                <select id="accountFilterMonth" class="form-control" onchange="App.handleAccountFilterChange('monthFilter', this.value)">
+                                    <option value="thisMonth" ${monthFilter === 'thisMonth' ? 'selected' : ''}>This month</option>
+                                    <option value="lastMonth" ${monthFilter === 'lastMonth' ? 'selected' : ''}>Last month</option>
+                                    <option value="all" ${monthFilter === 'all' ? 'selected' : ''}>All time</option>
+                                </select>
+                            </div>
+                            <div class="accounts-filter-section">
+                                <label class="form-label">Search</label>
+                                <input type="text" id="accountSearch" class="form-control" placeholder="Name or rep..." value="${String(accountFilters.search || '').replace(/"/g, '&quot;')}" oninput="App.searchAccounts()">
+                            </div>
+                            <div class="accounts-filter-section">
+                                <label class="form-label">Region</label>
+                                <select id="accountFilterRegion" class="form-control" onchange="App.handleAccountFilterChange('region', this.value)">
+                                    <option value="">All Regions</option>
+                                    ${regions.map(r => `<option value="${r}" ${r === regionFilter ? 'selected' : ''}>${r}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="accounts-filter-section">
+                                <label class="form-label">Industry</label>
+                                <select id="accountFilterIndustry" class="form-control" onchange="App.handleAccountFilterChange('industry', this.value)">
+                                    <option value="">All Industries</option>
+                                    ${industries.map(i => `<option value="${i}" ${i === industryFilter ? 'selected' : ''}>${i}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="accounts-filter-section">
+                                <label class="form-label">Sales Rep</label>
+                                <select id="accountFilterSalesRep" class="form-control" onchange="App.handleAccountFilterChange('salesRep', this.value)">
+                                    <option value="">All Reps</option>
+                                    ${salesReps.map(r => `<option value="${r}" ${r === salesRepFilter ? 'selected' : ''}>${r}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="accounts-filter-section">
+                                <button class="btn btn-secondary btn-block" onclick="App.resetAccountFilters(); return false;">Reset</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Region</label>
-                        <select id="accountFilterRegion" class="form-control" onchange="App.handleAccountFilterChange('region', this.value)">
-                            <option value="">All Regions</option>
-                            ${regions.map(r => `<option value="${r}" ${r === regionFilter ? 'selected' : ''}>${r}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Industry</label>
-                        <select id="accountFilterIndustry" class="form-control" onchange="App.handleAccountFilterChange('industry', this.value)">
-                            <option value="">All Industries</option>
-                            ${industries.map(i => `<option value="${i}" ${i === industryFilter ? 'selected' : ''}>${i}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Sales Rep</label>
-                        <select id="accountFilterSalesRep" class="form-control" onchange="App.handleAccountFilterChange('salesRep', this.value)">
-                            <option value="">All Reps</option>
-                            ${salesReps.map(r => `<option value="${r}" ${r === salesRepFilter ? 'selected' : ''}>${r}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group" style="align-self: flex-end;">
-                        <button class="btn btn-link" onclick="App.resetAccountFilters(); return false;">Reset</button>
-                    </div>
-                </div>
+                    <div class="accounts-content">
+            `;
+
+            const statsBar = `
+                        <div class="accounts-stats-bar">
+                            <div class="accounts-top5-chart">
+                                <h4>Top 5 Accounts (by activities)</h4>
+                                <ul class="accounts-top5-list">
+                                    ${top5Accounts.length ? top5Accounts.map(({ account, count }) => `
+                                        <li><span class="account-name">${this.escapeHtml(account.name || 'Unknown')}</span><strong>${count}</strong></li>
+                                    `).join('') : '<li class="text-muted">No activity in this period</li>'}
+                                </ul>
+                            </div>
+                            <div class="accounts-stats-cards">
+                                <div class="accounts-stat-card">
+                                    <div class="stat-value">${filtered.length}</div>
+                                    <div class="stat-label">Total accounts</div>
+                                </div>
+                                <div class="accounts-stat-card">
+                                    <div class="stat-value">${totalActivitiesInPeriod}</div>
+                                    <div class="stat-label">Activities (${periodLabelDisplay})</div>
+                                </div>
+                                <div class="accounts-stat-card">
+                                    <div class="stat-value">${avgPerAccount}</div>
+                                    <div class="stat-label">Avg activities per account</div>
+                                </div>
+                                <div class="accounts-stat-card">
+                                    <div class="stat-value">${filtered.length ? top5Accounts.reduce((s, { count }) => s + count, 0) : 0}</div>
+                                    <div class="stat-label">Top 5 activities share</div>
+                                </div>
+                            </div>
+                        </div>
             `;
 
             const cards = await Promise.all(filtered.map(async account => {
-                const activityCount = await this.getAccountActivityCount(account.id, allActivities);
+                const activityCount = await this.getAccountActivityCount(account.id, allActivities, monthFilter);
                 const projectsMarkup = await this.buildAccountProjectsMarkup(account, 'classic', ownerMap);
-                const activitiesMarkup = await this.buildAccountActivitiesMarkup(account, 'classic', 8, allActivities);
+                const activitiesMarkup = await this.buildAccountActivitiesMarkup(account, 'classic', 8, allActivities, monthFilter, userMap);
                 const notesMarkup = this.buildAccountNotesMarkup(account, 'classic');
                 const safeName = this.escapeHtml(account.name || '');
                 const safeIndustry = this.escapeHtml(account.industry || 'Unknown');
@@ -6651,8 +6711,11 @@ const App = {
 
             container.innerHTML = `
                 ${backLink}
-                ${filterBar}
+                ${sidebarFilters}
+                ${statsBar}
                 ${gridContent}
+                    </div>
+                </div>
             `;
         } catch (error) {
             console.error('Error loading accounts view:', error);
@@ -6677,22 +6740,46 @@ const App = {
     },
 
     handleAccountFilterChange(key, value) {
-        if (!this.accountFilters) this.accountFilters = { search: '', industry: '', salesRep: '', region: '' };
-        if (key === 'industry' || key === 'salesRep' || key === 'region') {
-            this.accountFilters[key] = value || '';
+        if (!this.accountFilters) this.accountFilters = { search: '', industry: '', salesRep: '', region: '', monthFilter: 'thisMonth' };
+        if (key === 'industry' || key === 'salesRep' || key === 'region' || key === 'monthFilter') {
+            this.accountFilters[key] = value || (key === 'monthFilter' ? 'thisMonth' : '');
             this.loadAccountsView();
         }
     },
 
     resetAccountFilters() {
-        this.accountFilters = { search: '', industry: '', salesRep: '', region: '' };
+        this.accountFilters = { search: '', industry: '', salesRep: '', region: '', monthFilter: 'thisMonth' };
         this.loadAccountsView();
     },
 
-    // Get activity count for account (optional: pass pre-fetched activities to avoid N fetches)
-    async getAccountActivityCount(accountId, activitiesList = null) {
-        const activities = activitiesList != null ? activitiesList : await DataManager.getAllActivities();
-        let list = (activities || []).filter(a => a.accountId === accountId);
+    /** Get activities in the selected period for accounts view (this month, last month, or all). */
+    getActivitiesInPeriodForAccounts(activitiesList, monthFilter) {
+        if (!activitiesList || !activitiesList.length) return [];
+        if (monthFilter === 'all') return activitiesList;
+        const now = new Date();
+        let targetYear = now.getFullYear();
+        let targetMonth = now.getMonth() + 1;
+        if (monthFilter === 'lastMonth') {
+            targetMonth -= 1;
+            if (targetMonth < 1) { targetMonth += 12; targetYear -= 1; }
+        }
+        const period = targetYear + '-' + String(targetMonth).padStart(2, '0');
+        return activitiesList.filter(a => {
+            const d = a.date || a.createdAt;
+            if (!d) return false;
+            const m = (typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '').substring(0, 7);
+            return m === period;
+        });
+    },
+
+    // Get activity count for account (optional: pass pre-fetched activities; monthFilter: 'thisMonth'|'lastMonth'|'all')
+    async getAccountActivityCount(accountId, activitiesList = null, monthFilter = 'all') {
+        if (activitiesList == null) activitiesList = await DataManager.getAllActivities();
+        let list = (activitiesList || []).filter(a => a.accountId === accountId);
+        if (monthFilter && monthFilter !== 'all') {
+            const inPeriod = this.getActivitiesInPeriodForAccounts(list, monthFilter);
+            list = inPeriod;
+        }
         if (typeof this.isMigrationMode === 'function' && this.isMigrationMode()) {
             const cutoff = '2026-01';
             list = list.filter(a => {
@@ -6749,9 +6836,12 @@ const App = {
         `;
     },
 
-    async buildAccountActivitiesMarkup(account, variant = 'classic', limit = 8, activitiesList = null) {
-        const activities = activitiesList != null ? activitiesList : await DataManager.getAllActivities();
+    async buildAccountActivitiesMarkup(account, variant = 'classic', limit = 8, activitiesList = null, monthFilter = 'all', userMap = null) {
+        let activities = activitiesList != null ? activitiesList : await DataManager.getAllActivities();
         let list = (activities || []).filter(a => a.accountId === account.id);
+        if (monthFilter && monthFilter !== 'all') {
+            list = this.getActivitiesInPeriodForAccounts(list, monthFilter);
+        }
         if (typeof this.isMigrationMode === 'function' && this.isMigrationMode()) {
             const cutoff = '2026-01';
             list = list.filter(a => {
@@ -6760,17 +6850,20 @@ const App = {
             });
         }
         list = list.sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || '')).slice(0, limit);
+        const map = userMap || {};
         if (!list.length) {
             return `<div class="${variant === 'card' ? 'account-activities account-activities-card' : 'account-activities'}"><h4 class="account-activities-title">Activities</h4><p class="text-muted" style="margin:0;font-size:0.875rem;">None</p></div>`;
         }
         const rows = list.map(a => {
             const dateStr = UI.formatDate ? UI.formatDate(a.date || a.createdAt) : (a.date || a.createdAt || '').toString().slice(0, 10);
             const typeLabel = (typeof UI.getActivityTypeLabel === 'function' ? UI.getActivityTypeLabel(a.type) : a.type) || 'Activity';
+            const presalesName = a.userName || (a.userId && map[a.userId]) || a.assignedUserEmail || '—';
             const noteStr = (a.details && a.details.notes) ? String(a.details.notes) : '';
             const notes = noteStr ? noteStr.slice(0, 60) + (noteStr.length > 60 ? '…' : '') : '';
             const safeType = this.escapeHtml(typeLabel);
             const safeNotes = notes ? this.escapeHtml(notes) : '';
-            return `<div class="account-activity-row"><span class="account-activity-date">${this.escapeHtml(dateStr)}</span> <span class="account-activity-type">${safeType}</span>${safeNotes ? ` — ${safeNotes}` : ''}</div>`;
+            const safePresales = this.escapeHtml(presalesName);
+            return `<div class="account-activity-row"><span class="account-activity-date">${this.escapeHtml(dateStr)}</span> <span class="account-activity-type">${safeType}</span> <span class="account-activity-presales">By: ${safePresales}</span>${safeNotes ? ` — ${safeNotes}` : ''}</div>`;
         }).join('');
         return `
             <div class="${variant === 'card' ? 'account-activities account-activities-card' : 'account-activities'}">

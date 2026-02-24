@@ -326,6 +326,7 @@ const Admin = {
             users: () => this.loadUsers(),
             sales: () => this.loadSalesReps(),
             salesLeaders: () => this.renderSalesLeadersPanel(),
+            leaders: () => this.renderLeadersPanel(),
             regions: () => this.renderRegionsPanel(),
             industryUseCases: () => this.loadIndustryUseCasesSection(),
             interface: () => { },
@@ -2129,22 +2130,21 @@ const Admin = {
         const container = document.getElementById('salesLeadersList');
         if (!container) return;
 
-        const [regions, leaders, users] = await Promise.all([
+        const [regions, leaders, salesReps] = await Promise.all([
             DataManager.getRegions(),
             DataManager.getSalesLeaders(),
-            DataManager.getUsers()
+            DataManager.getGlobalSalesReps ? DataManager.getGlobalSalesReps() : []
         ]);
-        const userList = Array.isArray(users) ? users : [];
-
-        const optionsHtml = '<option value="">— None —</option>' + userList
-            .filter(u => u && (u.username || u.email))
-            .map(u => `<option value="${(u.id || '').toString().replace(/"/g, '&quot;')}">${(u.username || u.email || u.id || 'Unknown').replace(/</g, '&lt;')}</option>`)
-            .join('');
+        const repList = Array.isArray(salesReps) ? salesReps : [];
 
         let html = '';
         for (const region of regions) {
-            const currentId = leaders[region] || '';
+            const repsInRegion = repList.filter(r => (r.region || '').trim() === region && (r.email || '').trim());
+            const optionsHtml = '<option value="">— None —</option>' + repsInRegion
+                .map(r => `<option value="${String(r.email).replace(/"/g, '&quot;')}">${(r.name || r.email || 'Unknown').replace(/</g, '&lt;')}</option>`)
+                .join('');
             const selectId = 'salesLeaderSelect_' + region.replace(/[^a-zA-Z0-9]/g, '_');
+            const currentValue = (leaders && leaders[region]) ? String(leaders[region]) : '';
             html += `
                 <div class="admin-list-row" style="align-items: center;">
                     <div style="flex: 1; font-weight: 500;">${region.replace(/</g, '&lt;')}</div>
@@ -2157,24 +2157,70 @@ const Admin = {
             `;
         }
 
-        container.innerHTML = html || '<p class="text-muted">No regions configured. Add regions under Regions first.</p>';
+        container.innerHTML = html || '<p class="text-muted">No regions configured. Add regions under Regions first. Sales leaders are chosen from Sales Users (by name in that region).</p>';
 
         container.querySelectorAll('select[data-region]').forEach(select => {
             const region = select.getAttribute('data-region');
             const currentLeaders = leaders || {};
-            const currentId = String(currentLeaders[region] || '');
-            if (currentId && select.querySelector(`option[value="${currentId.replace(/"/g, '&quot;')}"]`)) {
-                select.value = currentId;
+            const currentValue = String(currentLeaders[region] || '');
+            if (currentValue && select.querySelector(`option[value="${currentValue.replace(/"/g, '&quot;')}"]`)) {
+                select.value = currentValue;
             }
             select.addEventListener('change', async () => {
-                const userId = select.value || '';
+                const email = (select.value || '').trim();
                 const updated = { ...(await DataManager.getSalesLeaders()) };
-                if (userId) updated[region] = userId;
+                if (email) updated[region] = email;
                 else delete updated[region];
                 await DataManager.saveSalesLeaders(updated);
                 UI.showNotification('Sales leader saved for ' + region, 'success');
             });
         });
+    },
+
+    async renderLeadersPanel() {
+        const container = document.getElementById('leadersList');
+        if (!container) return;
+        const emails = await DataManager.getLeaders();
+        if (!emails.length) {
+            container.innerHTML = '<p class="text-muted">No leader emails yet. Add one above.</p>';
+            return;
+        }
+        container.innerHTML = emails.map(email => {
+            const safe = String(email).replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            const attr = safe.replace(/'/g, '&#39;');
+            return `<div class="admin-list-row" style="align-items: center;">
+                <span>${safe}</span>
+                <button type="button" class="btn btn-sm btn-danger" data-leader-email="${attr}" onclick="Admin.removeLeaderEmail(this.getAttribute('data-leader-email'))">Remove</button>
+            </div>`;
+        }).join('');
+    },
+
+    async addLeaderEmail() {
+        const input = document.getElementById('leaderEmailInput');
+        if (!input) return;
+        const email = (input.value || '').trim().toLowerCase();
+        if (!email) {
+            UI.showNotification('Enter an email address.', 'warning');
+            return;
+        }
+        const list = await DataManager.getLeaders();
+        if (list.includes(email)) {
+            UI.showNotification('That email is already in the list.', 'info');
+            return;
+        }
+        list.push(email);
+        await DataManager.saveLeaders(list);
+        input.value = '';
+        UI.showNotification('Leader added.', 'success');
+        await this.renderLeadersPanel();
+    },
+
+    async removeLeaderEmail(emailAttr) {
+        const email = (emailAttr || '').trim();
+        const list = (await DataManager.getLeaders()).filter(e => e !== email);
+        await DataManager.saveLeaders(list);
+        UI.showNotification('Leader removed.', 'success');
+        await this.renderLeadersPanel();
     },
 
     async handleRegionDelete(event) {
