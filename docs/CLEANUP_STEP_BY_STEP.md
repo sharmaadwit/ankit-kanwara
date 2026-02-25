@@ -10,14 +10,17 @@ You can either **trigger cleanup from the app** (no CLI) or **use Railway CLI** 
 
 Use this if you don’t have or don’t want to use the Railway CLI. You must be logged in as an **admin**.
 
+**Critical:** Run the cleanup fetch **only when the address bar shows your app URL** (e.g. `https://ankit-kanwara-production.up.railway.app`). If you run it while on **railway.com** (the Railway dashboard), the request goes to Railway’s site and you get **404** — the cleanup runs on your app, not on Railway’s website.
+
 ### Step 1: Deploy the latest code
 
 The app now has an admin cleanup API. Deploy your project to Railway as usual (push to Git if Railway deploys from GitHub, or deploy from your IDE).
 
-### Step 2: Log in as admin
+### Step 2: Open your app and log in (so the server has your session)
 
-1. Open your app in the browser (e.g. `https://your-app.up.railway.app`).
-2. Log in with an **admin** account.
+1. In the **address bar**, go to **your app URL**: `https://ankit-kanwara-production.up.railway.app` (not railway.com).
+2. If you see the login screen, log in with your **admin** account.
+3. If you’re already on the dashboard but the console showed **401** on `/api/auth/me`, the server does **not** have a valid session cookie. **Log out**, then **log in again** so the server sets the cookie. Then run the cleanup in Step 3.
 
 ### Step 3: Run cleanup (delete all data before June 2025)
 
@@ -34,7 +37,7 @@ fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Conten
 Press Enter. You should see a response like:  
 `{ ok: true, login_logs: 123, activity_logs: 456, storage_history: 789, total: 1368, mode: "before 2025-06-01" }`
 
-**Important:** You must be **logged in as an admin** in that same tab. If you get 401, log in first and run the line again.
+**Important:** You must be on **your app’s tab** (URL like `…up.railway.app`) and **logged in as admin**. If you get **401**: log out, log in again (so the server sets the session cookie), then run the line again.
 
 **3b) From PowerShell or curl**
 
