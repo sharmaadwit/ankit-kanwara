@@ -151,7 +151,10 @@ const Auth = {
         // Cookie-first: restore session from GET /api/auth/me when server sent cookieAuth
         if (typeof window !== 'undefined' && window.__USE_COOKIE_AUTH__) {
             try {
+                const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 const res = await fetch('/api/auth/me', { credentials: 'include' });
+                const meMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
+                console.log('[PAMS init] /api/auth/me:', meMs + 'ms');
                 if (res.ok) {
                     const me = await res.json();
                     const user = {
@@ -164,7 +167,9 @@ const Auth = {
                         defaultRegion: me.defaultRegion || '',
                         isActive: true
                     };
+                    const r0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                     const { role, salesLeaderRegion } = await this.resolveRole(user);
+                    console.log('[PAMS init] resolveRole (cookie path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
                     user.role = role;
                     user.salesLeaderRegion = salesLeaderRegion || undefined;
                     this.currentUser = user;
@@ -186,14 +191,19 @@ const Auth = {
         }
 
         if (sessionData && sessionData.userId) {
+            const s0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             const user = await DataManager.getUserById(sessionData.userId);
+            const getUserMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - s0);
+            console.log('[PAMS init] getUserById (session path):', getUserMs + 'ms');
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
                     this.clearSession();
                     return false;
                 }
+                const r0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 const role = sessionData.role || (await this.resolveRole(user)).role;
                 const salesLeaderRegion = sessionData.salesLeaderRegion != null ? sessionData.salesLeaderRegion : (await this.resolveRole(user)).salesLeaderRegion;
+                console.log('[PAMS init] resolveRole (session path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
                 user.role = role;
                 user.salesLeaderRegion = salesLeaderRegion || undefined;
                 this.currentUser = user;

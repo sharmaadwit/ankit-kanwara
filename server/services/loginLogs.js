@@ -1,7 +1,29 @@
 const { getPool } = require('../db');
 const { getTransactionId } = require('../middleware/requestContext');
+const logger = require('../logger');
 
 const VALID_STATUSES = new Set(['success', 'failure']);
+
+const LOGIN_LOGS_RETENTION_DAYS = 90;
+const LOGIN_LOGS_CLEANUP_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
+let lastLoginLogsCleanupAt = 0;
+
+const enforceLoginLogsRetention = async (pool) => {
+  const now = Date.now();
+  if (now - lastLoginLogsCleanupAt < LOGIN_LOGS_CLEANUP_INTERVAL_MS) return;
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM login_logs WHERE created_at < NOW() - $1::interval;',
+      [`${LOGIN_LOGS_RETENTION_DAYS} days`]
+    );
+    lastLoginLogsCleanupAt = now;
+    if (rowCount > 0) {
+      logger.info('login_logs_retention', { deleted: rowCount, retentionDays: LOGIN_LOGS_RETENTION_DAYS });
+    }
+  } catch (error) {
+    logger.warn('login_logs_retention_failed', { message: error.message });
+  }
+};
 
 const normalizeStatus = (status) => {
   if (!status) return 'unknown';
@@ -19,6 +41,7 @@ const logLoginAttempt = async ({
   sessionId
 }) => {
   const pool = getPool();
+  await enforceLoginLogsRetention(pool);
   const { rows } = await pool.query(
     `
       INSERT INTO login_logs (transaction_id, username, status, message, user_agent, ip_address, session_id)

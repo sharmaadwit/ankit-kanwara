@@ -302,6 +302,7 @@ router.post('/logout', async (req, res) => {
  * Return current user from session cookie. 401 if no session.
  */
 router.get('/me', async (req, res) => {
+  const meStart = Date.now();
   const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
   if (!sessionId) {
     return res.status(401).json({ message: 'Not authenticated.' });
@@ -311,6 +312,8 @@ router.get('/me', async (req, res) => {
     res.clearCookie(SESSION_COOKIE_NAME, { path: '/', httpOnly: true });
     return res.status(401).json({ message: 'Session expired.' });
   }
+  const durationMs = Date.now() - meStart;
+  logger.info('auth_me', { durationMs });
   res.json({
     userId: session.userId,
     username: session.username,

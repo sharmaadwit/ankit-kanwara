@@ -176,6 +176,7 @@ const App = {
 
     // Initialize application
     async init() {
+        const initStart = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
         this.setupLoadingOverlay();
         this.setLoading(true, 'Preparing workspace…');
 
@@ -183,13 +184,18 @@ const App = {
             // Always setup event listeners (needed for login form)
             this.setupEventListeners();
 
+            let t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             const bootstrap = await this.loadBootstrap();
+            const bootstrapMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
+            console.log('[PAMS init] loadBootstrap:', bootstrapMs + 'ms');
+
             this.setAppConfiguration(bootstrap.config || {});
 
             this.loadAnalyticsTablePresetsDeferred();
 
             let hasSession = false;
             if (bootstrap.user) {
+                t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 Auth.currentUser = {
                     id: bootstrap.user.userId,
                     username: bootstrap.user.username,
@@ -203,14 +209,20 @@ const App = {
                 Auth.writeSession({ userId: Auth.currentUser.id, loginTime: new Date().toISOString() });
                 Auth.showMainApp();
                 hasSession = true;
+                const resolveMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
+                console.log('[PAMS init] bootstrap user applied:', resolveMs + 'ms');
             } else {
+                t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 hasSession = await Auth.init();
+                const authInitMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
+                console.log('[PAMS init] Auth.init:', authInitMs + 'ms');
             }
             if (!hasSession) {
                 this.setLoading(false);
                 return;
             }
 
+            t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             InterfaceManager.init();
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
                 Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
@@ -222,6 +234,8 @@ const App = {
             } else {
                 this.switchView(targetView);
             }
+            const totalMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - initStart);
+            console.log('[PAMS init] total (prepare workspace):', totalMs + 'ms');
             this.setLoading(false);
         } catch (error) {
             console.error('Application initialization failed', error);

@@ -196,6 +196,7 @@ const createApp = (options = {}) => {
   app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);
   app.use('/api/storage', storageRequestLogger, storageLimiter, sessionMiddleware, requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
+  app.use('/api/admin/cleanup', adminLimiter, require('./routes/adminCleanup'));
   app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
   app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
@@ -203,6 +204,7 @@ const createApp = (options = {}) => {
   app.use('/api/migration', sessionMiddleware, requireStorageAuth, migrationRouter);
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
+    const bootstrapStart = Date.now();
     const hostname = req.hostname || '';
     const isLocalHost =
       hostname.includes('localhost') ||
@@ -231,9 +233,12 @@ const createApp = (options = {}) => {
           defaultRegion: req.user.defaultRegion || ''
         };
       }
+      const durationMs = Date.now() - bootstrapStart;
+      logger.info('bootstrap', { durationMs, hasUser: !!user });
       res.json({ config: configPayload, user });
     } catch (error) {
-      logger.error('bootstrap_failed', { message: error.message });
+      const durationMs = Date.now() - bootstrapStart;
+      logger.error('bootstrap_failed', { message: error.message, durationMs });
       res.json({
         config: {
           remoteStorage: forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),

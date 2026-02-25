@@ -18,7 +18,10 @@
     "restore-feedback": "node server/scripts/restore-storage-from-snapshot.js",
     "push-january": "node scripts/push-january-merged.js",
     "compare-backups": "node scripts/compare-backups-winloss.js",
-    "logins-last-hour": "node server/scripts/logins-last-hour.js"
+    "logins-last-hour": "node server/scripts/logins-last-hour.js",
+    "db-size-report": "node server/scripts/db-size-report.js",
+    "cleanup-logs-and-history": "node server/scripts/cleanup-logs-and-history.js",
+    "cleanup-before-june2025": "node server/scripts/cleanup-logs-and-history.js 2025-06-01"
   },
   "engines": {
     "node": ">=18"
