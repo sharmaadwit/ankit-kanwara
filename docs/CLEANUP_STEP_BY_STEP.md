@@ -2,6 +2,8 @@
 
 You can either **trigger cleanup from the app** (no CLI) or **use Railway CLI** on your computer.
 
+**If you get “connection timeout” or “ENOTFOUND postgres.railway.internal”** when using Railway CLI, the DB is only reachable from inside Railway. Use **Option A (browser)** instead — it always works.
+
 ---
 
 ## Option A: From the app (no Railway CLI)
@@ -23,19 +25,16 @@ Use one of these:
 
 **3a) From the browser (any tool that can send a POST request)**
 
-Open the **Developer Console** (F12 → Console), then paste and run:
+Open the **Developer Console** (F12 → Console). Paste **only this one line** (do not include any \`\`\` or “javascript” text):
 
-```javascript
-fetch('/api/admin/cleanup', {
-  method: 'POST',
-  credentials: 'include',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ deleteBeforeDate: '2025-06-01' })
-}).then(r => r.json()).then(console.log).catch(console.error);
+```
+fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({deleteBeforeDate:'2025-06-01'})}).then(r=>r.json()).then(console.log).catch(console.error);
 ```
 
-You should see a response like:  
+Press Enter. You should see a response like:  
 `{ ok: true, login_logs: 123, activity_logs: 456, storage_history: 789, total: 1368, mode: "before 2025-06-01" }`
+
+**Important:** You must be **logged in as an admin** in that same tab. If you get 401, log in first and run the line again.
 
 **3b) From PowerShell or curl**
 
@@ -58,7 +57,7 @@ fetch('/api/admin/cleanup', {
 
 ## Option B: Using Railway CLI
 
-Use this if you want to run the cleanup from your machine with Railway’s environment (e.g. to use the same scripts that run locally with `DATABASE_URL` from Railway).
+**Note:** Railway’s `DATABASE_URL` often points to `postgres.railway.internal`, which **only works inside Railway**. So `railway run npm run cleanup-before-june2025` from your PC may fail with “connection timeout” or “ENOTFOUND postgres.railway.internal”. **Use Option A (browser)** instead — it always works because the cleanup runs on the server.
 
 ### Step 1: Check if Railway CLI is installed
 
@@ -96,7 +95,7 @@ Then run `railway --version` again to confirm.
 ### Step 3: Link your project (once)
 
 1. Open PowerShell or Command Prompt.
-2. Go to your project folder:
+2. **Go into the app folder** (where `package.json` lives — not the parent folder):
 
    ```powershell
    cd "c:\Project PAT Master Folder\Project PAT"
@@ -109,7 +108,7 @@ Then run `railway --version` again to confirm.
    railway link
    ```
 
-   When you run `railway link`, choose the right **project** and **environment** (e.g. production) that has your Postgres database.
+   When you run `railway link`, choose the right **project** and **environment** (e.g. production). You can select your **app service** (or press Esc at “Select a service” to use project-level env vars). The scripts need `DATABASE_URL`, which is usually available from the project.
 
 ### Step 4: Run the size report (optional)
 

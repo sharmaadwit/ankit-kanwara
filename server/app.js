@@ -196,7 +196,7 @@ const createApp = (options = {}) => {
   app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);
   app.use('/api/storage', storageRequestLogger, storageLimiter, sessionMiddleware, requireStorageAuth, storageRouter);
   app.use('/api/admin/logs', adminLimiter, adminLogsRouter);
-  app.use('/api/admin/cleanup', adminLimiter, require('./routes/adminCleanup'));
+  app.use('/api/admin/cleanup', adminLimiter, sessionMiddleware, require('./routes/adminCleanup'));
   app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
   app.use('/api/admin/users', adminLimiter, requireAdminAuth, require('./routes/adminUsers'));
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
