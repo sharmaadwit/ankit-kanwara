@@ -4,8 +4,16 @@
  * Industry: set only for external accounts; internal activities have no industry (ignored).
  */
 
+const zlib = require('zlib');
 const { getPool } = require('../db');
 const logger = require('../logger');
+
+const GZIP_PREFIX = '__gz__';
+function compressForStorage(str) {
+  const buf = Buffer.from(str, 'utf8');
+  const compressed = zlib.gzipSync(buf);
+  return GZIP_PREFIX + compressed.toString('base64');
+}
 
 const MIGRATION_CUTOFF = '2026-01-31'; // only rows with activity date <= this
 const CANONICAL_INDUSTRIES = [
@@ -287,10 +295,11 @@ async function writeDraftToStorage(accounts, activitiesByMonth, internalActiviti
   const pool = getPool();
   const write = async (key, value) => {
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    const stored = compressForStorage(serialized);
     await pool.query(
       `INSERT INTO storage (key, value, updated_at) VALUES ($1, $2, NOW())
        ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW();`,
-      [key, serialized]
+      [key, stored]
     );
   };
 

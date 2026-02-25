@@ -48,8 +48,9 @@ const normalizeMutationId = (value) => {
   return trimmed;
 };
 
-/** Archive current value to storage_history before overwrite (The Insurance). */
+/** Archive current value to storage_history before overwrite (The Insurance). Skip migration_* keys to avoid huge history growth. */
 const archiveCurrentValue = async (client, key) => {
+  if (/^migration_/.test(key)) return;
   const { rows } = await client.query(
     'SELECT value, updated_at FROM storage WHERE key = $1;',
     [key]

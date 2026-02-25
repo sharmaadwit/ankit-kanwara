@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const express = require('express');
 const router = express.Router();
 const { getPool } = require('../db');
@@ -65,13 +66,17 @@ const getStorageValue = async (key) => {
   }
 };
 
+const GZIP_PREFIX = '__gz__';
+const compressForStorage = (str) => GZIP_PREFIX + zlib.gzipSync(Buffer.from(str, 'utf8')).toString('base64');
+
 const setStorageValue = async (key, value) => {
   const pool = getPool();
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  const stored = /^migration_/.test(key) ? compressForStorage(serialized) : serialized;
   await pool.query(
     `INSERT INTO storage (key, value, updated_at) VALUES ($1, $2, NOW())
      ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW();`,
-    [key, serialized]
+    [key, stored]
   );
 };
 

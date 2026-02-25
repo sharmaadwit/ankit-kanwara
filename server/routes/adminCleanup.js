@@ -3,13 +3,18 @@
  * GET  /api/admin/cleanup  — returns table sizes, top storage keys, row counts (what's using space).
  * POST /api/admin/cleanup  — run cleanup (logs, storage_history, optional mutations/pending + VACUUM).
  *   Body: { "deleteBeforeDate": "2025-06-01" } or { "full": true } to also clean storage_mutations and pending_storage_saves.
+ *   Body: { "recompressMigration": true } — recompress all migration_* keys in storage (shrinks existing data, no deletion).
  */
 
 const express = require('express');
+const zlib = require('zlib');
 const router = express.Router();
 const { getPool } = require('../db');
 const { requireAdminAuth } = require('../middleware/auth');
 const logger = require('../logger');
+
+const GZIP_PREFIX = '__gz__';
+const compressValue = (str) => GZIP_PREFIX + zlib.gzipSync(Buffer.from(str, 'utf8')).toString('base64');
 
 /** GET /api/admin/cleanup — storage visibility (table sizes, top keys, counts). */
 const getDbSize = async () => {
@@ -121,12 +126,37 @@ router.get(['/', ''], requireAdminAuth, async (req, res) => {
   }
 });
 
+/** Recompress migration_* keys in storage: read each, if not already __gz__, compress and write back. Saves space without deleting data. */
+const recompressMigrationKeys = async () => {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    "SELECT key, value FROM storage WHERE key LIKE 'migration_%'"
+  );
+  let recompressed = 0;
+  for (const row of rows || []) {
+    const raw = row.value;
+    if (typeof raw !== 'string' || raw.startsWith(GZIP_PREFIX)) continue;
+    const compressed = compressValue(raw);
+    await pool.query(
+      'UPDATE storage SET value = $2, updated_at = NOW() WHERE key = $1',
+      [row.key, compressed]
+    );
+    recompressed += 1;
+  }
+  return recompressed;
+};
+
 router.post('/', requireAdminAuth, async (req, res) => {
   try {
     const body = req.body || {};
     if (body.sizeOnly === true || (req.query && req.query.sizeOnly === 'true')) {
       const size = await getDbSize();
       return res.json(size);
+    }
+    if (body.recompressMigration === true || (req.query && req.query.recompressMigration === 'true')) {
+      const recompressed = await recompressMigrationKeys();
+      logger.info('admin_recompress_migration', { recompressed });
+      return res.json({ ok: true, recompressed });
     }
     const deleteBeforeDate = body.deleteBeforeDate || (req.query && req.query.deleteBeforeDate) || null;
     const full = body.full === true || (req.query && req.query.full === 'true');

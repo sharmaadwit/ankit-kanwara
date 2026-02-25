@@ -38,6 +38,8 @@ Use this to see what’s causing the spike and what to clean.
 
 **No duplicacy removal** is done on live **storage** keys (that would change app data). Duplicates are trimmed by cleaning **storage_history**, **storage_mutations**, and **pending_storage_saves** (old rows only).
 
+**Migration keys** (`migration_*`) live in the same **storage** table. They are now stored compressed (gzip + base64, prefix `__gz__`) on write, and archiving to **storage_history** is skipped for these keys so they don’t grow history. To shrink *existing* migration data without deleting it, run recompress once (see below).
+
 ---
 
 ## 3. Run cleanup from the app
@@ -55,6 +57,14 @@ fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Conten
 ```
 
 Use **full: true** periodically to keep mutations and pending saves small. Retention: storage_mutations &gt; 30 days, pending_storage_saves &gt; 7 days (env: `STORAGE_MUTATIONS_RETENTION_DAYS`, `PENDING_STORAGE_RETENTION_DAYS`).
+
+**Recompress migration keys** (one-off to shrink existing migration data; no deletion):
+
+```javascript
+fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-Admin-User':(typeof Auth!=='undefined'&&Auth.currentUser&&Auth.currentUser.username)?Auth.currentUser.username:''},body:JSON.stringify({recompressMigration:true})}).then(r=>r.json()).then(console.log).catch(console.error);
+```
+
+Response: `{ ok: true, recompressed: N }` where N is the number of migration keys that were recompressed (already-compressed keys are skipped).
 
 ---
 
