@@ -475,28 +475,32 @@ const ReportsV2 = {
 
     // Render tab navigation
     renderTabNavigation() {
+        const isMonthly = this.activeTab === 'monthly';
         return `
-            <div class="reports-v2-tabs">
-                <button class="reports-v2-tab ${this.activeTab === 'presales' ? 'active' : ''}" 
-                        onclick="ReportsV2.switchTab('presales')">
-                    Presales Reports
-                </button>
-                <button class="reports-v2-tab ${this.activeTab === 'sales' ? 'active' : ''}" 
-                        onclick="ReportsV2.switchTab('sales')">
-                    Sales View
-                </button>
-                <button class="reports-v2-tab ${this.activeTab === 'regional' ? 'active' : ''}" 
-                        onclick="ReportsV2.switchTab('regional')">
-                    Regional Data
-                </button>
-                <button class="reports-v2-tab ${this.activeTab === 'monthly' ? 'active' : ''}" 
-                        onclick="ReportsV2.switchTab('monthly')">
-                    Monthly report (PDF)
-                </button>
-                <button class="reports-v2-tab ${this.activeTab === 'ai' ? 'active' : ''}" 
-                        onclick="ReportsV2.switchTab('ai')">
-                    AI Intelligence
-                </button>
+            <div class="reports-v2-tabs reports-v2-tabs-with-edit">
+                <div class="reports-v2-tabs-inner">
+                    <button class="reports-v2-tab ${this.activeTab === 'presales' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('presales')">
+                        Presales Reports
+                    </button>
+                    <button class="reports-v2-tab ${this.activeTab === 'sales' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('sales')">
+                        Sales View
+                    </button>
+                    <button class="reports-v2-tab ${this.activeTab === 'regional' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('regional')">
+                        Regional Data
+                    </button>
+                    <button class="reports-v2-tab ${this.activeTab === 'monthly' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('monthly')">
+                        Monthly report (PDF)
+                    </button>
+                    <button class="reports-v2-tab ${this.activeTab === 'ai' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('ai')">
+                        AI Intelligence
+                    </button>
+                </div>
+                ${isMonthly ? `<button type="button" id="reportsEditReportBtn" class="btn btn-primary reports-v2-edit-in-tabs" onclick="ReportsV2.openEditReportModal()">Edit report</button>` : ''}
             </div>
         `;
     },
@@ -614,10 +618,10 @@ const ReportsV2 = {
             <div class="reports-v2-section monthly-report-pdf-section" id="monthlyReportPdfContent">
                 <div class="reports-v2-monthly-pdf-actions">
                     <h2 class="reports-v2-section-title">Monthly report (PDF)</h2>
-                    <p class="text-muted">Same structure as the email report. Edit highlights, use cases and wins; then download PDF or images, or email.</p>
+                    <p class="text-muted">Same structure as the email report. Use <strong>Edit report</strong> to change highlights, use cases and wins; then download or email.</p>
                     <div class="reports-v2-monthly-actions-btns">
-                        <button type="button" class="btn btn-secondary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
-                        <button type="button" class="btn btn-primary" onclick="window.print(); return false;">Download PDF</button>
+                        <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
+                        <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
                         <button type="button" class="btn btn-outline" onclick="ReportsV2.downloadChartsAsImages()">Download charts as images</button>
                         <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
                     </div>
@@ -637,7 +641,7 @@ const ReportsV2 = {
                             </div>
                         </div>
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
-                        <h4>Cube Analysis Top Highlights – Global</h4>
+                        <h4>Cube Analysis Top Highlights – Global <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h4>
                         ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : ''}
                     </div>
                     <!-- Page 2 – Use cases (editable) -->
@@ -654,7 +658,7 @@ const ReportsV2 = {
                     </div>
                     <!-- Page 3 – Wins (editable: include/exclude + manual) -->
                     <div class="monthly-report-page">
-                        <h3>Wins – ${periodLabel}</h3>
+                        <h3>Wins – ${periodLabel} <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h3>
                         <p class="text-muted">Use <strong>Edit report</strong> to include/exclude wins or add manual wins.</p>
                         <div class="monthly-report-wins-grid">
                             ${(() => {

@@ -336,7 +336,7 @@ const Admin = {
             login: () => this.loadLoginLogs(),
             audit: () => this.loadActivityLogs(),
             storageDrafts: () => this.loadStorageDraftsSection(),
-            monthly: () => { },
+            monthly: () => this.populateReportExportRegionOptions(),
             reports: () => { },
             sandboxAccess: () => this.loadPOCSandbox()
         };
@@ -3078,6 +3078,17 @@ const Admin = {
         });
     },
 
+    async populateReportExportRegionOptions() {
+        const select = document.getElementById('adminReportRegionConfig');
+        if (!select) return;
+        const regions = (await DataManager.getRegions()) || [];
+        const current = select.value;
+        select.innerHTML = '<option value="">All regions</option>' + regions.map(r => `<option value="${r.replace(/"/g, '&quot;')}">${r.replace(/</g, '&lt;')}</option>`).join('');
+        if (current && regions.includes(current)) select.value = current;
+        const monthInput = document.getElementById('adminReportMonthConfig');
+        if (monthInput && !monthInput.value) monthInput.value = new Date().toISOString().substring(0, 7);
+    },
+
     async exportMonthlyCsv() {
         if (typeof App !== 'undefined' && !App.isFeatureEnabled('adminCsvExport')) {
             UI.showNotification('Admin CSV export is currently disabled.', 'info');
@@ -3085,33 +3096,84 @@ const Admin = {
         }
 
         const monthInput = document.getElementById('adminReportMonthConfig') || document.getElementById('adminReportMonth');
+        const regionSelect = document.getElementById('adminReportRegionConfig');
         const selectedMonth = monthInput && monthInput.value
             ? monthInput.value
             : new Date().toISOString().substring(0, 7);
+        const selectedRegion = (regionSelect && regionSelect.value) ? regionSelect.value.trim() : '';
 
         const allActivities = await DataManager.getAllActivities();
+        const accounts = await DataManager.getAccounts();
+        const accountMap = (accounts || []).reduce((acc, ac) => { acc[ac.id] = ac; return acc; }, {});
+
         const resolveMonth = DataManager.resolveActivityMonth
             ? (a) => DataManager.resolveActivityMonth(a)
-            : (a) => (a.date || '').substring(0, 7);
-        const activitiesInMonth = allActivities.filter(a => resolveMonth(a) === selectedMonth);
+            : (a) => (a.date || '').toString().substring(0, 7);
+        let activitiesInMonth = allActivities.filter(a => resolveMonth(a) === selectedMonth);
 
-        const header = ['Activity Date', 'Submitted At', 'User', 'Account', 'Project', 'Type', 'Internal/External', 'Summary'];
-        const rows = activitiesInMonth.map(a => [
-            a.date || '',
-            a.createdAt || '',
-            a.userName || a.assignedUserEmail || 'Unknown',
-            a.accountName || '',
-            a.projectName || '',
-            a.type || '',
-            a.isInternal ? 'Internal' : 'External',
-            (a.summary || a.description || '').replace(/[\r\n]+/g, ' ')
-        ]);
+        activitiesInMonth = activitiesInMonth.filter(a => !a.isInternal);
+
+        if (selectedRegion) {
+            activitiesInMonth = activitiesInMonth.filter(a => {
+                const account = a.accountId ? accountMap[a.accountId] : null;
+                const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || '';
+                return region === selectedRegion;
+            });
+        }
+
+        const header = ['Region', 'Sales Rep Name', 'Account Name', 'Industry', 'Project', 'Activity Date', 'Activity Type', 'Call Type', 'Entered By (Presales)', 'Notes', 'Use Case', 'Channels', 'Product Interested', 'Has SFDC'];
+        const escapeCsv = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
+
+        const rows = activitiesInMonth.map(a => {
+            const account = a.accountId ? accountMap[a.accountId] : null;
+            const project = account && a.projectId && account.projects
+                ? account.projects.find(p => p.id === a.projectId)
+                : null;
+            const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || '';
+            const salesRepName = a.salesRep || (account && account.salesRep) || '';
+            const accountName = account ? (account.name || '') : (a.accountName || '');
+            const industry = account ? (account.industry || '') : '';
+            const projectName = project ? (project.name || '') : (a.projectName || '');
+            const notes = (a.details && a.details.notes) ? a.details.notes : (a.summary || a.description || '');
+            const useCase = project && project.useCases && project.useCases.length
+                ? (Array.isArray(project.useCases) ? project.useCases.join('; ') : project.useCases)
+                : '';
+            const channels = project && project.channels && project.channels.length
+                ? (Array.isArray(project.channels) ? project.channels.join('; ') : project.channels)
+                : '';
+            const productInterested = project && project.productsInterested && project.productsInterested.length
+                ? (Array.isArray(project.productsInterested) ? project.productsInterested.join('; ') : project.productsInterested)
+                : '';
+            const activityType = (typeof UI !== 'undefined' && typeof UI.getActivityTypeLabel === 'function')
+                ? UI.getActivityTypeLabel(a.type) : (a.type || '');
+            const callType = (a.details && a.details.callType) ? a.details.callType : '';
+            const enteredBy = a.userName || a.assignedUserEmail || '';
+            const hasSfdc = (account && account.sfdcLink) || (project && project.sfdcLink) ? 'Y' : 'N';
+            return [
+                region,
+                salesRepName,
+                accountName,
+                industry,
+                projectName,
+                (a.date || a.createdAt || '').toString().substring(0, 10),
+                activityType,
+                callType,
+                enteredBy,
+                notes,
+                useCase,
+                channels,
+                productInterested,
+                hasSfdc
+            ];
+        });
+
         const csvRows = [header, ...rows];
-        const filename = `pams_activities_${selectedMonth}.csv`;
+        const regionSuffix = selectedRegion ? `_${selectedRegion.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+        const filename = `pams_region_${selectedMonth}${regionSuffix}.csv`;
         if (typeof App !== 'undefined' && typeof App.downloadCsv === 'function') {
             await App.downloadCsv(filename, csvRows);
         } else {
-            const csv = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+            const csv = csvRows.map(row => row.map(cell => escapeCsv(cell)).join(',')).join('\r\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -3122,13 +3184,13 @@ const Admin = {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
-        UI.showNotification(`Exported ${rows.length} activities for ${selectedMonth}.`, 'success');
+        UI.showNotification(`Exported ${rows.length} activities for ${selectedMonth}${selectedRegion ? ' (' + selectedRegion + ')' : ''}.`, 'success');
         if (typeof Audit !== 'undefined' && typeof Audit.log === 'function') {
             await Audit.log({
                 action: 'report.export',
-                entity: 'monthlyActivities',
+                entity: 'regionalMonthlyCsv',
                 entityId: selectedMonth,
-                detail: { rowCount: rows.length }
+                detail: { rowCount: rows.length, region: selectedRegion || 'all' }
             });
         }
     },

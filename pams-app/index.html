@@ -1126,18 +1126,23 @@
                                 <div class="admin-section hidden" data-admin-section="monthly">
                                     <div class="card" data-feature="adminCsvExport">
                                         <div class="card-header">
-                                            <h3>Monthly Analytics Export (Admin)</h3>
+                                            <h3>Regional CSV Export (Admin)</h3>
                                         </div>
                                         <div class="card-body">
+                                            <p class="text-muted small mb-2">External activities only. Select month and region, then download. Columns: Region, Sales Rep, Account, Industry, Project, Activity date, Activity type (SOW, POC, etc.), Call type, Entered By (Presales), Notes, Use case, Channels, Product Interested, Has SFDC.</p>
                                             <div class="form-grid">
                                                 <div class="form-group">
-                                                    <label class="form-label">Select Month</label>
-                                                    <input type="month" id="adminReportMonthConfig"
-                                                        class="form-control">
+                                                    <label class="form-label">Month</label>
+                                                    <input type="month" id="adminReportMonthConfig" class="form-control">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label class="form-label">Region</label>
+                                                    <select id="adminReportRegionConfig" class="form-control">
+                                                        <option value="">All regions</option>
+                                                    </select>
                                                 </div>
                                             </div>
-                                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download
-                                                Monthly CSV</button>
+                                            <button class="btn btn-primary" onclick="Admin.exportMonthlyCsv()">Download CSV</button>
                                         </div>
                                     </div>
                                 </div>
