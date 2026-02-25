@@ -350,11 +350,40 @@
 .reports-v2-monthly-pdf-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-start;
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
 .reports-v2-monthly-pdf-actions .btn { flex-shrink: 0; }
+.reports-v2-monthly-actions-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+.monthly-report-highlights-text {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: #fff;
+    border-radius: 0.5rem;
+    border: 1px solid var(--gray-200, #e5e7eb);
+    font-size: 0.9375rem;
+    white-space: pre-wrap;
+}
+.monthly-report-edit-win-row {
+    display: block;
+    padding: 0.35rem 0;
+    font-size: 0.875rem;
+}
+.monthly-report-edit-win-row input { margin-right: 0.5rem; }
+.monthly-report-manual-win {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+.monthly-report-manual-win input { min-width: 120px; }
 .monthly-report-pages {
     display: flex;
     flex-direction: column;
@@ -412,6 +441,14 @@
     border-radius: 0.5rem;
     padding: 1rem;
     font-size: 0.875rem;
+}
+.monthly-report-chart-wrap {
+    position: relative;
+    width: 100%;
+    min-height: 200px;
+}
+.monthly-report-chart-wrap canvas {
+    max-width: 100%;
 }
 .monthly-report-breakdown-center {
     text-align: center;

@@ -57,6 +57,135 @@ const ReportsV2 = {
         this.render();
     },
 
+    openEditReportModal() {
+        const period = this.currentPeriod;
+        const periodLabel = this.formatPeriod(period);
+        if (!period) return;
+        (async () => {
+            const overrides = await DataManager.getReportOverrides();
+            const o = overrides[period] || {};
+            const highlights = o.highlights != null ? o.highlights : '';
+            const useCases = Array.isArray(o.useCases) ? o.useCases : ['', '', '', '', ''];
+            const includedWinIds = Array.isArray(o.includedWinIds) ? o.includedWinIds : null;
+            const manualWins = Array.isArray(o.manualWins) ? o.manualWins : [];
+
+            let winsHtml = '';
+            if (this.monthlyReportData && this.monthlyReportData.winsForPeriod) {
+                this.monthlyReportData.winsForPeriod.forEach(w => {
+                    const checked = includedWinIds === null || includedWinIds.includes(w.projectId);
+                    winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(w.mrr || '—').replace(/</g, '&lt;')}</label>`;
+                });
+            }
+            manualWins.forEach((mw, i) => {
+                winsHtml += `<div class="monthly-report-manual-win" data-index="${i}"><input type="text" placeholder="Client" value="${(mw.clientName || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="MRR" value="${(mw.mrr || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Use case" value="${(mw.useCase || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Presales rep" value="${(mw.presalesRep || '').replace(/"/g, '&quot;')}"><button type="button" class="btn btn-sm btn-danger" onclick="ReportsV2.removeManualWin(this)">Remove</button></div>`;
+            });
+
+            const modal = document.getElementById('monthlyReportEditModal');
+            if (modal) {
+                document.getElementById('monthlyReportEditHighlights').value = highlights;
+                [0, 1, 2, 3, 4].forEach(i => { const el = document.getElementById('monthlyReportUseCase' + i); if (el) el.value = useCases[i] || ''; });
+                const winsWrap = document.getElementById('monthlyReportEditWinsWrap');
+                if (winsWrap) winsWrap.innerHTML = winsHtml || '<p class="text-muted">No wins in this period. Add manual wins below.</p>';
+                const manualWrap = document.getElementById('monthlyReportManualWinsWrap');
+                if (manualWrap) manualWrap.innerHTML = manualWins.map((mw, i) => `<div class="monthly-report-manual-win" data-index="${i}"><input type="text" placeholder="Client" value="${(mw.clientName || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="MRR" value="${(mw.mrr || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Use case" value="${(mw.useCase || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Presales rep" value="${(mw.presalesRep || '').replace(/"/g, '&quot;')}"><button type="button" class="btn btn-sm btn-danger" onclick="ReportsV2.removeManualWin(this)">Remove</button></div>`).join('');
+            } else {
+                const div = document.createElement('div');
+                div.id = 'monthlyReportEditModal';
+                div.className = 'modal hidden';
+                div.innerHTML = `
+                    <div class="modal-content" style="max-width: 640px;">
+                        <div class="modal-header"><h3>Edit report – ${periodLabel}</h3><button type="button" class="modal-close" onclick="ReportsV2.closeEditReportModal()">&times;</button></div>
+                        <div class="modal-body">
+                            <div class="form-group"><label>Cube Analysis Top Highlights</label><textarea id="monthlyReportEditHighlights" class="form-control" rows="3" placeholder="Optional text for top highlights."></textarea></div>
+                            <div class="form-group"><label>Use cases (5 boxes)</label>
+                                <input id="monthlyReportUseCase0" class="form-control" placeholder="Lead gen & onboarding"><br>
+                                <input id="monthlyReportUseCase1" class="form-control" placeholder="Loyalty & retention"><br>
+                                <input id="monthlyReportUseCase2" class="form-control" placeholder="Support & FAQ"><br>
+                                <input id="monthlyReportUseCase3" class="form-control" placeholder="Sales discovery & AI"><br>
+                                <input id="monthlyReportUseCase4" class="form-control" placeholder="Operational automation">
+                            </div>
+                            <div class="form-group"><label>Wins – include/exclude</label><div id="monthlyReportEditWinsWrap"></div></div>
+                            <div class="form-group"><label>Manual wins (add below)</label><div id="monthlyReportManualWinsWrap"></div><button type="button" class="btn btn-sm btn-outline" onclick="ReportsV2.addManualWinRow()">+ Add manual win</button></div>
+                        </div>
+                        <div class="modal-footer"><button type="button" class="btn btn-secondary" onclick="ReportsV2.closeEditReportModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="ReportsV2.saveEditReportModal()">Save</button></div>
+                    </div>`;
+                document.body.appendChild(div);
+                document.getElementById('monthlyReportEditHighlights').value = highlights;
+                [0, 1, 2, 3, 4].forEach(i => { const el = document.getElementById('monthlyReportUseCase' + i); if (el) el.value = useCases[i] || ''; });
+                document.getElementById('monthlyReportEditWinsWrap').innerHTML = winsHtml || '<p class="text-muted">No wins in this period. Add manual wins below.</p>';
+                document.getElementById('monthlyReportManualWinsWrap').innerHTML = manualWins.map((mw, i) => `<div class="monthly-report-manual-win" data-index="${i}"><input type="text" placeholder="Client" value="${(mw.clientName || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="MRR" value="${(mw.mrr || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Use case" value="${(mw.useCase || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Presales rep" value="${(mw.presalesRep || '').replace(/"/g, '&quot;')}"><button type="button" class="btn btn-sm btn-danger" onclick="ReportsV2.removeManualWin(this)">Remove</button></div>`).join('');
+            }
+            document.getElementById('monthlyReportEditModal').classList.remove('hidden');
+            document.getElementById('monthlyReportEditModal').dataset.period = period;
+        })();
+    },
+
+    closeEditReportModal() {
+        const m = document.getElementById('monthlyReportEditModal');
+        if (m) m.classList.add('hidden');
+    },
+
+    addManualWinRow() {
+        const wrap = document.getElementById('monthlyReportManualWinsWrap');
+        if (!wrap) return;
+        const div = document.createElement('div');
+        div.className = 'monthly-report-manual-win';
+        div.innerHTML = '<input type="text" placeholder="Client"><input type="text" placeholder="MRR"><input type="text" placeholder="Use case"><input type="text" placeholder="Presales rep"><button type="button" class="btn btn-sm btn-danger" onclick="ReportsV2.removeManualWin(this)">Remove</button>';
+        wrap.appendChild(div);
+    },
+
+    removeManualWin(btn) {
+        if (btn && btn.parentNode) btn.parentNode.remove();
+    },
+
+    async saveEditReportModal() {
+        const modal = document.getElementById('monthlyReportEditModal');
+        if (!modal) return;
+        const period = modal.dataset.period;
+        if (!period) return;
+        const highlights = (document.getElementById('monthlyReportEditHighlights') && document.getElementById('monthlyReportEditHighlights').value) || '';
+        const useCases = [0, 1, 2, 3, 4].map(i => (document.getElementById('monthlyReportUseCase' + i) && document.getElementById('monthlyReportUseCase' + i).value) || '');
+        const winsWrap = document.getElementById('monthlyReportEditWinsWrap');
+        const includedWinIds = [];
+        if (winsWrap) {
+            winsWrap.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                const id = cb.getAttribute('data-project-id');
+                if (id) includedWinIds.push(id);
+            });
+        }
+        const manualWins = [];
+        const manualWrap = document.getElementById('monthlyReportManualWinsWrap');
+        if (manualWrap) {
+            manualWrap.querySelectorAll('.monthly-report-manual-win').forEach(row => {
+                const inputs = row.querySelectorAll('input[type="text"]');
+                if (inputs.length >= 4 && (inputs[0].value || inputs[1].value)) {
+                    manualWins.push({ clientName: inputs[0].value, mrr: inputs[1].value, useCase: inputs[2].value, presalesRep: inputs[3].value });
+                }
+            });
+        }
+        const overrides = await DataManager.getReportOverrides();
+        overrides[period] = { highlights, useCases, includedWinIds: includedWinIds.length ? includedWinIds : null, manualWins };
+        await DataManager.saveReportOverrides(overrides);
+        this.closeEditReportModal();
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Report overrides saved.', 'success');
+        this.render();
+    },
+
+    downloadChartsAsImages() {
+        const ids = ['monthlyReportDonut', 'monthlyReportCallType', 'monthlyReportRegion', 'monthlyReportMissingSfdc', 'monthlyReportPresales'];
+        const names = ['activity-breakdown', 'call-types', 'region-activity', 'missing-sfdc', 'presales-by-user'];
+        ids.forEach((id, i) => {
+            const canvas = document.getElementById(id);
+            if (canvas && canvas.width > 0) {
+                const link = document.createElement('a');
+                link.download = names[i] + '-' + (this.currentPeriod || 'report') + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+        });
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Charts downloaded.', 'success');
+    },
+
     // Change activity breakdown filter
     changeActivityBreakdownFilter(filter) {
         this.activityBreakdownFilter = filter;
@@ -232,7 +361,12 @@ const ReportsV2 = {
                     'missingSfdcSalesRepChart',
                     'salesRepRequestsChart',
                     'industryTotalChart',
-                    'industryAverageChart'
+                    'industryAverageChart',
+                    'monthlyReportDonut',
+                    'monthlyReportCallType',
+                    'monthlyReportRegion',
+                    'monthlyReportMissingSfdc',
+                    'monthlyReportPresales'
                 ];
 
                 chartCanvases.forEach(canvasId => {
@@ -391,12 +525,16 @@ const ReportsV2 = {
     // Monthly report (PDF-style): 8-page structure per MONTHLY_EMAIL_REPORT_SPEC – single scrollable view + Download PDF
     async renderMonthlyReportPdf(activities) {
         const periodLabel = this.formatPeriod(this.currentPeriod);
+        const period = this.currentPeriod;
         const total = activities.length;
         const internalCount = activities.filter(a => a.isInternal).length;
         const externalCount = activities.filter(a => !a.isInternal).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
+        const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
+        const o = period ? (overrides[period] || {}) : {};
         let winsPeriod = 0;
         let lossesPeriod = 0;
+        const winsForPeriod = [];
         const periodMonth = this.currentPeriodType === 'month' ? this.currentPeriod : null;
         if (periodMonth && accounts.length) {
             accounts.forEach(account => {
@@ -405,8 +543,18 @@ const ReportsV2 = {
                         const monthForWinLoss = project.winLossData?.monthOfWin ||
                             (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
                         if (monthForWinLoss === periodMonth) {
-                            if (project.status === 'won') winsPeriod++;
-                            else if (project.status === 'lost') lossesPeriod++;
+                            if (project.status === 'won') {
+                                winsPeriod++;
+                                const uc = (project.useCases && project.useCases[0]);
+                                const useCaseText = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '—';
+                                winsForPeriod.push({
+                                    projectId: project.id,
+                                    accountId: account.id,
+                                    accountName: account.name || 'Unknown',
+                                    mrr: project.winLossData?.mrr ?? project.mrr ?? '—',
+                                    useCase: useCaseText
+                                });
+                            } else if (project.status === 'lost') lossesPeriod++;
                         }
                     }
                 });
@@ -451,12 +599,28 @@ const ReportsV2 = {
         const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
         const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
 
+        this.monthlyReportData = {
+            breakdown,
+            callTypeData,
+            regionCounts,
+            missingSfdcByRegion,
+            userActivityData,
+            regionsOrdered,
+            callTypeOrder,
+            winsForPeriod
+        };
+
         return `
             <div class="reports-v2-section monthly-report-pdf-section" id="monthlyReportPdfContent">
                 <div class="reports-v2-monthly-pdf-actions">
                     <h2 class="reports-v2-section-title">Monthly report (PDF)</h2>
-                    <p class="text-muted">Same structure as the email report. Use <strong>Download PDF</strong> to print or save as PDF.</p>
-                    <button type="button" class="btn btn-primary" onclick="window.print(); return false;">Download PDF</button>
+                    <p class="text-muted">Same structure as the email report. Edit highlights, use cases and wins; then download PDF or images, or email.</p>
+                    <div class="reports-v2-monthly-actions-btns">
+                        <button type="button" class="btn btn-secondary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
+                        <button type="button" class="btn btn-primary" onclick="window.print(); return false;">Download PDF</button>
+                        <button type="button" class="btn btn-outline" onclick="ReportsV2.downloadChartsAsImages()">Download charts as images</button>
+                        <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
+                    </div>
                 </div>
                 <div class="monthly-report-pages">
                     <!-- Page 1 – Summary -->
@@ -474,84 +638,72 @@ const ReportsV2 = {
                         </div>
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
                         <h4>Cube Analysis Top Highlights – Global</h4>
+                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : ''}
                     </div>
-                    <!-- Page 2 – Use cases (simplified) -->
+                    <!-- Page 2 – Use cases (editable) -->
                     <div class="monthly-report-page">
                         <h3>Use cases across industries</h3>
                         <p class="text-muted">What each use case is, where it shows up, and takeaways from the data.</p>
                         <div class="monthly-report-use-cases">
-                            <div class="monthly-report-use-case-card">Lead gen & onboarding – industries and regional highlights from pipeline.</div>
-                            <div class="monthly-report-use-case-card">Loyalty & retention – win themes by region.</div>
-                            <div class="monthly-report-use-case-card">Support & FAQ – pipeline share by region.</div>
-                            <div class="monthly-report-use-case-card">Sales discovery & AI recommendation – regional strengths.</div>
-                            <div class="monthly-report-use-case-card">Operational automation – regional examples.</div>
+                            ${[0, 1, 2, 3, 4].map(i => {
+                                const text = (o.useCases && o.useCases[i]) ? o.useCases[i] : ['Lead gen & onboarding – industries and regional highlights from pipeline.', 'Loyalty & retention – win themes by region.', 'Support & FAQ – pipeline share by region.', 'Sales discovery & AI recommendation – regional strengths.', 'Operational automation – regional examples.'][i];
+                                const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                return `<div class="monthly-report-use-case-card">${safe(text)}</div>`;
+                            }).join('')}
                         </div>
                     </div>
-                    <!-- Page 3 – Wins -->
+                    <!-- Page 3 – Wins (editable: include/exclude + manual) -->
                     <div class="monthly-report-page">
                         <h3>Wins – ${periodLabel}</h3>
-                        <p class="text-muted">Won projects in this period. Add/remove wins in Admin or Project Health for the report.</p>
+                        <p class="text-muted">Use <strong>Edit report</strong> to include/exclude wins or add manual wins.</p>
                         <div class="monthly-report-wins-grid">
-                            ${periodMonth && winsPeriod > 0 ? (() => {
-                                const wins = [];
-                                accounts.forEach(account => {
-                                    account.projects?.forEach(project => {
-                                        if (project.status !== 'won') return;
-                                        const monthForWinLoss = project.winLossData?.monthOfWin || (project.winLossData?.updatedAt || project.updatedAt || '').toString().substring(0, 7);
-                                        if (monthForWinLoss === periodMonth) {
-                                            const mrr = project.winLossData?.mrr ?? project.mrr ?? '—';
-                                            const uc = (project.useCases && project.useCases[0]);
-                                            const useCaseText = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '—';
-                                            const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                            wins.push(`<div class="monthly-report-win-card"><strong>${safe(account.name || 'Unknown')}</strong><br/>MRR: ${safe(mrr)} | Use case: ${safe(useCaseText)}</div>`);
-                                        }
-                                    });
-                                });
-                                return wins.slice(0, 9).join('');
-                            })() : '<p class="text-muted">No wins in this period.</p>'}
+                            ${(() => {
+                                const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
+                                const manual = o.manualWins || [];
+                                const cards = displayWins.slice(0, 9).map(w => `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>MRR: ${safe(w.mrr)} | Use case: ${safe(w.useCase)}</div>`);
+                                manual.forEach(mw => { cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${safe(mw.mrr || '')} | Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? ' | ' + safe(mw.presalesRep) : ''}</div>`); });
+                                return cards.length ? cards.slice(0, 12).join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report.</p>';
+                            })()}
                         </div>
                     </div>
-                    <!-- Page 4 – Activity breakdown -->
+                    <!-- Page 4 – Activity breakdown (donut chart) -->
                     <div class="monthly-report-page">
                         <h3>Activity breakdown</h3>
                         <p class="text-muted">Overall Activity</p>
-                        <div class="monthly-report-breakdown-center">${total} Total</div>
-                        <ul class="monthly-report-breakdown-list">
-                            ${Object.entries(breakdown).map(([label, count]) => `<li><strong>${label}</strong> ${count}</li>`).join('')}
-                        </ul>
-                    </div>
-                    <!-- Page 5 – Call types -->
-                    <div class="monthly-report-page">
-                        <h3>Call types</h3>
-                        <div class="monthly-report-call-types">
-                            ${callTypeOrder.map(label => {
-                                const count = callTypeData[label] || 0;
-                                return count > 0 ? `<div class="monthly-report-call-type-row"><span>${label}</span><strong>${count}</strong></div>` : '';
-                            }).filter(Boolean).join('') || '<p class="text-muted">No call type data.</p>'}
+                        <div class="monthly-report-chart-wrap" style="height: 280px;">
+                            <canvas id="monthlyReportDonut" height="280"></canvas>
                         </div>
                     </div>
-                    <!-- Page 6 – Region activity -->
+                    <!-- Page 5 – Call types (horizontal bar chart) -->
+                    <div class="monthly-report-page">
+                        <h3>Call types</h3>
+                        <div class="monthly-report-chart-wrap" style="height: 280px;">
+                            <canvas id="monthlyReportCallType" height="280"></canvas>
+                        </div>
+                    </div>
+                    <!-- Page 6 – Region activity (vertical bar chart) -->
                     <div class="monthly-report-page">
                         <h3>Regional intelligence</h3>
                         <p class="text-muted">${periodLabel} (External only)</p>
-                        <div class="monthly-report-region-bars">
-                            ${regionsOrdered.map(region => `<div class="monthly-report-region-row"><span>${region.replace(/</g, '&lt;')}</span><strong>${regionCounts[region] || 0}</strong></div>`).join('') || '<p class="text-muted">No regional data.</p>'}
+                        <div class="monthly-report-chart-wrap" style="height: 300px;">
+                            <canvas id="monthlyReportRegion" height="300"></canvas>
                         </div>
                     </div>
-                    <!-- Page 7 – Missing SFDC -->
+                    <!-- Page 7 – Missing SFDC (vertical bar chart) -->
                     <div class="monthly-report-page">
                         <h3>Missing SFDC opportunities</h3>
                         <p class="text-muted">External activities where project/account has no SFDC link. ${periodLabel}.</p>
-                        <div class="monthly-report-region-bars">
-                            ${Object.keys(missingSfdcByRegion).length ? Object.entries(missingSfdcByRegion).sort((a, b) => b[1] - a[1]).map(([region, count]) => `<div class="monthly-report-region-row"><span>${region.replace(/</g, '&lt;')}</span><strong>${count}</strong></div>`).join('') : '<p class="text-muted">None.</p>'}
+                        <div class="monthly-report-chart-wrap" style="height: 300px;">
+                            <canvas id="monthlyReportMissingSfdc" height="300"></canvas>
                         </div>
                     </div>
-                    <!-- Page 8 – Presales individual activity -->
+                    <!-- Page 8 – Presales individual activity (horizontal bar chart) -->
                     <div class="monthly-report-page">
                         <h3>Presales individual activity</h3>
                         <p class="text-muted">Activities by user – ${periodLabel}</p>
-                        <div class="monthly-report-user-bars">
-                            ${userActivityData.length ? userActivityData.map(u => `<div class="monthly-report-user-row"><span>${String(u.name || u.id || '—').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</span><strong>${u.count}</strong></div>`).join('') : '<p class="text-muted">No user data.</p>'}
+                        <div class="monthly-report-chart-wrap" style="height: 300px;">
+                            <canvas id="monthlyReportPresales" height="300"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1527,6 +1679,59 @@ const ReportsV2 = {
                         });
                     }
                 }
+            }
+
+            // Monthly report (PDF) tab – same charts as spec: donut, call type, region, missing SFDC, presales by user
+            if (this.activeTab === 'monthly' && this.monthlyReportData) {
+                const md = this.monthlyReportData;
+                const donutColors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#38B2AC', '#ED64A6'];
+                if (document.getElementById('monthlyReportDonut') && md.breakdown) {
+                    const labels = Object.keys(md.breakdown);
+                    const data = Object.values(md.breakdown);
+                    if (data.some(v => v > 0)) {
+                        this.renderDonutChart('monthlyReportDonut', {
+                            labels,
+                            data,
+                            colors: donutColors
+                        });
+                    }
+                }
+                if (document.getElementById('monthlyReportCallType') && md.callTypeData) {
+                    const callEntries = (md.callTypeOrder || Object.keys(md.callTypeData)).map(label => [label, md.callTypeData[label] || 0]).filter(([, c]) => c > 0);
+                    if (callEntries.length > 0) {
+                        this.renderHorizontalBarChart('monthlyReportCallType', {
+                            labels: callEntries.map(([n]) => n),
+                            data: callEntries.map(([, c]) => c),
+                            label: 'Activities'
+                        });
+                    }
+                }
+                if (document.getElementById('monthlyReportRegion') && md.regionsOrdered && md.regionsOrdered.length > 0) {
+                    this.renderBarChart('monthlyReportRegion', {
+                        labels: md.regionsOrdered,
+                        data: md.regionsOrdered.map(r => md.regionCounts[r] || 0),
+                        label: 'Activities'
+                    });
+                }
+                if (document.getElementById('monthlyReportMissingSfdc')) {
+                    const missingEntries = Object.entries(md.missingSfdcByRegion || {}).sort((a, b) => b[1] - a[1]);
+                    if (missingEntries.length > 0) {
+                        this.renderBarChart('monthlyReportMissingSfdc', {
+                            labels: missingEntries.map(([r]) => r),
+                            data: missingEntries.map(([, c]) => c),
+                            label: 'Missing SFDC'
+                        });
+                    }
+                }
+                if (document.getElementById('monthlyReportPresales') && md.userActivityData && md.userActivityData.length > 0) {
+                    this.renderHorizontalBarChart('monthlyReportPresales', {
+                        labels: md.userActivityData.map(u => (u.name || u.id || '—').toString().slice(0, 20)),
+                        data: md.userActivityData.map(u => u.count),
+                        label: 'Activities'
+                    });
+                }
+                const emailBtn = document.getElementById('monthlyReportEmailBtn');
+                if (emailBtn) emailBtn.href = 'mailto:?subject=' + encodeURIComponent('Presales Update ' + this.formatPeriod(this.currentPeriod));
             }
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
