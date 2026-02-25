@@ -1,5 +1,6 @@
 const logger = require('../logger');
 const { getSession } = require('../services/session');
+const { getPool } = require('../db');
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'pams_sid';
 
@@ -68,6 +69,22 @@ const requireStorageAuth = (req, res, next) => {
   return res.status(401).json({ message: 'Unauthorized' });
 };
 
+/** Verify username is admin in DB (for X-Admin-User header when no cookie). */
+const verifyAdminUserInDb = async (username) => {
+  if (!username || typeof username !== 'string') return false;
+  const pool = getPool();
+  if (!pool) return false;
+  try {
+    const { rows } = await pool.query(
+      "SELECT 1 FROM users WHERE username = $1 AND is_active = true AND $2 = ANY(roles)",
+      [username.trim(), 'Admin']
+    );
+    return rows && rows.length > 0;
+  } catch {
+    return false;
+  }
+};
+
 const requireAdminAuth = (req, res, next) => {
   const providedKey = extractHeaderToken(req, 'x-admin-api-key');
   const expectedKey = extractApiKey();
@@ -76,8 +93,19 @@ const requireAdminAuth = (req, res, next) => {
     return next();
   }
 
-  if (isAdminRequest(req)) {
-    return next();
+  const adminUser = extractHeaderToken(req, 'x-admin-user');
+  if (adminUser) {
+    verifyAdminUserInDb(adminUser)
+      .then((ok) => {
+        if (ok) return next();
+        logger.warn('admin_auth_failed', { path: req.originalUrl || req.url, reason: 'user_not_admin' });
+        res.status(401).json({ message: 'Admin authentication required' });
+      })
+      .catch((err) => {
+        logger.warn('admin_auth_failed', { path: req.originalUrl || req.url, message: err.message });
+        res.status(401).json({ message: 'Admin authentication required' });
+      });
+    return;
   }
 
   logger.warn('admin_auth_failed', {

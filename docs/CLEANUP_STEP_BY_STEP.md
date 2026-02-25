@@ -28,16 +28,16 @@ Use one of these:
 
 **3a) From the browser (any tool that can send a POST request)**
 
-Open the **Developer Console** (F12 → Console). Paste **only this one line** (do not include any \`\`\` or “javascript” text):
+Open the **Developer Console** (F12 → Console). Paste **only this one line** (do not include any \`\`\` or “javascript” text). This sends your current username so the server can verify you’re an admin:
 
 ```
-fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({deleteBeforeDate:'2025-06-01'})}).then(r=>r.json()).then(console.log).catch(console.error);
+fetch('/api/admin/cleanup',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-Admin-User':(typeof Auth!=='undefined'&&Auth.currentUser&&Auth.currentUser.username)?Auth.currentUser.username:''},body:JSON.stringify({deleteBeforeDate:'2025-06-01'})}).then(r=>r.json()).then(console.log).catch(console.error);
 ```
 
 Press Enter. You should see a response like:  
 `{ ok: true, login_logs: 123, activity_logs: 456, storage_history: 789, total: 1368, mode: "before 2025-06-01" }`
 
-**Important:** You must be on **your app’s tab** (URL like `…up.railway.app`) and **logged in as admin**. If you get **401**: log out, log in again (so the server sets the session cookie), then run the line again.
+**Important:** Be on **your app’s tab** (URL like `…up.railway.app`), **logged in as admin**, and use the line above (it includes `X-Admin-User` so the server can verify your admin role even when the session cookie isn’t set). If you still get **401**, your user must exist in the database with the **Admin** role (log in once via the login form so your user is in the DB).
 
 **3b) From PowerShell or curl**
 
