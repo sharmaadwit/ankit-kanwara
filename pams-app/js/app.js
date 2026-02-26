@@ -2099,7 +2099,7 @@ const App = {
         }, 100);
     },
 
-    // Update statistics
+    // Update statistics (activities in current user's "update" drafts are excluded from counts until submitted)
     async updateStats() {
         try {
             const [accounts, activities, internalActivities] = await Promise.all([
@@ -2107,6 +2107,8 @@ const App = {
                 DataManager.getAllActivities(),
                 DataManager.getInternalActivities()
             ]);
+            const excludeIds = this.getActivityIdsInUpdateDraftsForCurrentUser();
+            const countedActivities = (activities || []).filter(a => !excludeIds.has(a.id));
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
 
             let totalProjects = 0;
@@ -2128,7 +2130,7 @@ const App = {
 
             const stats = {
                 totalProjects,
-                totalActivities: activities.length,
+                totalActivities: countedActivities.length,
                 customerActivities,
                 internalActivities: internalActivities.length,
                 wonProjects,
@@ -2915,7 +2917,16 @@ const App = {
     updateDraftsBadge() {
         const badge = document.getElementById('draftsNavBadge');
         if (!badge) return;
-        const count = typeof Drafts !== 'undefined' ? Drafts.getDrafts().length : 0;
+        const raw = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const all = Array.isArray(raw) ? raw : [];
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        const count = currentUser && currentUser.id
+            ? all.filter(d => {
+                const p = d && d.payload;
+                if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
+                return true;
+            }).length
+            : all.length;
         badge.textContent = count;
         badge.classList.toggle('hidden', count === 0);
     },
@@ -2925,12 +2936,22 @@ const App = {
         const badge = document.getElementById('draftsNavBadge');
         if (!container) return;
 
-        const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const rawDrafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const allDrafts = Array.isArray(rawDrafts) ? rawDrafts : [];
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        const drafts = currentUser && currentUser.id
+            ? allDrafts.filter(d => {
+                const p = d && d.payload;
+                if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
+                return true;
+            })
+            : allDrafts;
         this.updateDraftsBadge();
 
         try {
-            const febKey = '__pams_feb_drafts_done__';
-            if (typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(febKey)) {
+            const uid = currentUser && currentUser.id ? String(currentUser.id) : '';
+            const febKey = uid ? '__pams_feb_drafts_done__' + uid : '__pams_feb_drafts_done__';
+            if (typeof sessionStorage !== 'undefined' && uid && !sessionStorage.getItem(febKey)) {
                 sessionStorage.setItem(febKey, '1');
                 this.moveFebruaryIncompleteActivitiesToDrafts();
             }
@@ -2967,15 +2988,17 @@ const App = {
         };
 
         const cards = drafts.map(function (d) {
+            try {
             const isInternal = d.type === 'internal';
-            const p = d.payload;
+            const p = d && d.payload;
             const isWinlossForm = p && p._winlossForm === true;
             const isActivityForm = p && p._activityForm === true;
             const isActivityUpdate = isActivityUpdateDraft(p);
             const isFullList = isFullListDraftPayload(p);
             const fullListCount = Array.isArray(p) ? p.length : (p && Number.isFinite(Number(p.count)) ? Number(p.count) : null);
-            const storageKey = d.storageKey || (isInternal ? 'internalActivities' : 'activities');
-            const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || (p.activity && (p.activity.date || p.activity.createdAt)) || d.attemptedAt || '')).toString().slice(0, 10);
+            const storageKey = (d && d.storageKey) || (isInternal ? 'internalActivities' : 'activities');
+            const rawDate = isFullList ? (d.attemptedAt || '') : (p && (p.date || p.createdAt || (p.activity && (p.activity.date || p.activity.createdAt)) || d.attemptedAt || ''));
+            const dateStr = (rawDate != null && rawDate !== undefined ? rawDate : '').toString().slice(0, 10);
             const listLabel = storageKey === 'accounts'
                 ? 'Accounts (win/loss) (' + (fullListCount != null ? fullListCount : '?') + ' items)'
                 : isInternal ? 'Internal (' + (fullListCount != null ? fullListCount : '?') + ' items)' : 'Activities (' + (fullListCount != null ? fullListCount : '?') + ' items)';
@@ -3007,6 +3030,9 @@ const App = {
                 '<button type="button" class="btn btn-outline btn-sm draft-discard"' + (isSubmitting ? ' disabled' : '') + '>Discard</button>' +
                 '</div></div></div>'
             );
+            } catch (e) {
+                return '<div class="draft-card" data-draft-id="' + (d.id || '') + '"><div class="draft-card-body"><span class="draft-type">Draft</span><p class="draft-label">Invalid draft</p><button type="button" class="btn btn-outline btn-sm draft-discard">Discard</button></div></div>';
+            }
         }).join('');
 
         container.innerHTML = '<div class="drafts-grid">' + cards + '</div>';
@@ -3120,7 +3146,16 @@ const App = {
     },
 
     async draftsSubmitAll() {
-        const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const raw = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const allDrafts = Array.isArray(raw) ? raw : [];
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        const drafts = currentUser && currentUser.id
+            ? allDrafts.filter(d => {
+                const p = d && d.payload;
+                if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
+                return true;
+            })
+            : allDrafts;
         if (drafts.length === 0) return;
         const isFullListDraftPayload = (payload) => (Array.isArray(payload) && payload.length > 0) || (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
         const decodeFullListPayload = (payload) => {
@@ -3186,20 +3221,51 @@ const App = {
 
     draftsDeleteAll() {
         if (typeof Drafts === 'undefined') return;
-        const count = Drafts.getDrafts().length;
+        const raw = Drafts.getDrafts();
+        const all = Array.isArray(raw) ? raw : [];
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        const toRemove = currentUser && currentUser.id
+            ? all.filter(d => {
+                const p = d && d.payload;
+                if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
+                return true;
+            })
+            : all;
+        const count = toRemove.length;
         if (count === 0) return;
-        if (typeof window.confirm !== 'undefined' && !window.confirm('Delete all ' + count + ' draft(s)? This cannot be undone.')) return;
-        Drafts.clearDrafts();
+        if (typeof window.confirm !== 'undefined' && !window.confirm('Delete all ' + count + ' of your draft(s)? This cannot be undone.')) return;
+        toRemove.forEach(d => Drafts.removeDraft(d.id));
         App.loadDraftsView();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('All drafts deleted.', 'info');
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Your drafts deleted.', 'info');
+    },
+
+    /**
+     * Return activity IDs that are in the current user's "update" drafts (pending use cases/products).
+     * These are excluded from activity counts until the user submits the update.
+     */
+    getActivityIdsInUpdateDraftsForCurrentUser() {
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        if (!currentUser || !currentUser.id) return new Set();
+        const raw = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
+        const drafts = Array.isArray(raw) ? raw : [];
+        const ids = new Set();
+        drafts.forEach(d => {
+            const p = d && d.payload;
+            if (!p || !p._activityUpdate || !p.activityId) return;
+            const act = p.activity;
+            if (act && String(act.userId) === String(currentUser.id)) ids.add(p.activityId);
+        });
+        return ids;
     },
 
     /**
      * Find February (2026-02) external activities whose project is missing use cases or products interested,
-     * and add them as "update" drafts so users can Edit and submit again.
+     * and add them as "update" drafts only for the current user's own activities, so they can Edit and submit again.
      */
     async moveFebruaryIncompleteActivitiesToDrafts() {
         if (typeof Drafts === 'undefined' || typeof DataManager === 'undefined') return;
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        if (!currentUser || !currentUser.id) return;
         const FEB_MONTH = '2026-02';
         const [activities, accounts] = await Promise.all([DataManager.getActivities(), DataManager.getAccounts()]).catch(() => [[], []]);
         const accountMap = new Map((accounts || []).map(a => [a.id, a]));
@@ -3211,6 +3277,7 @@ const App = {
         let added = 0;
         for (const activity of (activities || [])) {
             if (activity.isInternal) continue;
+            if (String(activity.userId) !== String(currentUser.id)) continue;
             const month = (activity.monthOfActivity || (activity.date || activity.createdAt || '').toString().slice(0, 7));
             if (month !== FEB_MONTH) continue;
             if (existingDraftActivityIds.has(activity.id)) continue;
@@ -3232,7 +3299,7 @@ const App = {
         this.loadDraftsView();
         this.updateDraftsBadge();
         if (typeof UI !== 'undefined' && UI.showNotification) {
-            UI.showNotification(added > 0 ? added + ' February activity/activities moved to drafts. Use Edit & Save to add use cases/products.' : 'No February activities missing use cases/products.', added > 0 ? 'success' : 'info');
+            UI.showNotification(added > 0 ? added + ' of your February activity/activities moved to drafts. Use Edit & Save to add use cases/products.' : 'None of your February activities are missing use cases/products.', added > 0 ? 'success' : 'info');
         }
     },
 
@@ -6878,9 +6945,11 @@ const App = {
     },
 
     // Get activity count for account (optional: pass pre-fetched activities; monthFilter: 'thisMonth'|'lastMonth'|'all')
+    // Excludes activities that are in the current user's "update" drafts (pending use cases/products).
     async getAccountActivityCount(accountId, activitiesList = null, monthFilter = 'all') {
         if (activitiesList == null) activitiesList = await DataManager.getAllActivities();
-        let list = (activitiesList || []).filter(a => a.accountId === accountId);
+        const excludeIds = this.getActivityIdsInUpdateDraftsForCurrentUser();
+        let list = (activitiesList || []).filter(a => a.accountId === accountId && !excludeIds.has(a.id));
         if (monthFilter && monthFilter !== 'all') {
             const inPeriod = this.getActivitiesInPeriodForAccounts(list, monthFilter);
             list = inPeriod;
