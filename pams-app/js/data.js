@@ -1298,7 +1298,19 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
-                return stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                let list = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                if (!Array.isArray(list)) list = [];
+                // Restore from local if remote is empty (e.g. after migration or key was cleared)
+                if (list.length === 0 && typeof localStorage !== 'undefined') {
+                    try {
+                        const localStored = localStorage.getItem(key);
+                        const localList = localStored ? JSON.parse(localStored) : [];
+                        if (Array.isArray(localList) && localList.length > 0) {
+                            return localList;
+                        }
+                    } catch (_) { /* ignore */ }
+                }
+                return list;
             } catch (e) {
                 console.warn('[DataManager] Async getSuggestionsAndBugs failed:', e);
             }

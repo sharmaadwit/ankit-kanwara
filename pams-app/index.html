@@ -396,6 +396,15 @@
                                         <button class="btn btn-sm btn-outline" id="activitiesViewModeTable"
                                             onclick="App.setActivitiesViewMode('table')">Table</button>
                                     </div>
+                                    <div class="activities-group-by" style="display: flex; align-items: center; gap: 0.25rem;">
+                                        <label class="form-label" style="margin: 0; font-size: 0.875rem; white-space: nowrap;">Group by</label>
+                                        <select id="activityGroupBy" class="form-control form-control-sm" style="min-width: 7rem;"
+                                            onchange="App.handleActivityGroupByChange()">
+                                            <option value="month">Month</option>
+                                            <option value="project">Project</option>
+                                            <option value="type">Activity Type</option>
+                                        </select>
+                                    </div>
                                     <div class="activities-search">
                                         <input type="text" class="form-control" placeholder="Search activities..."
                                             id="activitySearch" oninput="App.handleActivitySearch(this.value)">
@@ -484,20 +493,8 @@
                     <div id="suggestionsBugsList" class="suggestions-bugs-list"></div>
                 </div>
 
-                <!-- Accounts View -->
+                <!-- Accounts View (header and content injected by loadAccountsView) -->
                 <div id="accountsView" class="view hidden">
-                    <div class="page-header">
-                        <h1 class="page-title">Accounts</h1>
-                        <p class="page-subtitle">Manage customer accounts and projects</p>
-                    </div>
-
-                    <div class="action-bar">
-                        <div class="search-bar">
-                            <input type="text" class="form-control" placeholder="Search accounts..." id="accountSearch"
-                                onkeyup="App.searchAccounts()">
-                        </div>
-                    </div>
-
                     <div id="accountsContent"></div>
                 </div>
 

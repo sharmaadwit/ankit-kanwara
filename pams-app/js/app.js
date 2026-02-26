@@ -31,10 +31,11 @@ const App = {
         timeframe: 'all',
         dateFrom: '',
         dateTo: '',
-        owner: 'all'
+        owner: 'mine'
     },
     activitySortBy: 'dateDesc',
     activitiesViewMode: 'cards',
+    activitiesGroupBy: 'month',
     accountFilters: {
         search: '',
         industry: '',
@@ -2807,6 +2808,10 @@ const App = {
             await this.loadCardActivitiesView().catch(e => console.warn('loadCardActivitiesView failed', e));
             return;
         }
+        // Default owner filter to "My activities" when still "all" so list shows current user's activities
+        if (this.activityFilters.owner === 'all') {
+            this.activityFilters.owner = this.getDefaultActivityOwnerFilter();
+        }
         // Initialize view mode if not set
         if (!this.activitiesViewMode) {
             this.activitiesViewMode = 'cards';
@@ -4872,6 +4877,12 @@ const App = {
         if (sortSelect) {
             sortSelect.value = this.activitySortBy || 'dateDesc';
         }
+
+        // Populate group-by (cards quick view)
+        const groupBySelect = document.getElementById('activityGroupBy');
+        if (groupBySelect) {
+            groupBySelect.value = this.activitiesGroupBy || 'month';
+        }
     },
 
     toggleCustomDateRange() {
@@ -6757,10 +6768,15 @@ const App = {
                 : (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); })();
             const periodLabelDisplay = monthFilter === 'all' ? 'All time' : (DataManager.formatMonth && DataManager.formatMonth(periodLabel)) || periodLabel;
 
-            const backLink = `
-                <div class="view-header-utility">
-                    <button class="btn btn-link view-back-link" onclick="App.switchView('dashboard')">← Back to Dashboard</button>
-                    <div class="header-actions">
+            const accountsHeader = `
+                <div class="accounts-page-header">
+                    <div class="accounts-page-header-left">
+                        <h1 class="page-title">Accounts</h1>
+                        <p class="page-subtitle">Manage customer accounts and projects</p>
+                    </div>
+                    <div class="accounts-page-header-actions">
+                        <input type="text" id="accountSearch" class="form-control" placeholder="Search accounts..." value="${String(accountFilters.search || '').replace(/"/g, '&quot;')}" oninput="App.searchAccounts()" style="min-width: 12rem;">
+                        <button class="btn btn-primary" onclick="Activities.openActivityModal && Activities.openActivityModal()">+ Log Activity</button>
                         <button class="btn btn-secondary" onclick="App.showMergeAccountModal()">Merge Accounts</button>
                     </div>
                 </div>
@@ -6768,11 +6784,12 @@ const App = {
 
             const sidebarFilters = `
                 <div class="accounts-layout">
-                    <div class="accounts-sidebar">
+                    <div class="accounts-sidebar" id="accountsSidebar">
                         <div class="accounts-sidebar-header">
                             <h3>Filters</h3>
+                            <button type="button" class="btn btn-link btn-sm" onclick="App.toggleAccountsSidebar()" aria-label="Toggle filters"><span id="accountsSidebarToggleIcon">▼</span></button>
                         </div>
-                        <div class="accounts-sidebar-content">
+                        <div class="accounts-sidebar-content" id="accountsSidebarContent">
                             <div class="accounts-filter-section">
                                 <label class="form-label">Period</label>
                                 <select id="accountFilterMonth" class="form-control" onchange="App.handleAccountFilterChange('monthFilter', this.value)">
@@ -6780,10 +6797,6 @@ const App = {
                                     <option value="lastMonth" ${monthFilter === 'lastMonth' ? 'selected' : ''}>Last month</option>
                                     <option value="all" ${monthFilter === 'all' ? 'selected' : ''}>All time</option>
                                 </select>
-                            </div>
-                            <div class="accounts-filter-section">
-                                <label class="form-label">Search</label>
-                                <input type="text" id="accountSearch" class="form-control" placeholder="Name or rep..." value="${String(accountFilters.search || '').replace(/"/g, '&quot;')}" oninput="App.searchAccounts()">
                             </div>
                             <div class="accounts-filter-section">
                                 <label class="form-label">Region</label>
@@ -6853,22 +6866,23 @@ const App = {
                 const safeName = this.escapeHtml(account.name || '');
                 const safeIndustry = this.escapeHtml(account.industry || 'Unknown');
                 const safeSalesRep = this.escapeHtml(account.salesRep || 'Unassigned');
+                const region = account.salesRepRegion || account.region || '';
+                const safeRegion = this.escapeHtml(region);
+                const projectCount = (account.projects || []).length;
                 return `
                     <div class="account-card">
                         <div class="account-card-header">
-                            <h3 class="account-card-title">${safeName}</h3>
-                            <button class="btn btn-icon" onclick="App.editAccount('${String(account.id).replace(/'/g, '&#39;')}')" title="Edit Account">✎</button>
+                            <div class="account-card-title-wrap">
+                                <h3 class="account-card-title">${safeName}</h3>
+                                ${region ? `<span class="account-card-badge">${safeRegion}</span>` : ''}
+                            </div>
+                            <button class="btn btn-sm btn-outline" onclick="App.editAccount('${String(account.id).replace(/'/g, '&#39;')}')" title="Edit Account">Edit</button>
                         </div>
                         <div class="account-card-meta">
-                            <div class="account-card-meta-item">
-                                <strong>Industry:</strong> ${safeIndustry}
-                            </div>
-                            <div class="account-card-meta-item">
-                                <strong>Sales Rep:</strong> ${safeSalesRep}
-                            </div>
-                            <div class="account-card-meta-item">
-                                <strong>Activities:</strong> ${activityCount}
-                            </div>
+                            <span class="account-card-meta-item"><strong>Industry</strong> ${safeIndustry}</span>
+                            <span class="account-card-meta-item"><strong>Sales Rep</strong> ${safeSalesRep}</span>
+                            <span class="account-card-meta-item"><strong>Activities</strong> ${activityCount}</span>
+                            ${projectCount ? `<span class="account-card-meta-item"><strong>Projects</strong> ${projectCount}</span>` : ''}
                         </div>
                         ${projectsMarkup}
                         ${activitiesMarkup}
@@ -6882,7 +6896,7 @@ const App = {
                 : `<div class="accounts-grid">${cards.join('')}</div>`;
 
             container.innerHTML = `
-                ${backLink}
+                ${accountsHeader}
                 ${sidebarFilters}
                 ${statsBar}
                 ${gridContent}
@@ -6922,6 +6936,15 @@ const App = {
     resetAccountFilters() {
         this.accountFilters = { search: '', industry: '', salesRep: '', region: '', monthFilter: 'thisMonth' };
         this.loadAccountsView();
+    },
+
+    toggleAccountsSidebar() {
+        const sidebar = document.getElementById('accountsSidebar');
+        const icon = document.getElementById('accountsSidebarToggleIcon');
+        if (sidebar) {
+            sidebar.classList.toggle('collapsed');
+            if (icon) icon.textContent = sidebar.classList.contains('collapsed') ? '▶' : '▼';
+        }
     },
 
     /** Get activities in the selected period for accounts view (this month, last month, or all). */
@@ -7495,26 +7518,53 @@ const App = {
             'other': '#718096'
         };
 
-        const activitiesByMonth = {};
+        const groupBy = this.activitiesGroupBy || 'month';
+        const groups = {};
+
         activities.forEach(activity => {
-            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
-            if (!activitiesByMonth[month]) {
-                activitiesByMonth[month] = [];
+            let key;
+            if (groupBy === 'project') {
+                if (activity.isInternal) {
+                    key = '\u200bInternal'; // sort first with zero-width space
+                } else {
+                    const accountName = (activity.accountName || 'Unknown Account').trim();
+                    const projectName = (activity.projectName || '').trim();
+                    key = projectName ? `${accountName} → ${projectName}` : `${accountName} (no project)`;
+                }
+            } else if (groupBy === 'type') {
+                if (activity.isInternal) {
+                    const typeLabel = UI.getActivityTypeLabel(activity.type || 'other');
+                    key = `Internal: ${typeLabel}`;
+                } else {
+                    key = UI.getActivityTypeLabel(activity.type || 'other');
+                }
+            } else {
+                key = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || '').substring(0, 7) || 'Unknown';
             }
-            activitiesByMonth[month].push(activity);
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(activity);
         });
 
+        let sortKeys;
+        if (groupBy === 'month') {
+            sortKeys = Object.keys(groups).sort().reverse();
+        } else {
+            sortKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        }
+
         let html = '';
-        Object.keys(activitiesByMonth).sort().reverse().forEach(month => {
+        sortKeys.forEach(groupKey => {
+            const displayLabel = groupKey === '\u200bInternal' ? 'Internal' : (groupBy === 'month' ? DataManager.formatMonth(groupKey) : groupKey);
             html += `
                 <div class="card" style="margin-bottom: 1.5rem;">
-                    <div class="card-header">
-                        <h3>${DataManager.formatMonth(month)}</h3>
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0;">${displayLabel}</h3>
+                        <span class="text-muted small">${groups[groupKey].length} ${groups[groupKey].length === 1 ? 'activity' : 'activities'}</span>
                     </div>
                     <div class="card-body">
             `;
 
-            activitiesByMonth[month].forEach(activity => {
+            groups[groupKey].forEach(activity => {
                 const isOwner = currentUser
                     ? activity.userId === currentUser.id || activity.createdBy === currentUser.id
                     : false;
@@ -7764,6 +7814,14 @@ const App = {
             }
         }
         this.renderActivitiesList();
+    },
+
+    handleActivityGroupByChange() {
+        const select = document.getElementById('activityGroupBy');
+        if (select) {
+            this.activitiesGroupBy = select.value || 'month';
+            this.renderActivitiesList();
+        }
     },
 
     toggleActivitiesSidebar() {

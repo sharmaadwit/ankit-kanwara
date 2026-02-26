@@ -1802,6 +1802,124 @@ body.migration-mode-on [data-migration-hide] {
     border-bottom: none;
 }
 
+/* Accounts page header (title + search + actions) */
+.accounts-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--gray-200, #e5e7eb);
+}
+
+.accounts-page-header-left .page-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.5rem;
+}
+
+.accounts-page-header-left .page-subtitle {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--gray-600, #4b5563);
+}
+
+.accounts-page-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Accounts sidebar collapse */
+.accounts-sidebar.collapsed {
+    width: 52px;
+    min-width: 52px;
+}
+
+.accounts-sidebar.collapsed .accounts-sidebar-header h3 {
+    display: none;
+}
+
+.accounts-sidebar.collapsed .accounts-sidebar-content {
+    display: none;
+}
+
+/* Accounts grid: responsive cards */
+.accounts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1.25rem;
+}
+
+/* Account card improvements */
+.account-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.account-card-title-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.account-card-title-wrap .account-card-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gray-900, #111827);
+}
+
+.account-card-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    background: var(--gray-200, #e5e7eb);
+    color: var(--gray-700, #374151);
+}
+
+.account-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    font-size: 0.875rem;
+    color: var(--gray-600, #4b5563);
+    margin-bottom: 1rem;
+}
+
+.account-card-meta-item {
+    white-space: nowrap;
+}
+
+.account-card-meta-item strong {
+    margin-right: 0.25rem;
+}
+
+/* Stats bar: stack on narrow screens */
+@media (max-width: 768px) {
+    .accounts-stats-bar {
+        grid-template-columns: 1fr;
+    }
+    .accounts-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .accounts-page-header-actions {
+        flex-direction: column;
+    }
+    .accounts-page-header-actions .form-control {
+        min-width: 100%;
+    }
+}
+
 /* Activity Display Styles */
 .activity-item {
     padding: 1rem;
