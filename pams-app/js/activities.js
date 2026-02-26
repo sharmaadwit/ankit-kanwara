@@ -1511,11 +1511,7 @@ const Activities = {
                     <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
                 </div>
             `;
-            // Feature 4: Single-project default — if account has one project, auto-select it
-            if (projects.length === 1) {
-                const single = projects[0];
-                setTimeout(() => this.selectProject(single.id, single.name || 'Project'), 0);
-            }
+            // Don't auto-select single project here — user may want to add a new project; dropdown stays open
         }
 
         dropdown.innerHTML = html;
@@ -1577,11 +1573,25 @@ const Activities = {
             dropdown.style.display = 'block';
             dropdown.classList.add('active');
 
+            // Position fixed so dropdown isn't clipped by modal overflow; place below trigger
+            const trigger = document.getElementById('projectDisplayContainer');
+            if (trigger) {
+                const rect = trigger.getBoundingClientRect();
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.width = Math.max(rect.width, 280) + 'px';
+                dropdown.style.right = 'auto';
+                dropdown.style.zIndex = '9999';
+            }
+
             const searchInput = document.getElementById('projectDropdownSearch');
             if (searchInput) {
                 searchInput.value = '';
                 searchInput.focus();
             }
+            // Keep clicks inside dropdown from bubbling so document listener doesn't close it
+            dropdown.onclick = function (e) { e.stopPropagation(); };
         }
     },
 
