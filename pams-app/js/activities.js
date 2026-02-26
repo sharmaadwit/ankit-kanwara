@@ -629,7 +629,7 @@ const Activities = {
                                 <div class="form-group">
                                     <label class="form-label required">Account Name</label>
                                     <div class="search-select-container" style="position: relative;">
-                                        <div class="form-control" style="display: flex; align-items: center; cursor: pointer; position: relative;" onclick="Activities.toggleAccountDropdown()">
+                                        <div class="form-control" style="display: flex; align-items: center; cursor: pointer; position: relative;" onclick="event.stopPropagation(); Activities.toggleAccountDropdown()">
                                             <span id="accountDisplay" style="flex: 1;">Select account...</span>
                                             <span style="margin-left: 0.5rem;">▼</span>
                                         </div>
@@ -675,7 +675,7 @@ const Activities = {
                                 <div class="form-group">
                                     <label class="form-label required">Project Name</label>
                                     <div class="search-select-container" style="position: relative;">
-                                        <div class="form-control" id="projectDisplayContainer" style="display: flex; align-items: center; cursor: pointer; position: relative; background: #e5e7eb; cursor: not-allowed;" onclick="Activities.toggleProjectDropdown()">
+                                        <div class="form-control" id="projectDisplayContainer" style="display: flex; align-items: center; cursor: pointer; position: relative; background: #e5e7eb; cursor: not-allowed;" onclick="event.stopPropagation(); Activities.toggleProjectDropdown()">
                                             <span id="projectDisplay" style="flex: 1;">Select account first...</span>
                                             <span style="margin-left: 0.5rem;">▼</span>
                                         </div>
@@ -1549,7 +1549,7 @@ const Activities = {
     },
 
     // Toggle project dropdown
-    toggleProjectDropdown() {
+    async toggleProjectDropdown() {
         const accountId = document.getElementById('selectedAccountId').value;
         if (!accountId) {
             UI.showNotification('Please select an account first', 'error');
@@ -1572,7 +1572,8 @@ const Activities = {
         if (isVisible) {
             dropdown.style.display = 'none';
         } else {
-            this.loadProjectDropdown();
+            // Load content first so we don't show empty dropdown or focus an element that gets replaced
+            await this.loadProjectDropdown();
             dropdown.style.display = 'block';
             dropdown.classList.add('active');
 
