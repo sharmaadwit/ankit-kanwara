@@ -325,10 +325,33 @@ const createApp = (options = {}) => {
   });
 
   if (!options.disableStatic) {
+    // Resolve pams-app relative to server/ (repo root = parent of server/)
     const staticDir = path.resolve(__dirname, '..', 'pams-app');
+    const indexPath = path.join(staticDir, 'index.html');
+    const staticDirExists = fs.existsSync(staticDir);
+    const indexExists = fs.existsSync(indexPath);
+    logger.info('static_configured', {
+      staticDir,
+      staticDirExists,
+      indexExists,
+      cwd: process.cwd()
+    });
+    if (!staticDirExists || !indexExists) {
+      logger.warn('static_missing_fallback', { staticDir, indexPath });
+    }
     app.use(express.static(staticDir, { extensions: ['html'] }));
+    // Explicit root so GET / always serves the app (catch-all can still 404 if sendFile fails)
+    app.get('/', (req, res) => {
+      if (indexExists) {
+        return res.sendFile(indexPath);
+      }
+      res.status(503).send('<!DOCTYPE html><html><body><h1>App not found</h1><p>Static files missing. Check build.</p></body></html>');
+    });
     app.get('*', (req, res) => {
-      res.sendFile(path.join(staticDir, 'index.html'));
+      if (indexExists) {
+        return res.sendFile(indexPath);
+      }
+      res.status(404).send('Not found');
     });
   }
 

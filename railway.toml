@@ -1,0 +1,13 @@
+# Railway deploy config: health check and start
+# - Health check must hit an endpoint that returns 200 (we use /api/health).
+# - Grace period allows DB init and preload to finish before health checks run.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+healthcheckInterval = 10
+healthcheckGracePeriod = 45
