@@ -2069,7 +2069,7 @@ const Activities = {
                     Drafts.removeDraft(this.editingContext.fromDraftId);
                 }
                 this.closeActivityModal();
-                UI.showNotification('Internal activity logged successfully!', 'success');
+                UI.showNotification('Internal activity logged successfully! Draft removed.', 'success');
                 this.setLastActivityDateForUser(currentUser.id, date);
             } catch (err) {
                 UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
@@ -2081,6 +2081,7 @@ const Activities = {
             DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
         }
         if (window.app) {
+            if (window.app.updateDraftsBadge) window.app.updateDraftsBadge();
             await window.app.loadDashboard();
             await window.app.loadActivitiesView();
             if (window.app.loadDraftsView) await window.app.loadDraftsView();
@@ -2344,13 +2345,17 @@ const Activities = {
                 previousProjectId: originalProjectId
             });
 
+            if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
+                Drafts.removeDraft(this.editingContext.fromDraftId);
+            }
             this.closeActivityModal();
-            UI.showNotification('Activity updated successfully!', 'success');
+            UI.showNotification('Activity updated successfully! Draft removed.', 'success');
             this.setLastActivityDateForUser(currentUser.id, date);
             if (window.app) {
                 if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
                     DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
                 }
+                if (window.app.updateDraftsBadge) window.app.updateDraftsBadge();
                 await window.app.loadDashboard();
                 await window.app.loadActivitiesView();
                 if (window.app.loadDraftsView) await window.app.loadDraftsView();
@@ -2430,7 +2435,7 @@ const Activities = {
                         Drafts.removeDraft(this.editingContext.fromDraftId);
                     }
                     this.closeActivityModal();
-                    UI.showNotification('Activity logged successfully!', 'success');
+                    UI.showNotification('Activity logged successfully! Draft removed.', 'success');
                     this.setLastActivityDateForUser(currentUser.id, date);
                 } catch (err) {
                     UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
@@ -2443,6 +2448,7 @@ const Activities = {
             if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
                 DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
             }
+            if (window.app.updateDraftsBadge) window.app.updateDraftsBadge();
             await window.app.loadDashboard();
             await window.app.loadActivitiesView();
             if (window.app.loadDraftsView) await window.app.loadDraftsView();

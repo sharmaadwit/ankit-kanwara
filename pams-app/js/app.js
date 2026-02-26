@@ -1412,11 +1412,13 @@ const App = {
 
         const stats = await this.updateStats() || {};
 
-        const [activities, accounts, users] = await Promise.all([
+        const [activitiesRaw, accounts, users] = await Promise.all([
             DataManager.getAllActivities(),
             DataManager.getAccounts(),
             DataManager.getUsers()
         ]);
+        const excludeIds = this.getActivityIdsInUpdateDraftsForCurrentUser();
+        const activities = (activitiesRaw || []).filter(a => !excludeIds.has(a.id));
         const accountMap = new Map(accounts.map(a => [a.id, a]));
         const userMap = new Map(users.map(u => [u.id, u]));
         const now = new Date();
@@ -2961,7 +2963,7 @@ const App = {
         if (headerActions) headerActions.style.display = drafts.length > 0 ? '' : 'none';
 
         if (drafts.length === 0) {
-            container.innerHTML = '<p class="text-muted">No drafts. Your failed activities on this device appear here. Use <strong>Submit all</strong> to retry or <strong>Delete all</strong> to clear them.</p>';
+            container.innerHTML = '<p class="text-muted">No drafts. All caught up—activities only count once you submit each from here via <strong>Edit</strong> &amp; Save.</p>';
             return;
         }
 
@@ -3055,6 +3057,7 @@ const App = {
                             return;
                         }
                         if (p && p._activityForm === true && p.formData) {
+                            if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
                             if (typeof Activities !== 'undefined' && Activities.restoreFormFromDraft) {
                                 await Activities.restoreFormFromDraft(p.formData, draft.id);
                             }
@@ -3062,10 +3065,12 @@ const App = {
                             return;
                         }
                         if (p && p._activityUpdate === true && p.activity && typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                            if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
                             await Activities.openActivityModal({ mode: 'edit', activity: p.activity, isInternal: false, fromDraftId: draft.id });
                             App.loadDraftsView();
                             return;
                         }
+                        if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
                         var isFullList = isFullListDraftPayload(p);
                         var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                         if (isFullList) {
@@ -3098,6 +3103,7 @@ const App = {
                 const draft = drafts.find(function (d) { return d.id === id; });
                 if (!draft) return;
                 const p = draft.payload;
+                if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
                 if (p && p._activityForm === true && p.formData && typeof Activities !== 'undefined' && Activities.restoreFormFromDraft) {
                     Activities.restoreFormFromDraft(p.formData, draft.id);
                     App.loadDraftsView();
@@ -3129,14 +3135,7 @@ const App = {
             });
         });
 
-        const submitAllBtn = document.getElementById('draftsSubmitAllBtn');
         const deleteAllBtn = document.getElementById('draftsDeleteAllBtn');
-        if (submitAllBtn && !submitAllBtn._wired) {
-            submitAllBtn._wired = true;
-            submitAllBtn.addEventListener('click', function () {
-                App.draftsSubmitAll();
-            });
-        }
         if (deleteAllBtn && !deleteAllBtn._wired) {
             deleteAllBtn._wired = true;
             deleteAllBtn.addEventListener('click', function () {

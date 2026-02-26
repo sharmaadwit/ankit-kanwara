@@ -260,17 +260,13 @@
                     <!-- Dashboard content is dynamically loaded by loadCardDashboard() -->
                 </div>
 
-                <!-- My Drafts (per-user: failed activities on this device; Submit all or Delete) -->
+                <!-- My Drafts (per-user: each draft is submitted via Edit & Save; only completed counts) -->
                 <div id="draftsView" class="view hidden">
                     <div class="drafts-layout">
                         <div class="drafts-header">
                             <h1 class="page-title">My drafts</h1>
-                            <p class="page-subtitle">Your failed activities on this device. Use <strong>Submit
-                                    all</strong> to retry saving, or <strong>Delete</strong> to clear drafts you no
-                                longer need.</p>
+                            <p class="page-subtitle">Drafts are not counted in activity totals. Open each with <strong>Edit</strong>, complete and save—it will move to submitted and count then.</p>
                             <div class="drafts-header-actions" id="draftsHeaderActions" style="display: none;">
-                                <button type="button" class="btn btn-primary" id="draftsSubmitAllBtn">Submit
-                                    all</button>
                                 <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete
                                     all</button>
                             </div>
