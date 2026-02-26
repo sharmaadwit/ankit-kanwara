@@ -222,6 +222,17 @@ const App = {
                 return;
             }
 
+            const currentUser = typeof Auth !== 'undefined' && Auth.currentUser ? Auth.currentUser : null;
+            if (currentUser && currentUser.username) {
+                window.__REMOTE_STORAGE_USER__ = currentUser.username;
+                window.__REMOTE_STORAGE_HEADERS__ = { 'X-Admin-User': currentUser.username };
+            }
+            if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
+                t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+                await window.__REMOTE_STORAGE_RECONCILE__();
+                console.log('[PAMS init] reconcile:', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) + 'ms');
+            }
+
             t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             InterfaceManager.init();
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
@@ -697,7 +708,7 @@ const App = {
                     'X-Admin-User': currentUser.username
                 };
                 if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
-                    setTimeout(function () { window.__REMOTE_STORAGE_RECONCILE__(); }, 0);
+                    await window.__REMOTE_STORAGE_RECONCILE__();
                 }
             }
 
@@ -6972,6 +6983,10 @@ const App = {
                         <input type="text" id="mergeAccountSearch" class="form-control" placeholder="Search by name, industry, sales rep..." style="margin-bottom: 1rem;" autocomplete="off">
                         <div id="mergeAccountList" class="merge-account-list" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 6px; padding: 0.25rem;"></div>
                         <p id="mergeAccountNoResults" class="text-muted" style="display: none; margin-top: 0.5rem; font-size: 0.9rem;">No accounts match your search.</p>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label" for="mergeAccountFinalName">Final account name (optional)</label>
+                            <input type="text" id="mergeAccountFinalName" class="form-control" placeholder="Leave blank to keep target name" autocomplete="off">
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="UI.hideModal('${modalId}')">Cancel</button>
@@ -7036,6 +7051,8 @@ const App = {
             searchInput.value = '';
             searchInput.placeholder = 'Search by name, industry, sales rep...';
         }
+        const finalNameInput = document.getElementById('mergeAccountFinalName');
+        if (finalNameInput) finalNameInput.value = '';
         if (noResults) noResults.style.display = 'none';
 
         const searchable = (a) => [a.name, a.industry, a.salesRep, a.salesRepRegion].filter(Boolean).join(' ').toLowerCase();
@@ -7059,7 +7076,7 @@ const App = {
         UI.showModal(modalId);
     },
 
-    confirmMergeAccount() {
+    async confirmMergeAccount() {
         const modal = document.getElementById('mergeAccountModal');
         const sourceId = modal?.dataset?.mergeSourceId;
         const selected = document.querySelector('input[name="mergeTargetAccount"]:checked');
@@ -7073,12 +7090,21 @@ const App = {
             return;
         }
         const targetId = selected.value;
+        const sourceAccount = await DataManager.getAccountById(sourceId);
+        const targetAccount = await DataManager.getAccountById(targetId);
+        const finalNameEl = document.getElementById('mergeAccountFinalName');
+        const finalName = finalNameEl?.value?.trim() || null;
+        const message = finalName
+            ? `Merge "${sourceAccount?.name || sourceId}" into "${targetAccount?.name || targetId}"? Activities will move. Final name will be: "${finalName}". Continue?`
+            : `Merge "${sourceAccount?.name || sourceId}" into "${targetAccount?.name || targetId}"? Activities will move. Continue?`;
+        if (!(typeof window !== 'undefined' && window.confirm(message))) return;
         UI.hideModal('mergeAccountModal');
-        this.mergeAccounts(sourceId, targetId);
+        if (finalNameEl) finalNameEl.value = '';
+        await this.mergeAccounts(sourceId, targetId, finalName);
     },
 
-    // Merge accounts
-    async mergeAccounts(sourceAccountId, targetAccountId) {
+    // Merge accounts (optional finalName: set target account name after merge)
+    async mergeAccounts(sourceAccountId, targetAccountId, finalName = null) {
         if (!(typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin())) {
             UI.showNotification('Only administrators can merge accounts.', 'error');
             return;
@@ -7160,10 +7186,11 @@ const App = {
             // Update only external (customer) activities – internal activities stay in internalActivities key
             const externalActivities = await DataManager.getActivities();
             let activitiesUpdated = 0;
+            const nameAfterMerge = finalName || targetAccount.name;
             externalActivities.forEach(activity => {
                 if (activity.accountId === sourceAccountId) {
                     activity.accountId = targetAccountId;
-                    activity.accountName = targetAccount.name;
+                    activity.accountName = nameAfterMerge;
                     activitiesUpdated++;
                 }
             });
@@ -7184,7 +7211,16 @@ const App = {
                 return;
             }
 
-            UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${targetAccount.name}"${activitiesUpdated ? ` (${activitiesUpdated} activities moved)` : ''}.`, 'success');
+            if (finalName && finalName !== targetAccount.name) {
+                try {
+                    await DataManager.updateAccount(targetAccountId, { name: finalName });
+                } catch (err) {
+                    console.warn('Merge: update target name failed', err);
+                }
+            }
+
+            const displayName = finalName || targetAccount.name;
+            UI.showNotification(`Accounts merged successfully. "${sourceAccount.name}" merged into "${displayName}"${activitiesUpdated ? ` (${activitiesUpdated} activities moved)` : ''}.`, 'success');
             this.loadAccountsView();
         }
     },

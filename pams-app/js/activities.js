@@ -686,6 +686,10 @@ const Activities = {
                                     <div id="newProjectFields" style="margin-top: 0.5rem; display: none;">
                                         <input type="text" class="form-control" id="newProjectName" placeholder="Project Name" style="margin-bottom: 0.5rem;">
                                     </div>
+                                    <div id="editProjectNameWrap" style="margin-top: 0.5rem; display: none;">
+                                        <label class="form-label">Edit project name</label>
+                                        <input type="text" class="form-control" id="projectNameEdit" placeholder="Project name">
+                                    </div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">SFDC Link</label>
@@ -906,16 +910,15 @@ const Activities = {
         const container = document.getElementById('activityFields');
         if (!container) return;
 
-        // Toggle project fields visibility (Issue #1)
+        // Project-level Use Cases and Products Interested: always show for external activities (project-level fields)
         const projectUseCasesGroup = document.getElementById('projectUseCasesGroup');
         const projectProductsGroup = document.getElementById('projectProductsGroup');
-        const isRedundantType = type === 'customerCall' || type === 'poc';
-
+        const isExternal = this.activityType === 'external';
         if (projectUseCasesGroup) {
-            projectUseCasesGroup.style.display = isRedundantType ? 'none' : 'block';
+            projectUseCasesGroup.style.display = isExternal ? 'block' : 'none';
         }
         if (projectProductsGroup) {
-            projectProductsGroup.style.display = isRedundantType ? 'none' : 'block';
+            projectProductsGroup.style.display = isExternal ? 'block' : 'none';
         }
 
         let html = '';
@@ -1507,6 +1510,11 @@ const Activities = {
                     <div class="search-select-create" onclick="Activities.showNewProjectFields()">+ Add New Project</div>
                 </div>
             `;
+            // Feature 4: Single-project default — if account has one project, auto-select it
+            if (projects.length === 1) {
+                const single = projects[0];
+                setTimeout(() => this.selectProject(single.id, single.name || 'Project'), 0);
+            }
         }
 
         dropdown.innerHTML = html;
@@ -1585,6 +1593,10 @@ const Activities = {
         if (projectDisplay) projectDisplay.textContent = 'New Project';
         const newProjectFields = document.getElementById('newProjectFields');
         if (newProjectFields) newProjectFields.style.display = 'block';
+        const editProjectNameWrap = document.getElementById('editProjectNameWrap');
+        const projectNameEdit = document.getElementById('projectNameEdit');
+        if (editProjectNameWrap) editProjectNameWrap.style.display = 'none';
+        if (projectNameEdit) projectNameEdit.value = '';
         const newProjectName = document.getElementById('newProjectName');
         if (newProjectName) {
             newProjectName.required = true;
@@ -1611,6 +1623,17 @@ const Activities = {
         if (newProjectName) {
             newProjectName.required = false;
             newProjectName.value = '';
+        }
+        const editProjectNameWrap = document.getElementById('editProjectNameWrap');
+        const projectNameEdit = document.getElementById('projectNameEdit');
+        if (editProjectNameWrap && projectNameEdit) {
+            if (id && id !== 'new') {
+                editProjectNameWrap.style.display = 'block';
+                projectNameEdit.value = name || '';
+            } else {
+                editProjectNameWrap.style.display = 'none';
+                projectNameEdit.value = '';
+            }
         }
 
         // Load and pre-populate project data if existing project
@@ -1825,6 +1848,10 @@ const Activities = {
         if (sfdcLink) sfdcLink.style.display = 'block';
         const projectLocation = document.getElementById('projectLocation');
         if (projectLocation) projectLocation.value = '';
+        const editProjectNameWrap = document.getElementById('editProjectNameWrap');
+        const projectNameEdit = document.getElementById('projectNameEdit');
+        if (editProjectNameWrap) editProjectNameWrap.style.display = 'none';
+        if (projectNameEdit) projectNameEdit.value = '';
 
         // Clear Use Cases
         this.selectedUseCases = [];
@@ -1983,6 +2010,14 @@ const Activities = {
             }
         }
 
+        // Feature 3: Enablement optional warning — allow save without days/hours with explicit confirmation
+        if (activityType === 'Enablement' && (!timeSpentType || !timeSpentValue || parseFloat(timeSpentValue) <= 0)) {
+            const proceed = typeof window !== 'undefined' && window.confirm(
+                'Enablement activities are usually tracked with days or hours. Save without time spent?'
+            );
+            if (!proceed) return;
+        }
+
         const activityNameInput = document.getElementById('internalActivityName');
         const activityName = activityNameInput?.value?.trim() || '';
         const topic = document.getElementById('internalTopic')?.value?.trim() || '';
@@ -2094,11 +2129,16 @@ const Activities = {
             }
         }
 
-        // Get project info (now from Project Information section)
+        // Get project info (now from Project Information section); support editing project name when existing project selected
         const projectId = projectIdEl ? projectIdEl.value : '';
         let projectName = document.getElementById('projectDisplay')?.textContent || '';
         if (projectId === 'new') {
             projectName = document.getElementById('newProjectName')?.value || '';
+        } else {
+            const projectNameEditEl = document.getElementById('projectNameEdit');
+            if (projectNameEditEl && projectNameEditEl.value.trim()) {
+                projectName = projectNameEditEl.value.trim();
+            }
         }
 
         if (!accountId || !accountName || !industry) {
@@ -2164,11 +2204,17 @@ const Activities = {
             });
             finalProjectId = projectResult.id;
         } else {
-            // If project exists, we might need to update its location or products
+            // If project exists, update name if edited, and location/products
             const accounts = await DataManager.getAccounts();
             const account = accounts.find(a => a.id === finalAccountId);
             const project = account?.projects?.find(p => p.id === finalProjectId);
             if (project) {
+                const projectNameEditEl = document.getElementById('projectNameEdit');
+                const editedName = projectNameEditEl?.value?.trim();
+                if (editedName && editedName !== (project.name || '')) {
+                    await DataManager.updateProject(finalAccountId, finalProjectId, { name: editedName });
+                    projectName = editedName;
+                }
                 const projectLocation = document.getElementById('projectLocation')?.value;
                 if (projectLocation !== undefined) project.location = projectLocation || '';
 
