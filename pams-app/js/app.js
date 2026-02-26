@@ -631,6 +631,7 @@ const App = {
             if (!e.target.closest('.search-select-container')) {
                 document.querySelectorAll('.search-select-dropdown').forEach(d => {
                     d.classList.remove('active');
+                    d.style.display = 'none';
                 });
             }
         });

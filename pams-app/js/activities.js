@@ -674,12 +674,12 @@ const Activities = {
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label required">Project Name</label>
-                                    <div class="search-select-container">
+                                    <div class="search-select-container" style="position: relative;">
                                         <div class="form-control" id="projectDisplayContainer" style="display: flex; align-items: center; cursor: pointer; position: relative; background: #e5e7eb; cursor: not-allowed;" onclick="Activities.toggleProjectDropdown()">
                                             <span id="projectDisplay" style="flex: 1;">Select account first...</span>
                                             <span style="margin-left: 0.5rem;">▼</span>
                                         </div>
-                                        <div class="search-select-dropdown" id="projectDropdown" style="display: none;">
+                                        <div class="search-select-dropdown" id="projectDropdown" style="display: none; position: absolute; z-index: 2100; width: 100%;">
                                             <!-- Will be populated by loadProjectDropdown() -->
                                         </div>
                                     </div>
