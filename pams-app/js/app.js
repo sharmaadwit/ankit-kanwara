@@ -2928,6 +2928,14 @@ const App = {
         const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
         this.updateDraftsBadge();
 
+        try {
+            const febKey = '__pams_feb_drafts_done__';
+            if (typeof sessionStorage !== 'undefined' && !sessionStorage.getItem(febKey)) {
+                sessionStorage.setItem(febKey, '1');
+                this.moveFebruaryIncompleteActivitiesToDrafts();
+            }
+        } catch (_) {}
+
         const headerActions = document.getElementById('draftsHeaderActions');
         if (headerActions) headerActions.style.display = drafts.length > 0 ? '' : 'none';
 
@@ -2939,6 +2947,10 @@ const App = {
         const isFullListDraftPayload = (payload) => {
             return (Array.isArray(payload) && payload.length > 0) ||
                 (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
+        };
+
+        const isActivityUpdateDraft = (payload) => {
+            return !!payload && payload._activityUpdate === true && payload.activityId && payload.activity;
         };
 
         const decodeFullListPayload = (payload) => {
@@ -2959,26 +2971,30 @@ const App = {
             const p = d.payload;
             const isWinlossForm = p && p._winlossForm === true;
             const isActivityForm = p && p._activityForm === true;
+            const isActivityUpdate = isActivityUpdateDraft(p);
             const isFullList = isFullListDraftPayload(p);
             const fullListCount = Array.isArray(p) ? p.length : (p && Number.isFinite(Number(p.count)) ? Number(p.count) : null);
             const storageKey = d.storageKey || (isInternal ? 'internalActivities' : 'activities');
-            const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || d.attemptedAt || '')).toString().slice(0, 10);
+            const dateStr = isFullList ? (d.attemptedAt || '').toString().slice(0, 10) : (p && (p.date || p.createdAt || (p.activity && (p.activity.date || p.activity.createdAt)) || d.attemptedAt || '')).toString().slice(0, 10);
             const listLabel = storageKey === 'accounts'
                 ? 'Accounts (win/loss) (' + (fullListCount != null ? fullListCount : '?') + ' items)'
                 : isInternal ? 'Internal (' + (fullListCount != null ? fullListCount : '?') + ' items)' : 'Activities (' + (fullListCount != null ? fullListCount : '?') + ' items)';
+            const act = (isActivityUpdate && p.activity) ? p.activity : p;
             const label = d.label
                 ? d.label + (dateStr ? ' – ' + dateStr : '')
-                : isFullList
-                    ? listLabel + ' – ' + dateStr
-                    : isInternal
-                        ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
-                        : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
-            const typeLabel = d.label ? d.label.split(' – ')[0] : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External'));
+                : isActivityUpdate
+                    ? (act.accountName || act.accountId || 'External') + ' – ' + (act.type || '') + ' – ' + dateStr + ' (add use cases/products)'
+                    : isFullList
+                        ? listLabel + ' – ' + dateStr
+                        : isInternal
+                            ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
+                            : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+            const typeLabel = d.label ? d.label.split(' – ')[0] : (isActivityUpdate ? 'Feb update' : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External')));
             const err = (d.errorMessage || '').slice(0, 80);
             const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
-            const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : 'Submit again');
+            const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : (isActivityUpdate ? 'Edit & Save' : 'Submit again'));
             const submitDisabled = isSubmitting ? ' disabled' : '';
-            const showEdit = !isFullList && !isSubmitting && (isActivityForm || (!isWinlossForm && !isActivityForm));
+            const showEdit = !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || (!isWinlossForm && !isActivityForm));
             return (
                 '<div class="draft-card" data-draft-id="' + (d.id || '') + '">' +
                 '<div class="draft-card-body">' +
@@ -3019,6 +3035,11 @@ const App = {
                             App.loadDraftsView();
                             return;
                         }
+                        if (p && p._activityUpdate === true && p.activity && typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                            await Activities.openActivityModal({ mode: 'edit', activity: p.activity, isInternal: false, fromDraftId: draft.id });
+                            App.loadDraftsView();
+                            return;
+                        }
                         var isFullList = isFullListDraftPayload(p);
                         var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                         if (isFullList) {
@@ -3053,6 +3074,11 @@ const App = {
                 const p = draft.payload;
                 if (p && p._activityForm === true && p.formData && typeof Activities !== 'undefined' && Activities.restoreFormFromDraft) {
                     Activities.restoreFormFromDraft(p.formData, draft.id);
+                    App.loadDraftsView();
+                    return;
+                }
+                if (p && p._activityUpdate === true && p.activity && typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                    Activities.openActivityModal({ mode: 'edit', activity: p.activity, isInternal: false, fromDraftId: draft.id });
                     App.loadDraftsView();
                     return;
                 }
@@ -3096,12 +3122,24 @@ const App = {
     async draftsSubmitAll() {
         const drafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
         if (drafts.length === 0) return;
+        const isFullListDraftPayload = (payload) => (Array.isArray(payload) && payload.length > 0) || (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
+        const decodeFullListPayload = (payload) => {
+            if (Array.isArray(payload)) return payload;
+            if (payload && payload._fullList === true && typeof payload.payloadJson === 'string') {
+                try { const parsed = JSON.parse(payload.payloadJson); return Array.isArray(parsed) ? parsed : null; } catch (_) { return null; }
+            }
+            return null;
+        };
         let submitted = 0;
         let failed = 0;
         let skippedForms = 0;
         for (const draft of drafts) {
             const p = draft.payload;
             if (p && p._activityForm === true) {
+                skippedForms++;
+                continue;
+            }
+            if (p && p._activityUpdate === true) {
                 skippedForms++;
                 continue;
             }
@@ -3154,6 +3192,48 @@ const App = {
         Drafts.clearDrafts();
         App.loadDraftsView();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('All drafts deleted.', 'info');
+    },
+
+    /**
+     * Find February (2026-02) external activities whose project is missing use cases or products interested,
+     * and add them as "update" drafts so users can Edit and submit again.
+     */
+    async moveFebruaryIncompleteActivitiesToDrafts() {
+        if (typeof Drafts === 'undefined' || typeof DataManager === 'undefined') return;
+        const FEB_MONTH = '2026-02';
+        const [activities, accounts] = await Promise.all([DataManager.getActivities(), DataManager.getAccounts()]).catch(() => [[], []]);
+        const accountMap = new Map((accounts || []).map(a => [a.id, a]));
+        const existingDraftActivityIds = new Set(
+            (Drafts.getDrafts() || [])
+                .filter(d => d.payload && d.payload._activityUpdate && d.payload.activityId)
+                .map(d => d.payload.activityId)
+        );
+        let added = 0;
+        for (const activity of (activities || [])) {
+            if (activity.isInternal) continue;
+            const month = (activity.monthOfActivity || (activity.date || activity.createdAt || '').toString().slice(0, 7));
+            if (month !== FEB_MONTH) continue;
+            if (existingDraftActivityIds.has(activity.id)) continue;
+            const account = accountMap.get(activity.accountId);
+            const project = account && account.projects ? account.projects.find(pr => pr.id === activity.projectId) : null;
+            if (!project) continue;
+            const hasUseCases = project.useCases && Array.isArray(project.useCases) && project.useCases.length > 0;
+            const hasProducts = project.productsInterested && Array.isArray(project.productsInterested) && project.productsInterested.length > 0;
+            if (hasUseCases && hasProducts) continue;
+            Drafts.addDraft({
+                type: 'external',
+                payload: { _activityUpdate: true, activityId: activity.id, activity: JSON.parse(JSON.stringify(activity)) },
+                errorMessage: 'Add use cases / products and save',
+                label: 'Feb – update'
+            });
+            existingDraftActivityIds.add(activity.id);
+            added++;
+        }
+        this.loadDraftsView();
+        this.updateDraftsBadge();
+        if (typeof UI !== 'undefined' && UI.showNotification) {
+            UI.showNotification(added > 0 ? added + ' February activity/activities moved to drafts. Use Edit & Save to add use cases/products.' : 'No February activities missing use cases/products.', added > 0 ? 'success' : 'info');
+        }
     },
 
     async getWinLossProjectsDataset() {

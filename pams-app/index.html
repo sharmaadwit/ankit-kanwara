@@ -274,6 +274,10 @@
                                 <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete
                                     all</button>
                             </div>
+                            <p class="mt-2 mb-0">
+                                <button type="button" class="btn btn-outline btn-sm" id="draftsAddFebIncompleteBtn" onclick="App.moveFebruaryIncompleteActivitiesToDrafts()">Add Feb activities needing update</button>
+                                <span class="text-muted small ml-1">Moves February external activities missing use cases/products into drafts so you can edit and save.</span>
+                            </p>
                         </div>
                         <div id="draftsListContainer" class="drafts-list-container">
                             <!-- Populated by loadDraftsView() -->

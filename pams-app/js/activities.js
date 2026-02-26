@@ -68,7 +68,8 @@ const Activities = {
                 activity: JSON.parse(JSON.stringify(activity)),
                 isInternal: !!isInternal,
                 originalAccountId: activity.accountId || null,
-                originalProjectId: activity.projectId || null
+                originalProjectId: activity.projectId || null,
+                fromDraftId: fromDraftId || null
             }
             : (fromDraftId ? { fromDraftId } : null);
 
