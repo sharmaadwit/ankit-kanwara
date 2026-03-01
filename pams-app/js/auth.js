@@ -185,6 +185,15 @@ const Auth = {
                     }
                     return true;
                 }
+                // 401 with remote storage: server has no valid session, so storage PUTs would fail. Require re-login.
+                if (res.status === 401 && window.__REMOTE_STORAGE_ENABLED__) {
+                    this.clearSession();
+                    if (typeof this.showLoginScreen === 'function') this.showLoginScreen();
+                    if (typeof UI !== 'undefined' && UI.showNotification) {
+                        UI.showNotification('Session expired or invalid. Please sign in again to save activities.', 'warning');
+                    }
+                    return false;
+                }
             } catch (e) {
                 console.warn('Cookie session restore failed:', e);
             }

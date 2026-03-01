@@ -404,10 +404,17 @@ router.get('/batch', async (req, res) => {
   }
 });
 
+/** Keys that may not exist yet; return 200 with null value instead of 404 to avoid console noise. */
+const OPTIONAL_STORAGE_KEYS = new Set(['pams_leaders', 'pams_salesLeaders', 'pams_reportOverrides', 'suggestions_and_bugs']);
+
 router.get('/:key', async (req, res) => {
   try {
     const row = await getValueWithVersion(req.params.key);
     if (!row) {
+      if (OPTIONAL_STORAGE_KEYS.has(req.params.key)) {
+        res.status(200).json({ key: req.params.key, value: null, updated_at: null });
+        return;
+      }
       const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
       logger.warn('storage_get_404', {
         key: req.params.key,
