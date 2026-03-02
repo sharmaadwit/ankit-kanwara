@@ -420,25 +420,24 @@
         }
 
         const existingManifest = loadShardManifest(ACTIVITIES_MANIFEST_KEY);
+        const existingBuckets = existingManifest.buckets || [];
         const bucketMap = buildActivityBuckets(parsed);
-        const bucketKeys = Array.from(bucketMap.keys()).sort((a, b) => b.localeCompare(a));
+        const bucketKeysFromPayload = Array.from(bucketMap.keys());
 
-        bucketKeys.forEach((bucketKey) => {
+        // Write only buckets we have data for in this payload
+        bucketKeysFromPayload.forEach((bucketKey) => {
             const records = bucketMap.get(bucketKey) || [];
             const payload = JSON.stringify(records);
             saveStorageKey(bucketKey, payload);
         });
 
-        const staleBuckets = (existingManifest.buckets || []).filter(
-            (key) => !bucketKeys.includes(key)
-        );
-        staleBuckets.forEach((bucketKey) => {
-            deleteStorageKey(bucketKey);
-        });
+        // Never delete existing month buckets: a partial in-memory list (e.g. missing Jan/Feb)
+        // would otherwise wipe those months. Keep manifest = union of existing + this payload.
+        const allBucketKeys = Array.from(new Set([...existingBuckets, ...bucketKeysFromPayload])).sort((a, b) => b.localeCompare(a));
 
         const manifest = {
             version: Date.now(),
-            buckets: bucketKeys
+            buckets: allBucketKeys
         };
         saveShardManifest(manifest);
         ensureActivitiesPointer();
