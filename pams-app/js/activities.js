@@ -1541,9 +1541,17 @@ const Activities = {
         }
 
         return projects.map(project => {
-            const safeName = JSON.stringify(project.name);
-            return `<div class="search-select-item" data-id="${project.id}" onclick='Activities.selectProject("${project.id}", ${safeName})'>${project.name}</div>`;
+            const safeId = this.escapeAttr(project.id);
+            const safeName = this.escapeAttr(project.name);
+            return `<div class="search-select-item" data-id="${safeId}" data-name="${safeName}" onclick="Activities.selectProjectFromItem(this)">${this.escapeAttr(project.name) || ''}</div>`;
         }).join('');
+    },
+
+    /** Called from project dropdown item click; reads data-id/data-name so names with apostrophes (e.g. under L'Oreal) work. */
+    selectProjectFromItem(el) {
+        const id = el && el.getAttribute('data-id');
+        const name = el && el.getAttribute('data-name');
+        if (id != null) this.selectProject(id, name || '');
     },
 
     filterProjectDropdown(query = '') {
