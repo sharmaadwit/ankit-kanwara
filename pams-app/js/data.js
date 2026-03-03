@@ -2009,9 +2009,6 @@ const DataManager = {
             if (!Number.isNaN(parsed.getTime())) {
                 const iso = parsed.toISOString();
                 normalized.date = iso;
-                if (!normalized.monthOfActivity) {
-                    normalized.monthOfActivity = iso.slice(0, 7);
-                }
             }
         }
 
@@ -2423,19 +2420,6 @@ const DataManager = {
 
         const allActivities = await this.getAllActivities();
         const monthsInPeriod = new Set();
-        const resolveActivityMonth = (activity) => {
-            const explicitMonth = typeof activity.monthOfActivity === 'string'
-                ? activity.monthOfActivity.trim()
-                : '';
-            if (explicitMonth && /^\d{4}-\d{2}$/.test(explicitMonth)) {
-                return explicitMonth;
-            }
-            const rawDate = activity.date || activity.createdAt;
-            if (typeof rawDate === 'string' && rawDate.length >= 7) {
-                return rawDate.substring(0, 7);
-            }
-            return null;
-        };
         const resolveActivityYear = (activity, monthKey) => {
             if (monthKey && monthKey.length >= 4) {
                 return monthKey.substring(0, 4);
@@ -2448,7 +2432,7 @@ const DataManager = {
         };
 
         const periodActivities = allActivities.filter(activity => {
-            const monthKey = resolveActivityMonth(activity);
+            const monthKey = this.resolveActivityMonth(activity);
             const yearKey = resolveActivityYear(activity, monthKey);
             if (isYearMode) {
                 if (yearKey === referencePeriod) {
@@ -2853,18 +2837,13 @@ const DataManager = {
 
         const activities = await this.getActivities();
         activities.forEach((activity) => {
-            addMonth(
-                activity.monthOfActivity ||
-                (activity.date ? activity.date.slice(0, 7) : '')
-            );
+            addMonth(this.resolveActivityMonth(activity) || (activity.date ? activity.date.slice(0, 7) : ''));
         });
         if (includeInternal) {
             const internalActivities = await this.getInternalActivities();
             internalActivities.forEach((activity) => {
-                addMonth(
-                    activity.monthOfActivity ||
-                    (activity.date ? activity.date.slice(0, 7) : '')
-                );
+                const month = activity.date ? activity.date.slice(0, 7) : (activity.monthOfActivity || '');
+                addMonth(month || '');
             });
         }
 
@@ -2889,18 +2868,14 @@ const DataManager = {
 
         const activities = await this.getActivities();
         activities.forEach((activity) => {
-            addYear(
-                activity.monthOfActivity ||
-                (activity.date ? activity.date.slice(0, 7) : '')
-            );
+            const month = this.resolveActivityMonth(activity) || (activity.date ? activity.date.slice(0, 7) : '');
+            addYear(month);
         });
         if (includeInternal) {
             const internalActivities = await this.getInternalActivities();
             internalActivities.forEach((activity) => {
-                addYear(
-                    activity.monthOfActivity ||
-                    (activity.date ? activity.date.slice(0, 7) : '')
-                );
+                const month = activity.date ? activity.date.slice(0, 7) : (activity.monthOfActivity || '');
+                addYear(month);
             });
         }
 
@@ -2911,20 +2886,23 @@ const DataManager = {
     },
 
     /**
-     * Resolve the activity's month key (YYYY-MM) for grouping/counting.
-     * Uses only user-given activity date: monthOfActivity first, then activity.date.
-     * Does NOT use createdAt (submission time) so Jan count = activities where user said Jan.
+     * Resolve the activity's month key (YYYY-MM) for grouping/counting/reports.
+     * - New logged data: month is derived only from activity.date (then createdAt); no monthOfActivity.
+     * - Migrated activities: use monthOfActivity (migration source of truth), then date.
      * @param {Object} activity - Activity object
      * @returns {string|null} 'YYYY-MM' or null
      */
     resolveActivityMonth(activity) {
         if (!activity) return null;
-        const explicit = typeof activity.monthOfActivity === 'string'
-            ? activity.monthOfActivity.trim()
-            : '';
-        if (explicit && /^\d{4}-\d{2}$/.test(explicit)) return explicit;
-        const raw = activity.date;
-        if (typeof raw === 'string' && raw.length >= 7) return raw.substring(0, 7);
+        const isMigrated = activity.source === 'migration' || activity.isMigrated === true;
+        if (isMigrated) {
+            const explicit = typeof activity.monthOfActivity === 'string'
+                ? activity.monthOfActivity.trim()
+                : '';
+            if (explicit && /^\d{4}-\d{2}$/.test(explicit)) return explicit;
+        }
+        const rawDate = activity.date || activity.createdAt;
+        if (typeof rawDate === 'string' && rawDate.length >= 7) return rawDate.substring(0, 7);
         return null;
     },
 

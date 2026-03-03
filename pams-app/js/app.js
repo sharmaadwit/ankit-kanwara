@@ -3295,7 +3295,7 @@ const App = {
         for (const activity of (activities || [])) {
             if (activity.isInternal) continue;
             if (String(activity.userId) !== String(currentUser.id)) continue;
-            const month = (activity.monthOfActivity || (activity.date || activity.createdAt || '').toString().slice(0, 7));
+            const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity)) || (activity.date || activity.createdAt || '').toString().slice(0, 7);
             if (month !== FEB_MONTH) continue;
             if (existingDraftActivityIds.has(activity.id)) continue;
             const account = accountMap.get(activity.accountId);
