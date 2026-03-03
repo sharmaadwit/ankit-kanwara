@@ -748,6 +748,7 @@
             }
         } catch (err) {
             if (err && err.status === 409) {
+                if (entry.key && err.updated_at != null) lastVersion[entry.key] = err.updated_at;
                 removeOutboxEntry(entry.id);
                 if (entry.draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
                     window.Drafts.updateDraft(entry.draftId, {
@@ -872,7 +873,8 @@
                         ? 'Conflict – someone else saved. Submit again to merge.'
                         : ((err && err.message) || (queued ? 'Saved locally. Auto-retry queued.' : 'Data not saved.'));
                 if (err && err.status === 409) {
-                    // Conflict must be reviewed manually; stop auto retry for this entry.
+                    // So "Submit again" from Drafts uses latest version and can succeed.
+                    if (key && err.updated_at != null) lastVersion[key] = err.updated_at;
                     removeOutboxEntry(outboxId);
                 } else {
                     const currentEntry = safeReadOutbox().find((x) => x && x.id === outboxId) || {};

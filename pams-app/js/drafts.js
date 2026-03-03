@@ -4,6 +4,7 @@
  */
 (function (global) {
     const STORAGE_KEY = '__pams_drafts__';
+    const BACKUP_KEY = '__pams_drafts_backup__';
 
     function resolveDraftStorage() {
         try {
@@ -84,6 +85,42 @@
 
         clearDrafts() {
             setStorage([]);
+        },
+
+        /** Backup current drafts so we don't lose any if Submit all fails or tab closes. */
+        backup() {
+            try {
+                const storage = resolveDraftStorage();
+                if (!storage || typeof storage.setItem !== 'function') return false;
+                const list = getStorage();
+                storage.setItem(BACKUP_KEY, JSON.stringify({
+                    at: new Date().toISOString(),
+                    drafts: list
+                }));
+                return true;
+            } catch (e) {
+                return false;
+            }
+        },
+
+        /** Return backup snapshot if any (e.g. for restore UI). */
+        getBackup() {
+            try {
+                const storage = resolveDraftStorage();
+                if (!storage || typeof storage.getItem !== 'function') return null;
+                const raw = storage.getItem(BACKUP_KEY);
+                if (!raw) return null;
+                return JSON.parse(raw);
+            } catch (e) {
+                return null;
+            }
+        },
+
+        /** Restore drafts from last backup (e.g. after failed Submit all). */
+        restoreFromBackup() {
+            const snap = this.getBackup();
+            if (!snap || !Array.isArray(snap.drafts)) return false;
+            return setStorage(snap.drafts);
         }
     };
 

@@ -3148,6 +3148,13 @@ const App = {
                 App.draftsDeleteAll();
             });
         }
+        const submitAllBtn = document.getElementById('draftsSubmitAllBtn');
+        if (submitAllBtn && !submitAllBtn._wired) {
+            submitAllBtn._wired = true;
+            submitAllBtn.addEventListener('click', function () {
+                App.draftsSubmitAll();
+            });
+        }
     },
 
     async draftsSubmitAll() {
@@ -3162,6 +3169,11 @@ const App = {
             })
             : allDrafts;
         if (drafts.length === 0) return;
+        // Backup drafts so we don't lose any if something fails mid-submit
+        if (typeof Drafts !== 'undefined' && typeof Drafts.backup === 'function') {
+            Drafts.backup();
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Drafts backed up. Submitting…', 'info');
+        }
         const isFullListDraftPayload = (payload) => (Array.isArray(payload) && payload.length > 0) || (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
         const decodeFullListPayload = (payload) => {
             if (Array.isArray(payload)) return payload;
