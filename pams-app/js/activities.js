@@ -119,10 +119,9 @@ const Activities = {
             } else {
                 const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
                 const lastDate = currentUser && this.getLastActivityDateForUser(currentUser.id);
-                if (lastDate) {
-                    const dateInput = document.getElementById('activityDate');
-                    if (dateInput) dateInput.value = lastDate.slice(0, 10);
-                }
+                const today = new Date().toISOString().split('T')[0];
+                const dateInput = document.getElementById('activityDate');
+                if (dateInput) dateInput.value = (lastDate && lastDate.slice(0, 10)) || today;
                 this.refreshUseCaseOptions('');
             }
             this.updateAddAnotherActivityButtonVisibility();
@@ -1293,15 +1292,34 @@ const Activities = {
         `;
     },
 
+    /** Escape for HTML attribute so names like L'Oreal don't break onclick. */
+    escapeAttr(str) {
+        if (str == null) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    },
+
     renderAccountOptions(accounts = []) {
         if (!accounts.length) {
             return `<div class="search-select-empty">No accounts found</div>`;
         }
 
         return accounts.map(account => {
-            const safeName = JSON.stringify(account.name);
-            return `<div class="search-select-item" data-id="${account.id}" onclick='Activities.selectAccount("${account.id}", ${safeName})'>${account.name}</div>`;
+            const safeId = this.escapeAttr(account.id);
+            const safeName = this.escapeAttr(account.name);
+            return `<div class="search-select-item" data-id="${safeId}" data-name="${safeName}" onclick="Activities.selectAccountFromItem(this)">${this.escapeAttr(account.name) || ''}</div>`;
         }).join('');
+    },
+
+    /** Called from account dropdown item click; reads data-id/data-name so L'Oreal etc. work. */
+    selectAccountFromItem(el) {
+        const id = el && el.getAttribute('data-id');
+        const name = el && el.getAttribute('data-name');
+        if (id != null) this.selectAccount(id, name || '');
     },
 
     async filterAccountDropdown(query = '') {
@@ -2764,10 +2782,9 @@ const Activities = {
         const radios = document.querySelectorAll('input[name="activityCategory"]');
         radios.forEach(radio => radio.checked = false);
 
-        // Set default date
-        const today = new Date().toISOString().split('T')[0];
+        // Do not set date here – openActivityModal's setTimeout sets it (last used or today for create, activity date for edit)
         const dateInput = document.getElementById('activityDate');
-        if (dateInput) dateInput.value = today;
+        if (dateInput) dateInput.value = '';
     },
 
     // Helper functions
