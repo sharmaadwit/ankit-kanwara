@@ -12,7 +12,19 @@ Before each **Submit all**, the app backs up your current drafts to browser stor
    - `Drafts.getBackup()` — see if a backup exists (object with `drafts` and `at`).
    - If it returns an object with a `drafts` array: `Drafts.restoreFromBackup()` then refresh the Drafts view or reload the page.
 
+**Important:** Restore brings back **draft cards** only. It does **not** add items to the Activities list by itself. After restoring, you must click **Submit again** (or Submit all) on each draft to save them to Activities.
+
 **Note:** The backup is from *before* the last Submit all. Some of those items may already have been submitted successfully. After restoring, remove or skip any that are already in Activities.
+
+### Check logs (browser console)
+
+Open the app, press **F12** → **Console**. When you open My drafts or click Restore from backup, you’ll see messages like:
+
+- `[Drafts] getBackup: N draft(s), at <timestamp>. Backup = draft list only; use Submit again to save to Activities.`
+- `[Drafts] restoreFromBackup: restored N draft(s). Click Submit again on each to save to Activities.`
+- `[Drafts] restoreFromBackup: no backup or backup has no drafts.` — means nothing was restored (backup empty or missing).
+
+If you see "0 draft(s)" or "no backup", the backup in this browser is empty or was overwritten (e.g. by a later Submit all that backed up an empty list).
 
 ## 2. Where drafts and backup live (client)
 

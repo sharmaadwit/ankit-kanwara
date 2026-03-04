@@ -110,17 +110,28 @@
                 if (!storage || typeof storage.getItem !== 'function') return null;
                 const raw = storage.getItem(BACKUP_KEY);
                 if (!raw) return null;
-                return JSON.parse(raw);
+                const snap = JSON.parse(raw);
+                if (typeof console !== 'undefined' && console.log && snap) {
+                    const n = Array.isArray(snap.drafts) ? snap.drafts.length : 0;
+                    console.log('[Drafts] getBackup: ' + n + ' draft(s), at ' + (snap.at || 'unknown') + '. Backup = draft list only; use Submit again to save to Activities.');
+                }
+                return snap;
             } catch (e) {
+                if (typeof console !== 'undefined' && console.warn) console.warn('[Drafts] getBackup failed:', e);
                 return null;
             }
         },
 
-        /** Restore drafts from last backup (e.g. after failed Submit all). */
+        /** Restore drafts from last backup (e.g. after failed Submit all). Restores draft cards only; user must click Submit again to save to Activities. */
         restoreFromBackup() {
             const snap = this.getBackup();
-            if (!snap || !Array.isArray(snap.drafts)) return false;
-            return setStorage(snap.drafts);
+            if (!snap || !Array.isArray(snap.drafts)) {
+                if (typeof console !== 'undefined' && console.log) console.log('[Drafts] restoreFromBackup: no backup or backup has no drafts.');
+                return false;
+            }
+            const ok = setStorage(snap.drafts);
+            if (typeof console !== 'undefined' && console.log) console.log('[Drafts] restoreFromBackup: restored ' + snap.drafts.length + ' draft(s). Click Submit again on each to save to Activities.');
+            return ok;
         }
     };
 

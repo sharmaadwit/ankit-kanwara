@@ -3022,12 +3022,14 @@ const App = {
                 restoreBackupBtn._wired = true;
                 restoreBackupBtn.addEventListener('click', function () {
                     if (typeof Drafts === 'undefined') return;
+                    const backup = Drafts.getBackup();
+                    const count = backup && Array.isArray(backup.drafts) ? backup.drafts.length : 0;
                     if (Drafts.restoreFromBackup()) {
                         App.loadDraftsView();
                         App.updateDraftsBadge();
-                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Drafts restored from backup. Review and submit again if needed.', 'success');
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Restored ' + count + ' draft(s). Click Submit again on each to save them to Activities.', 'success');
                     } else {
-                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('No backup available to restore.', 'warning');
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('No backup available or backup had no drafts. Drafts backup is from before the last Submit all (same browser only).', 'warning');
                     }
                 });
             }
