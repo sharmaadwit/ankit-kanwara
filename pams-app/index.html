@@ -581,6 +581,10 @@
                                             onclick="Admin.openAdminSection('storageDrafts', event)">
                                             <span>All drafts</span>
                                         </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="activityRecovery"
+                                            onclick="Admin.openAdminSection('activityRecovery', event)">
+                                            <span>Activity recovery</span>
+                                        </a>
                                     </div>
                                 </div>
                             </nav>
@@ -789,6 +793,22 @@
                                                 conflict (409). Apply them to merge into current data, or delete to
                                                 discard.</p>
                                             <div id="adminStorageDraftsList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Activity recovery: load missing activities from backup file into My Drafts -->
+                                <div class="admin-section hidden" data-admin-section="activityRecovery">
+                                    <div class="card">
+                                        <div class="card-header"><h3>Activity recovery</h3></div>
+                                        <div class="card-body">
+                                            <p class="text-muted small">If activities are missing from the app, choose a backup snapshot file (e.g. from <code>backups/storage-snapshot-*.json</code>). Activities that are in the backup but not in current storage will be added as one draft so you can submit them from <strong>My drafts</strong>.</p>
+                                            <div class="form-group mt-2">
+                                                <label for="activityRecoveryFileInput">Backup snapshot (JSON)</label>
+                                                <input type="file" id="activityRecoveryFileInput" accept=".json" class="form-control form-control-sm" style="max-width: 400px;" />
+                                            </div>
+                                            <button type="button" class="btn btn-primary btn-sm" id="activityRecoveryLoadBtn" onclick="Admin.loadMissingActivitiesIntoDrafts()">Load missing activities into my drafts</button>
+                                            <div id="activityRecoveryMessage" class="mt-2 small"></div>
                                         </div>
                                     </div>
                                 </div>

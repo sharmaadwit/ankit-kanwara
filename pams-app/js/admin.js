@@ -336,6 +336,7 @@ const Admin = {
             login: () => this.loadLoginLogs(),
             audit: () => this.loadActivityLogs(),
             storageDrafts: () => this.loadStorageDraftsSection(),
+            activityRecovery: () => this.loadActivityRecoverySection(),
             monthly: () => this.populateReportExportRegionOptions(),
             reports: () => { },
             sandboxAccess: () => this.loadPOCSandbox()
@@ -399,6 +400,75 @@ const Admin = {
             console.error('loadStorageDraftsSection', e);
             container.innerHTML = '<div class="text-danger">Failed to load drafts: ' + (e.message || 'Unknown error') + '</div>';
         }
+    },
+
+    loadActivityRecoverySection() {
+        const msg = document.getElementById('activityRecoveryMessage');
+        if (msg) msg.textContent = '';
+        const input = document.getElementById('activityRecoveryFileInput');
+        if (input) input.value = '';
+    },
+
+    async loadMissingActivitiesIntoDrafts() {
+        const fileInput = document.getElementById('activityRecoveryFileInput');
+        const msgEl = document.getElementById('activityRecoveryMessage');
+        if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+            if (msgEl) msgEl.innerHTML = '<span class="text-warning">Choose a backup JSON file first.</span>';
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Choose a backup snapshot file first.', 'warning');
+            return;
+        }
+        const file = fileInput.files[0];
+        const msg = (text, isError) => {
+            if (msgEl) msgEl.innerHTML = isError ? '<span class="text-danger">' + text + '</span>' : '<span class="text-muted">' + text + '</span>';
+        };
+        msg('Reading file…', false);
+        let snapshot;
+        try {
+            const text = await new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload = () => resolve(r.result);
+                r.onerror = () => reject(new Error('File read failed'));
+                r.readAsText(file, 'utf8');
+            });
+            snapshot = JSON.parse(text);
+        } catch (e) {
+            msg('Invalid JSON or read error: ' + (e.message || ''), true);
+            return;
+        }
+        const data = snapshot.data || snapshot;
+        const backupActivities = [];
+        if (Array.isArray(data.activities)) backupActivities.push(...data.activities);
+        Object.keys(data).forEach((k) => {
+            if (k.startsWith('activities:') && Array.isArray(data[k])) backupActivities.push(...data[k]);
+        });
+        const backupIds = new Set(backupActivities.filter((a) => a && a.id).map((a) => a.id));
+        msg('Backup has ' + backupActivities.length + ' activities. Comparing with current…', false);
+        let current = [];
+        try {
+            if (typeof DataManager !== 'undefined' && DataManager.getActivities) current = await DataManager.getActivities();
+        } catch (_) {}
+        const currentIds = new Set((current || []).filter((a) => a && a.id).map((a) => a.id));
+        const missing = backupActivities.filter((a) => a && a.id && !currentIds.has(a.id));
+        if (missing.length === 0) {
+            msg('No missing activities: everything in the backup is already in current storage.', false);
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('No missing activities to add to drafts.', 'info');
+            return;
+        }
+        const merged = [...(current || []), ...missing];
+        if (typeof Drafts === 'undefined' || !Drafts.addDraft) {
+            msg('Drafts not available.', true);
+            return;
+        }
+        const payload = {
+            _fullList: true,
+            storageKey: 'activities',
+            payloadJson: JSON.stringify(merged),
+            count: merged.length
+        };
+        Drafts.addDraft({ type: 'external', payload: payload, storageKey: 'activities', label: 'Recovery: ' + missing.length + ' missing from backup' });
+        msg('Added 1 draft with ' + merged.length + ' activities (' + missing.length + ' were missing). Open My drafts and click Submit again.', false);
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Draft created with ' + missing.length + ' missing activities. Open My drafts and click Submit again.', 'success');
+        if (typeof App !== 'undefined' && App.updateDraftsBadge) App.updateDraftsBadge();
     },
 
     async storageDraftApply(id, storageKey) {

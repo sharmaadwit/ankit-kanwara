@@ -66,10 +66,16 @@ const main = async () => {
     const snapshot = JSON.parse(raw);
     const data = snapshot.data || snapshot;
     const rawRestoreKeys = (process.env.RESTORE_KEYS || 'all').trim();
-    const keysToRestore =
-        rawRestoreKeys.toLowerCase() === 'all' || rawRestoreKeys === '*'
-            ? Object.keys(data).filter((k) => !(data[k] && typeof data[k] === 'object' && data[k].error))
-            : rawRestoreKeys.split(',').map((k) => k.trim()).filter(Boolean);
+    let keysToRestore;
+    if (rawRestoreKeys.toLowerCase() === 'all' || rawRestoreKeys === '*') {
+        keysToRestore = Object.keys(data).filter((k) => !(data[k] && typeof data[k] === 'object' && data[k].error));
+    } else if (rawRestoreKeys.toLowerCase() === 'activities') {
+        keysToRestore = Object.keys(data).filter(
+            (k) => (k === 'activities' || k.startsWith('activities:')) && (!(data[k] && typeof data[k] === 'object' && data[k].error))
+        );
+    } else {
+        keysToRestore = rawRestoreKeys.split(',').map((k) => k.trim()).filter(Boolean);
+    }
 
     const fetchImpl = typeof fetch === 'function' ? fetch : (await import('node-fetch')).default;
     const headers = buildHeaders();
