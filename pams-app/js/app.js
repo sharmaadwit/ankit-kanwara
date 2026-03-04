@@ -1315,6 +1315,36 @@ const App = {
         }
     },
 
+    _getActivityTimestamp(a) {
+        if (!a) return '';
+        const t = a.updatedAt || a.createdAt;
+        return t ? String(t) : '';
+    },
+    _mergeActivitiesByIdNewerWins(serverArr, draftArr) {
+        if (!Array.isArray(serverArr)) serverArr = [];
+        if (!Array.isArray(draftArr)) draftArr = [];
+        const byId = new Map();
+        serverArr.forEach((s) => { if (s && s.id) byId.set(s.id, s); });
+        draftArr.forEach((l) => {
+            if (!l || !l.id) return;
+            const existing = byId.get(l.id);
+            const lTs = this._getActivityTimestamp(l);
+            if (!existing) { byId.set(l.id, l); return; }
+            const sTs = this._getActivityTimestamp(existing);
+            if (lTs > sTs) byId.set(l.id, l);
+        });
+        return Array.from(byId.values());
+    },
+    _dedupeActivitiesBySignature(arr) {
+        if (!Array.isArray(arr) || !arr.length) return arr;
+        const seen = new Map();
+        arr.forEach((a) => {
+            const dateDay = (a.date || a.createdAt || '').toString().slice(0, 10);
+            const sig = (a.accountId || '') + '|' + (a.projectId || '') + '|' + dateDay + '|' + (a.type || '');
+            seen.set(sig, a);
+        });
+        return Array.from(seen.values());
+    },
     async persistDraftListByKey(keyToSave, listPayload, draftType = 'external') {
         const payloadArray = Array.isArray(listPayload) ? listPayload : [];
 
@@ -1327,6 +1357,17 @@ const App = {
             return;
         }
         if (keyToSave === 'activities' && DataManager.saveActivities) {
+            // With remote storage, merge draft list with current server list so "Submit again" after 409 succeeds
+            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__) {
+                if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+                    DataManager.invalidateCache('activities', 'allActivities');
+                }
+                const current = await DataManager.getActivities();
+                const merged = this._mergeActivitiesByIdNewerWins(current || [], payloadArray);
+                const deduped = this._dedupeActivitiesBySignature(merged);
+                await DataManager.saveActivities(deduped);
+                return;
+            }
             await DataManager.saveActivities(payloadArray);
             return;
         }
@@ -2965,11 +3006,37 @@ const App = {
             }
         } catch (_) {}
 
+        const backupSnap = typeof Drafts !== 'undefined' ? Drafts.getBackup() : null;
+        const hasBackup = backupSnap && Array.isArray(backupSnap.drafts) && backupSnap.drafts.length > 0;
         const headerActions = document.getElementById('draftsHeaderActions');
-        if (headerActions) headerActions.style.display = drafts.length > 0 ? '' : 'none';
+        if (headerActions) headerActions.style.display = (drafts.length > 0 || hasBackup) ? '' : 'none';
+        const restoreBackupBtn = document.getElementById('draftsRestoreBackupBtn');
+        if (restoreBackupBtn) {
+            restoreBackupBtn.style.display = hasBackup ? '' : 'none';
+            if (hasBackup) {
+                const n = backupSnap.drafts.length;
+                const at = backupSnap.at ? String(backupSnap.at).slice(0, 19).replace('T', ' ') : '';
+                restoreBackupBtn.textContent = at ? `Restore from backup (${n} items, ${at})` : `Restore from backup (${n} items)`;
+            }
+            if (!restoreBackupBtn._wired) {
+                restoreBackupBtn._wired = true;
+                restoreBackupBtn.addEventListener('click', function () {
+                    if (typeof Drafts === 'undefined') return;
+                    if (Drafts.restoreFromBackup()) {
+                        App.loadDraftsView();
+                        App.updateDraftsBadge();
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Drafts restored from backup. Review and submit again if needed.', 'success');
+                    } else {
+                        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('No backup available to restore.', 'warning');
+                    }
+                });
+            }
+        }
 
         if (drafts.length === 0) {
-            container.innerHTML = '<p class="text-muted">No drafts. All caught up—activities only count once you submit each from here via <strong>Edit</strong> &amp; Save.</p>';
+            let msg = '<p class="text-muted">No drafts. All caught up—activities only count once you submit each from here via <strong>Edit</strong> &amp; Save.</p>';
+            if (hasBackup) msg += '<p class="text-muted small mt-2">If drafts vanished after Submit all, use <strong>Restore from backup</strong> above to recover them.</p>';
+            container.innerHTML = msg;
             return;
         }
 

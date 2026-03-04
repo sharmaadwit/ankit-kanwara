@@ -328,15 +328,24 @@ router.get('/', async (req, res) => {
   }
 });
 
-/** Lost & Found: list pending/draft saves (e.g. after 409 conflict). Admin only. */
+/** Lost & Found: list pending/draft saves (e.g. after 409 conflict). Admin only. Query: ?hours=24 to limit to last N hours. */
 router.get('/pending', requireAdminAuth, async (req, res) => {
   try {
-    const { rows } = await getPool().query(
-      `SELECT id, storage_key, value, reason, username, created_at
-       FROM pending_storage_saves
-       ORDER BY created_at DESC
-       LIMIT 200;`
-    );
+    const hoursParam = req.query.hours;
+    const hours = hoursParam != null ? Math.max(0, parseInt(String(hoursParam), 10) || 0) : null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+    const query = hours != null && hours > 0
+      ? `SELECT id, storage_key, value, reason, username, created_at
+         FROM pending_storage_saves
+         WHERE created_at >= NOW() - ($1 * interval '1 hour')
+         ORDER BY created_at DESC
+         LIMIT $2`
+      : `SELECT id, storage_key, value, reason, username, created_at
+         FROM pending_storage_saves
+         ORDER BY created_at DESC
+         LIMIT $1`;
+    const args = hours != null && hours > 0 ? [hours, limit] : [limit];
+    const { rows } = await getPool().query(query, args);
     const pending = rows.map((r) => ({
       id: r.id,
       storage_key: r.storage_key,
