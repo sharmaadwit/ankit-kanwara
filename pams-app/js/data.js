@@ -1939,6 +1939,9 @@ const DataManager = {
 
     // Activity Management
     async getActivities() {
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
+            this.cache.activities = null;
+        }
         if (this.cache.activities) {
             return this.cache.activities;
         }

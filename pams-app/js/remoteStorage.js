@@ -704,7 +704,7 @@
         });
     };
 
-    /** Async get (S2.1). For 'activities' key, use the async GET result when server returns the blob (not shard pointer) so we never use possibly-cached sync path. */
+    /** Async get (S2.1). For 'activities' key, use only the async GET result. Never fall back to loadActivitiesValue() on error so we never show a stale cached 82. */
     const getItemAsync = (key) => {
         if (!key) return Promise.resolve(null);
         if (key === ACTIVITIES_KEY) {
@@ -720,7 +720,7 @@
                     }
                     return loadActivitiesValue();
                 })
-                .catch(() => loadActivitiesValue());
+                .catch(() => null);
         }
         return performRequestAsync('GET', `/${encodeURIComponent(key)}`).then((result) => {
             if (!result || typeof result.value !== 'string') return null;

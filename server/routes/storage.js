@@ -97,9 +97,11 @@ const listKeys = async () => {
 
 /** Returns { value, updated_at } for optimistic locking. updated_at is ISO string. */
 const getValueWithVersion = async (key) => {
-  const cached = getCachedStorageRow(key);
-  if (cached) {
-    return cached;
+  if (key !== 'activities') {
+    const cached = getCachedStorageRow(key);
+    if (cached) {
+      return cached;
+    }
   }
   const { rows } = await getPool().query(
     'SELECT value, updated_at FROM storage WHERE key = $1;',
@@ -113,7 +115,9 @@ const getValueWithVersion = async (key) => {
     value: row.value,
     updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : null
   };
-  setCachedStorageRow(key, normalized);
+  if (key !== 'activities') {
+    setCachedStorageRow(key, normalized);
+  }
   return normalized;
 };
 
