@@ -1138,6 +1138,7 @@ const App = {
                 this.loadDraftsView();
                 break;
             case 'winloss':
+                if (typeof this.syncWinLossLogButtonVisibility === 'function') this.syncWinLossLogButtonVisibility();
                 this.loadWinLossView();
                 break;
             case 'import':
@@ -1225,6 +1226,7 @@ const App = {
                 this.loadDraftsView();
                 break;
             case 'winloss':
+                if (typeof this.syncWinLossLogButtonVisibility === 'function') this.syncWinLossLogButtonVisibility();
                 this.loadWinLossView();
                 break;
             case 'reports':
@@ -3627,7 +3629,10 @@ const App = {
             if (activeBadge) activeBadge.textContent = `${active} Active`;
 
             if (visibleProjects.length === 0) {
-                container.innerHTML = UI.emptyState('No projects match the current filters.');
+                const showLogBtn = this.isFeatureEnabled('winLoss') && this.isDashboardVisible('winLoss');
+                container.innerHTML = UI.emptyState('No projects match the current filters.')
+                    + (showLogBtn ? `<div style="margin-top: 1rem;"><button type="button" class="btn btn-primary" onclick="App.openWinLossProjectPicker()">Update Win/Loss</button></div>` : '');
+                this.syncWinLossLogButtonVisibility();
                 return;
             }
 
@@ -3672,6 +3677,7 @@ const App = {
             });
 
             container.innerHTML = html;
+            this.syncWinLossLogButtonVisibility();
             await this.populateWinLossOwnerFilter();
             this.populateWinLossMonthFilter();
         } catch (error) {
@@ -3680,7 +3686,16 @@ const App = {
             if (container) {
                 container.innerHTML = UI.emptyState('Error loading projects');
             }
+            this.syncWinLossLogButtonVisibility();
         }
+    },
+
+    /** Ensure the persistent Update Win/Loss button is visible when user has access (fixes intermittent missing button). */
+    syncWinLossLogButtonVisibility() {
+        const btn = document.getElementById('winlossLogButton');
+        if (!btn) return;
+        const enabled = this.isFeatureEnabled('winLoss') && this.isDashboardVisible('winLoss');
+        btn.classList.toggle('feature-hidden', !enabled);
     },
 
     loadImportView() {
@@ -3964,7 +3979,7 @@ const App = {
                 emptyNode = document.createElement('div');
                 emptyNode.className = 'winloss-search-empty';
                 emptyNode.style.marginBottom = '1rem';
-                emptyNode.innerHTML = '<p class="text-muted">No projects match your search. Clear the search box or click <strong>Update Win/Loss</strong> above to pick a project.</p>';
+                emptyNode.innerHTML = '<p class="text-muted">No projects match your search. Clear the search box or use the button below to update win/loss for a project.</p><button type="button" class="btn btn-primary" onclick="App.openWinLossProjectPicker()">Update Win/Loss</button>';
                 if (container) container.prepend(emptyNode);
             }
             if (emptyNode) emptyNode.style.display = '';
