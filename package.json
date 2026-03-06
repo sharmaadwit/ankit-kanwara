@@ -24,7 +24,7 @@
     "cleanup-before-june2025": "node server/scripts/cleanup-logs-and-history.js 2025-06-01"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18 <22"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

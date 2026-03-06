@@ -1,0 +1,9 @@
+# Avoid build phase hanging: this app has no "build" script.
+# Pin Node 20 to avoid Node 22 / nixpacks issues on Railway.
+# See: https://nixpacks.com/docs/guides/configuring-builds
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
+
+[phases.build]
+cmds = ["echo 'No build step'"]
