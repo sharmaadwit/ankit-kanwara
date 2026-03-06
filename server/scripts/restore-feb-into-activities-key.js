@@ -106,9 +106,20 @@ async function putActivities(base, array, headers) {
     const res = await fetchImpl(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers },
-        body: JSON.stringify({ value: array })
+        body: JSON.stringify({ value: JSON.stringify(array) })
     });
     if (res.status !== 204 && res.status !== 200) throw new Error(`PUT ${ACTIVITIES_KEY}: ${res.status} ${res.statusText}`);
+}
+
+async function putStorageKey(base, key, array, headers) {
+    const fetchImpl = typeof fetch === 'function' ? fetch : (await import('node-fetch')).default;
+    const url = `${base.replace(/\/$/, '')}/${encodeURIComponent(key)}`;
+    const res = await fetchImpl(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...headers },
+        body: JSON.stringify({ value: JSON.stringify(array) })
+    });
+    if (res.status !== 204 && res.status !== 200) throw new Error(`PUT ${key}: ${res.status} ${res.statusText}`);
 }
 
 async function main() {
@@ -143,7 +154,10 @@ async function main() {
     console.log('After merge: total', merged.length, ', Feb 2026 in merged:', febInMerged.length);
 
     await putActivities(base, merged, headers);
-    console.log('Done. PUT', merged.length, 'activities to "' + ACTIVITIES_KEY + '". Hard-refresh the app (Ctrl+Shift+R).');
+    console.log('PUT', merged.length, 'activities to "' + ACTIVITIES_KEY + '".');
+    await putStorageKey(base, FEB_KEY, febInMerged, headers);
+    console.log('PUT', febInMerged.length, 'activities to "' + FEB_KEY + '" (shard for entities API).');
+    console.log('Done. Hard-refresh the app (Ctrl+Shift+R).');
 }
 
 main().catch((e) => {

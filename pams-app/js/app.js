@@ -7074,7 +7074,7 @@ const App = {
         }
     },
 
-    /** Get activities in the selected period for accounts view (this month, last month, or all). */
+    /** Get activities in the selected period for accounts view (this month, last month, or all). Uses resolveActivityMonth so migrated activities with monthOfActivity are included (fixes Feb showing 82 instead of full count). */
     getActivitiesInPeriodForAccounts(activitiesList, monthFilter) {
         if (!activitiesList || !activitiesList.length) return [];
         if (monthFilter === 'all') return activitiesList;
@@ -7086,12 +7086,15 @@ const App = {
             if (targetMonth < 1) { targetMonth += 12; targetYear -= 1; }
         }
         const period = targetYear + '-' + String(targetMonth).padStart(2, '0');
-        return activitiesList.filter(a => {
-            const d = a.date || a.createdAt;
-            if (!d) return false;
-            const m = (typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '').substring(0, 7);
-            return m === period;
-        });
+        const resolveMonth = (typeof DataManager !== 'undefined' && DataManager.resolveActivityMonth)
+            ? DataManager.resolveActivityMonth
+            : (a) => {
+                const d = a && (a.date || a.createdAt);
+                if (!d) return null;
+                const s = typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '';
+                return s.length >= 7 ? s.substring(0, 7) : null;
+            };
+        return activitiesList.filter(a => resolveMonth(a) === period);
     },
 
     // Get activity count for account (optional: pass pre-fetched activities; monthFilter: 'thisMonth'|'lastMonth'|'all')
