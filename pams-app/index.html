@@ -276,6 +276,10 @@
                                 <button type="button" class="btn btn-outline btn-sm" id="draftsAddFebIncompleteBtn" onclick="App.moveFebruaryIncompleteActivitiesToDrafts()">Add Feb activities needing update</button>
                                 <span class="text-muted small ml-1">Moves February external activities missing use cases/products into drafts so you can edit and save.</span>
                             </p>
+                            <p class="mt-1 mb-0">
+                                <button type="button" class="btn btn-outline btn-sm" id="draftsExportRecoveryBtn" onclick="App.exportMyDataForRecovery()" title="Download your local cache so an admin can restore your activities">Export my data for recovery</button>
+                                <span class="text-muted small ml-1">If your activities are missing, export this file and send it to your admin so they can restore them.</span>
+                            </p>
                         </div>
                         <div id="draftsListContainer" class="drafts-list-container">
                             <!-- Populated by loadDraftsView() -->
@@ -466,6 +470,7 @@
                             <span class="badge badge-danger" id="totalLosses">0 Losses</span>
                             <span class="badge badge-warning" id="totalActive">0 Active</span>
                         </div>
+                        <button type="button" class="btn btn-primary" id="winlossLogButton" data-feature="winLoss" onclick="App.openWinLossProjectPicker()" title="Update win/loss for any project you can manage">Update Win/Loss</button>
                     </div>
 
                     <div id="winlossContent"></div>
@@ -802,7 +807,7 @@
                                     <div class="card">
                                         <div class="card-header"><h3>Activity recovery</h3></div>
                                         <div class="card-body">
-                                            <p class="text-muted small">If activities are missing from the app, choose a backup snapshot file (e.g. from <code>backups/storage-snapshot-*.json</code>). Activities that are in the backup but not in current storage will be added as one draft so you can submit them from <strong>My drafts</strong>.</p>
+                                            <p class="text-muted small">If activities are missing, choose a backup file: a server snapshot (<code>backups/storage-snapshot-*.json</code>) or a <strong>user recovery file</strong> (from My drafts → Export my data for recovery). Activities in the file that are not in current storage will be added as one draft; open My drafts and click Submit again to save them.</p>
                                             <div class="form-group mt-2">
                                                 <label for="activityRecoveryFileInput">Backup snapshot (JSON)</label>
                                                 <input type="file" id="activityRecoveryFileInput" accept=".json" class="form-control form-control-sm" style="max-width: 400px;" />

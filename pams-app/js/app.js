@@ -3947,13 +3947,30 @@ const App = {
 
     // Filter win/loss
     filterWinLoss() {
-        const query = document.getElementById('winlossSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('.project-card');
+        const query = (document.getElementById('winlossSearch') && document.getElementById('winlossSearch').value || '').toLowerCase().trim();
+        const container = document.getElementById('winlossContent');
+        const cards = container ? container.querySelectorAll('.project-card') : [];
 
         cards.forEach(card => {
             const text = card.textContent.toLowerCase();
-            card.style.display = text.includes(query) ? '' : 'none';
+            card.style.display = !query || text.includes(query) ? '' : 'none';
         });
+
+        let visibleCount = 0;
+        cards.forEach(card => { if (card.style.display !== 'none') visibleCount++; });
+        let emptyNode = container ? container.querySelector('.winloss-search-empty') : null;
+        if (query && visibleCount === 0) {
+            if (!emptyNode) {
+                emptyNode = document.createElement('div');
+                emptyNode.className = 'winloss-search-empty';
+                emptyNode.style.marginBottom = '1rem';
+                emptyNode.innerHTML = '<p class="text-muted">No projects match your search. Clear the search box or click <strong>Update Win/Loss</strong> above to pick a project.</p>';
+                if (container) container.prepend(emptyNode);
+            }
+            if (emptyNode) emptyNode.style.display = '';
+        } else if (emptyNode) {
+            emptyNode.style.display = 'none';
+        }
     },
 
     // Load reports V2
@@ -8152,6 +8169,67 @@ const App = {
 
         UI.showNotification('Sales rep removed successfully', 'success');
         await this.loadUserSalesReps();
+    },
+
+    /** Open project picker to choose which project to update win/loss for. Always visible so users can log even when search hides all cards. */
+    async openWinLossProjectPicker() {
+        if (!this.isFeatureEnabled('winLoss')) {
+            UI.showNotification(this.getAccessMessage('winLoss', 'feature'), 'info');
+            return;
+        }
+        if (!this.isDashboardVisible('winLoss')) {
+            UI.showNotification(this.getAccessMessage('winLoss', 'visibility'), 'info');
+            return;
+        }
+        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        const ownerFilterRaw = this.winLossFilters.owner || this.getDefaultRecordOwnerFilter();
+        const ownerFilterValue = this.resolveOwnerFilterValue(ownerFilterRaw, currentUser);
+
+        let projects = await this.getWinLossProjectsDataset();
+        projects = projects.filter(project => {
+            const ownerIds = project.ownerIds || [];
+            if (ownerFilterValue !== 'all') return ownerIds.includes(ownerFilterValue);
+            if (!isAdmin && currentUser?.id) return ownerIds.includes(currentUser.id);
+            return true;
+        });
+        const manageable = projects.filter(p => isAdmin || (currentUser?.id && (p.ownerIds || []).includes(currentUser.id)));
+        if (manageable.length === 0) {
+            UI.showNotification('No projects you can update. Change the owner filter or ask an admin.', 'info');
+            return;
+        }
+
+        this.createWinLossPickerModal();
+        const listEl = document.getElementById('winLossPickerList');
+        if (listEl) {
+            listEl.innerHTML = manageable.slice(0, 200).map(p => {
+                const name = (p.accountName || 'Account') + ' – ' + (p.name || p.id || 'Project');
+                return `<button type="button" class="btn btn-block btn-outline text-left" onclick="UI.hideModal('winLossPickerModal'); App.openWinLossModal('${(p.accountId || '').replace(/'/g, "\\'")}', '${(p.id || '').replace(/'/g, "\\'")}');">${name.replace(/</g, '&lt;')}</button>`;
+            }).join('');
+            if (manageable.length > 200) listEl.innerHTML += '<p class="text-muted small">Showing first 200. Use search above to narrow the list.</p>';
+        }
+        UI.showModal('winLossPickerModal');
+    },
+
+    createWinLossPickerModal() {
+        const container = document.getElementById('modalsContainer');
+        const modalId = 'winLossPickerModal';
+        if (document.getElementById(modalId)) return;
+        const html = `
+            <div id="${modalId}" class="modal">
+                <div class="modal-content" style="max-width: 480px;">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Choose project to update</h2>
+                        <button class="modal-close" onclick="UI.hideModal('${modalId}')">&times;</button>
+                    </div>
+                    <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                        <p class="text-muted small">Select a project to log or update win/loss.</p>
+                        <div id="winLossPickerList"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
     },
 
     // Open win/loss modal
