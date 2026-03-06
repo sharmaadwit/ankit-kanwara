@@ -61,7 +61,7 @@
     const LOCAL_BACKUP_PREFIX = '__pams_backup__';
     const CACHE_BUSTER_KEY = '__pams_cache_version__';
     // Increment this version on each deployment to clear stale local caches
-    const CACHE_BUSTER_VERSION = '2026-02-09-v1';
+    const CACHE_BUSTER_VERSION = '2026-02-12-v1';
 
     /** Clear all local backup keys if the cache buster version has changed. */
     const clearStaleLocalBackups = () => {
@@ -572,7 +572,10 @@
     };
 
     const performRequest = (method, suffix, body, opts) => {
-        const url = buildUrl(suffix);
+        let url = buildUrl(suffix);
+        if (method === 'GET') {
+            url += (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now();
+        }
         const xhr = new XMLHttpRequest();
         xhr.open(method, url, false);
         xhr.withCredentials = true;
@@ -701,13 +704,20 @@
         });
     };
 
-    /** Async get (S2.1). For 'activities' key, fetches version for lastVersion then returns composed value. */
+    /** Async get (S2.1). For 'activities' key, use the async GET result when server returns the blob (not shard pointer) so we never use possibly-cached sync path. */
     const getItemAsync = (key) => {
         if (!key) return Promise.resolve(null);
         if (key === ACTIVITIES_KEY) {
             return performRequestAsync('GET', `/${encodeURIComponent(ACTIVITIES_KEY)}`)
                 .then((result) => {
                     if (result && result.key != null && result.updated_at != null) lastVersion[result.key] = result.updated_at;
+                    if (result && typeof result.value === 'string') {
+                        const raw = maybeDecompressValue(result.value);
+                        if (raw !== SHARD_POINTER_TOKEN) {
+                            shardCache[ACTIVITIES_KEY] = { version: null, value: raw };
+                            return raw;
+                        }
+                    }
                     return loadActivitiesValue();
                 })
                 .catch(() => loadActivitiesValue());
