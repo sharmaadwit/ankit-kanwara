@@ -2256,6 +2256,9 @@ const App = {
         const activitiesView = document.getElementById('activitiesView');
         if (!activitiesView) return;
 
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+            DataManager.invalidateCache('activities', 'allActivities');
+        }
         const allActivities = await DataManager.getAllActivities();
         const activities = await this.applyActivityFilters(allActivities);
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
@@ -5253,6 +5256,49 @@ const App = {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+    },
+
+    /** Export user's local cache (backups + drafts) so admin can restore activities. */
+    exportMyDataForRecovery() {
+        try {
+            const storage = (typeof window !== 'undefined' && window.__BROWSER_LOCAL_STORAGE__) ? window.__BROWSER_LOCAL_STORAGE__ : (typeof window !== 'undefined' && window.localStorage) ? window.localStorage : null;
+            if (!storage || typeof storage.getItem !== 'function') {
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Local storage not available.', 'warning');
+                return;
+            }
+            const backups = {};
+            const prefix = '__pams_backup__';
+            for (let i = 0; i < storage.length; i++) {
+                const key = storage.key(i);
+                if (key && key.startsWith(prefix) && !key.endsWith('_at')) {
+                    const shortKey = key.slice(prefix.length);
+                    const raw = storage.getItem(key);
+                    if (raw != null) backups[shortKey] = raw;
+                }
+            }
+            const payload = {
+                source: 'user-local-cache',
+                at: new Date().toISOString(),
+                backups: backups
+            };
+            if (typeof Drafts !== 'undefined') {
+                if (Drafts.getDrafts) payload.drafts = Drafts.getDrafts();
+                if (Drafts.getBackup) payload.draftsBackup = Drafts.getBackup();
+            }
+            const json = JSON.stringify(payload, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'pams-recovery-' + new Date().toISOString().slice(0, 10) + '.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Recovery file downloaded. Send it to your admin to restore activities.', 'success');
+        } catch (e) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Export failed: ' + (e.message || 'Unknown error'), 'error');
+        }
     },
 
     toCsv(rows = []) {

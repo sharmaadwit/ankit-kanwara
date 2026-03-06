@@ -233,6 +233,37 @@ const deleteValue = async (key) => {
   invalidateStorageReadCache(key);
 };
 
+/** True if key is activities or activities:YYYY-MM (merge on PUT to prevent trim). */
+const isActivityStorageKey = (key) =>
+  key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key);
+
+/** Merge two activity arrays by id; newer updatedAt/createdAt wins. Prevents one client from overwriting with partial list. */
+const mergeActivitiesPayload = (currentSerialized, incomingSerialized) => {
+  const parse = (s) => {
+    if (s == null || s === '') return [];
+    try {
+      const v = typeof s === 'string' ? s : String(s);
+      const decoded = v.startsWith(GZIP_PREFIX) ? maybeDecompressValue(v) : v;
+      const parsed = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  };
+  const getTs = (a) => (a && (a.updatedAt || a.createdAt)) ? String(a.updatedAt || a.createdAt) : '';
+  const currentArr = parse(currentSerialized);
+  const incomingArr = parse(incomingSerialized);
+  const byId = new Map();
+  currentArr.forEach((a) => { if (a && a.id) byId.set(a.id, a); });
+  incomingArr.forEach((a) => {
+    if (!a || !a.id) return;
+    const existing = byId.get(a.id);
+    if (!existing) { byId.set(a.id, a); return; }
+    if (getTs(a) > getTs(existing)) byId.set(a.id, a);
+  });
+  return JSON.stringify(Array.from(byId.values()));
+};
+
 /** Log storage PUT for Railway/in-app diagnostics and retrieval (key, who, count). */
 const extractPayloadCount = (key, serializedValue) => {
   const isKnown =
@@ -457,8 +488,14 @@ router.put('/:key', async (req, res) => {
       return;
     }
 
-    const serializedValue =
+    let serializedValue =
       value === null || value === undefined ? '' : String(value);
+
+    if (isActivityStorageKey(req.params.key)) {
+      const current = await getValueWithVersion(req.params.key);
+      serializedValue = mergeActivitiesPayload(current ? current.value : null, serializedValue);
+    }
+
     const ifMatch = req.get('If-Match') || req.get('if-match');
     const rawClientMutationId = req.get('X-Client-Mutation-Id') || req.get('x-client-mutation-id');
     const clientMutationId = rawClientMutationId ? normalizeMutationId(rawClientMutationId) : null;
