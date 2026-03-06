@@ -1345,11 +1345,43 @@ const App = {
         });
         return Array.from(seen.values());
     },
+    /** Merge accounts for conflict-safe submit: server base + our draft (ours wins per account/project). */
+    _mergeAccountsDeepForSubmit(serverAccounts, ourAccounts) {
+        const server = Array.isArray(serverAccounts) ? serverAccounts : [];
+        const ours = Array.isArray(ourAccounts) ? ourAccounts : [];
+        const serverById = new Map(server.filter(a => a && a.id).map(a => [a.id, a]));
+        const ourIds = new Set(ours.map(a => a && a.id).filter(Boolean));
+        const merged = [];
+        server.forEach(s => {
+            if (!ourIds.has(s.id)) merged.push(s);
+        });
+        ours.forEach(ourAcc => {
+            if (!ourAcc || !ourAcc.id) return;
+            const serverAcc = serverById.get(ourAcc.id);
+            const serverProjects = Array.isArray(serverAcc && serverAcc.projects) ? serverAcc.projects : [];
+            const ourProjects = Array.isArray(ourAcc.projects) ? ourAcc.projects : [];
+            const ourProjectIds = new Set(ourProjects.map(p => p && p.id).filter(Boolean));
+            const projectsMerged = [
+                ...serverProjects.filter(p => p && !ourProjectIds.has(p.id)),
+                ...ourProjects
+            ];
+            merged.push({ ...(serverAcc || {}), ...ourAcc, projects: projectsMerged });
+        });
+        return merged;
+    },
+
     async persistDraftListByKey(keyToSave, listPayload, draftType = 'external') {
         const payloadArray = Array.isArray(listPayload) ? listPayload : [];
 
         if (keyToSave === 'accounts' && DataManager.saveAccounts) {
-            await DataManager.saveAccounts(payloadArray);
+            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__) {
+                if (typeof DataManager.invalidateCache === 'function') DataManager.invalidateCache('accounts', 'allActivities');
+                const serverAccounts = await DataManager.getAccounts();
+                const merged = this._mergeAccountsDeepForSubmit(serverAccounts, payloadArray);
+                await DataManager.saveAccounts(merged);
+            } else {
+                await DataManager.saveAccounts(payloadArray);
+            }
             return;
         }
         if (keyToSave === 'users' && DataManager.saveUsers) {
@@ -2406,6 +2438,10 @@ const App = {
         if (monthFilter) {
             projects = projects.filter(project => {
                 const monthOfWin = project.winLossData?.monthOfWin;
+                if (project.status === 'won' || project.status === 'lost') {
+                    const effectiveMonth = monthOfWin || (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                    return effectiveMonth === monthFilter;
+                }
                 return monthOfWin === monthFilter || (!monthOfWin && (project.status === 'active' || project.status === ''));
             });
         }
@@ -3487,7 +3523,10 @@ const App = {
         const allProjects = await this.getWinLossProjectsDataset();
         const months = new Set();
         allProjects.forEach(project => {
-            const m = project.winLossData?.monthOfWin;
+            let m = project.winLossData?.monthOfWin;
+            if (!m && (project.status === 'won' || project.status === 'lost')) {
+                m = (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+            }
             if (m && /^\d{4}-\d{2}$/.test(m)) months.add(m);
         });
         const sorted = Array.from(months).sort((a, b) => b.localeCompare(a));
@@ -3564,6 +3603,10 @@ const App = {
             if (monthFilter) {
                 visibleProjects = visibleProjects.filter(project => {
                     const monthOfWin = project.winLossData?.monthOfWin;
+                    if (project.status === 'won' || project.status === 'lost') {
+                        const effectiveMonth = monthOfWin || (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
+                        return effectiveMonth === monthFilter;
+                    }
                     return monthOfWin === monthFilter || (!monthOfWin && (project.status === 'active' || project.status === ''));
                 });
             }
@@ -8415,11 +8458,44 @@ const App = {
             }
         }
 
-        await DataManager.saveAccounts(accounts);
+        try {
+            await DataManager.saveAccounts(accounts);
+        } catch (err) {
+            if (err && err.status === 409 && err.value != null) {
+                try {
+                    const serverAccounts = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
+                    if (Array.isArray(serverAccounts)) {
+                        const merged = JSON.parse(JSON.stringify(serverAccounts));
+                        const acc = merged.find(a => a && a.id === accountId);
+                        const proj = acc?.projects?.find(p => p && p.id === projectId);
+                        if (acc && proj) {
+                            proj.status = project.status;
+                            proj.sfdcLink = project.sfdcLink;
+                            if (project.winLossData) proj.winLossData = { ...project.winLossData }; else delete proj.winLossData;
+                            if (typeof DataManager.invalidateCache === 'function') DataManager.invalidateCache('accounts', 'allActivities');
+                            await DataManager.saveAccounts(merged);
+                            UI.hideModal('winLossModal');
+                            UI.showNotification('Project status updated!', 'success');
+                            await this.loadWinLossView();
+                            if (this.currentView === 'winloss' && typeof this.refreshCurrentViewData === 'function') this.refreshCurrentViewData();
+                            return;
+                        }
+                    }
+                } catch (mergeErr) {
+                    console.warn('Win/Loss 409 merge retry failed', mergeErr);
+                }
+            }
+            UI.showNotification('Could not save. Win/Loss was saved to Drafts. Open My drafts and click Submit again.', 'warning');
+            if (typeof this.loadDraftsView === 'function') await this.loadDraftsView();
+            return;
+        }
 
         UI.hideModal('winLossModal');
         UI.showNotification('Project status updated!', 'success');
         await this.loadWinLossView();
+        if (this.currentView === 'winloss' && typeof this.refreshCurrentViewData === 'function') {
+            this.refreshCurrentViewData();
+        }
     },
 
     /** Apply a win/loss draft (saved when session was invalid). Loads accounts, applies form data, saves. */

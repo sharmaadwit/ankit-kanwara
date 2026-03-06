@@ -212,19 +212,24 @@ const ReportsV2 = {
         const period = this.currentPeriod;
         const isYear = this.currentPeriodType === 'year';
         const cutoff = this.REPORTS_ACTIVITY_CUTOFF || '2026-01';
+        const resolveMonth = (typeof DataManager !== 'undefined' && DataManager.resolveActivityMonth)
+            ? DataManager.resolveActivityMonth
+            : (a) => {
+                const d = a && (a.date || a.createdAt);
+                if (!d) return null;
+                const s = typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '';
+                return s.length >= 7 ? s.substring(0, 7) : null;
+            };
 
         let filtered = allActivities.filter(activity => {
-            const activityDate = activity.date || activity.createdAt;
-            if (!activityDate) return false;
-            if (activityDate < cutoff) return false;
+            const activityMonthKey = resolveMonth(activity);
+            if (!activityMonthKey) return false;
+            if (activityMonthKey < cutoff) return false;
 
             if (isYear) {
-                const activityYear = activityDate.substring(0, 4);
-                return activityYear === period;
-            } else {
-                const activityMonth = activityDate.substring(0, 7);
-                return activityMonth === period;
+                return activityMonthKey.substring(0, 4) === period;
             }
+            return activityMonthKey === period;
         });
 
         // Sales leader: scope to their region only

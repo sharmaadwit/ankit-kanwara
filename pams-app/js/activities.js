@@ -2475,7 +2475,7 @@ const Activities = {
                     UI.showNotification('Activity logged successfully! Draft removed.', 'success');
                     this.setLastActivityDateForUser(currentUser.id, date);
                 } catch (err) {
-                    UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
+                    UI.showNotification('Could not save. Activity was saved to Drafts. Open My drafts and click Submit again – then it will show in Activities and Win/Loss.', 'warning');
                     if (window.app && window.app.loadDraftsView) await window.app.loadDraftsView();
                 }
             }
@@ -2488,7 +2488,11 @@ const Activities = {
             if (window.app.updateDraftsBadge) window.app.updateDraftsBadge();
             await window.app.loadDashboard();
             await window.app.loadActivitiesView();
+            if (window.app.loadWinLossView) await window.app.loadWinLossView();
             if (window.app.loadDraftsView) await window.app.loadDraftsView();
+            if (window.app.currentView && typeof window.app.refreshCurrentViewData === 'function') {
+                window.app.refreshCurrentViewData();
+            }
         }
     },
 
