@@ -2497,6 +2497,7 @@ const App = {
             projects.forEach(project => {
                 const statusColor = project.status === 'won' ? '#48BB78' : project.status === 'lost' ? '#F56565' : '#4299E1';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
+                const ownerLabelText = project.status === 'won' ? 'Won by:' : 'Owner:';
                 const canManage = isAdmin || (currentUserId && (project.ownerIds || []).includes(currentUserId));
                 html += `
                     <div class="content-card">
@@ -2504,7 +2505,7 @@ const App = {
                             <div>
                                 <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600;">${project.name}</h3>
                                 <div style="color: var(--gray-600); font-size: 0.875rem; margin-top: 0.25rem;">${project.accountName}</div>
-                                <div style="color: var(--gray-500); font-size: 0.75rem; margin-top: 0.25rem;">Owner: ${ownerLabel}</div>
+                                <div style="color: var(--gray-500); font-size: 0.75rem; margin-top: 0.25rem;">${ownerLabelText} ${ownerLabel}</div>
                             </div>
                             <span style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; background: ${statusColor}20; color: ${statusColor};">
                                 ${project.status || 'active'}
@@ -3455,13 +3456,15 @@ const App = {
                 const ownerNames = ownerIds
                     .map(id => userLookup.get(id)?.username)
                     .filter(Boolean);
+                const winnerName = (project.status === 'won' && (project.winLossData?.wonByUserName || (project.winLossData?.wonByUserId && userLookup.get(project.winLossData.wonByUserId)?.username)));
+                const primaryOwnerName = winnerName || ownerNames[0] || account.salesRep || 'Unassigned';
                 projects.push({
                     ...project,
                     accountId: account.id,
                     accountName: account.name,
                     ownerIds,
                     ownerNames,
-                    primaryOwnerName: ownerNames[0] || account.salesRep || 'Unassigned'
+                    primaryOwnerName
                 });
             });
         });
@@ -3649,6 +3652,7 @@ const App = {
                 ` : '';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
                 const canManage = isAdmin || (currentUser?.id && (project.ownerIds || []).includes(currentUser.id));
+                const ownerLabelText = project.status === 'won' ? 'Won by:' : 'Owner:';
 
                 html += `
                     <div class="project-card ${statusClass}">
@@ -3656,7 +3660,7 @@ const App = {
                             <h4>${project.name}</h4>
                             <p class="text-muted">${project.accountName}</p>
                             <p class="text-muted" style="margin-top: 0.5rem;">
-                                <strong>Owner:</strong> ${ownerLabel}
+                                <strong>${ownerLabelText}</strong> ${ownerLabel}
                             </p>
                             ${winLossDetails}
                             <p class="text-muted" style="margin-top: 0.5rem;">

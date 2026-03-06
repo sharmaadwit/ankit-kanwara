@@ -73,7 +73,8 @@ const ReportsV2 = {
             if (this.monthlyReportData && this.monthlyReportData.winsForPeriod) {
                 this.monthlyReportData.winsForPeriod.forEach(w => {
                     const checked = includedWinIds === null || includedWinIds.includes(w.projectId);
-                    winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(w.mrr || '—').replace(/</g, '&lt;')}</label>`;
+                    const presalesPart = (w.presalesRep && w.presalesRep !== '—') ? ' | Won by: ' + String(w.presalesRep).replace(/</g, '&lt;') : '';
+                    winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(w.mrr || '—').replace(/</g, '&lt;')}${presalesPart}</label>`;
                 });
             }
             manualWins.forEach((mw, i) => {
@@ -539,6 +540,8 @@ const ReportsV2 = {
         const internalCount = activities.filter(a => a.isInternal).length;
         const externalCount = activities.filter(a => !a.isInternal).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
+        const users = typeof DataManager !== 'undefined' && DataManager.getUsers ? await DataManager.getUsers() : [];
+        const userLookup = new Map((users || []).map(u => [u.id, u.username || u.name]));
         const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
         const o = period ? (overrides[period] || {}) : {};
         let winsPeriod = 0;
@@ -556,12 +559,14 @@ const ReportsV2 = {
                                 winsPeriod++;
                                 const uc = (project.useCases && project.useCases[0]);
                                 const useCaseText = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '—';
+                                const presalesRep = project.winLossData?.wonByUserName || userLookup.get(project.winLossData?.wonByUserId) || '—';
                                 winsForPeriod.push({
                                     projectId: project.id,
                                     accountId: account.id,
                                     accountName: account.name || 'Unknown',
                                     mrr: project.winLossData?.mrr ?? project.mrr ?? '—',
-                                    useCase: useCaseText
+                                    useCase: useCaseText,
+                                    presalesRep
                                 });
                             } else if (project.status === 'lost') lossesPeriod++;
                         }
@@ -670,7 +675,7 @@ const ReportsV2 = {
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                                 let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
                                 const manual = o.manualWins || [];
-                                const cards = displayWins.slice(0, 9).map(w => `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>MRR: ${safe(w.mrr)} | Use case: ${safe(w.useCase)}</div>`);
+                                const cards = displayWins.slice(0, 9).map(w => `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>MRR: ${safe(w.mrr)} | Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? ' | Won by: ' + safe(w.presalesRep) : ''}</div>`);
                                 manual.forEach(mw => { cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${safe(mw.mrr || '')} | Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? ' | ' + safe(mw.presalesRep) : ''}</div>`); });
                                 return cards.length ? cards.slice(0, 12).join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report.</p>';
                             })()}
