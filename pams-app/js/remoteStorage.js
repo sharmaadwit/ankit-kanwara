@@ -662,6 +662,7 @@
         const headers = { Accept: 'application/json', ...buildHeaders(requestHeaders) };
         if (body !== undefined) headers['Content-Type'] = 'application/json';
         const init = { method, headers, credentials: 'include' };
+        if (method === 'GET') init.cache = 'no-store';
         if (body !== undefined) init.body = JSON.stringify(body);
         return fetch(url, init).then((res) => {
             if (res.status === 404) return null;
@@ -700,10 +701,17 @@
         });
     };
 
-    /** Async get (S2.1). For 'activities' key, still uses sync load under the hood; use for non-activity keys first. */
+    /** Async get (S2.1). For 'activities' key, fetches version for lastVersion then returns composed value. */
     const getItemAsync = (key) => {
         if (!key) return Promise.resolve(null);
-        if (key === ACTIVITIES_KEY) return Promise.resolve(loadActivitiesValue());
+        if (key === ACTIVITIES_KEY) {
+            return performRequestAsync('GET', `/${encodeURIComponent(ACTIVITIES_KEY)}`)
+                .then((result) => {
+                    if (result && result.key != null && result.updated_at != null) lastVersion[result.key] = result.updated_at;
+                    return loadActivitiesValue();
+                })
+                .catch(() => loadActivitiesValue());
+        }
         return performRequestAsync('GET', `/${encodeURIComponent(key)}`).then((result) => {
             if (!result || typeof result.value !== 'string') return null;
             return maybeDecompressValue(result.value);
