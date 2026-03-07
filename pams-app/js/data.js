@@ -175,6 +175,24 @@ if (typeof window !== 'undefined') {
         console.log('[ActivitySave] Trace (' + arr.length + ' steps):\n' + text);
         return text;
     };
+    /** Refetch activities from server and check if an activity id exists. Usage: __findActivityById('mmfxkcu0wqb6pittr') */
+    window.__findActivityById = function (id) {
+        var dm = typeof window !== 'undefined' && window.DataManager;
+        if (!dm || typeof dm.invalidateCache !== 'function' || typeof dm.getActivities !== 'function') {
+            console.warn('[ActivitySave] DataManager not ready. Try again after app load.');
+            return Promise.resolve(null);
+        }
+        dm.invalidateCache('activities', 'allActivities');
+        return dm.getActivities().then(function (list) {
+            var found = Array.isArray(list) ? list.find(function (a) { return a && a.id === id; }) : null;
+            if (found) {
+                console.log('[ActivitySave] Found activity:', found);
+            } else {
+                console.log('[ActivitySave] Activity id "' + id + '" NOT in list. Total activities on server:', list ? list.length : 0);
+            }
+            return found;
+        });
+    };
     window.addEventListener('unhandledrejection', function (event) {
         var reasonStr = String(event.reason && (event.reason.message || event.reason));
         if (reasonStr.indexOf('Clipboard') !== -1 || reasonStr.indexOf('writeText') !== -1) {
@@ -2007,9 +2025,7 @@ const DataManager = {
 
     // Activity Management
     async getActivities() {
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
-            this.cache.activities = null;
-        }
+        // Use cache when set (e.g. right after addActivity) so a stale refetch does not hide the new activity
         if (this.cache.activities) {
             return this.cache.activities;
         }
@@ -2138,14 +2154,19 @@ const DataManager = {
             window.__activitySaveTracePush('getActivities returned', { count: Array.isArray(activities) ? activities.length : 0 });
         }
         const timestamp = new Date().toISOString();
+        // Newly logged activities must never be treated as migration (so they are never hidden by migration cutoff).
+        const source = activity && (activity.source === 'migration') ? 'migration' : 'manual';
         const normalized = {
             ...activity,
             id: this.generateId(),
             createdAt: timestamp,
             updatedAt: timestamp,
-            source: activity?.source || 'manual',
-            isMigrated: activity?.source === 'migration'
+            source: source,
+            isMigrated: source === 'migration'
         };
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('addActivity normalized', { source: normalized.source, isMigrated: !!normalized.isMigrated, date: normalized.date });
+        }
 
         const referenceDate = normalized.date || normalized.createdAt;
         if (referenceDate) {
@@ -2189,7 +2210,19 @@ const DataManager = {
             throw err;
         }
         if (typeof window.__activitySaveTracePush === 'function') {
-            window.__activitySaveTracePush('addActivity success', { id: normalized.id });
+            window.__activitySaveTracePush('addActivity success', { id: normalized.id, date: normalized.date });
+        }
+        try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e) {}
+        this.cache.activities = activities;
+        // Verify server has the new activity (refetch and log – do not overwrite cache with refetched data)
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync && typeof window.__activitySaveTracePush === 'function') {
+            var _newId = normalized.id;
+            var _expectedCount = activities.length;
+            window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities').then(function (stored) {
+                var arr = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                var hasNewId = Array.isArray(arr) && arr.some(function (a) { return a && a.id === _newId; });
+                window.__activitySaveTracePush('post-save verify', { serverCount: arr.length, expectedCount: _expectedCount, hasNewId: hasNewId });
+            }).catch(function (e) { window.__activitySaveTracePush('post-save verify failed', { message: e && e.message }); });
         }
         this.recordAudit('activity.create', 'activity', normalized.id, {
             accountId: normalized.accountId || null,

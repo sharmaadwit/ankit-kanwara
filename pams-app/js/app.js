@@ -5108,10 +5108,10 @@ const App = {
 
         const now = new Date();
 
-        const migrationCutoff = '2026-01'; // In migration mode, only activities with date/month <= Jan 2026
+        const migrationCutoff = '2026-01'; // In migration mode, only migrated activities with date/month <= Jan 2026 are limited
         return list.filter(activity => {
-            // Migration mode: exclude any activity after Jan 2026
-            if (typeof this.isMigrationMode === 'function' && this.isMigrationMode() && activity) {
+            // Migration mode: exclude only migrated activities after Jan 2026. Manually logged activities always show.
+            if (typeof this.isMigrationMode === 'function' && this.isMigrationMode() && activity && (activity.source === 'migration' || activity.isMigrated === true)) {
                 const activityMonthKey = DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(activity);
                 const month = activityMonthKey || (activity.date || activity.createdAt || '').toString().substring(0, 7);
                 if (month && month > migrationCutoff) return false;
@@ -5232,9 +5232,10 @@ const App = {
 
     async handleActivitySearch(value, variant = 'standard') {
         this.activityFilters.search = value || '';
-        await this.renderActivitiesList();
         if (InterfaceManager.getCurrentInterface() === 'card' || variant === 'card') {
             await this.loadCardActivitiesView();
+        } else {
+            await this.renderActivitiesList();
         }
     },
 
@@ -5299,9 +5300,10 @@ const App = {
         const cardSearch = document.getElementById('cardActivitySearch');
         if (cardSearch) cardSearch.value = '';
         await this.populateActivityFilterControls();
-        await this.renderActivitiesList();
         if (InterfaceManager.getCurrentInterface() === 'card') {
             await this.loadCardActivitiesView();
+        } else {
+            await this.renderActivitiesList();
         }
     },
 
@@ -7202,9 +7204,12 @@ const App = {
             const inPeriod = this.getActivitiesInPeriodForAccounts(list, monthFilter);
             list = inPeriod;
         }
+        // Migration mode: only hide migrated activities after 2026-01. Manually logged activities always count.
         if (typeof this.isMigrationMode === 'function' && this.isMigrationMode()) {
             const cutoff = '2026-01';
+            const isFromMigration = (a) => (a && (a.source === 'migration' || a.isMigrated === true));
             list = list.filter(a => {
+                if (!isFromMigration(a)) return true;
                 const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(a)) || (a.date || a.createdAt || '').toString().substring(0, 7);
                 return !month || month <= cutoff;
             });
@@ -7264,9 +7269,12 @@ const App = {
         if (monthFilter && monthFilter !== 'all') {
             list = this.getActivitiesInPeriodForAccounts(list, monthFilter);
         }
+        // Migration mode: only hide migrated activities after 2026-01. Manually logged activities always show.
         if (typeof this.isMigrationMode === 'function' && this.isMigrationMode()) {
             const cutoff = '2026-01';
+            const isFromMigration = (a) => (a && (a.source === 'migration' || a.isMigrated === true));
             list = list.filter(a => {
+                if (!isFromMigration(a)) return true;
                 const month = (DataManager.resolveActivityMonth && DataManager.resolveActivityMonth(a)) || (a.date || a.createdAt || '').toString().substring(0, 7);
                 return !month || month <= cutoff;
             });
@@ -7690,6 +7698,11 @@ const App = {
 
     async renderActivitiesList(containerId = 'activitiesContent') {
         try {
+            // Card interface replaces activitiesView innerHTML (no activitiesContent); refresh card view instead
+            if (containerId === 'activitiesContent' && typeof InterfaceManager !== 'undefined' && InterfaceManager.getCurrentInterface() === 'card') {
+                await this.loadCardActivitiesView().catch(e => console.warn('loadCardActivitiesView failed', e));
+                return;
+            }
             const container = document.getElementById(containerId);
             if (!container) {
                 console.error('Activities container not found:', containerId);
