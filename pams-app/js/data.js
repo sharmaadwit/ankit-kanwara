@@ -2137,7 +2137,157 @@ const DataManager = {
         this.invalidateCache('activities', 'allActivities');
     },
 
+    /**
+     * Append one activity via server API (no bulk PUT). Saves to draft first, then POST /activities/append.
+     * On success: remove draft, invalidate cache. On failure: draft stays for Edit & Submit.
+     * Use this when remote storage is enabled so we never send the full list.
+     */
+    async appendActivity(activity) {
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('appendActivity start', { type: activity && activity.type, date: activity && (activity.date || activity.createdAt) });
+        }
+        const timestamp = new Date().toISOString();
+        const source = activity && (activity.source === 'migration') ? 'migration' : 'manual';
+        const normalized = {
+            ...activity,
+            id: this.generateId(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            source: source,
+            isMigrated: source === 'migration'
+        };
+        const referenceDate = normalized.date || normalized.createdAt;
+        if (referenceDate) {
+            const parsed = new Date(referenceDate);
+            if (!Number.isNaN(parsed.getTime())) normalized.date = parsed.toISOString();
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) this.cache.activities = null;
+        const activities = await this.getActivities();
+        const dateDay = (normalized.date || normalized.createdAt || '').toString().slice(0, 10);
+        const duplicate = activities.find(function (a) {
+            return (a.accountId || '') === (normalized.accountId || '') &&
+                (a.projectId || '') === (normalized.projectId || '') &&
+                (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
+                (a.type || '') === (normalized.type || '');
+        });
+        if (duplicate) {
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('appendActivity skipped duplicate', { date: dateDay });
+            }
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('An activity with the same account, project, date and type already exists.', 'warning');
+            }
+            return duplicate;
+        }
+        var draftId = null;
+        if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+            var d = window.Drafts.addDraft({
+                type: 'external',
+                storageKey: 'activities',
+                payload: { _singleActivity: true, activity: normalized },
+                errorMessage: 'Submitting…'
+            });
+            if (d && d.id) draftId = d.id;
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('appendActivity draft added', { draftId: draftId });
+            }
+        }
+        var apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        var url = apiBase + '/activities/append';
+        var bodyStr = JSON.stringify({ activity: normalized });
+        var lastErr = null;
+        var maxAttempts = 3;
+        var retryDelays = [0, 1000, 2000];
+        for (var attempt = 0; attempt < maxAttempts; attempt++) {
+            if (attempt > 0 && retryDelays[attempt] > 0) {
+                if (draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+                    window.Drafts.updateDraft(draftId, { errorMessage: 'Retrying in ' + (retryDelays[attempt] / 1000) + 's…' });
+                }
+                await new Promise(function (r) { setTimeout(r, retryDelays[attempt]); });
+            }
+            try {
+                var res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: bodyStr
+                });
+                var data = res.ok ? (await res.json().catch(function () { return {}; })) : null;
+                if (res.ok && data && data.ok) {
+                    if (draftId && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
+                        window.Drafts.removeDraft(draftId);
+                    }
+                    this.invalidateCache('activities', 'allActivities');
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('appendActivity success', { id: normalized.id, attempt: attempt + 1 });
+                    }
+                    try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e) {}
+                    this.cache.activities = null;
+                    this.recordAudit('activity.create', 'activity', normalized.id, {
+                        accountId: normalized.accountId || null,
+                        projectId: normalized.projectId || null,
+                        type: normalized.type || '',
+                        category: normalized.isInternal ? 'internal' : 'external',
+                        fullSnapshot: normalized
+                    });
+                    return normalized;
+                }
+                var errMsg = (data && data.message) || ('Request failed: ' + res.status);
+                lastErr = new Error(errMsg);
+                if (res.status >= 400 && res.status < 500 && res.status !== 408) {
+                    break;
+                }
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('appendActivity attempt failed', { attempt: attempt + 1, status: res.status, message: errMsg });
+                }
+            } catch (err) {
+                lastErr = err;
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('appendActivity attempt threw', { attempt: attempt + 1, message: err && err.message });
+                }
+            }
+        }
+        var msg = lastErr && (lastErr.message || lastErr.status);
+        if (draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+            window.Drafts.updateDraft(draftId, { errorMessage: msg || 'Could not save. Click Submit again or Edit & Save.' });
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('appendActivity failed after retries', { message: msg });
+        }
+        window.__activitySaveTracePersistFailure && window.__activitySaveTracePersistFailure('appendActivity');
+        throw lastErr || new Error('Append failed');
+    },
+
+    /** Submit one existing activity (e.g. from draft) to the append API. Auto-retries up to 3 times on failure. */
+    async submitSingleActivityToServer(activity) {
+        if (!activity || !activity.id) throw new Error('Activity must have an id');
+        var apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        var url = apiBase + '/activities/append';
+        var bodyStr = JSON.stringify({ activity: activity });
+        var lastErr = null;
+        for (var attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) await new Promise(function (r) { setTimeout(r, 1000 * attempt); });
+            try {
+                var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: bodyStr });
+                if (res.ok) {
+                    this.invalidateCache('activities', 'allActivities');
+                    this.cache.activities = null;
+                    return activity;
+                }
+                var data = await res.json().catch(function () { return {}; });
+                lastErr = new Error((data && data.message) || ('Request failed: ' + res.status));
+                if (res.status >= 400 && res.status < 500 && res.status !== 408) break;
+            } catch (err) {
+                lastErr = err;
+            }
+        }
+        throw lastErr || new Error('Submit failed');
+    },
+
     async addActivity(activity) {
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof this.appendActivity === 'function') {
+            return this.appendActivity(activity);
+        }
         if (typeof window.__activitySaveTracePush === 'function') {
             window.__activitySaveTracePush('addActivity start', {
                 type: activity && activity.type,
@@ -2145,7 +2295,6 @@ const DataManager = {
                 accountId: activity && activity.accountId
             });
         }
-        // Re-fetch from remote so we merge with latest (avoids overwriting other users' or today's entries)
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
             this.cache.activities = null;
         }
@@ -2154,7 +2303,6 @@ const DataManager = {
             window.__activitySaveTracePush('getActivities returned', { count: Array.isArray(activities) ? activities.length : 0 });
         }
         const timestamp = new Date().toISOString();
-        // Newly logged activities must never be treated as migration (so they are never hidden by migration cutoff).
         const source = activity && (activity.source === 'migration') ? 'migration' : 'manual';
         const normalized = {
             ...activity,
@@ -2167,16 +2315,11 @@ const DataManager = {
         if (typeof window.__activitySaveTracePush === 'function') {
             window.__activitySaveTracePush('addActivity normalized', { source: normalized.source, isMigrated: !!normalized.isMigrated, date: normalized.date });
         }
-
         const referenceDate = normalized.date || normalized.createdAt;
         if (referenceDate) {
             const parsed = new Date(referenceDate);
-            if (!Number.isNaN(parsed.getTime())) {
-                const iso = parsed.toISOString();
-                normalized.date = iso;
-            }
+            if (!Number.isNaN(parsed.getTime())) normalized.date = parsed.toISOString();
         }
-
         const dateDay = (normalized.date || normalized.createdAt || '').toString().slice(0, 10);
         const duplicate = activities.find(function (a) {
             return (a.accountId || '') === (normalized.accountId || '') &&
@@ -2186,19 +2329,13 @@ const DataManager = {
         });
         if (duplicate) {
             if (typeof window.__activitySaveTracePush === 'function') {
-                window.__activitySaveTracePush('addActivity skipped duplicate', {
-                    accountId: normalized.accountId,
-                    projectId: normalized.projectId,
-                    date: dateDay,
-                    type: normalized.type
-                });
+                window.__activitySaveTracePush('addActivity skipped duplicate', { accountId: normalized.accountId, date: dateDay, type: normalized.type });
             }
             if (typeof UI !== 'undefined' && UI.showNotification) {
                 UI.showNotification('An activity with the same account, project, date and type already exists. Skipping duplicate.', 'warning');
             }
             return duplicate;
         }
-
         activities.push(normalized);
         try {
             await this.saveActivities(activities);
@@ -2214,16 +2351,6 @@ const DataManager = {
         }
         try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e) {}
         this.cache.activities = activities;
-        // Verify server has the new activity (refetch and log – do not overwrite cache with refetched data)
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync && typeof window.__activitySaveTracePush === 'function') {
-            var _newId = normalized.id;
-            var _expectedCount = activities.length;
-            window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities').then(function (stored) {
-                var arr = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
-                var hasNewId = Array.isArray(arr) && arr.some(function (a) { return a && a.id === _newId; });
-                window.__activitySaveTracePush('post-save verify', { serverCount: arr.length, expectedCount: _expectedCount, hasNewId: hasNewId });
-            }).catch(function (e) { window.__activitySaveTracePush('post-save verify failed', { message: e && e.message }); });
-        }
         this.recordAudit('activity.create', 'activity', normalized.id, {
             accountId: normalized.accountId || null,
             projectId: normalized.projectId || null,

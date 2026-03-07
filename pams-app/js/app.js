@@ -3137,16 +3137,20 @@ const App = {
             const listLabel = storageKey === 'accounts'
                 ? 'Accounts (win/loss) (' + (fullListCount != null ? fullListCount : '?') + ' items)'
                 : isInternal ? 'Internal (' + (fullListCount != null ? fullListCount : '?') + ' items)' : 'Activities (' + (fullListCount != null ? fullListCount : '?') + ' items)';
-            const act = (isActivityUpdate && p.activity) ? p.activity : p;
+            const act = (isActivityUpdate && p.activity) ? p.activity : (p && p._singleActivity && p.activity ? p.activity : p);
+            const rawDateSingle = (p && p._singleActivity && p.activity) ? (p.activity.date || p.activity.createdAt || '') : rawDate;
+            const dateStrSingle = (rawDateSingle != null && rawDateSingle !== undefined ? rawDateSingle : '').toString().slice(0, 10);
             const label = d.label
                 ? d.label + (dateStr ? ' – ' + dateStr : '')
                 : isActivityUpdate
                     ? (act.accountName || act.accountId || 'External') + ' – ' + (act.type || '') + ' – ' + dateStr + ' (add use cases/products)'
-                    : isFullList
-                        ? listLabel + ' – ' + dateStr
-                        : isInternal
-                            ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
-                            : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+                    : (p && p._singleActivity === true && p.activity)
+                        ? (act.accountName || act.accountId || 'Activity') + ' – ' + (act.type || '') + ' – ' + dateStrSingle
+                        : isFullList
+                            ? listLabel + ' – ' + dateStr
+                            : isInternal
+                                ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
+                                : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
             const typeLabel = d.label ? d.label.split(' – ')[0] : (isActivityUpdate ? 'Feb update' : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External')));
             const err = (d.errorMessage || '').slice(0, 80);
             const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
@@ -3204,6 +3208,19 @@ const App = {
                             return;
                         }
                         if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
+                        if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
+                            try {
+                                await DataManager.submitSingleActivityToServer(p.activity);
+                                if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
+                            } catch (e) {
+                                if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: (e && e.message) || 'Submit failed' });
+                                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Still could not save. Try again or edit the draft.', 'error');
+                            }
+                            App.loadDraftsView();
+                            App.updateDraftsBadge();
+                            return;
+                        }
                         var isFullList = isFullListDraftPayload(p);
                         var keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                         if (isFullList) {
@@ -3249,9 +3266,10 @@ const App = {
                 }
                 if (isFullListDraftPayload(p)) return;
                 if (typeof Activities === 'undefined' || !Activities.openActivityModal) return;
+                const activityToEdit = (p && p._singleActivity && p.activity) ? p.activity : p;
                 Activities.openActivityModal({
-                    mode: 'create',
-                    activity: p,
+                    mode: (p && p._singleActivity && p.activity) ? 'edit' : 'create',
+                    activity: activityToEdit,
                     isInternal: draft.type === 'internal',
                     fromDraftId: draft.id
                 });
@@ -3333,6 +3351,12 @@ const App = {
                 continue;
             }
             try {
+                if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
+                    await DataManager.submitSingleActivityToServer(p.activity);
+                    if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                    submitted++;
+                    continue;
+                }
                 const isFullList = isFullListDraftPayload(p);
                 const keyToSave = draft.storageKey || (draft.type === 'internal' ? 'internalActivities' : 'activities');
                 if (isFullList) {

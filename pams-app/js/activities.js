@@ -2367,8 +2367,10 @@ const Activities = {
                 details: activity.details,
                 isInternal: false
             };
-
-            const updated = await DataManager.updateActivity(original.id, updates);
+            const updated =
+                (this.editingContext && this.editingContext.fromDraftId && typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof DataManager.submitSingleActivityToServer === 'function')
+                    ? await DataManager.submitSingleActivityToServer({ ...original, ...updates, updatedAt: new Date().toISOString() })
+                    : await DataManager.updateActivity(original.id, updates);
             if (!updated) {
                 UI.showNotification('Unable to update activity. Please try again.', 'error');
                 return;
@@ -2480,7 +2482,16 @@ const Activities = {
                         Drafts.removeDraft(this.editingContext.fromDraftId);
                     }
                     this.closeActivityModal();
-                    UI.showNotification('Activity logged successfully! Draft removed.', 'success');
+                    let msg = 'Activity logged successfully!';
+                    if (this.editingContext && this.editingContext.fromDraftId) msg += ' Draft removed.';
+                    const activityMonth = (created.date || created.createdAt || '').toString().slice(0, 7);
+                    const now = new Date();
+                    const currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+                    const timeframe = (window.app && window.app.activityFilters && window.app.activityFilters.timeframe) || 'all';
+                    if (activityMonth && activityMonth !== currentMonth && (timeframe === 'thisMonth' || timeframe === 'lastMonth')) {
+                        msg += " If you don't see it, set the date filter to \"All\" or the activity's month.";
+                    }
+                    UI.showNotification(msg, 'success');
                     this.setLastActivityDateForUser(currentUser.id, date);
                 } catch (err) {
                     if (typeof window.__activitySaveTracePush === 'function') {
@@ -2497,7 +2508,7 @@ const Activities = {
 
         if (window.app) {
             if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
-                DataManager.invalidateCache('activities', 'internalActivities', 'allActivities');
+                DataManager.invalidateCache('internalActivities', 'allActivities');
             }
             if (window.app.updateDraftsBadge) window.app.updateDraftsBadge();
             await window.app.loadDashboard();

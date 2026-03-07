@@ -451,6 +451,63 @@ router.get('/batch', async (req, res) => {
 /** Keys that may not exist yet; return 200 with null value instead of 404 to avoid console noise. */
 const OPTIONAL_STORAGE_KEYS = new Set(['pams_leaders', 'pams_salesLeaders', 'pams_reportOverrides', 'suggestions_and_bugs']);
 
+/**
+ * POST /activities/append – append one activity (no bulk). Read-modify-write on server so client never sends full list.
+ * Body: { activity: { id, date, type, accountId, projectId, ... } }
+ * Returns: { ok: true, key: 'activities', updated_at } or 4xx/5xx.
+ */
+router.post('/activities/append', async (req, res) => {
+  try {
+    const { activity } = req.body || {};
+    if (!activity || typeof activity !== 'object' || !activity.id) {
+      return res.status(400).json({ message: 'Body must include { activity: { id, ... } }' });
+    }
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: currentRows } = await client.query(
+        'SELECT value, updated_at FROM storage WHERE key = $1 FOR UPDATE;',
+        ['activities']
+      );
+      const currentSerialized = currentRows.length ? currentRows[0].value : null;
+      const incomingSerialized = JSON.stringify([activity]);
+      const mergedSerialized = mergeActivitiesPayload(currentSerialized, incomingSerialized);
+      let parsedMerged;
+      try {
+        parsedMerged = JSON.parse(mergedSerialized);
+      } catch (_) {
+        parsedMerged = [];
+      }
+      const hasNewActivity = Array.isArray(parsedMerged) && parsedMerged.some((a) => a && a.id === activity.id);
+      if (!hasNewActivity) {
+        await client.query('ROLLBACK').catch(() => {});
+        logger.error('storage_append_activity_dropped', { activityId: activity.id, transactionId: req.transactionId });
+        return res.status(500).json({ message: 'Append merge did not include activity; not written.' });
+      }
+      await archiveCurrentValue(client, 'activities');
+      const { rows } = await client.query(
+        `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()
+         RETURNING updated_at;`,
+        [mergedSerialized]
+      );
+      await client.query('COMMIT');
+      invalidateStorageReadCache('activities');
+      const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
+      logger.info('storage_append_activity', { activityId: activity.id, transactionId: req.transactionId });
+      return res.status(200).json({ ok: true, key: 'activities', updated_at: updatedAt });
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('storage_append_activity_failed', { message: error.message, transactionId: req.transactionId });
+    return res.status(500).json({ message: 'Failed to append activity' });
+  }
+});
+
 router.get('/:key', async (req, res) => {
   try {
     const row = await getValueWithVersion(req.params.key);
@@ -501,6 +558,11 @@ router.put('/:key', async (req, res) => {
     }
 
     const ifMatch = req.get('If-Match') || req.get('if-match');
+    if (isActivityStorageKey(req.params.key) && (ifMatch === undefined || ifMatch === null || ifMatch === '')) {
+      return res.status(400).json({
+        message: 'If-Match required for activities to prevent data loss. Refresh the page and try again.'
+      });
+    }
     const rawClientMutationId = req.get('X-Client-Mutation-Id') || req.get('x-client-mutation-id');
     const clientMutationId = rawClientMutationId ? normalizeMutationId(rawClientMutationId) : null;
     if (rawClientMutationId && !clientMutationId) {
