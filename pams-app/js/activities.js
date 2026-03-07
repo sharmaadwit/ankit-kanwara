@@ -2462,6 +2462,14 @@ const Activities = {
                 }
             } else {
                 try {
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('external activity submit', {
+                            type: activity.type,
+                            date: activity.date,
+                            accountId: activity.accountId,
+                            projectId: activity.projectId
+                        });
+                    }
                     const created = await DataManager.addActivity(activity);
                     await this.syncProjectActivityReference({
                         activity: created,
@@ -2475,6 +2483,12 @@ const Activities = {
                     UI.showNotification('Activity logged successfully! Draft removed.', 'success');
                     this.setLastActivityDateForUser(currentUser.id, date);
                 } catch (err) {
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('external activity save threw', {
+                            status: err && err.status,
+                            message: err && err.message
+                        });
+                    }
                     UI.showNotification('Could not save. Activity was saved to Drafts. Open My drafts and click Submit again – then it will show in Activities and Win/Loss.', 'warning');
                     if (window.app && window.app.loadDraftsView) await window.app.loadDraftsView();
                 }

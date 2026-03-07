@@ -137,6 +137,17 @@ const DEFAULT_INDUSTRY_USE_CASES = {
 const ENTITY_KEYS = new Set(['accounts', 'activities', 'internalActivities', 'users']);
 const isEntityKey = (key) => key && (ENTITY_KEYS.has(key) || key === 'activities');
 
+// Activity save trace: last 50 steps for debugging data loss. In console: __activitySaveTrace or __activitySaveTracePush('msg', {detail})
+if (typeof window !== 'undefined') {
+    window.__activitySaveTrace = window.__activitySaveTrace || [];
+    window.__activitySaveTracePush = function (msg, detail) {
+        window.__activitySaveTrace = window.__activitySaveTrace || [];
+        window.__activitySaveTrace.push({ t: Date.now(), msg: msg, detail: detail != null ? detail : undefined });
+        if (window.__activitySaveTrace.length > 50) window.__activitySaveTrace.shift();
+        console.log('[ActivitySave]', msg, detail != null ? detail : '');
+    };
+}
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -1970,15 +1981,77 @@ const DataManager = {
         return activities.filter(a => a.projectId === projectId);
     },
 
+    _mergeActivitiesByIdNewerWins(serverArr, localArr) {
+        if (!Array.isArray(serverArr)) serverArr = [];
+        if (!Array.isArray(localArr)) localArr = [];
+        const byId = new Map();
+        const ts = (a) => (a && (a.updatedAt || a.createdAt)) ? String(a.updatedAt || a.createdAt) : '';
+        serverArr.forEach((s) => { if (s && s.id) byId.set(s.id, s); });
+        localArr.forEach((l) => {
+            if (!l || !l.id) return;
+            const existing = byId.get(l.id);
+            if (!existing) { byId.set(l.id, l); return; }
+            if (ts(l) > ts(existing)) byId.set(l.id, l);
+        });
+        return Array.from(byId.values());
+    },
+    _dedupeActivitiesBySignature(arr) {
+        if (!Array.isArray(arr) || !arr.length) return arr;
+        const seen = new Map();
+        arr.forEach((a) => {
+            const dateDay = (a.date || a.createdAt || '').toString().slice(0, 10);
+            const sig = (a.accountId || '') + '|' + (a.projectId || '') + '|' + dateDay + '|' + (a.type || '');
+            seen.set(sig, a);
+        });
+        return Array.from(seen.values());
+    },
     async saveActivities(activities) {
+        const count = Array.isArray(activities) ? activities.length : 0;
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('saveActivities called', { count });
+        }
         const payload = JSON.stringify(activities);
         // Use async with draft for conflict handling
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
                 await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('activities', payload, { type: 'external' });
                 this.invalidateCache('activities', 'allActivities');
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('saveActivities success', { count });
+                }
                 return;
             } catch (err) {
+                if (err && err.status === 409 && err.value != null) {
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        let serverCount = null;
+                        try {
+                            const v = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
+                            if (Array.isArray(v)) serverCount = v.length;
+                        } catch (_) { }
+                        window.__activitySaveTracePush('409 conflict, merging and retrying', { serverCount });
+                    }
+                    try {
+                        const serverArr = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
+                        if (Array.isArray(serverArr)) {
+                            const merged = this._mergeActivitiesByIdNewerWins(serverArr, activities);
+                            const deduped = this._dedupeActivitiesBySignature(merged);
+                            this.invalidateCache('activities', 'allActivities');
+                            await this.saveActivities(deduped);
+                            if (typeof window.__activitySaveTracePush === 'function') {
+                                window.__activitySaveTracePush('merge retry success', { mergedCount: deduped.length });
+                            }
+                            return;
+                        }
+                    } catch (mergeErr) {
+                        if (typeof window.__activitySaveTracePush === 'function') {
+                            window.__activitySaveTracePush('merge retry failed', { message: mergeErr && mergeErr.message });
+                        }
+                        console.warn('[DataManager] Activities 409 merge retry failed', mergeErr);
+                    }
+                }
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('saveActivities failed', { status: err && err.status, message: err && err.message });
+                }
                 console.warn('[DataManager] Async saveActivities failed; preserving draft and aborting sync overwrite:', err);
                 throw err;
             }
@@ -1991,11 +2064,21 @@ const DataManager = {
     },
 
     async addActivity(activity) {
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('addActivity start', {
+                type: activity && activity.type,
+                date: activity && (activity.date || activity.createdAt),
+                accountId: activity && activity.accountId
+            });
+        }
         // Re-fetch from remote so we merge with latest (avoids overwriting other users' or today's entries)
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
             this.cache.activities = null;
         }
         const activities = await this.getActivities();
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('getActivities returned', { count: Array.isArray(activities) ? activities.length : 0 });
+        }
         const timestamp = new Date().toISOString();
         const normalized = {
             ...activity,
@@ -2023,6 +2106,14 @@ const DataManager = {
                 (a.type || '') === (normalized.type || '');
         });
         if (duplicate) {
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('addActivity skipped duplicate', {
+                    accountId: normalized.accountId,
+                    projectId: normalized.projectId,
+                    date: dateDay,
+                    type: normalized.type
+                });
+            }
             if (typeof UI !== 'undefined' && UI.showNotification) {
                 UI.showNotification('An activity with the same account, project, date and type already exists. Skipping duplicate.', 'warning');
             }
@@ -2033,7 +2124,13 @@ const DataManager = {
         try {
             await this.saveActivities(activities);
         } catch (err) {
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('addActivity failed', { status: err && err.status, message: err && err.message });
+            }
             throw err;
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('addActivity success', { id: normalized.id });
         }
         this.recordAudit('activity.create', 'activity', normalized.id, {
             accountId: normalized.accountId || null,

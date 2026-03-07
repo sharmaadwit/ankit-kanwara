@@ -1393,12 +1393,28 @@ const App = {
         if (keyToSave === 'activities' && DataManager.saveActivities) {
             // With remote storage, merge draft list with current server list so "Submit again" after 409 succeeds
             if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__) {
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('Drafts Submit activities', {
+                        draftCount: Array.isArray(payloadArray) ? payloadArray.length : 0
+                    });
+                }
                 if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
                     DataManager.invalidateCache('activities', 'allActivities');
                 }
                 const current = await DataManager.getActivities();
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('Drafts getActivities after invalidate', {
+                        currentCount: Array.isArray(current) ? current.length : 0
+                    });
+                }
                 const merged = this._mergeActivitiesByIdNewerWins(current || [], payloadArray);
                 const deduped = this._dedupeActivitiesBySignature(merged);
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('Drafts merged activities', {
+                        mergedCount: merged.length,
+                        dedupedCount: deduped.length
+                    });
+                }
                 await DataManager.saveActivities(deduped);
                 return;
             }

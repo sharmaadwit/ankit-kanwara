@@ -859,6 +859,12 @@
             type: draftType
         };
         const queued = enqueueOutboxEntry(outboxEntry);
+        if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('PUT activities (storage)', {
+                count: isEntityListKey && payloadForDraft && payloadForDraft.count != null ? payloadForDraft.count : null,
+                payloadLen: typeof payloadStr === 'string' ? payloadStr.length : 0
+            });
+        }
         if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
             draft = window.Drafts.addDraft({
                 type: draftType,
@@ -876,6 +882,9 @@
             extraHeaders: { 'X-Client-Mutation-Id': outboxId }
         })
             .then(() => {
+                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('PUT activities response 200', { key });
+                }
                 removeOutboxEntry(outboxId);
                 if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
                     window.Drafts.removeDraft(draft.id);
@@ -885,6 +894,13 @@
                 }
             })
             .catch((err) => {
+                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('PUT activities response error', {
+                        status: err && err.status,
+                        message: err && err.message,
+                        conflict: !!(err && err.status === 409)
+                    });
+                }
                 const errorMessage = (err && err.status === 401)
                     ? 'Session expired. Please sign in again.'
                     : (err && err.status === 409)
