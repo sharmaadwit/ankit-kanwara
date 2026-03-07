@@ -452,7 +452,7 @@ router.get('/batch', async (req, res) => {
 const OPTIONAL_STORAGE_KEYS = new Set(['pams_leaders', 'pams_salesLeaders', 'pams_reportOverrides', 'suggestions_and_bugs']);
 
 /**
- * POST /activities/append – append one activity (no bulk). Read-modify-write on server so client never sends full list.
+ * POST /activities/append – append or update one activity (no bulk). Read-modify-write on server.
  * Body: { activity: { id, date, type, accountId, projectId, ... } }
  * Returns: { ok: true, key: 'activities', updated_at } or 4xx/5xx.
  */
@@ -505,6 +505,68 @@ router.post('/activities/append', async (req, res) => {
   } catch (error) {
     logger.error('storage_append_activity_failed', { message: error.message, transactionId: req.transactionId });
     return res.status(500).json({ message: 'Failed to append activity' });
+  }
+});
+
+/**
+ * POST /activities/remove – remove one activity by id (no full-list PUT).
+ * Body: { activityId: string }
+ * Returns: { ok: true, key: 'activities', updated_at } or 404 / 5xx.
+ */
+router.post('/activities/remove', async (req, res) => {
+  try {
+    const activityId = req.body?.activityId;
+    if (!activityId || typeof activityId !== 'string') {
+      return res.status(400).json({ message: 'Body must include { activityId: string }' });
+    }
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: currentRows } = await client.query(
+        'SELECT value FROM storage WHERE key = $1 FOR UPDATE;',
+        ['activities']
+      );
+      const currentSerialized = currentRows.length ? currentRows[0].value : null;
+      const parse = (s) => {
+        if (s == null || s === '') return [];
+        try {
+          const v = typeof s === 'string' ? s : String(s);
+          const decoded = v.startsWith(GZIP_PREFIX) ? maybeDecompressValue(v) : v;
+          const parsed = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      };
+      const list = parse(currentSerialized);
+      const filtered = list.filter((a) => a && a.id !== activityId);
+      if (filtered.length === list.length) {
+        await client.query('ROLLBACK').catch(() => {});
+        logger.warn('storage_remove_activity_not_found', { activityId, transactionId: req.transactionId });
+        return res.status(404).json({ message: 'Activity not found' });
+      }
+      await archiveCurrentValue(client, 'activities');
+      const newSerialized = JSON.stringify(filtered);
+      const { rows } = await client.query(
+        `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()
+         RETURNING updated_at;`,
+        [newSerialized]
+      );
+      await client.query('COMMIT');
+      invalidateStorageReadCache('activities');
+      const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
+      logger.info('storage_remove_activity', { activityId, transactionId: req.transactionId });
+      return res.status(200).json({ ok: true, key: 'activities', updated_at: updatedAt });
+    } catch (txErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('storage_remove_activity_failed', { message: error.message, transactionId: req.transactionId });
+    return res.status(500).json({ message: 'Failed to remove activity' });
   }
 });
 

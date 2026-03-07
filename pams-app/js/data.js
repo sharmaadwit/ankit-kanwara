@@ -449,8 +449,11 @@ const DataManager = {
 
             this.normalizeSalesRepRegions();
             this.backfillAccountSalesRepRegions();
-            this.backfillActivitySalesRepRegions();
-            await this.applyMigrationCleanupIfNeeded();
+            // When remote storage is on, skip full-list activity backfill/cleanup on init so we don't PUT 3283 activities right after reconcile (would overwrite server and undo user edits).
+            if (typeof window === 'undefined' || !window.__REMOTE_STORAGE_ENABLED__) {
+                this.backfillActivitySalesRepRegions();
+                await this.applyMigrationCleanupIfNeeded();
+            }
             this.ensureAnalyticsPresetBaseline();
         } catch (error) {
             console.error('Error initializing data:', error);
@@ -2195,7 +2198,7 @@ const DataManager = {
                     credentials: 'include',
                     body: bodyStr
                 });
-                var data = res.ok ? (await res.json().catch(function () { return {}; })) : null;
+                var data = await res.json().catch(function () { return {}; });
                 if (res.ok && data && data.ok) {
                     if (draftId && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
                         window.Drafts.removeDraft(draftId);
@@ -2369,7 +2372,47 @@ const DataManager = {
         return null;
     },
 
+    /**
+     * Remove one activity via server POST /activities/remove (used when remote storage enabled).
+     * Throws on failure; err.status === 423 when account/project is locked.
+     */
+    async removeActivityViaServer(activityId) {
+        const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        const res = await fetch(apiBase + '/activities/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ activityId })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data && data.ok) {
+            this.invalidateCache('activities', 'allActivities');
+            this.recordAudit('activity.delete', 'activity', activityId);
+            return;
+        }
+        const err = new Error((data && data.message) || ('Request failed: ' + res.status));
+        err.status = res.status;
+        err.locked = res.status === 423 && !!(data && data.locked);
+        throw err;
+    },
+
     async deleteActivity(activityId) {
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof this.removeActivityViaServer === 'function') {
+            try {
+                await this.removeActivityViaServer(activityId);
+                return;
+            } catch (e) {
+                if (e.status === 423 && e.locked && typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+                    window.Drafts.addDraft({
+                        type: 'external',
+                        storageKey: 'activities',
+                        payload: { _pendingDelete: true, activityId },
+                        errorMessage: (e && e.message) || 'Account/project locked. Try again in a moment (lock expires in 60s).'
+                    });
+                }
+                throw e;
+            }
+        }
         this.invalidateCache('activities', 'allActivities');
         const activities = (await this.getActivities()).filter(a => a.id !== activityId);
         await this.saveActivities(activities);

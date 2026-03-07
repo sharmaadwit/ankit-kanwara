@@ -3140,23 +3140,26 @@ const App = {
             const act = (isActivityUpdate && p.activity) ? p.activity : (p && p._singleActivity && p.activity ? p.activity : p);
             const rawDateSingle = (p && p._singleActivity && p.activity) ? (p.activity.date || p.activity.createdAt || '') : rawDate;
             const dateStrSingle = (rawDateSingle != null && rawDateSingle !== undefined ? rawDateSingle : '').toString().slice(0, 10);
+            const isPendingDelete = !!(p && p._pendingDelete === true && p.activityId);
             const label = d.label
                 ? d.label + (dateStr ? ' – ' + dateStr : '')
-                : isActivityUpdate
-                    ? (act.accountName || act.accountId || 'External') + ' – ' + (act.type || '') + ' – ' + dateStr + ' (add use cases/products)'
-                    : (p && p._singleActivity === true && p.activity)
-                        ? (act.accountName || act.accountId || 'Activity') + ' – ' + (act.type || '') + ' – ' + dateStrSingle
-                        : isFullList
-                            ? listLabel + ' – ' + dateStr
-                            : isInternal
-                                ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
-                                : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
-            const typeLabel = d.label ? d.label.split(' – ')[0] : (isActivityUpdate ? 'Feb update' : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External')));
+                : isPendingDelete
+                    ? 'Delete activity – try again'
+                    : isActivityUpdate
+                        ? (act.accountName || act.accountId || 'External') + ' – ' + (act.type || '') + ' – ' + dateStr + ' (add use cases/products)'
+                        : (p && p._singleActivity === true && p.activity)
+                            ? (act.accountName || act.accountId || 'Activity') + ' – ' + (act.type || '') + ' – ' + dateStrSingle
+                            : isFullList
+                                ? listLabel + ' – ' + dateStr
+                                : isInternal
+                                    ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
+                                    : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
+            const typeLabel = d.label ? d.label.split(' – ')[0] : (isPendingDelete ? 'Delete' : (isActivityUpdate ? 'Feb update' : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External'))));
             const err = (d.errorMessage || '').slice(0, 80);
             const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
             const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : (isActivityUpdate ? 'Edit & Save' : 'Submit again'));
             const submitDisabled = isSubmitting ? ' disabled' : '';
-            const showEdit = !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || (!isWinlossForm && !isActivityForm));
+            const showEdit = !isPendingDelete && !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || (!isWinlossForm && !isActivityForm));
             return (
                 '<div class="draft-card" data-draft-id="' + (d.id || '') + '">' +
                 '<div class="draft-card-body">' +
@@ -3219,6 +3222,20 @@ const App = {
                             }
                             App.loadDraftsView();
                             App.updateDraftsBadge();
+                            return;
+                        }
+                        if (p && p._pendingDelete === true && p.activityId && typeof DataManager !== 'undefined' && typeof DataManager.removeActivityViaServer === 'function') {
+                            try {
+                                await DataManager.removeActivityViaServer(p.activityId);
+                                if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Activity deleted.', 'success');
+                            } catch (e) {
+                                if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: (e && e.message) || 'Delete failed' });
+                                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification((e && e.message) || 'Still could not delete. Try again in a moment.', 'error');
+                            }
+                            App.loadDraftsView();
+                            App.updateDraftsBadge();
+                            if (App.currentView !== 'drafts' && typeof App.refreshCurrentViewData === 'function') App.refreshCurrentViewData();
                             return;
                         }
                         var isFullList = isFullListDraftPayload(p);
@@ -3351,6 +3368,12 @@ const App = {
                 continue;
             }
             try {
+                if (p && p._pendingDelete === true && p.activityId && typeof DataManager !== 'undefined' && typeof DataManager.removeActivityViaServer === 'function') {
+                    await DataManager.removeActivityViaServer(p.activityId);
+                    if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                    submitted++;
+                    continue;
+                }
                 if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
                     await DataManager.submitSingleActivityToServer(p.activity);
                     if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);

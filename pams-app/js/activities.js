@@ -2373,10 +2373,11 @@ const Activities = {
                 details: activity.details,
                 isInternal: false
             };
-            const updated =
-                (this.editingContext && this.editingContext.fromDraftId && typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof DataManager.submitSingleActivityToServer === 'function')
-                    ? await DataManager.submitSingleActivityToServer({ ...original, ...updates, updatedAt: new Date().toISOString() })
-                    : await DataManager.updateActivity(original.id, updates);
+            // When remote storage is on, always use single-activity update (append API) so we never do a full-list PUT for edit – fixes date change and avoids timeouts/overwrites.
+            const useSingleActivityUpdate = typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof DataManager.submitSingleActivityToServer === 'function';
+            const updated = useSingleActivityUpdate
+                ? await DataManager.submitSingleActivityToServer({ ...original, ...updates, updatedAt: new Date().toISOString() })
+                : await DataManager.updateActivity(original.id, updates);
             if (!updated) {
                 UI.showNotification('Unable to update activity. Please try again.', 'error');
                 return;
