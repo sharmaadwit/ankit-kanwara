@@ -107,9 +107,18 @@ const Activities = {
         }
         this.removeExtraActivityRows();
 
+        // Set default date for create mode synchronously so we never overwrite a user-selected date (no 100ms race)
+        const dateInput = document.getElementById('activityDate');
+        if (dateInput && !this._restoreFormDataPending && !(isEdit || fromDraftId)) {
+            const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+            const lastDate = currentUser && this.getLastActivityDateForUser(currentUser.id);
+            const today = new Date().toISOString().split('T')[0];
+            dateInput.value = (lastDate && lastDate.slice(0, 10)) || today;
+        }
+
         UI.showModal(modalId);
 
-        // Initialize use case dropdown after modal is shown
+        // Initialize use case dropdown / restore draft / populate edit form after modal is shown
         setTimeout(async () => {
             if (this._restoreFormDataPending) {
                 await this.restoreFormFromDraftFields(this._restoreFormDataPending);
@@ -117,11 +126,6 @@ const Activities = {
             } else if ((isEdit || fromDraftId) && activity) {
                 await this.populateEditForm(activity, !!isInternal);
             } else {
-                const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
-                const lastDate = currentUser && this.getLastActivityDateForUser(currentUser.id);
-                const today = new Date().toISOString().split('T')[0];
-                const dateInput = document.getElementById('activityDate');
-                if (dateInput) dateInput.value = (lastDate && lastDate.slice(0, 10)) || today;
                 this.refreshUseCaseOptions('');
             }
             this.updateAddAnotherActivityButtonVisibility();
@@ -310,8 +314,10 @@ const Activities = {
 
         const dateInput = document.getElementById('activityDate');
         const formattedDate = this.formatDateForInput(activity.date || activity.createdAt);
-        if (dateInput && formattedDate) {
-            dateInput.value = formattedDate;
+        if (dateInput) {
+            dateInput.disabled = false;
+            dateInput.removeAttribute('readonly');
+            if (formattedDate) dateInput.value = formattedDate;
         }
 
         const activityTypeSelect = document.getElementById('activityTypeSelect');
