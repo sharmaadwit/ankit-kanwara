@@ -2162,23 +2162,6 @@ const DataManager = {
             if (!Number.isNaN(parsed.getTime())) normalized.date = parsed.toISOString();
         }
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) this.cache.activities = null;
-        const activities = await this.getActivities();
-        const dateDay = (normalized.date || normalized.createdAt || '').toString().slice(0, 10);
-        const duplicate = activities.find(function (a) {
-            return (a.accountId || '') === (normalized.accountId || '') &&
-                (a.projectId || '') === (normalized.projectId || '') &&
-                (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
-                (a.type || '') === (normalized.type || '');
-        });
-        if (duplicate) {
-            if (typeof window.__activitySaveTracePush === 'function') {
-                window.__activitySaveTracePush('appendActivity skipped duplicate', { date: dateDay });
-            }
-            if (typeof UI !== 'undefined' && UI.showNotification) {
-                UI.showNotification('An activity with the same account, project, date and type already exists.', 'warning');
-            }
-            return duplicate;
-        }
         var draftId = null;
         if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
             var d = window.Drafts.addDraft({
@@ -2219,7 +2202,7 @@ const DataManager = {
                     }
                     this.invalidateCache('activities', 'allActivities');
                     if (typeof window.__activitySaveTracePush === 'function') {
-                        window.__activitySaveTracePush('appendActivity success', { id: normalized.id, attempt: attempt + 1 });
+                        window.__activitySaveTracePush('appendActivity success', { id: normalized.id, attempt: attempt + 1, duplicate: !!data.duplicate });
                     }
                     try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e) {}
                     this.cache.activities = null;
@@ -2250,6 +2233,16 @@ const DataManager = {
         var msg = lastErr && (lastErr.message || lastErr.status);
         if (draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
             window.Drafts.updateDraft(draftId, { errorMessage: msg || 'Could not save. Click Submit again or Edit & Save.' });
+        } else if (!draftId && typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+            window.Drafts.addDraft({
+                type: 'external',
+                storageKey: 'activities',
+                payload: { _singleActivity: true, activity: normalized },
+                errorMessage: msg || 'Could not save. Click Submit again or Edit & Save.'
+            });
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('appendActivity failed: draft added for retry', { id: normalized.id });
+            }
         }
         if (typeof window.__activitySaveTracePush === 'function') {
             window.__activitySaveTracePush('appendActivity failed after retries', { message: msg });
