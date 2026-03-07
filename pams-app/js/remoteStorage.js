@@ -488,6 +488,8 @@
     const OUTBOX_PROCESS_BATCH_SIZE = 2;
     let isFlushingOutbox = false;
     let outboxFlushTimer = null;
+    /** Only one PUT for activities in flight at a time to prevent overwrites. */
+    let activitiesPutInFlight = null;
 
     const nowIso = () => new Date().toISOString();
     const generateMutationId = () =>
@@ -538,7 +540,11 @@
     const enqueueOutboxEntry = (entry) => {
         if (!entry || !entry.id) return false;
         return updateOutbox((items) => {
-            const filtered = items.filter((item) => item && item.id !== entry.id);
+            let filtered = items.filter((item) => item && item.id !== entry.id);
+            // Long-term fix: only one activities entry at a time so an old 3278 never overwrites a 3279.
+            if (entry.key === 'activities') {
+                filtered = filtered.filter((item) => item.key !== 'activities');
+            }
             filtered.unshift(entry);
             if (filtered.length > OUTBOX_MAX_ITEMS) {
                 return filtered.slice(0, OUTBOX_MAX_ITEMS);
@@ -844,110 +850,131 @@
         }
         let draft = null;
         let draftSaved = true;
-        const ifMatchSnapshot = Object.prototype.hasOwnProperty.call(lastVersion, key) ? lastVersion[key] : null;
-        const outboxId = generateMutationId();
-        const outboxEntry = {
-            id: outboxId,
-            key: key,
-            value: payloadStr,
-            ifMatchValue: ifMatchSnapshot,
-            clientMutationId: outboxId,
-            draftId: null,
-            attempts: 0,
-            nextAttemptAt: Date.now() + 15000,
-            createdAt: nowIso(),
-            type: draftType
-        };
-        const queued = enqueueOutboxEntry(outboxEntry);
-        if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-            window.__activitySaveTracePush('PUT activities (storage)', {
-                count: isEntityListKey && payloadForDraft && payloadForDraft.count != null ? payloadForDraft.count : null,
-                payloadLen: typeof payloadStr === 'string' ? payloadStr.length : 0
-            });
-        }
-        if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
-            draft = window.Drafts.addDraft({
-                type: draftType,
-                payload: payloadForDraft,
-                errorMessage: 'Submitting…',
-                storageKey: key
-            });
-            draftSaved = !!draft;
-            if (draft && draft.id) {
-                updateOutboxEntry(outboxId, { draftId: draft.id });
+        // Long-term fix: ensure we have a version before PUT activities so server can reject stale overwrites.
+        const ensureVersionThenRun = () => {
+            const ifMatchSnapshot = Object.prototype.hasOwnProperty.call(lastVersion, key) ? lastVersion[key] : null;
+            if (key === 'activities' && (ifMatchSnapshot == null || ifMatchSnapshot === '')) {
+                return getItemAsync('activities').then(() => setItemAsyncWithDraft(key, value, options));
             }
-        }
-        return setItemAsync(key, payloadStr, {
-            ifMatchValue: ifMatchSnapshot,
-            extraHeaders: { 'X-Client-Mutation-Id': outboxId }
-        })
-            .then(() => {
-                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                    window.__activitySaveTracePush('PUT activities response 200', { key });
+            return runSetItemWithDraft(ifMatchSnapshot);
+        };
+        const runSetItemWithDraft = (ifMatchSnapshot) => {
+            const outboxId = generateMutationId();
+            const outboxEntry = {
+                id: outboxId,
+                key: key,
+                value: payloadStr,
+                ifMatchValue: ifMatchSnapshot,
+                clientMutationId: outboxId,
+                draftId: null,
+                attempts: 0,
+                nextAttemptAt: Date.now() + 15000,
+                createdAt: nowIso(),
+                type: draftType
+            };
+            const queued = enqueueOutboxEntry(outboxEntry);
+            if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('PUT activities (storage)', {
+                    count: isEntityListKey && payloadForDraft && payloadForDraft.count != null ? payloadForDraft.count : null,
+                    payloadLen: typeof payloadStr === 'string' ? payloadStr.length : 0
+                });
+            }
+            if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+                draft = window.Drafts.addDraft({
+                    type: draftType,
+                    payload: payloadForDraft,
+                    errorMessage: 'Submitting…',
+                    storageKey: key
+                });
+                draftSaved = !!draft;
+                if (draft && draft.id) {
+                    updateOutboxEntry(outboxId, { draftId: draft.id });
                 }
-                removeOutboxEntry(outboxId);
-                if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
-                    window.Drafts.removeDraft(draft.id);
-                    try {
-                        window.dispatchEvent(new CustomEvent('remotestorage:save-succeeded', { detail: { key } }));
-                    } catch (_) { }
-                }
+            }
+            return setItemAsync(key, payloadStr, {
+                ifMatchValue: ifMatchSnapshot,
+                extraHeaders: { 'X-Client-Mutation-Id': outboxId }
             })
-            .catch((err) => {
-                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                    window.__activitySaveTracePush('PUT activities response error', {
-                        status: err && err.status,
-                        message: err && err.message,
-                        conflict: !!(err && err.status === 409)
-                    });
-                }
-                const errorMessage = (err && err.status === 401)
-                    ? 'Session expired. Please sign in again.'
-                    : (err && err.status === 409)
-                        ? 'Conflict – someone else saved. Submit again to merge.'
-                        : ((err && err.message) || (queued ? 'Saved locally. Auto-retry queued.' : 'Data not saved.'));
-                if (err && err.status === 409) {
-                    // So "Submit again" from Drafts uses latest version and can succeed.
-                    if (key && err.updated_at != null) lastVersion[key] = err.updated_at;
+                .then(() => {
+                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('PUT activities response 200', { key });
+                    }
                     removeOutboxEntry(outboxId);
-                } else {
-                    const currentEntry = safeReadOutbox().find((x) => x && x.id === outboxId) || {};
-                    const attempts = (Number(currentEntry.attempts) || 0) + 1;
-                    updateOutboxEntry(outboxId, {
-                        attempts,
-                        lastError: (err && err.message) || 'save_failed',
-                        lastErrorAt: nowIso(),
-                        nextAttemptAt: Date.now() + computeRetryDelayMs(attempts)
-                    });
-                    scheduleOutboxFlush(1500);
-                }
-                if (draft && draft.id && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
-                    window.Drafts.updateDraft(draft.id, { errorMessage: errorMessage });
-                } else if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
-                    const fallbackDraft = window.Drafts.addDraft({
-                        type: draftType,
-                        payload: payloadForDraft,
-                        errorMessage: errorMessage,
-                        storageKey: key
-                    });
-                    draftSaved = !!fallbackDraft;
-                }
-                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                    window.__activitySaveTracePush('Draft created (activities)', {
-                        status: err && err.status,
-                        draftSaved: !!draftSaved
-                    });
-                }
-                try {
-                    const finalMessage = draftSaved
-                        ? errorMessage
-                        : (errorMessage + ' Draft could not be saved locally (storage full).');
-                    window.dispatchEvent(new CustomEvent('remotestorage:save-failed', {
-                        detail: { key, error: err, message: finalMessage, draftSaved: draftSaved }
-                    }));
-                } catch (_) { }
-                throw err;
-            });
+                    if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
+                        window.Drafts.removeDraft(draft.id);
+                        try {
+                            window.dispatchEvent(new CustomEvent('remotestorage:save-succeeded', { detail: { key } }));
+                        } catch (_) { }
+                    }
+                })
+                .catch((err) => {
+                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('PUT activities response error', {
+                            status: err && err.status,
+                            message: err && err.message,
+                            conflict: !!(err && err.status === 409)
+                        });
+                    }
+                    const errorMessage = (err && err.status === 401)
+                        ? 'Session expired. Please sign in again.'
+                        : (err && err.status === 409)
+                            ? 'Conflict – someone else saved. Submit again to merge.'
+                            : ((err && err.message) || (queued ? 'Saved locally. Auto-retry queued.' : 'Data not saved.'));
+                    if (err && err.status === 409) {
+                        // So "Submit again" from Drafts uses latest version and can succeed.
+                        if (key && err.updated_at != null) lastVersion[key] = err.updated_at;
+                        removeOutboxEntry(outboxId);
+                    } else {
+                        const currentEntry = safeReadOutbox().find((x) => x && x.id === outboxId) || {};
+                        const attempts = (Number(currentEntry.attempts) || 0) + 1;
+                        updateOutboxEntry(outboxId, {
+                            attempts,
+                            lastError: (err && err.message) || 'save_failed',
+                            lastErrorAt: nowIso(),
+                            nextAttemptAt: Date.now() + computeRetryDelayMs(attempts)
+                        });
+                        scheduleOutboxFlush(1500);
+                    }
+                    if (draft && draft.id && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+                        window.Drafts.updateDraft(draft.id, { errorMessage: errorMessage });
+                    } else if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+                        const fallbackDraft = window.Drafts.addDraft({
+                            type: draftType,
+                            payload: payloadForDraft,
+                            errorMessage: errorMessage,
+                            storageKey: key
+                        });
+                        draftSaved = !!fallbackDraft;
+                    }
+                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('Draft created (activities)', {
+                            status: err && err.status,
+                            draftSaved: !!draftSaved
+                        });
+                    }
+                    try {
+                        const finalMessage = draftSaved
+                            ? errorMessage
+                            : (errorMessage + ' Draft could not be saved locally (storage full).');
+                        window.dispatchEvent(new CustomEvent('remotestorage:save-failed', {
+                            detail: { key, error: err, message: finalMessage, draftSaved: draftSaved }
+                        }));
+                    } catch (_) { }
+                    throw err;
+                });
+        };
+        if (key === 'activities') {
+            const run = () => {
+                const p = ensureVersionThenRun().finally(function () {
+                    if (activitiesPutInFlight === p) activitiesPutInFlight = null;
+                });
+                activitiesPutInFlight = p;
+                return p;
+            };
+            if (activitiesPutInFlight) return activitiesPutInFlight.then(run);
+            return run();
+        }
+        return ensureVersionThenRun();
     };
 
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
@@ -1298,6 +1325,8 @@
                 DataManager.cache.allActivities = null;
             }
         }
+        // Clear any pending full-list activities PUT from outbox so we don't overwrite server with stale data (e.g. after user edited an activity date).
+        updateOutbox((items) => items.filter((e) => !e || e.key !== ACTIVITIES_KEY));
     };
 
     try {

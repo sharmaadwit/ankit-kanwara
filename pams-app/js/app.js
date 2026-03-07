@@ -8750,43 +8750,49 @@ const App = {
         const currentUser = Auth.getCurrentUser();
         if (!currentUser) return;
 
-        // Find activity
-        let activity;
-        if (isInternal) {
-            const activities = await DataManager.getInternalActivities();
-            activity = activities.find(a => a.id === activityId);
-        } else {
-            const activities = await DataManager.getActivities();
-            activity = activities.find(a => a.id === activityId);
-        }
+        try {
+            // Find activity
+            let activity;
+            if (isInternal) {
+                const activities = await DataManager.getInternalActivities();
+                activity = activities.find(a => a.id === activityId);
+            } else {
+                const activities = await DataManager.getActivities();
+                activity = activities.find(a => a.id === activityId);
+            }
 
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+            const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
 
-        if (!activity) {
-            UI.showNotification('Activity not found', 'error');
-            return;
-        }
+            if (!activity) {
+                UI.showNotification('Activity not found', 'error');
+                return;
+            }
 
-        const isOwner = activity.userId === currentUser.id || activity.createdBy === currentUser.id;
+            const isOwner = activity.userId === currentUser.id || activity.createdBy === currentUser.id;
 
-        // Check if user owns this activity
-        if (!isAdmin && !isOwner) {
-            UI.showNotification('You can only delete your own activities', 'error');
-            return;
-        }
+            // Check if user owns this activity
+            if (!isAdmin && !isOwner) {
+                UI.showNotification('You can only delete your own activities', 'error');
+                return;
+            }
 
-        // Delete activity
-        if (isInternal) {
-            await DataManager.deleteInternalActivity(activityId);
-        } else {
-            await DataManager.deleteActivity(activityId);
-        }
+            // Delete activity
+            if (isInternal) {
+                await DataManager.deleteInternalActivity(activityId);
+            } else {
+                await DataManager.deleteActivity(activityId);
+            }
 
-        UI.showNotification('Activity deleted successfully', 'success');
-        if (this.currentView === 'activities') {
-            await this.loadActivitiesView();
-        } else {
-            this.refreshCurrentViewData();
+            UI.showNotification('Activity deleted successfully', 'success');
+            if (this.currentView === 'activities') {
+                await this.loadActivitiesView();
+            } else {
+                this.refreshCurrentViewData();
+            }
+        } catch (err) {
+            console.error('Delete activity failed:', err);
+            const message = (err && (err.message || err.status)) ? String(err.message || err.status) : 'Delete failed';
+            UI.showNotification(message || 'Could not delete activity. Try again.', 'error');
         }
     },
     // Expose functions globally

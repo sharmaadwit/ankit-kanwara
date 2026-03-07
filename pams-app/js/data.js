@@ -2370,9 +2370,7 @@ const DataManager = {
     },
 
     async deleteActivity(activityId) {
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {
-            this.cache.activities = null;
-        }
+        this.invalidateCache('activities', 'allActivities');
         const activities = (await this.getActivities()).filter(a => a.id !== activityId);
         await this.saveActivities(activities);
         this.recordAudit('activity.delete', 'activity', activityId);
