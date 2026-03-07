@@ -932,6 +932,12 @@
                     });
                     draftSaved = !!fallbackDraft;
                 }
+                if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('Draft created (activities)', {
+                        status: err && err.status,
+                        draftSaved: !!draftSaved
+                    });
+                }
                 try {
                     const finalMessage = draftSaved
                         ? errorMessage

@@ -8571,10 +8571,16 @@ const App = {
             }
         }
 
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('Win/Loss saveAccounts start', { accountId, projectId, status: project.status });
+        }
         try {
             await DataManager.saveAccounts(accounts);
         } catch (err) {
             if (err && err.status === 409 && err.value != null) {
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('Win/Loss 409 conflict, merging', {});
+                }
                 try {
                     const serverAccounts = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
                     if (Array.isArray(serverAccounts)) {
@@ -8587,6 +8593,9 @@ const App = {
                             if (project.winLossData) proj.winLossData = { ...project.winLossData }; else delete proj.winLossData;
                             if (typeof DataManager.invalidateCache === 'function') DataManager.invalidateCache('accounts', 'allActivities');
                             await DataManager.saveAccounts(merged);
+                            if (typeof window.__activitySaveTracePush === 'function') {
+                                window.__activitySaveTracePush('Win/Loss merge retry success', {});
+                            }
                             UI.hideModal('winLossModal');
                             UI.showNotification('Project status updated!', 'success');
                             await this.loadWinLossView();
@@ -8595,14 +8604,23 @@ const App = {
                         }
                     }
                 } catch (mergeErr) {
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('Win/Loss merge retry failed', { message: mergeErr && mergeErr.message });
+                    }
                     console.warn('Win/Loss 409 merge retry failed', mergeErr);
                 }
+            }
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('Win/Loss saved to Drafts', { status: err && err.status });
             }
             UI.showNotification('Could not save. Win/Loss was saved to Drafts. Open My drafts and click Submit again.', 'warning');
             if (typeof this.loadDraftsView === 'function') await this.loadDraftsView();
             return;
         }
 
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('Win/Loss save success', {});
+        }
         UI.hideModal('winLossModal');
         UI.showNotification('Project status updated!', 'success');
         await this.loadWinLossView();

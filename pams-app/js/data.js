@@ -137,14 +137,64 @@ const DEFAULT_INDUSTRY_USE_CASES = {
 const ENTITY_KEYS = new Set(['accounts', 'activities', 'internalActivities', 'users']);
 const isEntityKey = (key) => key && (ENTITY_KEYS.has(key) || key === 'activities');
 
-// Activity save trace: last 50 steps for debugging data loss. In console: __activitySaveTrace or __activitySaveTracePush('msg', {detail})
+// Activity save trace: last 80 steps for debugging data loss. Persisted on failure so you can retrieve after refresh.
 if (typeof window !== 'undefined') {
     window.__activitySaveTrace = window.__activitySaveTrace || [];
+    const TRACE_MAX = 80;
+    const TRACE_LAST_FAILURE_KEY = '__activitySaveTraceLastFailure';
     window.__activitySaveTracePush = function (msg, detail) {
         window.__activitySaveTrace = window.__activitySaveTrace || [];
         window.__activitySaveTrace.push({ t: Date.now(), msg: msg, detail: detail != null ? detail : undefined });
-        if (window.__activitySaveTrace.length > 50) window.__activitySaveTrace.shift();
+        if (window.__activitySaveTrace.length > TRACE_MAX) window.__activitySaveTrace.shift();
         console.log('[ActivitySave]', msg, detail != null ? detail : '');
+    };
+    window.__activitySaveTracePersistFailure = function (reason) {
+        try {
+            var payload = {
+                at: new Date().toISOString(),
+                reason: reason,
+                trace: (window.__activitySaveTrace || []).slice(-TRACE_MAX)
+            };
+            window.localStorage.setItem(TRACE_LAST_FAILURE_KEY, JSON.stringify(payload));
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('trace persisted to localStorage', { key: TRACE_LAST_FAILURE_KEY });
+            }
+        } catch (e) { console.warn('[ActivitySave] persist failed', e); }
+    };
+    window.__activitySaveTraceCopy = function () {
+        var arr = window.__activitySaveTrace || [];
+        var lines = arr.map(function (e) {
+            return (new Date(e.t).toISOString()) + ' ' + e.msg + (e.detail != null ? ' ' + JSON.stringify(e.detail) : '');
+        });
+        var text = lines.join('\n');
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { console.log('[ActivitySave] Copied', arr.length, 'lines to clipboard'); });
+        }
+        return text;
+    };
+    window.addEventListener('unhandledrejection', function (event) {
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('unhandledRejection', {
+                reason: String(event.reason && (event.reason.message || event.reason)),
+                stack: event.reason && event.reason.stack
+            });
+            window.__activitySaveTracePersistFailure('unhandledRejection');
+        }
+    });
+    var prevOnError = window.onerror;
+    window.onerror = function (message, source, lineno, colno, error) {
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('window.onerror', {
+                message: message,
+                source: source,
+                line: lineno,
+                col: colno,
+                stack: error && error.stack
+            });
+            window.__activitySaveTracePersistFailure('onerror');
+        }
+        if (prevOnError) return prevOnError.apply(this, arguments);
+        return false;
     };
 }
 
@@ -2051,6 +2101,7 @@ const DataManager = {
                 }
                 if (typeof window.__activitySaveTracePush === 'function') {
                     window.__activitySaveTracePush('saveActivities failed', { status: err && err.status, message: err && err.message });
+                    window.__activitySaveTracePersistFailure('saveActivities');
                 }
                 console.warn('[DataManager] Async saveActivities failed; preserving draft and aborting sync overwrite:', err);
                 throw err;
@@ -2126,6 +2177,7 @@ const DataManager = {
         } catch (err) {
             if (typeof window.__activitySaveTracePush === 'function') {
                 window.__activitySaveTracePush('addActivity failed', { status: err && err.status, message: err && err.message });
+                window.__activitySaveTracePersistFailure('addActivity');
             }
             throw err;
         }
