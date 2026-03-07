@@ -168,14 +168,21 @@ if (typeof window !== 'undefined') {
         });
         var text = lines.join('\n');
         if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () { console.log('[ActivitySave] Copied', arr.length, 'lines to clipboard'); });
+            navigator.clipboard.writeText(text)
+                .then(function () { console.log('[ActivitySave] Copied', arr.length, 'lines to clipboard'); })
+                .catch(function () { console.warn('[ActivitySave] Clipboard failed (click page first). Trace logged below – copy from console.'); });
         }
+        console.log('[ActivitySave] Trace (' + arr.length + ' steps):\n' + text);
         return text;
     };
     window.addEventListener('unhandledrejection', function (event) {
+        var reasonStr = String(event.reason && (event.reason.message || event.reason));
+        if (reasonStr.indexOf('Clipboard') !== -1 || reasonStr.indexOf('writeText') !== -1) {
+            return;
+        }
         if (typeof window.__activitySaveTracePush === 'function') {
             window.__activitySaveTracePush('unhandledRejection', {
-                reason: String(event.reason && (event.reason.message || event.reason)),
+                reason: reasonStr,
                 stack: event.reason && event.reason.stack
             });
             window.__activitySaveTracePersistFailure('unhandledRejection');
