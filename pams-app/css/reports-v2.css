@@ -460,6 +460,14 @@
     border-radius: 999px;
     font-size: 0.875rem;
 }
+.monthly-report-use-cases-subtitle {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--gray-600, #4b5563);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin: 0.5rem 0 0.25rem 0;
+}
 .monthly-report-use-cases { display: flex; flex-direction: column; gap: 0.75rem; }
 .monthly-report-use-case-card {
     background: #fff;
@@ -474,12 +482,13 @@
     gap: 1rem;
 }
 .monthly-report-win-card {
-    background: #fff;
-    border: 1px solid var(--gray-200, #e5e7eb);
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
     border-radius: 0.5rem;
     padding: 1rem;
     font-size: 0.875rem;
 }
+.monthly-report-win-card strong { color: #15803d; }
 .monthly-report-chart-wrap {
     position: relative;
     width: 100%;

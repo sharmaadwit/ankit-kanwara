@@ -1,6 +1,12 @@
 // Reports V2 - New reporting structure
 const ReportsV2 = {
     charts: {},
+    formatReportCurrency(value, defaultZero = false) {
+        if (value === null || value === undefined || value === '') return defaultZero ? '₹0' : '—';
+        const n = Number(value);
+        if (!Number.isFinite(n)) return String(value);
+        return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+    },
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
@@ -64,7 +70,7 @@ const ReportsV2 = {
         (async () => {
             const overrides = await DataManager.getReportOverrides();
             const o = overrides[period] || {};
-            const highlights = o.highlights != null ? o.highlights : '';
+            const highlights = (o.highlights != null && o.highlights !== '') ? o.highlights : (this.monthlyReportData && this.monthlyReportData.defaultHighlights) || '';
             const useCases = Array.isArray(o.useCases) ? o.useCases : ['', '', '', '', ''];
             const includedWinIds = Array.isArray(o.includedWinIds) ? o.includedWinIds : null;
             const manualWins = Array.isArray(o.manualWins) ? o.manualWins : [];
@@ -558,13 +564,16 @@ const ReportsV2 = {
                             if (project.status === 'won') {
                                 winsPeriod++;
                                 const uc = (project.useCases && project.useCases[0]);
-                                const useCaseText = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '—';
+                                const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
+                                const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
                                 const presalesRep = project.winLossData?.wonByUserName || userLookup.get(project.winLossData?.wonByUserId) || '—';
+                                const wl = project.winLossData || {};
                                 winsForPeriod.push({
                                     projectId: project.id,
                                     accountId: account.id,
                                     accountName: account.name || 'Unknown',
-                                    mrr: project.winLossData?.mrr ?? project.mrr ?? '—',
+                                    mrr: wl.mrr ?? project.mrr ?? '—',
+                                    otd: wl.otd != null && wl.otd !== '' ? wl.otd : null,
                                     useCase: useCaseText,
                                     presalesRep
                                 });
@@ -613,6 +622,103 @@ const ReportsV2 = {
         const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
         const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
 
+        // Five canonical use cases (match reference) – keyword mapping to bucket index 0–4
+        const CANONICAL_USE_CASES = [
+            'Lead gen & onboarding',
+            'Loyalty & retention',
+            'Support & FAQ',
+            'Sales discovery & AI recommendation',
+            'Operational automation'
+        ];
+        const USE_CASE_KEYWORDS = [
+            ['lead gen', 'onboarding', 'lead capture', 'kyc', 'recruitment', 'property', 'inquiry', 'qualification'],
+            ['loyalty', 'retention', 're-engagement', 'incentive', 'coupon', 'voucher', 'fan engagement', 'o2o'],
+            ['support', 'faq', 'service', 'helpdesk', 'complaint', 'enquir'],
+            ['sales', 'discovery', 'ai recommendation', 'virtual shopper', 'advisor', 'catalog', 'commerce', 'conversion', 'checkout', 'beauty', 'fashion'],
+            ['operational', 'automation', 'back-office', 'efficiency', 'reporting', 'logistics', 'workflow', 'collection', 'document validation', 'tracking']
+        ];
+        const matchUseCaseToBucket = (text) => {
+            if (!text || typeof text !== 'string') return -1;
+            const t = text.toLowerCase();
+            for (let i = 0; i < USE_CASE_KEYWORDS.length; i++) {
+                if (USE_CASE_KEYWORDS[i].some(kw => t.includes(kw))) return i;
+            }
+            return -1;
+        };
+        const bucketStats = CANONICAL_USE_CASES.map(() => ({
+            industries: new Set(),
+            regionIndustries: new Map(),
+            activityCount: 0,
+            winCount: 0
+        }));
+        const addToBucket = (bucketIdx, region, industry) => {
+            if (bucketIdx < 0) return;
+            const b = bucketStats[bucketIdx];
+            b.activityCount++;
+            if (industry) b.industries.add(industry);
+            if (region && region !== 'Unassigned') {
+                if (!b.regionIndustries.has(region)) b.regionIndustries.set(region, new Map());
+                const rMap = b.regionIndustries.get(region);
+                rMap.set(industry || '—', (rMap.get(industry || '—') || 0) + 1);
+            }
+        };
+        activities.filter(a => !a.isInternal && a.accountId).forEach(activity => {
+            const account = accounts.find(ac => ac.id === activity.accountId);
+            const project = account?.projects?.find(p => p.id === activity.projectId);
+            const industry = account?.industry ? String(account.industry).trim() : null;
+            const region = activity.salesRepRegion || activity.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
+            const useCases = project?.useCases ? (Array.isArray(project.useCases) ? project.useCases : [project.useCases]) : [];
+            useCases.forEach(uc => {
+                const label = typeof uc === 'string' ? uc.trim() : (uc && typeof uc === 'object' && uc.name) ? String(uc.name).trim() : null;
+                if (!label) return;
+                const bucketIdx = matchUseCaseToBucket(label);
+                addToBucket(bucketIdx, region, industry);
+            });
+        });
+        winsForPeriod.forEach(w => {
+            const account = accounts.find(ac => ac.id === w.accountId);
+            const industry = account?.industry ? String(account.industry).trim() : null;
+            const region = account?.salesRepRegion || account?.region || 'Unassigned';
+            const bucketIdx = matchUseCaseToBucket(w.useCase);
+            if (bucketIdx >= 0) {
+                bucketStats[bucketIdx].winCount++;
+                if (industry) bucketStats[bucketIdx].industries.add(industry);
+                if (region !== 'Unassigned') {
+                    if (!bucketStats[bucketIdx].regionIndustries.has(region)) bucketStats[bucketIdx].regionIndustries.set(region, new Map());
+                    const rMap = bucketStats[bucketIdx].regionIndustries.get(region);
+                    rMap.set(industry || '—', (rMap.get(industry || '—') || 0) + 1);
+                }
+            }
+        });
+        const useCaseCardsFromData = CANONICAL_USE_CASES.map((title, i) => {
+            const b = bucketStats[i];
+            const indList = Array.from(b.industries).sort();
+            const industriesPhrase = indList.length ? indList.join(', ') : '—';
+            const regionParts = [];
+            b.regionIndustries.forEach((indMap, reg) => {
+                const topInd = Array.from(indMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name).filter(n => n !== '—');
+                if (topInd.length) regionParts.push(reg + (topInd.length ? ' (' + topInd.join(', ') + ')' : ''));
+            });
+            const regionalTakeaway = regionParts.length ? ' Strong in ' + regionParts.slice(0, 5).join('; ') + '.' : '';
+            const takeaway = (b.activityCount + b.winCount) > 0
+                ? (b.activityCount + ' activities, ' + b.winCount + ' win' + (b.winCount !== 1 ? 's' : '') + ' in period.' + regionalTakeaway)
+                : 'No activity or wins in this period.';
+            return {
+                name: title,
+                industries: indList,
+                activityCount: b.activityCount,
+                winCount: b.winCount,
+                industriesPhrase,
+                takeaway,
+                fullText: (i + 1) + '. ' + title + (industriesPhrase !== '—' ? ' Industries: ' + industriesPhrase + '.' : '') + ' ' + takeaway
+            };
+        });
+
+        // Auto Cube Analysis highlights when none saved
+        const defaultHighlights = !(o.highlights && o.highlights.trim())
+            ? `Total activities: ${total} (${externalCount} external). Wins this period: ${winsPeriod}. Top regions: ${regionsOrdered.slice(0, 3).join(', ') || '—'}.`
+            : '';
+
         this.monthlyReportData = {
             breakdown,
             callTypeData,
@@ -621,7 +727,9 @@ const ReportsV2 = {
             userActivityData,
             regionsOrdered,
             callTypeOrder,
-            winsForPeriod
+            winsForPeriod,
+            useCaseCardsFromData,
+            defaultHighlights
         };
 
         return `
@@ -652,17 +760,21 @@ const ReportsV2 = {
                         </div>
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
                         <h4>Cube Analysis Top Highlights – Global <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h4>
-                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : ''}
+                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : (defaultHighlights ? `<div class="monthly-report-highlights-text">${String(defaultHighlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</div>` : '')}
                     </div>
-                    <!-- Page 2 – Use cases (editable) -->
+                    <!-- Page 2 – Use cases (editable): same format as reference – 5 cards with numbered title, industries, takeaway -->
                     <div class="monthly-report-page">
-                        <h3>Use cases across industries</h3>
-                        <p class="text-muted">What each use case is, where it shows up, and takeaways from the data.</p>
+                        <h3>Cube Analysis Top Highlights – Global</h3>
+                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES</h4>
+                        <p class="text-muted">What each use case is, where it shows up, and the overall takeaway from the data.</p>
                         <div class="monthly-report-use-cases">
                             ${[0, 1, 2, 3, 4].map(i => {
-                                const text = (o.useCases && o.useCases[i]) ? o.useCases[i] : ['Lead gen & onboarding – industries and regional highlights from pipeline.', 'Loyalty & retention – win themes by region.', 'Support & FAQ – pipeline share by region.', 'Sales discovery & AI recommendation – regional strengths.', 'Operational automation – regional examples.'][i];
+                                const override = (o.useCases && o.useCases[i]) ? o.useCases[i].trim() : '';
+                                const fromData = useCaseCardsFromData[i];
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                return `<div class="monthly-report-use-case-card">${safe(text)}</div>`;
+                                if (override) return `<div class="monthly-report-use-case-card">${safe(override)}</div>`;
+                                if (!fromData) return `<div class="monthly-report-use-case-card"><strong>${i + 1}. ${CANONICAL_USE_CASES[i]}</strong><br/>No data in this period.</div>`;
+                                return `<div class="monthly-report-use-case-card"><strong>${i + 1}. ${safe(fromData.name)}</strong><br/>Industries: ${safe(fromData.industriesPhrase)}<br/>${safe(fromData.takeaway)}</div>`;
                             }).join('')}
                         </div>
                     </div>
@@ -675,9 +787,17 @@ const ReportsV2 = {
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                                 let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
                                 const manual = o.manualWins || [];
-                                const cards = displayWins.slice(0, 9).map(w => `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>MRR: ${safe(w.mrr)} | Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? ' | Won by: ' + safe(w.presalesRep) : ''}</div>`);
-                                manual.forEach(mw => { cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${safe(mw.mrr || '')} | Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? ' | ' + safe(mw.presalesRep) : ''}</div>`); });
-                                return cards.length ? cards.slice(0, 12).join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report.</p>';
+                                const cards = displayWins.slice(0, 12).map(w => {
+                                    const mrrStr = (w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(w.mrr, true) : '—';
+                                    const otdStr = (w.otd != null && w.otd !== '') ? ReportsV2.formatReportCurrency(w.otd, true) : '';
+                                    const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
+                                    return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
+                                });
+                                manual.forEach(mw => {
+                                    const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true) : '—';
+                                    cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${mrrStr}<br/>Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : ''}</div>`);
+                                });
+                                return cards.length ? cards.join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report or log win/loss on projects.</p>';
                             })()}
                         </div>
                     </div>
