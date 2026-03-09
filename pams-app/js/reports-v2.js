@@ -29,30 +29,13 @@ const ReportsV2 = {
 
     // Seeded manual wins for PDF report (merged into manual wins for the given period)
     SEED_MANUAL_WINS_BY_PERIOD: {
+        '2026-02': [
+            { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
+            { clientName: 'YouTube Shopping', useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement', channel: 'WhatsApp', industry: 'Entertainment', expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.', stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya', commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002', mrr: '', presalesRep: 'Adwit Sharma' }
+        ],
         '2026-03': [
-            {
-                clientName: 'Prabhudas Liladhar Capital',
-                useCase: 'Electronic Know Your Customer bot (E-KYC)',
-                product: 'Converse (Bot Studio)',
-                channel: 'WhatsApp',
-                industry: 'Financial Services',
-                buyerCentre: 'Chairperson & Managing Director',
-                stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah',
-                commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)',
-                mrr: '100000',
-                presalesRep: 'Purusottam Singh'
-            },
-            {
-                clientName: 'YouTube Shopping',
-                useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement',
-                channel: 'WhatsApp',
-                industry: 'Entertainment',
-                expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.',
-                stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya',
-                commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002',
-                mrr: '',
-                presalesRep: 'Adwit Sharma'
-            }
+            { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
+            { clientName: 'YouTube Shopping', useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement', channel: 'WhatsApp', industry: 'Entertainment', expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.', stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya', commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002', mrr: '', presalesRep: 'Adwit Sharma' }
         ]
     },
 
