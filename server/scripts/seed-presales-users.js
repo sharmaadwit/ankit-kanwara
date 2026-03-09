@@ -65,6 +65,16 @@ const NEW_USERS = [
     username: 'adwit.sharma',
     email: 'adwit.sharma@gupshup.io',
     defaultRegion: ''
+  },
+  {
+    username: 'nidhi',
+    email: 'nidhi@gupshup.io',
+    defaultRegion: ''
+  },
+  {
+    username: 'maria',
+    email: 'maria@gupshup.io',
+    defaultRegion: ''
   }
 ];
 
