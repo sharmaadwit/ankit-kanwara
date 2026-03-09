@@ -27,6 +27,35 @@ const ReportsV2 = {
         ]
     },
 
+    // Seeded manual wins for PDF report (merged into manual wins for the given period)
+    SEED_MANUAL_WINS_BY_PERIOD: {
+        '2026-03': [
+            {
+                clientName: 'Prabhudas Liladhar Capital',
+                useCase: 'Electronic Know Your Customer bot (E-KYC)',
+                product: 'Converse (Bot Studio)',
+                channel: 'WhatsApp',
+                industry: 'Financial Services',
+                buyerCentre: 'Chairperson & Managing Director',
+                stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah',
+                commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)',
+                mrr: '100000',
+                presalesRep: 'Purusottam Singh'
+            },
+            {
+                clientName: 'YouTube Shopping',
+                useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement',
+                channel: 'WhatsApp',
+                industry: 'Entertainment',
+                expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.',
+                stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya',
+                commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002',
+                mrr: '',
+                presalesRep: 'Adwit Sharma'
+            }
+        ]
+    },
+
     chartValueLabelsPlugin: {
         id: 'chartValueLabels',
         afterDatasetsDraw(chart) {
@@ -830,9 +859,30 @@ const ReportsV2 = {
                         <p class="text-muted">Use <strong>Edit report</strong> to include/exclude wins or add manual wins.</p>
                         <div class="monthly-report-wins-grid">
                             ${(() => {
-                                const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                                 let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
-                                const manual = o.manualWins || [];
+                                const seedForPeriod = (ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD[period]) || [];
+                                const manual = (o.manualWins || []).concat(seedForPeriod);
+                                const renderManualWinCard = (mw) => {
+                                    const hasRich = mw.product || mw.channel || mw.industry || mw.buyerCentre || mw.stakeholders || mw.commercials || mw.expansionPlan;
+                                    const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true) : '—';
+                                    if (hasRich) {
+                                        const lines = [];
+                                        lines.push('<strong>' + safe(mw.clientName || '') + '</strong>');
+                                        lines.push('Use case: ' + safe(mw.useCase || ''));
+                                        if (mw.product) lines.push('GS Product: ' + safe(mw.product));
+                                        if (mw.channel) lines.push('Channel: ' + safe(mw.channel));
+                                        if (mw.industry) lines.push('Industry: ' + safe(mw.industry));
+                                        if (mw.buyerCentre) lines.push('Buyer centre sold to: ' + safe(mw.buyerCentre));
+                                        if (mw.stakeholders) lines.push('Key stakeholders: ' + safe(mw.stakeholders));
+                                        if (mw.commercials) lines.push('Commercials: ' + safe(mw.commercials));
+                                        if (mw.expansionPlan) lines.push('Expansion plan: ' + safe(mw.expansionPlan));
+                                        if (mrrStr !== '—') lines.push('MRR: ' + mrrStr);
+                                        if (mw.presalesRep) lines.push('Presales rep: ' + safe(mw.presalesRep));
+                                        return '<div class="monthly-report-win-card monthly-report-win-card--detailed">' + lines.join('<br/>') + '</div>';
+                                    }
+                                    return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : '') + '</div>';
+                                };
                                 const cards = displayWins.slice(0, 12).map(w => {
                                     const mrrInInr = w.mrrInInr != null && Number.isFinite(w.mrrInInr) ? w.mrrInInr : (w.currency === 'INR' && w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
                                     const mrrStr = mrrInInr != null ? ReportsV2.formatReportCurrency(mrrInInr, true) : ((w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(w.mrr, true) : '—');
@@ -841,10 +891,7 @@ const ReportsV2 = {
                                     const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
                                     return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
                                 });
-                                manual.forEach(mw => {
-                                    const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true) : '—';
-                                    cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${mrrStr}<br/>Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : ''}</div>`);
-                                });
+                                manual.forEach(mw => cards.push(renderManualWinCard(mw)));
                                 return cards.length ? cards.join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report or log win/loss on projects.</p>';
                             })()}
                         </div>

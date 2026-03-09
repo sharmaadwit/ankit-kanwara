@@ -460,6 +460,16 @@
     border-radius: 999px;
     font-size: 0.875rem;
 }
+.monthly-report-region-top-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.75rem 0 0 0;
+}
+.monthly-report-region-top-list li {
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--gray-100, #f3f4f6);
+}
+.monthly-report-region-top-list li:last-child { border-bottom: none; }
 .monthly-report-use-cases-subtitle {
     font-size: 0.9375rem;
     font-weight: 600;
@@ -489,6 +499,11 @@
     font-size: 0.875rem;
 }
 .monthly-report-win-card strong { color: #15803d; }
+.monthly-report-win-card--detailed {
+    grid-column: 1 / -1;
+    max-width: 100%;
+    line-height: 1.5;
+}
 .monthly-report-chart-wrap {
     position: relative;
     width: 100%;
