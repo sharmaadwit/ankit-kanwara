@@ -783,51 +783,92 @@ const DataManager = {
         };
     },
 
-    // User Management
+    // User Management. Never throws: returns [] on failure so callers can always render. Load when needed (e.g. admin section), not critical for initial page load.
     async getUsers() {
         if (this.cache.users) {
             return this.cache.users;
         }
-        // Try async first if available, fallback to sync for initial load
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
-            try {
-                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
-                const parsed = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
-                const rawUsers = Array.isArray(parsed) ? parsed : [];
-                const normalized = rawUsers.map((user) => {
-                    const defaultRegion =
-                        typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
-                    const regions = Array.isArray(user.regions) ? user.regions : [];
-                    const salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
-                    return {
-                        ...user,
-                        regions,
-                        salesReps,
-                        defaultRegion
-                    };
-                });
-                this.cache.users = normalized;
-                return normalized;
-            } catch (err) {
-                console.warn('[DataManager] Async getUsers failed:', err);
-                if (isEntityKey('users')) return [];
-            }
+        try {
+            return await this._getUsersImpl();
+        } catch (err) {
+            console.warn('[DataManager] getUsers failed:', err);
+            return [];
         }
-        if (isEntityKey('users')) return [];
-        const stored = localStorage.getItem('users');
-        const rawUsers = stored ? (() => { try { const p = JSON.parse(stored); return Array.isArray(p) ? p : []; } catch (_) { return []; } })() : [];
-        const normalized = rawUsers.map(user => {
+    },
+
+    async _getUsersImpl() {
+        const normalizeUser = (user) => {
+            if (!user || typeof user !== 'object') return user;
             const defaultRegion =
-                typeof user.defaultRegion === 'string' ? user.defaultRegion.trim() : '';
+                typeof (user.defaultRegion || user.default_region) === 'string' ? (user.defaultRegion || user.default_region).trim() : '';
             const regions = Array.isArray(user.regions) ? user.regions : [];
-            const salesReps = Array.isArray(user.salesReps) ? user.salesReps : [];
+            const salesReps = Array.isArray(user.salesReps) ? user.salesReps : (Array.isArray(user.sales_reps) ? user.sales_reps : []);
             return {
                 ...user,
                 regions,
                 salesReps,
                 defaultRegion
             };
-        });
+        };
+        const toRawUsers = (parsed) => {
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.users)) return parsed.users;
+            return [];
+        };
+        // Try async (remote storage) first if available
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
+                const parsed = stored ? (typeof stored === 'string' ? (() => { try { return JSON.parse(stored); } catch (_) { return []; } })() : stored) : [];
+                const rawUsers = toRawUsers(parsed);
+                if (rawUsers.length > 0) {
+                    const normalized = rawUsers.map(normalizeUser).filter(Boolean);
+                    this.cache.users = normalized;
+                    return normalized;
+                }
+                // Storage returned empty: fallback to DB users (e.g. after auth migration) so admin list is visible
+                const fetchWithTimeout = (url, ms) => {
+                    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                    const id = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+                    const p = fetch(url, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+                    if (id) p.finally(() => clearTimeout(id));
+                    return p;
+                };
+                const ADMIN_USERS_TIMEOUT_MS = 12000;
+                let lastErr;
+                for (let attempt = 0; attempt <= 1; attempt++) {
+                    try {
+                        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+                        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+                        const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+                        const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+                        const url = root ? (root.replace(/\/$/, '') + '/api/admin/users') : '/api/admin/users';
+                        const res = await fetchWithTimeout(url, ADMIN_USERS_TIMEOUT_MS);
+                        if (res.ok) {
+                            const fromDb = await res.json();
+                            const list = Array.isArray(fromDb) ? fromDb : [];
+                            const normalized = list.map(normalizeUser).filter(Boolean);
+                            this.cache.users = normalized;
+                            return normalized;
+                        }
+                    } catch (apiErr) {
+                        lastErr = apiErr;
+                        if (attempt === 0) console.warn('[DataManager] Fallback GET /api/admin/users failed (will retry once):', apiErr);
+                    }
+                }
+                if (lastErr) console.warn('[DataManager] Fallback GET /api/admin/users failed after retry:', lastErr);
+                this.cache.users = [];
+                return [];
+            } catch (err) {
+                console.warn('[DataManager] Async getUsers failed:', err);
+                // Do not cache empty on error so next getUsers() can retry (e.g. transient network failure)
+                if (isEntityKey('users')) return [];
+            }
+        }
+        if (isEntityKey('users')) return [];
+        const stored = localStorage.getItem('users');
+        const rawUsers = stored ? (() => { try { const p = JSON.parse(stored); return toRawUsers(p); } catch (_) { return []; } })() : [];
+        const normalized = rawUsers.map(normalizeUser).filter(Boolean);
         this.cache.users = normalized;
         return normalized;
     },

@@ -1301,10 +1301,10 @@ const App = {
                 case 'projectHealth':
                 case 'sfdcCompliance':
                 case 'reports':
-                    await Promise.all([DataManager.getAccounts(), DataManager.getUsers()]);
+                    await DataManager.getAccounts();
                     break;
                 case 'dashboard':
-                    await Promise.all([DataManager.getAllActivities(), DataManager.getAccounts(), DataManager.getUsers()]);
+                    await Promise.all([DataManager.getAllActivities(), DataManager.getAccounts()]);
                     break;
                 default:
                     break;

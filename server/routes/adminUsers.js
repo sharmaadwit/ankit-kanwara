@@ -1,11 +1,53 @@
 const express = require('express');
 const zlib = require('zlib');
+const bcrypt = require('bcrypt');
 const router = express.Router();
 
 const { getPool } = require('../db');
 const logger = require('../logger');
 
 const USERS_KEY = 'users';
+
+/** Shape expected by client (admin list, dropdowns). No password. */
+function toPublicUser(row) {
+  return {
+    id: row.id,
+    username: row.username,
+    email: row.email || null,
+    roles: Array.isArray(row.roles) ? row.roles : (row.roles || []),
+    regions: Array.isArray(row.regions) ? row.regions : (row.regions || []),
+    salesReps: Array.isArray(row.sales_reps) ? row.sales_reps : (row.sales_reps || []),
+    defaultRegion: row.default_region || '',
+    isActive: row.is_active,
+    forcePasswordChange: Boolean(row.force_password_change),
+    passwordUpdatedAt: row.password_updated_at || null
+  };
+}
+
+/**
+ * GET /api/admin/users
+ * Returns all users from DB (active and inactive) for admin panel.
+ * Use when storage key "users" is empty so the list is still visible.
+ */
+router.get('/', async (req, res) => {
+  try {
+    const pool = getPool();
+    if (!pool) {
+      return res.status(503).json({ message: 'Database not available' });
+    }
+    const { rows } = await pool.query(
+      `SELECT id, username, email, roles, regions, sales_reps, default_region, is_active, force_password_change, password_updated_at
+       FROM users ORDER BY username ASC;`
+    );
+    res.json(rows.map(toPublicUser));
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.json([]);
+    }
+    logger.error('admin_users_list_failed', { message: err.message });
+    res.status(500).json({ message: 'Failed to load users.' });
+  }
+});
 const DEFAULT_PASSWORD = 'Welcome@Gupshup1';
 const GZIP_PREFIX = '__gz__';
 
@@ -58,8 +100,26 @@ router.post('/reset-password', async (req, res) => {
       [USERS_KEY]
     );
 
+    // When storage has no users (e.g. DB-backed auth), update password in DB so reset still works
     if (!rows.length) {
-      return res.status(404).json({ message: 'Users data not found' });
+      const { rows: dbUsers } = await pool.query(
+        `SELECT id, username FROM users WHERE LOWER(username) = $1 OR LOWER(COALESCE(email, '')) = $1 LIMIT 1;`,
+        [username.toLowerCase()]
+      );
+      if (dbUsers.length) {
+        const passwordHash = await bcrypt.hash(newPassword, 10);
+        await pool.query(
+          `UPDATE users SET password_hash = $1, force_password_change = false, password_updated_at = NOW(), updated_at = NOW() WHERE id = $2;`,
+          [passwordHash, dbUsers[0].id]
+        );
+        logger.info('admin_user_password_reset_db', { username: dbUsers[0].username, by: req.get('x-admin-user') || 'admin' });
+        return res.json({
+          success: true,
+          message: 'Password reset to default. User can log in with: ' + newPassword,
+          username: dbUsers[0].username
+        });
+      }
+      return res.status(404).json({ message: 'Users data not found and user not found in database.' });
     }
 
     let raw = rows[0].value;

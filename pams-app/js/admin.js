@@ -323,7 +323,8 @@ const Admin = {
 
     getSectionLoaders() {
         return {
-            users: () => this.loadUsers(),
+            users: () => this.loadUsers('usersList'),
+            presalesUsers: () => this.loadUsers('usersListConfig'),
             sales: () => this.loadSalesReps(),
             salesLeaders: () => this.renderSalesLeadersPanel(),
             leaders: () => this.renderLeadersPanel(),
@@ -435,9 +436,17 @@ const Admin = {
             msg('Invalid JSON or read error: ' + (e.message || ''), true);
             return;
         }
-        const data = snapshot.data || snapshot;
+        const data = snapshot.data || snapshot.backups || snapshot;
         const backupActivities = [];
-        if (Array.isArray(data.activities)) backupActivities.push(...data.activities);
+        const rawActivities = data.activities;
+        if (Array.isArray(rawActivities)) {
+            backupActivities.push(...rawActivities);
+        } else if (typeof rawActivities === 'string' && rawActivities) {
+            try {
+                const parsed = JSON.parse(rawActivities);
+                if (Array.isArray(parsed)) backupActivities.push(...parsed);
+            } catch (_) {}
+        }
         Object.keys(data).forEach((k) => {
             if (k.startsWith('activities:') && Array.isArray(data[k])) backupActivities.push(...data[k]);
         });
@@ -1206,13 +1215,24 @@ const Admin = {
         }
     },
 
-    // User Management
-    async loadUsers() {
-        const raw = await DataManager.getUsers();
-        const users = Array.isArray(raw) ? raw : [];
-        const container = document.getElementById('usersList');
-        const statusEl = document.getElementById('usersFilterStatus');
+    // User Management (containerId: 'usersList' for System Admin, 'usersListConfig' for Configuration)
+    // Loads when user opens the section only; shows Loading state then fetches (non-blocking for initial page load).
+    async loadUsers(containerId = 'usersList') {
+        const container = document.getElementById(containerId);
+        const statusElId = containerId === 'usersListConfig' ? 'usersFilterStatusConfig' : 'usersFilterStatus';
+        const statusEl = document.getElementById(statusElId);
         if (!container) return;
+
+        container.innerHTML = '<p class="text-muted">Loading users…</p>';
+        let users = [];
+        try {
+            const raw = await DataManager.getUsers();
+            users = Array.isArray(raw) ? raw : [];
+        } catch (e) {
+            console.warn('[Admin] loadUsers failed:', e);
+            container.innerHTML = '<p class="text-warning">Unable to load users. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>';
+            return;
+        }
 
         const statusFilter = (statusEl && statusEl.value) || 'active';
         let filtered = users;
@@ -1223,7 +1243,9 @@ const Admin = {
         }
 
         if (filtered.length === 0) {
-            container.innerHTML = '<p class="text-muted">No users match the current filter.</p>';
+            container.innerHTML = users.length === 0
+                ? '<p class="text-muted">No users found. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>'
+                : '<p class="text-muted">No users match the current filter.</p>';
             return;
         }
 
@@ -1402,7 +1424,8 @@ const Admin = {
         await DataManager.addUser(user);
         UI.hideModal('addUserModal');
         UI.showNotification('User added successfully', 'success');
-        await this.loadUsers();
+        await this.loadUsers('usersList');
+        await this.loadUsers('usersListConfig');
 
         // Reset form
         document.getElementById('addUserForm').reset();
@@ -1535,7 +1558,8 @@ const Admin = {
             }
             UI.hideModal('editUserModal');
             UI.showNotification('User updated successfully', 'success');
-            await this.loadUsers();
+            await this.loadUsers('usersList');
+            await this.loadUsers('usersListConfig');
         } else {
             UI.showNotification('Failed to update user', 'error');
         }
@@ -1546,7 +1570,8 @@ const Admin = {
 
         await DataManager.deleteUser(userId);
         UI.showNotification('User deleted successfully', 'success');
-        await this.loadUsers();
+        await this.loadUsers('usersList');
+        await this.loadUsers('usersListConfig');
     },
 
     async resetUserPassword(username) {
@@ -1572,6 +1597,8 @@ const Admin = {
             if (response.ok) {
                 const data = await response.json();
                 UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
+                await this.loadUsers('usersList');
+                await this.loadUsers('usersListConfig');
                 return;
             }
             const body = await response.json();
@@ -1585,7 +1612,8 @@ const Admin = {
             if (user) {
                 await DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
                 UI.showNotification('Password reset (local). User can log in with ' + defaultPassword + '. If using remote storage, refresh and use Reset password again after deploy.', 'success');
-                await this.loadUsers();
+                await this.loadUsers('usersList');
+                await this.loadUsers('usersListConfig');
             } else {
                 UI.showNotification(err.message || 'Failed to reset password. User not found locally.', 'error');
             }
@@ -1622,7 +1650,8 @@ const Admin = {
                     ? `Successfully set force_password_change for ${count} user(s). They will be prompted to change password on next login.`
                     : 'No users needed password change enforcement.';
                 UI.showNotification(message, 'success');
-                this.loadUsers(); // Refresh the user list
+                this.loadUsers('usersList');
+                this.loadUsers('usersListConfig');
             })
             .catch(err => {
                 console.error('Force password change failed:', err);

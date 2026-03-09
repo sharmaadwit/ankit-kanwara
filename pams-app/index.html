@@ -830,6 +830,18 @@
                             <nav class="admin-sidebar-nav" id="configurationSectionsNav">
                                 <div class="admin-nav-group">
                                     <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
+                                        <span>Users & Access</span>
+                                        <span class="admin-nav-group-icon">▼</span>
+                                    </div>
+                                    <div class="admin-nav-group-items">
+                                        <a href="#" class="admin-nav-item" data-admin-nav="presalesUsers"
+                                            onclick="Admin.openAdminSection('presalesUsers', event)">
+                                            <span>Presales Users</span>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="admin-nav-group">
+                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
                                         <span>Data Configuration</span>
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
@@ -894,6 +906,36 @@
                         <!-- Configuration Content Area -->
                         <div class="admin-content">
                             <div id="configurationSectionsContainer">
+                                <!-- Presales Users (Configuration) -->
+                                <div class="admin-section hidden" data-admin-section="presalesUsers">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h3>Presales Users</h3>
+                                            <p class="text-muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">Manage presales team members who log activities. Same as <strong>System Admin → System Users</strong>.</p>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="admin-config-toolbar"
+                                                style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem;">
+                                                <div class="form-group" style="margin-bottom:0; min-width: 160px;">
+                                                    <label class="form-label">Status</label>
+                                                    <select id="usersFilterStatusConfig" class="form-control"
+                                                        onchange="Admin.loadUsers('usersListConfig')">
+                                                        <option value="active">Active only</option>
+                                                        <option value="inactive">Inactive only</option>
+                                                        <option value="all">All</option>
+                                                    </select>
+                                                </div>
+                                                <button id="addUserBtnConfig" class="btn btn-primary"
+                                                    onclick="Admin.showAddUserModal()">Add New User</button>
+                                                <button id="forcePasswordChangeBtnConfig" class="btn btn-warning"
+                                                    onclick="Admin.forcePasswordChangeAll()"
+                                                    title="Force all users with default passwords to change on next login">Force
+                                                    Password Change</button>
+                                            </div>
+                                            <div id="usersListConfig" class="space-y-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <!-- Industry & Use Cases -->
                                 <div class="admin-section hidden" data-admin-section="industryUseCases">
                                     <div class="card">
@@ -1353,6 +1395,23 @@
                         </div>
                         <div class="card-body" data-csv-import-section>
                             <div id="importSummary" style="margin-bottom: 1rem;"></div>
+                            <div id="importProjectReviewSection" class="hidden" style="margin-bottom: 1.5rem;">
+                                <h4 style="margin-bottom: 0.75rem; font-size: 1rem;">Project review</h4>
+                                <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;">Review which accounts and projects are existing (will be linked) vs new (will be created) on commit.</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm" id="importProjectReviewTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Account</th>
+                                                <th>Project</th>
+                                                <th>Status</th>
+                                                <th>Activities in file</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="importProjectReviewBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
                                 <div class="text-muted" style="font-size: 0.85rem;">
