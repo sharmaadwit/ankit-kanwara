@@ -806,12 +806,10 @@ const ReportsV2 = {
                         </div>
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
                     </div>
-                    <!-- Page 2 – Cube Analysis (single section with data: highlights + 5 use cases + by region) -->
+                    <!-- Page 2 – Cube Analysis (5 use cases only; no highlights line, no description, no Edit) -->
                     <div class="monthly-report-page">
-                        <h3>Cube Analysis Top Highlights – Global <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h3>
-                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : (defaultHighlights ? `<div class="monthly-report-highlights-text">${String(defaultHighlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</div>` : '')}
+                        <h3>Cube Analysis Top Highlights – Global</h3>
                         <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES (ACTIVITIES ONLY)</h4>
-                        <p class="text-muted">What each use case is, where it shows up—from activity data only. Ordered by most activities first. Wins are on the next page.</p>
                         <div class="monthly-report-use-cases">
                             ${(() => {
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

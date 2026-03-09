@@ -49,7 +49,7 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 | 4 | Accounts/Win-Loss | Single-project default | If account has one project, auto-select in win/loss forms. | Planned | High |
 | 5 | Industries | Industry/use-case merge UX | Merge flow: enter merged name, choose base, confirm. | **Done** | Medium |
 | 6 | Auth | Cookie-only final cutover | Remove header/API-key fallback after all users on cookie auth. | Planned | High |
-| 7 | Reports | Reports enhancements | Continue analytics and reports UI/presets. | Planned | Medium |
+| 7 | Reports | Reports enhancements | Continue analytics and reports UI/presets. Project update: ensure new projects (e.g. under an account) appear in project dropdown when logging activity; retain project-level info (use cases, products) when creating new project and when opening activity for edit. | Planned | Medium |
 | 8 | Reports | Export suite | Expand CSV/XLSX/PDF export for reports and admin views. | Planned | Medium |
 | 9 | Communications | Download email package | Generate downloadable monthly email body/assets for manual send. | Planned | High |
 | 10 | Communications | Email notifications | Alerting for login anomalies, failures, optional report digests. | Planned | Medium |
@@ -65,8 +65,14 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 | No. | Stream | Project | Description | Status | Priority |
 |-----|--------|---------|-------------|--------|----------|
 | 1 | Async/Data Safety | Non-entity async hardening | Replace sync fallbacks where remote async is expected. | In progress | High |
-| 2 | Async/Data Safety | Draft-first conflict UX | Improve conflict messaging and retry from Drafts for full-list saves. | Planned | High |
+| 2 | Async/Data Safety | Draft-first conflict UX | Improve conflict messaging and retry from Drafts for full-list saves. Show one-line warning for conflict drafts: "Submitting again will replace the current saved data with this draft." | Planned | High |
 | 5 | Async/Data Safety | Account+project lock (Option B) | When someone submits an activity update or delete, lock only that account+project (max 60s). Unlock when done; if lock held >60s treat as released. On 423 save to Drafts and retry. Implemented but not yet deployed (see server/lib/accountProjectLock.js, storage.js append/remove). | Backlog | Medium |
+| 6 | Async/Data Safety | Admin update/merge: targeted autosave + lock | When admin updates or merges (e.g. account merge, bulk reassign), only update the affected activities (and accounts) via targeted APIs (append/remove per activity, not full-list PUT). Then lock in the update (same one-at-a-time + account/project lock as in #5) so we never overwrite the full list. | Backlog | Medium |
+| 7 | Async/Data Safety | Server-side merge for accounts | On storage PUT for `accounts`, merge incoming with current by account id (and nested projects by project id), newer wins. Prevents one partial/stale saveAccounts() from wiping the whole account list. See docs/TECH_EVALUATION_AND_DATA_SAFETY_FIX.md. | Backlog | High |
+| 8 | Async/Data Safety | Server-side merge for internalActivities | Same as #7 but for `internalActivities` key (merge by id, newer wins). | Backlog | Medium |
+| 9 | Async/Data Safety | Sync path lastVersion on 409 | In the sync setItem path (remoteStorage), when we catch 409 and have error.updated_at, set lastVersion[key] = error.updated_at before merge/retry so "Submit again" uses the right version. | Backlog | Medium |
+| 10 | Async/Data Safety | Refetch on tab focus after idle | When tab gains focus and last refetch for entity keys was > N minutes (e.g. 2), trigger reconcile (GET activities/accounts and set lastVersion) to reduce multi-tab stale overwrites. | Backlog | Medium |
+| 11 | Async/Data Safety | Restore from backup UI | Add "Restore from backup" in My Drafts when backup exists; confirm warning that it can create duplicates if some drafts were already submitted. See DATA_LOSS_AND_CONFLICT_BLINDSPOTS.md. | Backlog | Low |
 | 3 | Performance | Activities at scale API | Month-scoped/batched activity reads for large datasets. | Planned | High |
 | 4 | Performance | View-level prefetch tuning | Tune prefetch cadence/scope from production telemetry. | Planned | Medium |
 
@@ -78,8 +84,9 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 |-----|--------|---------|-------------|--------|----------|
 | 1 | Migration | Migration cleanup plan | Finalize migrated data tab flow, merge, overwrite controls. | Planned | High |
 | 2 | Migration | Migration runbook | Step-by-step validated migration checklist, rollback guidance. | Planned | High |
-| 3 | Ops/Backups | Backup verification automation | Recurring verification and restore test checklist/report. | Planned | Medium |
+| 3 | Ops/Backups | Backup verification automation | Recurring verification and restore test checklist/report. Periodically restore from latest backup and compare activity/account counts to production. | Planned | Medium |
 | 4 | Ops/Observability | Production metrics baseline | Request/latency/error dashboards and SLO thresholds. | Planned | Medium |
+| 5 | Ops/Observability | Alert on storage count drops | When activity or account PUT payload count drops significantly vs previous (e.g. &lt; 90% of prior), log or alert so trim events are detected early. See TECH_EVALUATION_AND_DATA_SAFETY_FIX.md. | Backlog | Medium |
 
 ---
 
