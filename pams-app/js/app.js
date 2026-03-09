@@ -14,7 +14,8 @@ const App = {
         USD: '$',
         EUR: '€',
         GBP: '£',
-        BRL: 'R$'
+        BRL: 'R$',
+        AED: 'AED '
     },
     latestAnalytics: {},
     reportFilters: {
@@ -1510,8 +1511,7 @@ const App = {
             DataManager.getAccounts(),
             DataManager.getUsers()
         ]);
-        const excludeIds = this.getActivityIdsInUpdateDraftsForCurrentUser();
-        const activities = (activitiesRaw || []).filter(a => !excludeIds.has(a.id));
+        const activities = activitiesRaw || [];
         const accountMap = new Map(accounts.map(a => [a.id, a]));
         const userMap = new Map(users.map(u => [u.id, u]));
         const now = new Date();
@@ -2194,7 +2194,7 @@ const App = {
         }, 100);
     },
 
-    // Update statistics (activities in current user's "update" drafts are excluded from counts until submitted)
+    // Update statistics (use full activity count so dashboard matches Reports; draft activities still appear in Drafts for edit)
     async updateStats() {
         try {
             const [accounts, activities, internalActivities] = await Promise.all([
@@ -2202,8 +2202,7 @@ const App = {
                 DataManager.getAllActivities(),
                 DataManager.getInternalActivities()
             ]);
-            const excludeIds = this.getActivityIdsInUpdateDraftsForCurrentUser();
-            const countedActivities = (activities || []).filter(a => !excludeIds.has(a.id));
+            const totalActivities = (activities || []).length;
             const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
 
             let totalProjects = 0;
@@ -2225,7 +2224,7 @@ const App = {
 
             const stats = {
                 totalProjects,
-                totalActivities: countedActivities.length,
+                totalActivities,
                 customerActivities,
                 internalActivities: internalActivities.length,
                 wonProjects,
@@ -2719,7 +2718,7 @@ const App = {
         accountsView.innerHTML = html;
     },
 
-    // Load card-based reports view
+    // Load card-based reports view – always use Reports V2 (same as standard view)
     async loadCardReportsView() {
         const reportsView = document.getElementById('reportsView');
         if (!reportsView) return;
@@ -2733,44 +2732,19 @@ const App = {
         if (monthOptions.length && !monthOptions.includes(selectedMonth)) {
             selectedMonth = monthOptions[monthOptions.length - 1] || fallbackMonth;
         }
-        if (!selectedMonth) {
-            selectedMonth = fallbackMonth;
-        }
+        if (!selectedMonth) selectedMonth = fallbackMonth;
         this.latestAnalytics.cardMonth = selectedMonth;
-
-        const analytics = await DataManager.getMonthlyAnalytics(selectedMonth, this.reportFilters || {});
-        this.latestAnalytics.card = analytics;
+        this.latestAnalytics.standardPeriod = selectedMonth;
+        this.latestAnalytics.standardMonth = selectedMonth;
 
         reportsView.innerHTML = `
-            <a href="#" class="back-to-home" onclick="App.navigateToCardView('dashboard'); return false;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
-                </svg>
-                Back to Home
-            </a>
-            <div class="analytics-card-controls">
-                <label class="form-label">Select Month</label>
-                <div class="month-picker-group">
-                    <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(-1, 'card')" aria-label="Previous month">
-                        ‹
-                    </button>
-                    <input type="month"
-                           id="cardReportMonth"
-                           class="form-control"
-                           value="${selectedMonth}"
-                           onchange="App.handleCardReportMonthChange(this.value)">
-                    <button type="button" class="btn btn-outline month-nav" onclick="App.shiftReportMonth(1, 'card')" aria-label="Next month">
-                        ›
-                    </button>
-                </div>
+            <div class="page-header">
+                <h1 class="page-title">Reports & Analytics</h1>
+                <p class="page-subtitle">Explore activity trends, product insights, regional performance, and custom tables.</p>
             </div>
-            ${this.buildAnalyticsOverviewTab(analytics, { prefix: 'card', periodType: 'month', periodValue: selectedMonth })}
+            <div id="reportsContent"></div>
         `;
-
-        this.setAnalyticsLoading('card', true);
-        await this.initAnalyticsCharts({ prefix: 'card', analytics, month: selectedMonth });
-        this.setAnalyticsLoading('card', false);
-        this.setupActivityMixToggle('card', analytics);
+        await this.loadReports();
     },
 
     // Load card-based admin view
@@ -3055,14 +3029,8 @@ const App = {
             : allDrafts;
         this.updateDraftsBadge();
 
-        try {
-            const uid = currentUser && currentUser.id ? String(currentUser.id) : '';
-            const febKey = uid ? '__pams_feb_drafts_done__' + uid : '__pams_feb_drafts_done__';
-            if (typeof sessionStorage !== 'undefined' && uid && !sessionStorage.getItem(febKey)) {
-                sessionStorage.setItem(febKey, '1');
-                this.moveFebruaryIncompleteActivitiesToDrafts();
-            }
-        } catch (_) {}
+        // No longer auto-moving Feb activities to drafts for missing use cases; keep counter correct without drafts.
+        try { /* was: moveFebruaryIncompleteActivitiesToDrafts() once per session */ } catch (_) {}
 
         const backupSnap = typeof Drafts !== 'undefined' ? Drafts.getBackup() : null;
         const hasBackup = backupSnap && Array.isArray(backupSnap.drafts) && backupSnap.drafts.length > 0;
@@ -3354,7 +3322,8 @@ const App = {
                 continue;
             }
             if (p && p._activityUpdate === true) {
-                skippedForms++;
+                if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
+                submitted++;
                 continue;
             }
             if (p && p._winlossForm === true) {
@@ -4095,19 +4064,10 @@ const App = {
                 return;
             } else {
                 console.error('ReportsV2 is not defined or init function missing. Check if reports-v2.js is loaded.');
-                console.log('Available globals:', typeof window !== 'undefined' ? Object.keys(window).filter(k => k.includes('Report')) : 'window not available');
                 if (container) {
                     container.innerHTML = '<div class="error-message">Reports module not loaded. Please refresh the page.</div>';
                 }
             }
-
-            // Fallback to old reports (hidden)
-            const reportsContainer = document.getElementById('reportsContent');
-            if (!reportsContainer) {
-                console.error('reportsContent container not found');
-                return;
-            }
-            reportsContainer.innerHTML = '<div style="display:none;"><!-- Old reports hidden --></div>';
         } catch (error) {
             console.error('Error loading reports:', error);
             const errorContainer = document.getElementById('reportsContent');
@@ -8350,7 +8310,10 @@ const App = {
 
         const accountSalesRep = await DataManager.getGlobalSalesRepByName(account?.salesRep || '');
         const existingWinLoss = project.winLossData || {};
-        const defaultCurrency = existingWinLoss.currency || accountSalesRep?.currency || 'INR';
+        const accountRegion = (account && (account.salesRepRegion || account.region || '')).toLowerCase();
+        const accountNameLower = (account && (account.name || '')).toLowerCase();
+        const isMenaAccount = accountRegion === 'mena' || accountNameLower.includes('alhamra') || accountNameLower.includes('alhamra.ae');
+        const defaultCurrency = existingWinLoss.currency || (isMenaAccount ? 'AED' : null) || accountSalesRep?.currency || 'INR';
         const defaultFx = existingWinLoss.fxToInr !== undefined && existingWinLoss.fxToInr !== null ? Number(existingWinLoss.fxToInr) : (accountSalesRep && accountSalesRep.fxToInr ? Number(accountSalesRep.fxToInr) : null);
 
         document.getElementById('winLossAccountId').value = accountId;
@@ -8398,10 +8361,13 @@ const App = {
             if (sfdcInput) sfdcInput.value = project.sfdcLink || '';
         }
 
+        const DEFAULT_FX_TO_INR = { AED: 22, USD: 83, EUR: 90, GBP: 105, BRL: 16 };
         if (mrrInput) {
             mrrInput.dataset.currency = defaultCurrency || 'INR';
             if (!Number.isNaN(defaultFx) && defaultFx) {
                 mrrInput.dataset.fx = String(defaultFx);
+            } else if (defaultCurrency && defaultCurrency !== 'INR' && DEFAULT_FX_TO_INR[defaultCurrency]) {
+                mrrInput.dataset.fx = String(DEFAULT_FX_TO_INR[defaultCurrency]);
             } else {
                 delete mrrInput.dataset.fx;
             }
@@ -8465,6 +8431,7 @@ const App = {
                                 <label class="form-label required">Currency</label>
                                 <select class="form-control" id="winLossCurrency" data-winloss-required="true" required onchange="App.handleWinLossCurrencyChange(this.value)">
                                     <option value="INR">INR (₹)</option>
+                                    <option value="AED">AED (UAE Dirham)</option>
                                     <option value="USD">USD ($)</option>
                                     <option value="EUR">EUR (€)</option>
                                     <option value="GBP">GBP (£)</option>
@@ -8588,7 +8555,8 @@ const App = {
             }
             const currency = mrrInput?.dataset?.currency || 'INR';
             const fxValue = parseFloat(mrrInput?.dataset?.fx || '');
-            const fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
+            const DEFAULT_FX = { AED: 22, USD: 83, EUR: 90, GBP: 105, BRL: 16 };
+            const fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : (currency !== 'INR' && DEFAULT_FX[currency] ? DEFAULT_FX[currency] : null);
             const mrrRounded = Number(mrrValue.toFixed(2));
             const mrrInInr = currency === 'INR' ? mrrRounded : (fxToInr ? Number((mrrRounded * fxToInr).toFixed(2)) : null);
 

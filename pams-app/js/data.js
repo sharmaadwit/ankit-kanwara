@@ -1441,6 +1441,10 @@ const DataManager = {
         return entry;
     },
 
+    /**
+     * Accept a pending use case: add to canonical list and sync into all projects (activities) for that industry
+     * so activities reflect the accepted value (e.g. "Other: Foo" -> "Foo").
+     */
     async acceptPendingUseCase(value, industry) {
         const trimmed = (value && typeof value === 'string' ? value.trim() : '') || '';
         const ind = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
@@ -1450,6 +1454,28 @@ const DataManager = {
         if (filtered.length === pending.length) return false;
         await this.savePendingUseCases(filtered);
         await this.addUseCaseToIndustry(ind, trimmed);
+        const accounts = await this.getAccounts();
+        let projectsUpdated = 0;
+        accounts.forEach(account => {
+            if ((account.industry || '').trim() !== ind) return;
+            (account.projects || []).forEach(project => {
+                const useCases = project.useCases || [];
+                let changed = false;
+                const newUseCases = useCases.map(uc => {
+                    const u = (uc && typeof uc === 'string' ? uc.trim() : '') || '';
+                    if (u === trimmed || u === `Other: ${trimmed}`) {
+                        changed = true;
+                        return trimmed;
+                    }
+                    return uc;
+                });
+                if (changed) {
+                    project.useCases = newUseCases;
+                    projectsUpdated++;
+                }
+            });
+        });
+        if (projectsUpdated > 0) await this.saveAccounts(accounts);
         return true;
     },
 
@@ -1966,16 +1992,22 @@ const DataManager = {
     },
 
     async deleteAccount(accountId) {
-        // Delete all activities associated with this account
         const activities = await this.getActivities();
-        const filteredActivities = activities.filter(a => a.accountId !== accountId);
-        await this.saveActivities(filteredActivities);
+        const toRemove = activities.filter(a => a.accountId === accountId);
 
-        // Delete account (projects are nested, so they'll be deleted too)
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof this.removeActivityViaServer === 'function') {
+            for (const a of toRemove) {
+                if (a && a.id) await this.removeActivityViaServer(a.id);
+            }
+        } else {
+            const filteredActivities = activities.filter(a => a.accountId !== accountId);
+            await this.saveActivities(filteredActivities);
+        }
+
         const accounts = (await this.getAccounts()).filter(a => a.id !== accountId);
         await this.saveAccounts(accounts);
         this.recordAudit('account.delete', 'account', accountId, {
-            removedActivities: activities.length - filteredActivities.length
+            removedActivities: toRemove.length
         });
     },
 
