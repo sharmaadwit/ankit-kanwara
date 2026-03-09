@@ -1215,8 +1215,36 @@ const Admin = {
         }
     },
 
+    // Fetch users from DB for admin list (bypasses storage/cache so list always shows actual DB users).
+    async fetchUsersForAdminPanel() {
+        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+        const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+        const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+        const opts = { method: 'GET', credentials: 'include', headers: { Accept: 'application/json', ...this.getAdminHeaders() } };
+        let res = await fetch((root ? root.replace(/\/$/, '') : '') + '/api/admin/users', opts);
+        if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list) && list.length > 0) return list;
+        }
+        res = await fetch((root ? root.replace(/\/$/, '') : '') + '/api/users', opts);
+        if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list)) return list;
+        }
+        return [];
+    },
+
+    normalizeUserForDisplay(user) {
+        if (!user || typeof user !== 'object') return user;
+        const defaultRegion = typeof (user.defaultRegion || user.default_region) === 'string' ? (user.defaultRegion || user.default_region).trim() : '';
+        const regions = Array.isArray(user.regions) ? user.regions : [];
+        const roles = Array.isArray(user.roles) ? user.roles : [];
+        return { ...user, defaultRegion, regions, roles, salesReps: Array.isArray(user.salesReps) ? user.salesReps : (Array.isArray(user.sales_reps) ? user.sales_reps : []) };
+    },
+
     // User Management (containerId: 'usersList' for System Admin, 'usersListConfig' for Configuration)
-    // Loads when user opens the section only; shows Loading state then fetches (non-blocking for initial page load).
+    // Loads when user opens the section; fetches directly from DB (bypasses cache) so list shows all actual users.
     async loadUsers(containerId = 'usersList') {
         const container = document.getElementById(containerId);
         const statusElId = containerId === 'usersListConfig' ? 'usersFilterStatusConfig' : 'usersFilterStatus';
@@ -1226,8 +1254,8 @@ const Admin = {
         container.innerHTML = '<p class="text-muted">Loading users…</p>';
         let users = [];
         try {
-            const raw = await DataManager.getUsers();
-            users = Array.isArray(raw) ? raw : [];
+            const fromApi = await this.fetchUsersForAdminPanel();
+            users = fromApi.map(u => this.normalizeUserForDisplay(u)).filter(Boolean);
         } catch (e) {
             console.warn('[Admin] loadUsers failed:', e);
             container.innerHTML = '<p class="text-warning">Unable to load users. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>';
@@ -1244,7 +1272,7 @@ const Admin = {
 
         if (filtered.length === 0) {
             container.innerHTML = users.length === 0
-                ? '<p class="text-muted">No users found. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>'
+                ? '<p class="text-muted">No users found. If you use database login, ensure you\'re logged in as an admin. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>'
                 : '<p class="text-muted">No users match the current filter.</p>';
             return;
         }
@@ -1266,7 +1294,7 @@ const Admin = {
                         <div class="admin-user-name">${user.username}</div>
                         <div class="admin-user-email">${user.email}</div>
                         <div class="admin-user-roles">
-                            ${user.roles.map(role => `<span class="badge">${role}</span>`).join('')}
+                            ${(Array.isArray(user.roles) ? user.roles : []).map(role => `<span class="badge">${role}</span>`).join('')}
                             ${statusBadge}
                             ${passwordBadge}
                         </div>
