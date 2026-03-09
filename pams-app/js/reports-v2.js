@@ -14,6 +14,19 @@ const ReportsV2 = {
     activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
 
     // Plugin to show value on pie/doughnut segments and bar tops (matches dashboard)
+    // Pre-built February 2026 Cube Analysis (from snapshot run) – used by "Load Feb 2026 analysis" button
+    FEB_2026_ANALYSIS: {
+        period: '2026-02',
+        highlights: 'Total activities: 433 (433 external). Top regions: India North, MENA, LATAM.',
+        useCases: [
+            '4. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail\n8 activities in period, 5 separate accounts.',
+            '1. Customer engagement & campaigns\nIndustries: Automobile, Banking, Energy, Events, F&B, HR, Healthcare, Manufacturing, Media & Entertainment, Metals, Partner agency, Professional Services, Real Estate & Construction, Retail\n50 activities in period, 19 separate accounts.',
+            '2. Support & FAQ\nIndustries: Automotive, Banking, F&B, Government, Manufacturing, Professional Services, Real Estate & Construction, Retail, Telco\n49 activities in period, 18 separate accounts.',
+            '3. Sales discovery & AI recommendation\nIndustries: Automobile, Banking, Education, Real Estate & Construction, Retail, Telco, Travel & Hospitality\n17 activities in period, 10 separate accounts.',
+            '5. Operational automation\nIndustries: Banking, CPG & FMCG, Logistics & Supply Chain\n5 activities in period, 3 separate accounts.'
+        ]
+    },
+
     chartValueLabelsPlugin: {
         id: 'chartValueLabels',
         afterDatasetsDraw(chart) {
@@ -106,7 +119,7 @@ const ReportsV2 = {
                             <div class="form-group"><label>Cube Analysis Top Highlights</label><textarea id="monthlyReportEditHighlights" class="form-control" rows="3" placeholder="Optional text for top highlights."></textarea></div>
                             <div class="form-group"><label>Use cases (5 boxes)</label>
                                 <input id="monthlyReportUseCase0" class="form-control" placeholder="Lead gen & onboarding"><br>
-                                <input id="monthlyReportUseCase1" class="form-control" placeholder="Loyalty & retention"><br>
+                                <input id="monthlyReportUseCase1" class="form-control" placeholder="Customer engagement & campaigns"><br>
                                 <input id="monthlyReportUseCase2" class="form-control" placeholder="Support & FAQ"><br>
                                 <input id="monthlyReportUseCase3" class="form-control" placeholder="Sales discovery & AI"><br>
                                 <input id="monthlyReportUseCase4" class="form-control" placeholder="Operational automation">
@@ -175,6 +188,21 @@ const ReportsV2 = {
         await DataManager.saveReportOverrides(overrides);
         this.closeEditReportModal();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Report overrides saved.', 'success');
+        this.render();
+    },
+
+    async loadFeb2026Analysis() {
+        const feb = this.FEB_2026_ANALYSIS;
+        if (!feb || feb.period !== '2026-02') return;
+        const overrides = await DataManager.getReportOverrides();
+        overrides['2026-02'] = {
+            highlights: feb.highlights,
+            useCases: feb.useCases.slice(0, 5),
+            includedWinIds: (overrides['2026-02'] && overrides['2026-02'].includedWinIds) || null,
+            manualWins: (overrides['2026-02'] && overrides['2026-02'].manualWins) || []
+        };
+        await DataManager.saveReportOverrides(overrides);
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Feb 2026 analysis loaded into report.', 'success');
         this.render();
     },
 
@@ -568,12 +596,18 @@ const ReportsV2 = {
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
                                 const presalesRep = project.winLossData?.wonByUserName || userLookup.get(project.winLossData?.wonByUserId) || '—';
                                 const wl = project.winLossData || {};
+                                const currency = wl.currency || 'INR';
+                                const mrrVal = wl.mrr ?? project.mrr;
+                                const mrrInInr = wl.mrrInInr != null && Number.isFinite(Number(wl.mrrInInr)) ? Number(wl.mrrInInr) : (currency === 'INR' && mrrVal != null ? Number(mrrVal) : null);
                                 winsForPeriod.push({
                                     projectId: project.id,
                                     accountId: account.id,
                                     accountName: account.name || 'Unknown',
-                                    mrr: wl.mrr ?? project.mrr ?? '—',
+                                    mrr: mrrVal ?? '—',
+                                    currency,
+                                    mrrInInr,
                                     otd: wl.otd != null && wl.otd !== '' ? wl.otd : null,
+                                    otdInInr: wl.otdInInr != null && Number.isFinite(Number(wl.otdInInr)) ? Number(wl.otdInInr) : null,
                                     useCase: useCaseText,
                                     presalesRep
                                 });
@@ -625,14 +659,14 @@ const ReportsV2 = {
         // Five canonical use cases (match reference) – keyword mapping to bucket index 0–4
         const CANONICAL_USE_CASES = [
             'Lead gen & onboarding',
-            'Loyalty & retention',
+            'Customer engagement & campaigns',
             'Support & FAQ',
             'Sales discovery & AI recommendation',
             'Operational automation'
         ];
         const USE_CASE_KEYWORDS = [
             ['lead gen', 'onboarding', 'lead capture', 'kyc', 'recruitment', 'property', 'inquiry', 'qualification'],
-            ['loyalty', 'retention', 're-engagement', 'incentive', 'coupon', 'voucher', 'fan engagement', 'o2o'],
+            ['engagement', 'campaign', 'notification', 'alert', 'marketing', 'broadcast', 'promotion', 'voucher', 'coupon', 'loyalty', 'retention', 're-engagement', 'incentive', 'fan engagement', 'o2o'],
             ['support', 'faq', 'service', 'helpdesk', 'complaint', 'enquir'],
             ['sales', 'discovery', 'ai recommendation', 'virtual shopper', 'advisor', 'catalog', 'commerce', 'conversion', 'checkout', 'beauty', 'fashion'],
             ['operational', 'automation', 'back-office', 'efficiency', 'reporting', 'logistics', 'workflow', 'collection', 'document validation', 'tracking']
@@ -645,13 +679,15 @@ const ReportsV2 = {
             }
             return -1;
         };
+        // Cube Analysis: activities and use cases only (no wins). Per region: pick one use case that had max activities; show activity count + distinct accounts.
         const bucketStats = CANONICAL_USE_CASES.map(() => ({
             industries: new Set(),
             regionIndustries: new Map(),
             activityCount: 0,
-            winCount: 0
+            regionActivityCount: new Map(),
+            regionAccountIds: new Map()
         }));
-        const addToBucket = (bucketIdx, region, industry) => {
+        const addToBucket = (bucketIdx, region, industry, accountId) => {
             if (bucketIdx < 0) return;
             const b = bucketStats[bucketIdx];
             b.activityCount++;
@@ -660,6 +696,11 @@ const ReportsV2 = {
                 if (!b.regionIndustries.has(region)) b.regionIndustries.set(region, new Map());
                 const rMap = b.regionIndustries.get(region);
                 rMap.set(industry || '—', (rMap.get(industry || '—') || 0) + 1);
+                b.regionActivityCount.set(region, (b.regionActivityCount.get(region) || 0) + 1);
+                if (accountId) {
+                    if (!b.regionAccountIds.has(region)) b.regionAccountIds.set(region, new Set());
+                    b.regionAccountIds.get(region).add(accountId);
+                }
             }
         };
         activities.filter(a => !a.isInternal && a.accountId).forEach(activity => {
@@ -672,47 +713,50 @@ const ReportsV2 = {
                 const label = typeof uc === 'string' ? uc.trim() : (uc && typeof uc === 'object' && uc.name) ? String(uc.name).trim() : null;
                 if (!label) return;
                 const bucketIdx = matchUseCaseToBucket(label);
-                addToBucket(bucketIdx, region, industry);
+                addToBucket(bucketIdx, region, industry, activity.accountId);
             });
-        });
-        winsForPeriod.forEach(w => {
-            const account = accounts.find(ac => ac.id === w.accountId);
-            const industry = account?.industry ? String(account.industry).trim() : null;
-            const region = account?.salesRepRegion || account?.region || 'Unassigned';
-            const bucketIdx = matchUseCaseToBucket(w.useCase);
-            if (bucketIdx >= 0) {
-                bucketStats[bucketIdx].winCount++;
-                if (industry) bucketStats[bucketIdx].industries.add(industry);
-                if (region !== 'Unassigned') {
-                    if (!bucketStats[bucketIdx].regionIndustries.has(region)) bucketStats[bucketIdx].regionIndustries.set(region, new Map());
-                    const rMap = bucketStats[bucketIdx].regionIndustries.get(region);
-                    rMap.set(industry || '—', (rMap.get(industry || '—') || 0) + 1);
-                }
-            }
         });
         const useCaseCardsFromData = CANONICAL_USE_CASES.map((title, i) => {
             const b = bucketStats[i];
             const indList = Array.from(b.industries).sort();
             const industriesPhrase = indList.length ? indList.join(', ') : '—';
-            const regionParts = [];
-            b.regionIndustries.forEach((indMap, reg) => {
-                const topInd = Array.from(indMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name]) => name).filter(n => n !== '—');
-                if (topInd.length) regionParts.push(reg + (topInd.length ? ' (' + topInd.join(', ') + ')' : ''));
-            });
-            const regionalTakeaway = regionParts.length ? ' Strong in ' + regionParts.slice(0, 5).join('; ') + '.' : '';
-            const takeaway = (b.activityCount + b.winCount) > 0
-                ? (b.activityCount + ' activities, ' + b.winCount + ' win' + (b.winCount !== 1 ? 's' : '') + ' in period.' + regionalTakeaway)
-                : 'No activity or wins in this period.';
+            const totalAccounts = new Set();
+            b.regionAccountIds.forEach((set) => set.forEach((id) => totalAccounts.add(id)));
+            const takeaway = b.activityCount > 0
+                ? b.activityCount + ' activities in period' + (totalAccounts.size > 0 ? ', ' + totalAccounts.size + ' separate accounts.' : '.')
+                : 'No activity in this period.';
             return {
                 name: title,
                 industries: indList,
                 activityCount: b.activityCount,
-                winCount: b.winCount,
+                accountCount: totalAccounts.size,
                 industriesPhrase,
-                takeaway,
-                fullText: (i + 1) + '. ' + title + (industriesPhrase !== '—' ? ' Industries: ' + industriesPhrase + '.' : '') + ' ' + takeaway
+                takeaway
             };
         });
+        // Per region: pick the one use case with maximum activities; show activity count and distinct accounts for that (region, use case).
+        const regionTopUseCase = [];
+        const allRegions = new Set();
+        bucketStats.forEach((b) => b.regionActivityCount.forEach((_, reg) => allRegions.add(reg)));
+        allRegions.forEach((region) => {
+            let maxCount = 0;
+            let topBucketIdx = -1;
+            CANONICAL_USE_CASES.forEach((_, i) => {
+                const c = bucketStats[i].regionActivityCount.get(region) || 0;
+                if (c > maxCount) { maxCount = c; topBucketIdx = i; }
+            });
+            if (topBucketIdx >= 0 && maxCount > 0) {
+                const accountIds = bucketStats[topBucketIdx].regionAccountIds.get(region);
+                const accountCount = accountIds ? accountIds.size : 0;
+                regionTopUseCase.push({
+                    region,
+                    useCaseName: CANONICAL_USE_CASES[topBucketIdx],
+                    activityCount: maxCount,
+                    accountCount
+                });
+            }
+        });
+        regionTopUseCase.sort((a, b) => b.activityCount - a.activityCount);
 
         // Auto Cube Analysis highlights when none saved
         const defaultHighlights = !(o.highlights && o.highlights.trim())
@@ -729,6 +773,7 @@ const ReportsV2 = {
             callTypeOrder,
             winsForPeriod,
             useCaseCardsFromData,
+            regionTopUseCase,
             defaultHighlights
         };
 
@@ -739,13 +784,14 @@ const ReportsV2 = {
                     <p class="text-muted">Same structure as the email report. Use <strong>Edit report</strong> to change highlights, use cases and wins; then download or email.</p>
                     <div class="reports-v2-monthly-actions-btns">
                         <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
+                        ${period === '2026-02' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadFeb2026Analysis()">Load Feb 2026 analysis</button>` : ''}
                         <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
                         <button type="button" class="btn btn-outline" onclick="ReportsV2.downloadChartsAsImages()">Download charts as images</button>
                         <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
                     </div>
                 </div>
                 <div class="monthly-report-pages">
-                    <!-- Page 1 – Summary -->
+                    <!-- Page 1 – Summary only (no duplicate Cube Analysis here) -->
                     <div class="monthly-report-page">
                         <h3>Presales Update – ${periodLabel}</h3>
                         <div class="monthly-report-summary-box">
@@ -759,23 +805,25 @@ const ReportsV2 = {
                             </div>
                         </div>
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
-                        <h4>Cube Analysis Top Highlights – Global <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h4>
-                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : (defaultHighlights ? `<div class="monthly-report-highlights-text">${String(defaultHighlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</div>` : '')}
                     </div>
-                    <!-- Page 2 – Use cases (editable): same format as reference – 5 cards with numbered title, industries, takeaway -->
+                    <!-- Page 2 – Cube Analysis (single section with data: highlights + 5 use cases + by region) -->
                     <div class="monthly-report-page">
-                        <h3>Cube Analysis Top Highlights – Global</h3>
-                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES</h4>
-                        <p class="text-muted">What each use case is, where it shows up, and the overall takeaway from the data.</p>
+                        <h3>Cube Analysis Top Highlights – Global <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h3>
+                        ${(o.highlights && o.highlights.trim()) ? `<div class="monthly-report-highlights-text">${String(o.highlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>')}</div>` : (defaultHighlights ? `<div class="monthly-report-highlights-text">${String(defaultHighlights).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}</div>` : '')}
+                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES (ACTIVITIES ONLY)</h4>
+                        <p class="text-muted">What each use case is, where it shows up—from activity data only. Ordered by most activities first. Wins are on the next page.</p>
                         <div class="monthly-report-use-cases">
-                            ${[0, 1, 2, 3, 4].map(i => {
-                                const override = (o.useCases && o.useCases[i]) ? o.useCases[i].trim() : '';
-                                const fromData = useCaseCardsFromData[i];
+                            ${(() => {
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                if (override) return `<div class="monthly-report-use-case-card">${safe(override)}</div>`;
-                                if (!fromData) return `<div class="monthly-report-use-case-card"><strong>${i + 1}. ${CANONICAL_USE_CASES[i]}</strong><br/>No data in this period.</div>`;
-                                return `<div class="monthly-report-use-case-card"><strong>${i + 1}. ${safe(fromData.name)}</strong><br/>Industries: ${safe(fromData.industriesPhrase)}<br/>${safe(fromData.takeaway)}</div>`;
-                            }).join('')}
+                                const sorted = [...useCaseCardsFromData].sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0));
+                                return sorted.map((fromData, displayIdx) => {
+                                    const canonicalIdx = CANONICAL_USE_CASES.indexOf(fromData.name);
+                                    const override = (o.useCases && canonicalIdx >= 0 && o.useCases[canonicalIdx]) ? o.useCases[canonicalIdx].trim() : '';
+                                    if (override) return `<div class="monthly-report-use-case-card">${safe(override).replace(/\n/g, '<br>')}</div>`;
+                                    if (!fromData) return `<div class="monthly-report-use-case-card"><strong>${displayIdx + 1}. ${CANONICAL_USE_CASES[displayIdx] || '—'}</strong><br/>No activity in this period.</div>`;
+                                    return `<div class="monthly-report-use-case-card"><strong>${displayIdx + 1}. ${safe(fromData.name)}</strong><br/>Industries: ${safe(fromData.industriesPhrase)}<br/>${safe(fromData.takeaway)}</div>`;
+                                }).join('');
+                            })()}
                         </div>
                     </div>
                     <!-- Page 3 – Wins (editable: include/exclude + manual) -->
@@ -788,8 +836,10 @@ const ReportsV2 = {
                                 let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
                                 const manual = o.manualWins || [];
                                 const cards = displayWins.slice(0, 12).map(w => {
-                                    const mrrStr = (w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(w.mrr, true) : '—';
-                                    const otdStr = (w.otd != null && w.otd !== '') ? ReportsV2.formatReportCurrency(w.otd, true) : '';
+                                    const mrrInInr = w.mrrInInr != null && Number.isFinite(w.mrrInInr) ? w.mrrInInr : (w.currency === 'INR' && w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
+                                    const mrrStr = mrrInInr != null ? ReportsV2.formatReportCurrency(mrrInInr, true) : ((w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(w.mrr, true) : '—');
+                                    const otdInInr = w.otdInInr != null && Number.isFinite(w.otdInInr) ? w.otdInInr : (w.otd != null && w.otd !== '' ? Number(w.otd) : null);
+                                    const otdStr = (otdInInr != null ? ReportsV2.formatReportCurrency(otdInInr, true) : ((w.otd != null && w.otd !== '') ? ReportsV2.formatReportCurrency(w.otd, true) : ''));
                                     const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
                                     return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
                                 });
