@@ -180,23 +180,24 @@ const App = {
     async init() {
         const initStart = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
         this.setupLoadingOverlay();
-        this.setLoading(true, 'Preparing workspace…');
+        this.setLoading(true, 'Connecting…', { progress: 0, tip: this.getRandomLoadingTip() });
 
         try {
             // Always setup event listeners (needed for login form)
             this.setupEventListeners();
 
             let t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+            this.setLoadingProgress(15, 'Loading your workspace…', this.getRandomLoadingTip());
             const bootstrap = await this.loadBootstrap();
             const bootstrapMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
             console.log('[PAMS init] loadBootstrap:', bootstrapMs + 'ms');
 
             this.setAppConfiguration(bootstrap.config || {});
-
             this.loadAnalyticsTablePresetsDeferred();
 
             let hasSession = false;
             if (bootstrap.user) {
+                this.setLoadingProgress(35, 'Welcome back…', this.getRandomLoadingTip());
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 Auth.currentUser = {
                     id: bootstrap.user.userId,
@@ -214,6 +215,7 @@ const App = {
                 const resolveMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
                 console.log('[PAMS init] bootstrap user applied:', resolveMs + 'ms');
             } else {
+                this.setLoadingProgress(25, 'Checking session…', this.getRandomLoadingTip());
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 hasSession = await Auth.init();
                 const authInitMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
@@ -229,12 +231,14 @@ const App = {
                 window.__REMOTE_STORAGE_USER__ = currentUser.username;
                 window.__REMOTE_STORAGE_HEADERS__ = { 'X-Admin-User': currentUser.username };
             }
+            this.setLoadingProgress(50, 'Syncing activities & accounts…', this.getRandomLoadingTip());
             if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 await window.__REMOTE_STORAGE_RECONCILE__();
                 console.log('[PAMS init] reconcile:', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) + 'ms');
             }
 
+            this.setLoadingProgress(75, 'Almost there…', this.getRandomLoadingTip());
             t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             InterfaceManager.init();
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
@@ -247,6 +251,10 @@ const App = {
             } else {
                 this.switchView(targetView);
             }
+            this.setLoadingProgress(90, 'Loading your view…', this.getRandomLoadingTip());
+            await new Promise(r => setTimeout(r, 500));
+            this.setLoadingProgress(100, 'Ready!', '');
+            await new Promise(r => setTimeout(r, 180));
             const totalMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - initStart);
             console.log('[PAMS init] total (prepare workspace):', totalMs + 'ms');
             this.setLoading(false);
@@ -639,12 +647,29 @@ const App = {
         });
     },
 
+    loadingTips: [
+        'Every logged activity counts.',
+        'Wins are sweeter when they\'re tracked.',
+        'Your pipeline is looking good.',
+        'Presales heroes log their calls.',
+        'Data in, insights out.',
+        'One more step to your dashboard.',
+        'Fetching the good stuff…',
+        'Almost there…'
+    ],
+
     setupLoadingOverlay() {
         if (!this.loadingOverlay) {
             this.loadingOverlay = document.getElementById('appLoadingOverlay');
         }
         if (!this.loadingMessageEl) {
             this.loadingMessageEl = document.getElementById('appLoadingMessage');
+        }
+        if (!this.loadingProgressEl) {
+            this.loadingProgressEl = document.getElementById('appLoadingProgress');
+        }
+        if (!this.loadingTipEl) {
+            this.loadingTipEl = document.getElementById('appLoadingTip');
         }
         this.setupSyncIndicator();
     },
@@ -682,10 +707,19 @@ const App = {
         });
     },
 
-    setLoading(isLoading, message) {
+    setLoading(isLoading, message, options = {}) {
         this.setupLoadingOverlay();
         if (message && this.loadingMessageEl) {
             this.loadingMessageEl.textContent = message;
+        }
+        if (options.progress !== undefined && this.loadingProgressEl) {
+            const pct = Math.min(100, Math.max(0, Number(options.progress)));
+            this.loadingProgressEl.style.width = pct + '%';
+            this.loadingProgressEl.setAttribute('aria-valuenow', pct);
+        }
+        if (options.tip !== undefined && this.loadingTipEl) {
+            this.loadingTipEl.textContent = options.tip;
+            this.loadingTipEl.style.opacity = options.tip ? '1' : '0';
         }
         if (!this.loadingOverlay) {
             return;
@@ -697,8 +731,28 @@ const App = {
         }
     },
 
+    setLoadingProgress(pct, message, tip) {
+        this.setupLoadingOverlay();
+        const val = Math.min(100, Math.max(0, Number(pct)));
+        if (this.loadingProgressEl) {
+            this.loadingProgressEl.style.width = val + '%';
+            this.loadingProgressEl.setAttribute('aria-valuenow', val);
+        }
+        if (message && this.loadingMessageEl) this.loadingMessageEl.textContent = message;
+        if (this.loadingTipEl) {
+            this.loadingTipEl.textContent = tip || (this.loadingTips && this.loadingTips[Math.floor(Math.random() * this.loadingTips.length)]);
+            this.loadingTipEl.style.opacity = (tip || this.loadingTips) ? '1' : '0';
+        }
+    },
+
+    getRandomLoadingTip() {
+        return this.loadingTips && this.loadingTips.length
+            ? this.loadingTips[Math.floor(Math.random() * this.loadingTips.length)]
+            : '';
+    },
+
     async handleSuccessfulLogin() {
-        this.setLoading(true, 'Loading workspace…');
+        this.setLoading(true, 'Loading workspace…', { progress: 20, tip: this.getRandomLoadingTip() });
         try {
             const currentUser =
                 typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
@@ -710,6 +764,7 @@ const App = {
                 window.__REMOTE_STORAGE_HEADERS__ = {
                     'X-Admin-User': currentUser.username
                 };
+                this.setLoadingProgress(45, 'Syncing your data…', this.getRandomLoadingTip());
                 if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
                     await window.__REMOTE_STORAGE_RECONCILE__();
                 }
@@ -733,6 +788,7 @@ const App = {
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
                 Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
             }
+            this.setLoadingProgress(70, 'Almost there…', this.getRandomLoadingTip());
             const preferredView = this.getInitialView();
             const targetView = this.getAccessibleView(preferredView);
             if (InterfaceManager.getCurrentInterface() === 'card') {
@@ -740,6 +796,10 @@ const App = {
             } else {
                 this.switchView(targetView);
             }
+            this.setLoadingProgress(90, 'Loading your view…', this.getRandomLoadingTip());
+            await new Promise(r => setTimeout(r, 500));
+            this.setLoadingProgress(100, 'Ready!', '');
+            await new Promise(r => setTimeout(r, 180));
         } finally {
             this.setLoading(false);
         }

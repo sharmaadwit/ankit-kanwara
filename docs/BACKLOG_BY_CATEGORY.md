@@ -21,6 +21,8 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 
 **Note:** Migration mode is implemented but not yet fully tested in production; see **Testing & validation** below.
 
+**Bug review (Mar 2026):** Admin System Users: Force Password Change moved to per-user row action (removed top-level button). Edit/Delete user row buttons hardened (data-user-id). Delete user now calls `DELETE /api/admin/users/:id` (soft-delete: sets `is_active = false`) so DB-backed users are deactivated and no longer show when filter is "Active only". In-app **Suggestions and Bugs** (sidebar) is where user-reported bugs/feedback live; no separate "open bugs" list in docs.
+
 ---
 
 ## What to work on next (suggested order)

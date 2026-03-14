@@ -452,6 +452,50 @@ router.get('/batch', async (req, res) => {
 const OPTIONAL_STORAGE_KEYS = new Set(['pams_leaders', 'pams_salesLeaders', 'pams_reportOverrides', 'suggestions_and_bugs']);
 
 /**
+ * Append one activity to the activities storage key. Must be called with a DB client that is
+ * already in a transaction (caller does BEGIN/COMMIT). Used by POST /activities/append and
+ * by pricing-calculations ingest to log a pricing activity.
+ * @param {object} client - pg client from getPool().connect()
+ * @param {object} activity - activity object with at least { id, date, type, ... }
+ * @returns {{ ok: boolean, updated_at?: string, dropped?: boolean }}
+ */
+async function appendActivityWithClient(client, activity) {
+  if (!activity || !activity.id) {
+    return { ok: false, dropped: true };
+  }
+  const { rows: currentRows } = await client.query(
+    'SELECT value, updated_at FROM storage WHERE key = $1 FOR UPDATE;',
+    ['activities']
+  );
+  const currentSerialized = currentRows.length ? currentRows[0].value : null;
+  const incomingSerialized = JSON.stringify([activity]);
+  const mergedSerialized = mergeActivitiesPayload(currentSerialized, incomingSerialized);
+  let parsedMerged;
+  try {
+    parsedMerged = JSON.parse(mergedSerialized);
+  } catch (_) {
+    parsedMerged = [];
+  }
+  const hasNewActivity = Array.isArray(parsedMerged) && parsedMerged.some((a) => a && a.id === activity.id);
+  if (!hasNewActivity) {
+    logger.warn('storage_append_activity_dropped', { activityId: activity.id });
+    return { ok: false, dropped: true };
+  }
+  await archiveCurrentValue(client, 'activities');
+  const { rows } = await client.query(
+    `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()
+     RETURNING updated_at;`,
+    [mergedSerialized]
+  );
+  invalidateStorageReadCache('activities');
+  const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
+  return { ok: true, updated_at: updatedAt };
+}
+
+router.appendActivityWithClient = appendActivityWithClient;
+
+/**
  * POST /activities/append – append or update one activity (no bulk). Read-modify-write on server.
  * Body: { activity: { id, date, type, accountId, projectId, ... } }
  * Returns: { ok: true, key: 'activities', updated_at } or 4xx/5xx.
@@ -465,37 +509,15 @@ router.post('/activities/append', async (req, res) => {
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
-      const { rows: currentRows } = await client.query(
-        'SELECT value, updated_at FROM storage WHERE key = $1 FOR UPDATE;',
-        ['activities']
-      );
-      const currentSerialized = currentRows.length ? currentRows[0].value : null;
-      const incomingSerialized = JSON.stringify([activity]);
-      const mergedSerialized = mergeActivitiesPayload(currentSerialized, incomingSerialized);
-      let parsedMerged;
-      try {
-        parsedMerged = JSON.parse(mergedSerialized);
-      } catch (_) {
-        parsedMerged = [];
-      }
-      const hasNewActivity = Array.isArray(parsedMerged) && parsedMerged.some((a) => a && a.id === activity.id);
-      if (!hasNewActivity) {
+      const result = await appendActivityWithClient(client, activity);
+      if (!result.ok && result.dropped) {
         await client.query('ROLLBACK').catch(() => {});
         logger.error('storage_append_activity_dropped', { activityId: activity.id, transactionId: req.transactionId });
         return res.status(500).json({ message: 'Append merge did not include activity; not written.' });
       }
-      await archiveCurrentValue(client, 'activities');
-      const { rows } = await client.query(
-        `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()
-         RETURNING updated_at;`,
-        [mergedSerialized]
-      );
       await client.query('COMMIT');
-      invalidateStorageReadCache('activities');
-      const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
       logger.info('storage_append_activity', { activityId: activity.id, transactionId: req.transactionId });
-      return res.status(200).json({ ok: true, key: 'activities', updated_at: updatedAt });
+      return res.status(200).json({ ok: true, key: 'activities', updated_at: result.updated_at });
     } catch (txErr) {
       await client.query('ROLLBACK').catch(() => {});
       throw txErr;

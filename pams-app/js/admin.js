@@ -1302,8 +1302,9 @@ const Admin = {
                     </div>
                     <div class="admin-user-actions">
                         <button class="btn btn-sm btn-outline" data-username="${(user.username || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onclick="Admin.resetUserPassword(this)" title="Reset to default password (Welcome@Gupshup1)">Reset password</button>
-                        <button class="btn btn-sm btn-secondary" onclick="Admin.editUser('${user.id}')">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="Admin.deleteUser('${user.id}')">Delete</button>
+                        <button class="btn btn-sm btn-warning" data-user-id="${(user.id || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onclick="Admin.forcePasswordChangeForUser(this)" title="Require this user to change password on next login">Force password change</button>
+                        <button class="btn btn-sm btn-secondary" data-user-id="${(user.id || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onclick="Admin.editUser(this)" title="Edit user">Edit</button>
+                        <button class="btn btn-sm btn-danger" data-user-id="${(user.id || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onclick="Admin.deleteUser(this)" title="Delete user">Delete</button>
                     </div>
                 </div>
             `;
@@ -1459,7 +1460,11 @@ const Admin = {
         document.getElementById('addUserForm').reset();
     },
 
-    async editUser(userId) {
+    async editUser(buttonOrUserId) {
+        const userId = typeof buttonOrUserId === 'object' && buttonOrUserId?.dataset?.userId != null
+            ? buttonOrUserId.dataset.userId
+            : buttonOrUserId;
+        if (!userId) return;
         const user = await DataManager.getUserById(userId);
         if (!user) {
             UI.showNotification('User not found', 'error');
@@ -1490,7 +1495,7 @@ const Admin = {
                         <h2 class="modal-title">Edit User</h2>
                         <button class="modal-close" onclick="UI.hideModal('${modalId}')">&times;</button>
                     </div>
-                    <form id="editUserForm" onsubmit="Admin.updateUser(event, '${user.id}')">
+                    <form id="editUserForm" data-user-id="${(user.id || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}" onsubmit="Admin.updateUser(event)">
                         <div class="form-group">
                             <label class="form-label">Username</label>
                             <input type="text" class="form-control" id="editUsername" value="${user.username}" disabled>
@@ -1542,8 +1547,14 @@ const Admin = {
         await this.populateGenericRegionSelect(document.getElementById('editUserDefaultRegion'), user.defaultRegion || '');
     },
 
-    async updateUser(event, userId) {
+    async updateUser(event) {
         event.preventDefault();
+        const form = event.target && event.target.closest ? event.target.closest('form') : document.getElementById('editUserForm');
+        const userId = form && form.dataset && form.dataset.userId ? form.dataset.userId : null;
+        if (!userId) {
+            UI.showNotification('User id missing.', 'error');
+            return;
+        }
 
         const email = document.getElementById('editUserEmail').value.trim();
         const password = document.getElementById('editUserPassword').value;
@@ -1593,9 +1604,31 @@ const Admin = {
         }
     },
 
-    async deleteUser(userId) {
+    async deleteUser(buttonOrUserId) {
+        const userId = typeof buttonOrUserId === 'object' && buttonOrUserId?.dataset?.userId != null
+            ? buttonOrUserId.dataset.userId
+            : buttonOrUserId;
+        if (!userId) return;
         if (!confirm('Are you sure you want to delete this user?')) return;
 
+        try {
+            const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'DELETE',
+                credentials: 'include',
+                headers: this.getAdminHeaders()
+            });
+            if (response.ok) {
+                UI.showNotification('User deleted successfully', 'success');
+                await this.loadUsers('usersList');
+                await this.loadUsers('usersListConfig');
+                return;
+            }
+            if (response.status === 404) {
+                // Not in DB; try storage-only (e.g. legacy or mixed)
+            }
+        } catch (e) {
+            console.warn('Delete user API failed, trying storage:', e);
+        }
         await DataManager.deleteUser(userId);
         UI.showNotification('User deleted successfully', 'success');
         await this.loadUsers('usersList');
@@ -1648,43 +1681,29 @@ const Admin = {
         }
     },
 
-    forcePasswordChangeAll() {
-        if (!confirm('This will force all users with default passwords to change their password on next login. Continue?')) {
-            return;
-        }
-
-        UI.showNotification('Running force password change script...', 'info');
-
-        // Call server endpoint to run the script
-        fetch('/api/admin/force-password-change', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() }
-        })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                }
-                return response.json()
-                    .then(body => { throw new Error(body.message || 'Force password change failed'); })
-                    .catch(e => {
-                        if (e instanceof Error && e.message && e.message !== 'Force password change failed') throw e;
-                        throw new Error('Force password change failed: ' + response.status);
-                    });
-            })
-            .then(data => {
-                const count = data.count || 0;
-                const message = count > 0
-                    ? `Successfully set force_password_change for ${count} user(s). They will be prompted to change password on next login.`
-                    : 'No users needed password change enforcement.';
-                UI.showNotification(message, 'success');
-                this.loadUsers('usersList');
-                this.loadUsers('usersListConfig');
-            })
-            .catch(err => {
-                console.error('Force password change failed:', err);
-                UI.showNotification(err.message || 'Failed to force password change', 'error');
+    async forcePasswordChangeForUser(buttonOrUserId) {
+        const userId = typeof buttonOrUserId === 'object' && buttonOrUserId?.dataset?.userId != null
+            ? buttonOrUserId.dataset.userId
+            : buttonOrUserId;
+        if (!userId) return;
+        try {
+            const response = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
+                method: 'PATCH',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json', ...this.getAdminHeaders() },
+                body: JSON.stringify({ forcePasswordChange: true })
             });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to set force password change');
+            }
+            UI.showNotification(data.message || 'User will be prompted to change password on next login.', 'success');
+            this.loadUsers('usersList');
+            this.loadUsers('usersListConfig');
+        } catch (err) {
+            console.error('Force password change failed:', err);
+            UI.showNotification(err.message || 'Failed to force password change', 'error');
+        }
     },
 
     // Sales Rep Management

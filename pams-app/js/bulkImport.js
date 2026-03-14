@@ -33,6 +33,8 @@ const BulkImport = {
         this.previewFilter = document.getElementById('importPreviewFilter');
         this.issuesPanel = document.getElementById('importIssuesPanel');
         this.issuesPanelBody = this.issuesPanel ? this.issuesPanel.querySelector('.card-body') : null;
+        this.projectReviewSection = document.getElementById('importProjectReviewSection');
+        this.projectReviewBody = document.getElementById('importProjectReviewBody');
     },
 
     bindEvents() {
@@ -87,6 +89,8 @@ const BulkImport = {
         if (this.previewFilter) this.previewFilter.value = 'all';
         if (this.issuesPanel) this.issuesPanel.style.display = 'none';
         if (this.issuesPanelBody) this.issuesPanelBody.innerHTML = '';
+        if (this.projectReviewSection) this.projectReviewSection.classList.add('hidden');
+        if (this.projectReviewBody) this.projectReviewBody.innerHTML = '';
         if (typeof App !== 'undefined' && App.clearPendingDuplicateAlerts) {
             App.clearPendingDuplicateAlerts();
         }
@@ -849,6 +853,8 @@ const BulkImport = {
             `;
         }
 
+        this.renderProjectReview();
+
         if (this.downloadErrorsBtn) {
             this.downloadErrorsBtn.style.display = this.state.errorRows.length ? 'inline-flex' : 'none';
         }
@@ -905,6 +911,49 @@ const BulkImport = {
                 <td>${row.messages.join('<br>')}</td>
             </tr>
         `).join('');
+    },
+
+    renderProjectReview() {
+        if (!this.projectReviewSection || !this.projectReviewBody) return;
+        const externalRows = (this.state.parsedRows || []).filter(r => r.category === 'external');
+        if (!externalRows.length) {
+            this.projectReviewSection.classList.add('hidden');
+            return;
+        }
+        const map = new Map();
+        externalRows.forEach(row => {
+            const an = row.payload?.accountName || '';
+            const pn = row.payload?.projectName || '';
+            const key = `${an}|${pn}`;
+            const isNew = !!row.newProject;
+            if (!map.has(key)) {
+                map.set(key, { accountName: an, projectName: pn, status: isNew ? 'new' : 'existing', count: 0 });
+            }
+            const entry = map.get(key);
+            entry.count += 1;
+            if (isNew && entry.status !== 'new') entry.status = 'new';
+        });
+        const rows = Array.from(map.values()).sort((a, b) =>
+            (a.accountName || '').localeCompare(b.accountName || '') || (a.projectName || '').localeCompare(b.projectName || '')
+        );
+        if (!rows.length) {
+            this.projectReviewSection.classList.add('hidden');
+            return;
+        }
+        const escape = (v) => {
+            if (v == null || v === '') return '';
+            const s = String(v);
+            return typeof App !== 'undefined' && typeof App.escapeHtml === 'function' ? App.escapeHtml(s) : s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+        this.projectReviewBody.innerHTML = rows.map(r => `
+            <tr>
+                <td>${escape(r.accountName)}</td>
+                <td>${escape(r.projectName)}</td>
+                <td><span class="badge ${r.status === 'new' ? 'badge-warning' : 'badge-success'}">${r.status === 'new' ? 'New' : 'Existing'}</span></td>
+                <td>${r.count}</td>
+            </tr>
+        `).join('');
+        this.projectReviewSection.classList.remove('hidden');
     },
 
     renderIssuesPanel() {
@@ -973,20 +1022,60 @@ const BulkImport = {
             this.notifyFeatureDisabled();
             return;
         }
-        const readyRows = this.state.parsedRows.filter(row => row.status === 'ready');
+        let readyRows = this.state.parsedRows.filter(row => row.status === 'ready');
         if (!readyRows.length) {
             UI.showNotification('No rows ready for import.', 'error');
             return;
+        }
+
+        // Re-validate duplicates at commit time (data may have changed since dry-run)
+        const existingActivities = await DataManager.getAllActivities();
+        const duplicateHash = new Set();
+        const stillReady = [];
+        let skippedDuplicates = 0;
+        for (const row of readyRows) {
+            if (row.category !== 'external') {
+                stillReady.push(row);
+                continue;
+            }
+            const p = row.payload;
+            const key = `${(p.accountName || '').toLowerCase()}|${(p.projectName || '').toLowerCase()}|${(p.date || '').substring(0, 10)}|${p.activityType || ''}`;
+            if (duplicateHash.has(key)) {
+                skippedDuplicates++;
+                continue;
+            }
+            duplicateHash.add(key);
+            const existing = existingActivities.find(a =>
+                !a.isInternal &&
+                (a.accountName || '').toLowerCase() === (p.accountName || '').toLowerCase() &&
+                (a.projectName || '').toLowerCase() === (p.projectName || '').toLowerCase() &&
+                (a.date || '').substring(0, 10) === (p.date || '').substring(0, 10) &&
+                (a.type || '') === p.activityType
+            );
+            if (existing) {
+                skippedDuplicates++;
+                continue;
+            }
+            stillReady.push(row);
+        }
+        readyRows = stillReady;
+        if (!readyRows.length) {
+            UI.showNotification('No rows ready for import. Some were duplicates of data added since dry-run.', 'warning');
+            return;
+        }
+        if (skippedDuplicates) {
+            UI.showNotification(`${skippedDuplicates} row(s) skipped as duplicates of current data.`, 'info');
         }
 
         let externalCount = 0;
         let internalCount = 0;
         let createdAccounts = 0;
         let createdProjects = 0;
+        const savedAccountIds = new Set();
 
         for (const row of readyRows) {
             if (row.category === 'external') {
-                const result = await this.commitExternalRow(row.payload);
+                const result = await this.commitExternalRow(row.payload, savedAccountIds);
                 externalCount++;
                 createdAccounts += result.newAccount ? 1 : 0;
                 createdProjects += result.newProject ? 1 : 0;
@@ -1006,7 +1095,7 @@ const BulkImport = {
         }
     },
 
-    async commitExternalRow(payload) {
+    async commitExternalRow(payload, savedAccountIds = new Set()) {
         const accounts = await DataManager.getAccounts();
         let account = this.findAccount(accounts, payload.accountName);
         let newAccountCreated = false;
@@ -1026,7 +1115,11 @@ const BulkImport = {
             if (payload.salesRepName && payload.salesRepName !== account.salesRep) {
                 account.salesRep = payload.salesRepName;
             }
-            await DataManager.saveAccounts(accounts);
+            // Only save accounts once per account per batch to avoid redundant writes
+            if (!savedAccountIds.has(account.id)) {
+                await DataManager.saveAccounts(accounts);
+                savedAccountIds.add(account.id);
+            }
         }
 
         let project = this.findProject(account, payload.projectName);

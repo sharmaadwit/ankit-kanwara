@@ -665,7 +665,7 @@ const Activities = {
                                     <label class="form-label required">Industry</label>
                                     <select class="form-control" id="industry" data-was-required="true" required onchange="Activities.handleIndustryChange(this.value)">
                                         <option value="">Select Industry</option>
-                                        ${(industries || []).map(ind => `<option value="${ind}">${ind}</option>`).join('')}
+                                        ${(industries || []).filter(ind => ind !== 'Other').map(ind => `<option value="${ind}">${ind}</option>`).join('')}
                                         <option value="Other">Other</option>
                                     </select>
                                     <input type="text" class="form-control" id="industryOtherText" placeholder="Specify industry..." style="margin-top: 0.5rem; display: none;">
@@ -1262,15 +1262,17 @@ const Activities = {
         const list = useCases.length ? useCases : ['Marketing', 'Commerce', 'Support'];
         const keepSelected = this.selectedUseCases.filter(uc => uc !== 'Other' && list.includes(uc));
         this.selectedUseCases = keepSelected;
-        dropdown.innerHTML = list.map(uc => {
+        const listWithoutOther = list.filter(uc => uc !== 'Other');
+        const otherRow = `
+            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
+                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
+            </div>`;
+        dropdown.innerHTML = listWithoutOther.map(uc => {
             const attrVal = (uc || '').replace(/"/g, '&quot;');
             return `<div class="multi-select-option" data-value="${attrVal}" onclick="Activities.toggleOption('useCase', this.getAttribute('data-value'))">
                 <input type="checkbox" value="${attrVal}"> ${uc}
             </div>`;
-        }).join('') + `
-            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
-                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
-            </div>`;
+        }).join('') + otherRow;
         this.syncMultiSelectState('useCase', this.selectedUseCases);
         this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
     },
@@ -1506,6 +1508,11 @@ const Activities = {
             return;
         }
 
+        // Force fresh accounts so newly added projects (e.g. Raja Susu) appear in the list
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+            DataManager.invalidateCache('accounts');
+        }
+
         let html = '';
 
         // If account is 'new', only show "Add New Project" option
@@ -1680,9 +1687,9 @@ const Activities = {
             }
         }
 
-        // Load and pre-populate project data if existing project
+        // Load and pre-populate project data if existing project (await so project-level info is shown when editing)
         if (id && id !== 'new') {
-            this.loadProjectData(id);
+            await this.loadProjectData(id);
             const pastSection = document.getElementById('pastActivitiesSection');
             if (pastSection) pastSection.classList.remove('hidden');
             await this.renderPastActivitiesForProject(id);
@@ -2135,6 +2142,8 @@ const Activities = {
     async saveExternalActivityUnified(currentUser, date, activityType, options = {}) {
         const { isEditing = false, original = null } = options || {};
         const editingContext = this.editingContext || {};
+        /** When we defer project use cases/products save until after activity save */
+        let pendingAccountsSave = null;
 
         // Get account information
         const accountIdEl = document.getElementById('selectedAccountId');
@@ -2248,8 +2257,29 @@ const Activities = {
                 status: 'active'
             });
             finalProjectId = projectResult.id;
+            // Retain project-level info (use cases, products, location) on the new project
+            if (projectResult && finalProjectId) {
+                const updates = {};
+                const projectLocation = document.getElementById('projectLocation')?.value;
+                if (projectLocation !== undefined) updates.location = projectLocation || '';
+                if (this.selectedProjectProducts && this.selectedProjectProducts.length > 0) {
+                    const productsOtherText = document.getElementById('projectProductsOtherText')?.value || '';
+                    updates.productsInterested = this.selectedProjectProducts.map(p =>
+                        p === 'Other' ? `Other: ${productsOtherText}` : p
+                    );
+                }
+                if (this.selectedUseCases && this.selectedUseCases.length > 0) {
+                    const useCaseOtherText = document.getElementById('useCaseOtherText')?.value || '';
+                    updates.useCases = this.selectedUseCases.map(uc =>
+                        uc === 'Other' ? `Other: ${useCaseOtherText}` : uc
+                    );
+                }
+                if (Object.keys(updates).length > 0) {
+                    await DataManager.updateProject(finalAccountId, finalProjectId, updates);
+                }
+            }
         } else {
-            // If project exists, update name if edited, and location/products
+            // If project exists, update name if edited, and prepare use cases/products (save accounts after activity so activity is never lost if accounts PUT fails)
             const accounts = await DataManager.getAccounts();
             const account = accounts.find(a => a.id === finalAccountId);
             const project = account?.projects?.find(p => p.id === finalProjectId);
@@ -2263,22 +2293,20 @@ const Activities = {
                 const projectLocation = document.getElementById('projectLocation')?.value;
                 if (projectLocation !== undefined) project.location = projectLocation || '';
 
-                // Issue #9: Save Products and Use Cases back to project
+                // Issue #9: Set Products and Use Cases on project (we persist accounts after activity save below)
                 if (this.selectedProjectProducts && this.selectedProjectProducts.length > 0) {
                     const productsOtherText = document.getElementById('projectProductsOtherText')?.value || '';
                     project.productsInterested = this.selectedProjectProducts.map(p =>
                         p === 'Other' ? `Other: ${productsOtherText}` : p
                     );
                 }
-
                 if (this.selectedUseCases && this.selectedUseCases.length > 0) {
                     const useCaseOtherText = document.getElementById('useCaseOtherText')?.value || '';
                     project.useCases = this.selectedUseCases.map(uc =>
                         uc === 'Other' ? `Other: ${useCaseOtherText}` : uc
                     );
                 }
-
-                await DataManager.saveAccounts(accounts);
+                pendingAccountsSave = accounts;
             }
         }
 
@@ -2394,6 +2422,14 @@ const Activities = {
             if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
                 Drafts.removeDraft(this.editingContext.fromDraftId);
             }
+            if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
+                try {
+                    await DataManager.saveAccounts(pendingAccountsSave);
+                } catch (e) {
+                    console.warn('Activity saved; project use cases/products save failed:', e);
+                    UI.showNotification('Activity saved. Project use cases/products could not be saved – try editing the activity again to save them.', 'warning');
+                }
+            }
             this.closeActivityModal();
             UI.showNotification('Activity updated successfully! Draft removed.', 'success');
             this.setLastActivityDateForUser(currentUser.id, date);
@@ -2461,6 +2497,14 @@ const Activities = {
                         draftsCount++;
                     }
                 }
+                if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
+                    try {
+                        await DataManager.saveAccounts(pendingAccountsSave);
+                    } catch (e) {
+                        console.warn('Activities saved; project use cases/products save failed:', e);
+                        UI.showNotification('Activities saved. Project use cases/products could not be saved – try editing again to save them.', 'warning');
+                    }
+                }
                 this.setLastActivityDateForUser(currentUser.id, lastSavedDate);
                 this.closeActivityModal();
                 if (draftsCount > 0) {
@@ -2487,6 +2531,14 @@ const Activities = {
                     });
                     if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
                         Drafts.removeDraft(this.editingContext.fromDraftId);
+                    }
+                    if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
+                        try {
+                            await DataManager.saveAccounts(pendingAccountsSave);
+                        } catch (e) {
+                            console.warn('Activity saved; project use cases/products save failed:', e);
+                            UI.showNotification('Activity saved. Project use cases/products could not be saved – try editing the activity again to save them.', 'warning');
+                        }
                     }
                     this.closeActivityModal();
                     let msg = 'Activity logged successfully!';

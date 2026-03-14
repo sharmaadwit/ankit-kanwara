@@ -2,7 +2,7 @@
 
 ## Overview
 
-PAMS uses PostgreSQL with a simple key-value storage model. Most application data (users, accounts, activities, etc.) is stored as JSON in the `storage` table, while audit logs are stored in dedicated tables.
+PAMS uses PostgreSQL with a hybrid model: (1) **Key-value:** the `storage` table holds most application data (users, accounts, activities, etc.) as JSON; (2) **Normalized tables:** `users`, `sessions` (auth), `login_logs`, `activity_logs` (audit), `storage_history`, `pending_storage_saves`, `storage_mutations` (storage support), and `pricing_calculations` (calculator audit). See `docs/ARCHITECTURE_AND_OPTIMIZATION_MEMO.md` for retention and cleanup.
 
 ---
 
@@ -170,6 +170,158 @@ ADD COLUMN IF NOT EXISTS transaction_id TEXT;
 
 ---
 
+### 4. `storage_history` Table
+
+**Purpose:** Archive of previous values before each overwrite of a storage key (“insurance” for recovery). Every PUT (except `migration_*` keys) inserts the current value here before updating `storage`.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS storage_history (
+    id SERIAL PRIMARY KEY,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ,
+    archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_storage_history_key_archived
+  ON storage_history (key, archived_at DESC);
+```
+
+**Columns:**
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key |
+| `key` | TEXT | Storage key that was overwritten |
+| `value` | TEXT | Previous value (may be compressed) |
+| `updated_at` | TIMESTAMPTZ | Previous row’s updated_at |
+| `archived_at` | TIMESTAMPTZ | When this archive row was created |
+
+**Retention:** Use `POST /api/admin/cleanup` or env `STORAGE_HISTORY_RETENTION_DAYS` (default 90). Run regularly to keep Railway lean.
+
+---
+
+### 5. `pending_storage_saves` Table
+
+**Purpose:** “Lost & Found” for writes rejected with 409 (conflict). Admin can inspect and re-apply or discard.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS pending_storage_saves (
+    id SERIAL PRIMARY KEY,
+    storage_key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    username TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pending_storage_saves_created_at
+  ON pending_storage_saves (created_at DESC);
+```
+
+**Retention:** Cleaned when running cleanup with `full: true`; `PENDING_STORAGE_RETENTION_DAYS` (default 7).
+
+---
+
+### 6. `storage_mutations` Table
+
+**Purpose:** Idempotency for client writes. Stores mutation ID and optional response timestamp so retries return the same result without re-applying.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS storage_mutations (
+    mutation_id TEXT PRIMARY KEY,
+    storage_key TEXT NOT NULL,
+    response_updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_storage_mutations_created_at
+  ON storage_mutations (created_at DESC);
+```
+
+**Retention:** Cleaned when running cleanup with `full: true`; `STORAGE_MUTATIONS_RETENTION_DAYS` (default 30).
+
+---
+
+### 7. `users` Table
+
+**Purpose:** Source of truth for authentication (cookie auth). Replaces storage key `users` for login; storage `users` may still be used as legacy/fallback until F-002.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT,
+    password_hash TEXT NOT NULL,
+    roles TEXT[] NOT NULL DEFAULT '{}',
+    regions TEXT[] NOT NULL DEFAULT '{}',
+    sales_reps TEXT[] NOT NULL DEFAULT '{}',
+    default_region TEXT DEFAULT '',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    force_password_change BOOLEAN NOT NULL DEFAULT false,
+    password_updated_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users (is_active);
+```
+
+---
+
+### 8. `sessions` Table
+
+**Purpose:** Active sessions for cookie-based auth. References `users`.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
+```
+
+**Relationships:** `sessions.user_id` → `users.id`
+
+---
+
+### 9. `pricing_calculations` Table
+
+**Purpose:** Store pricing calculator payloads for dashboards and audit (JSONB). No retention policy in code yet; consider adding one.
+
+**Schema:**
+```sql
+CREATE TABLE IF NOT EXISTS pricing_calculations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    calculation_id TEXT NOT NULL UNIQUE,
+    user_email TEXT,
+    country TEXT,
+    channel_type TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    payload JSONB NOT NULL DEFAULT '{}',
+    total_mandays NUMERIC,
+    voice_mandays NUMERIC,
+    text_mandays NUMERIC,
+    total_invoice NUMERIC
+);
+-- Indexes on calculation_id, user_email, created_at DESC, country, channel_type
+```
+
+---
+
+### 10. `login_logs` extra columns (actual schema in code)
+
+The running app also has: `session_id`, `logout_at`, `session_duration_seconds`. Index: `idx_login_logs_session_id` on `session_id` WHERE session_id IS NOT NULL.
+
+**Retention:** `LOGIN_LOGS_RETENTION_DAYS` (default 90); auto-cleanup in `loginLogs.js` and via admin cleanup.
+
+---
+
 ## Data Storage Model
 
 ### Key-Value Storage Pattern
@@ -246,6 +398,22 @@ SELECT * FROM activity_logs
 WHERE action = 'activity.create' 
 ORDER BY created_at DESC;
 ```
+
+---
+
+## Retention and Cleanup
+
+To keep Railway storage lean, run cleanup regularly (e.g. `POST /api/admin/cleanup`). Env vars:
+
+| Env var | Default | Applies to |
+|---------|---------|------------|
+| `STORAGE_HISTORY_RETENTION_DAYS` | 90 | storage_history |
+| `LOGIN_LOGS_RETENTION_DAYS` | 90 | login_logs |
+| `ACTIVITY_LOGS_RETENTION_DAYS` | 14 | activity_logs |
+| `STORAGE_MUTATIONS_RETENTION_DAYS` | 30 | storage_mutations (when `full: true`) |
+| `PENDING_STORAGE_RETENTION_DAYS` | 7 | pending_storage_saves (when `full: true`) |
+
+`pricing_calculations` has no retention in code yet; consider adding a policy or cleanup step.
 
 ---
 

@@ -80,6 +80,62 @@ function maybeDecompress(raw) {
   return raw;
 }
 
+/**
+ * PATCH /api/admin/users/:id
+ * Update one user (e.g. set force_password_change for next login).
+ */
+router.patch('/:id', async (req, res) => {
+  try {
+    const userId = (req.params.id || '').trim();
+    if (!userId) return res.status(400).json({ message: 'User id is required' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const forcePasswordChange = body.forcePasswordChange === true;
+
+    const pool = getPool();
+    if (!pool) return res.status(503).json({ message: 'Database not available' });
+
+    if (forcePasswordChange) {
+      const { rowCount } = await pool.query(
+        `UPDATE users SET force_password_change = true, updated_at = NOW() WHERE id = $1`,
+        [userId]
+      );
+      if (rowCount === 0) return res.status(404).json({ message: 'User not found' });
+      logger.info('admin_user_force_password_change', { userId, by: req.get('x-admin-user') || 'admin' });
+      return res.json({ success: true, message: 'User will be prompted to change password on next login.' });
+    }
+
+    return res.status(400).json({ message: 'No supported update provided' });
+  } catch (err) {
+    logger.error('admin_users_patch_failed', { message: err.message });
+    return res.status(500).json({ message: err.message || 'Failed to update user' });
+  }
+});
+
+/**
+ * DELETE /api/admin/users/:id
+ * Deactivate or remove user from DB (soft-delete: set is_active = false to avoid breaking FK).
+ */
+router.delete('/:id', async (req, res) => {
+  try {
+    const userId = (req.params.id || '').trim();
+    if (!userId) return res.status(400).json({ message: 'User id is required' });
+
+    const pool = getPool();
+    if (!pool) return res.status(503).json({ message: 'Database not available' });
+
+    const { rowCount } = await pool.query(
+      `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1`,
+      [userId]
+    );
+    if (rowCount === 0) return res.status(404).json({ message: 'User not found' });
+    logger.info('admin_user_deleted', { userId, by: req.get('x-admin-user') || 'admin' });
+    return res.json({ success: true, message: 'User deactivated.' });
+  } catch (err) {
+    logger.error('admin_users_delete_failed', { message: err.message });
+    return res.status(500).json({ message: err.message || 'Failed to delete user' });
+  }
+});
+
 router.post('/reset-password', async (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};

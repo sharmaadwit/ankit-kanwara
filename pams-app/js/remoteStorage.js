@@ -1103,20 +1103,19 @@
                     }
                     let merged = JSON.stringify(mergedArr);
                     serializedValue = merged;
-                    var draft = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
-                        type: 'external',
-                        payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
-                        errorMessage: 'Saving…',
-                        storageKey: ACTIVITIES_KEY
-                    }) : null;
                     try {
                         doActivitiesSave(merged);
                         saveLocalBackup(ACTIVITIES_KEY, merged);
                         shardCache[ACTIVITIES_KEY] = { version: null, value: serializedValue };
-                        if (draft && Drafts.removeDraft) Drafts.removeDraft(draft.id);
                         logSaveToActivityLog(ACTIVITIES_KEY, merged);
                         return serializedValue;
                     } catch (e) {
+                        var draft = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
+                            type: 'external',
+                            payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
+                            errorMessage: (e && e.message) || String(e),
+                            storageKey: ACTIVITIES_KEY
+                        }) : null;
                         if (draft && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: (e && e.message) || String(e) });
                         throw e;
                     }
@@ -1149,19 +1148,18 @@
                         merged = JSON.stringify(mergedArr);
                     }
                     serializedValue = merged;
-                    var draftAcc = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
-                        type: key === 'internalActivities' ? 'internal' : 'external',
-                        payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
-                        errorMessage: 'Saving…',
-                        storageKey: key
-                    }) : null;
                     try {
                         doPut(merged);
                         saveLocalBackup(key, merged);
-                        if (draftAcc && Drafts.removeDraft) Drafts.removeDraft(draftAcc.id);
                         logSaveToActivityLog(key, merged);
                         return serializedValue;
                     } catch (e) {
+                        var draftAcc = (typeof Drafts !== 'undefined' && Drafts.addDraft) ? Drafts.addDraft({
+                            type: key === 'internalActivities' ? 'internal' : 'external',
+                            payload: Array.isArray(mergedArr) ? mergedArr : safeJsonParse(merged),
+                            errorMessage: (e && e.message) || String(e),
+                            storageKey: key
+                        }) : null;
                         if (draftAcc && Drafts.updateDraft) Drafts.updateDraft(draftAcc.id, { errorMessage: (e && e.message) || String(e) });
                         throw e;
                     }

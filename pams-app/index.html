@@ -16,8 +16,15 @@
 <body>
     <div id="appLoadingOverlay">
         <div class="app-loading-content">
-            <div class="app-loading-spinner"></div>
-            <p id="appLoadingMessage">Loading PAMS…</p>
+            <div class="app-loading-spinner-wrap" aria-hidden="true">
+                <div class="app-loading-spinner"></div>
+                <div class="app-loading-spinner-ring"></div>
+            </div>
+            <p id="appLoadingMessage" class="app-loading-message">Loading PAMS…</p>
+            <p id="appLoadingTip" class="app-loading-tip"></p>
+            <div class="app-loading-progress-wrap">
+                <div id="appLoadingProgress" class="app-loading-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
         </div>
     </div>
     <div id="syncIndicator" class="sync-indicator hidden" aria-live="polite">Syncing your data…</div>
@@ -614,10 +621,6 @@
                                                 </div>
                                                 <button id="addUserBtn" class="btn btn-primary"
                                                     onclick="Admin.showAddUserModal()">Add New User</button>
-                                                <button id="forcePasswordChangeBtn" class="btn btn-warning"
-                                                    onclick="Admin.forcePasswordChangeAll()"
-                                                    title="Force all users with default passwords to change on next login">Force
-                                                    Password Change</button>
                                             </div>
                                             <div id="usersList" class="space-y-2"></div>
                                         </div>
@@ -927,10 +930,6 @@
                                                 </div>
                                                 <button id="addUserBtnConfig" class="btn btn-primary"
                                                     onclick="Admin.showAddUserModal()">Add New User</button>
-                                                <button id="forcePasswordChangeBtnConfig" class="btn btn-warning"
-                                                    onclick="Admin.forcePasswordChangeAll()"
-                                                    title="Force all users with default passwords to change on next login">Force
-                                                    Password Change</button>
                                             </div>
                                             <div id="usersListConfig" class="space-y-2"></div>
                                         </div>

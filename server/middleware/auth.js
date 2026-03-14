@@ -12,6 +12,21 @@ const sessionMiddleware = async (req, res, next) => {
   try {
     const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
     if (!sessionId) return next();
+    const { getDevSession } = require('../services/devSession');
+    const devSession = getDevSession(sessionId);
+    if (devSession) {
+      req.user = {
+        id: devSession.userId,
+        username: devSession.username,
+        email: devSession.email,
+        roles: devSession.roles,
+        regions: devSession.regions,
+        salesReps: devSession.salesReps,
+        defaultRegion: devSession.defaultRegion
+      };
+      req.headers['x-admin-user'] = devSession.username;
+      return next();
+    }
     const session = await getSession(sessionId);
     if (!session) return next();
     req.user = {

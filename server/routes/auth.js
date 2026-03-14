@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const { getPool } = require('../db');
 const { createSession, getSession, destroySession } = require('../services/session');
 const { logLoginAttempt, logLogoutEvent } = require('../services/loginLogs');
+const { isDevLoginAllowed, DEV_USER, setDevSession, getDevSession, destroyDevSession } = require('../services/devSession');
 const logger = require('../logger');
 const crypto = require('crypto');
 const zlib = require('zlib');
@@ -167,6 +168,20 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Username and password are required.' });
     }
 
+    // Dev bypass: when DB is unavailable, allow dev/dev to test locally
+    if (isDevLoginAllowed() && trimmedUsername === 'dev' && password === 'dev') {
+      const sessionId = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      setDevSession(sessionId, DEV_USER);
+      res.cookie(SESSION_COOKIE_NAME, sessionId, { ...COOKIE_OPTIONS, expires: expiresAt });
+      logger.info('auth_dev_login', { transactionId: req.transactionId });
+      return res.status(200).json({
+        user: { id: DEV_USER.id, username: DEV_USER.username, email: DEV_USER.email, roles: DEV_USER.roles, regions: DEV_USER.regions, salesReps: DEV_USER.salesReps, defaultRegion: DEV_USER.defaultRegion, isActive: true, forcePasswordChange: false },
+        forcePasswordChange: false,
+        sessionId
+      });
+    }
+
     const pool = getPool();
     let { rows } = await pool.query(
       `SELECT id, username, email, password_hash, roles, regions, sales_reps, default_region, is_active, force_password_change
@@ -260,6 +275,11 @@ router.post('/login', async (req, res) => {
       sessionId: trackingSessionId // Return session ID to client for logout tracking
     });
   } catch (error) {
+    // If dev login is allowed, suggest using dev/dev for local testing without DB
+    if (isDevLoginAllowed()) {
+      logger.warn('auth_login_error_dev_hint', { message: error.message, transactionId: req.transactionId });
+      return res.status(503).json({ message: 'Database unavailable. Use username: dev, password: dev to sign in (dev login is enabled).' });
+    }
     logger.error('auth_login_error', { message: error.message, transactionId: req.transactionId });
     res.status(500).json({ message: 'Login failed. Try again.' });
   }
@@ -274,6 +294,7 @@ router.post('/logout', async (req, res) => {
   const trackingSessionId = req.body?.sessionId; // Get tracking session ID from request body
 
   if (sessionId) {
+    destroyDevSession(sessionId);
     try {
       await destroySession(sessionId);
     } catch (e) {
@@ -306,6 +327,20 @@ router.get('/me', async (req, res) => {
   const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
   if (!sessionId) {
     return res.status(401).json({ message: 'Not authenticated.' });
+  }
+  const devSession = getDevSession(sessionId);
+  if (devSession) {
+    const durationMs = Date.now() - meStart;
+    logger.info('auth_me', { durationMs, dev: true });
+    return res.json({
+      userId: devSession.userId,
+      username: devSession.username,
+      email: devSession.email,
+      roles: devSession.roles,
+      regions: devSession.regions,
+      salesReps: devSession.salesReps,
+      defaultRegion: devSession.defaultRegion
+    });
   }
   const session = await getSession(sessionId);
   if (!session) {

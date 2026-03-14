@@ -1,6 +1,6 @@
 # Where to look when Activities are missing (admin)
 
-If you did activities yesterday but nothing shows in the app, check these in order.
+If you or other users are missing activities, check these in order. **To restore a specific user’s data**, have them export from the app (My drafts → **Export my data for recovery**) and send you the file; then use **Admin → Activity recovery** to load it. See **docs/USER_RECOVERY_STEPS.md** for steps to send to users.
 
 ---
 

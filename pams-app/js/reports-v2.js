@@ -1,11 +1,15 @@
 // Reports V2 - New reporting structure
 const ReportsV2 = {
     charts: {},
-    formatReportCurrency(value, defaultZero = false) {
-        if (value === null || value === undefined || value === '') return defaultZero ? '₹0' : '—';
+    INR_TO_AED: 0.044, // 1 INR ≈ 0.044 AED (for Alhamra.ae and other AED wins stored as INR by mistake)
+    formatReportCurrency(value, defaultZero = false, currency = 'INR') {
+        if (value === null || value === undefined || value === '') return defaultZero ? (currency === 'AED' ? 'AED 0' : '₹0') : '—';
         const n = Number(value);
         if (!Number.isFinite(n)) return String(value);
-        return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+        if (currency === 'AED') {
+            return 'AED ' + n.toLocaleString('en-AE', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+        }
+        return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0, minimumFractionDigits: 0 }) + ' (INR)';
     },
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
@@ -105,7 +109,9 @@ const ReportsV2 = {
                 this.monthlyReportData.winsForPeriod.forEach(w => {
                     const checked = includedWinIds === null || includedWinIds.includes(w.projectId);
                     const presalesPart = (w.presalesRep && w.presalesRep !== '—') ? ' | Won by: ' + String(w.presalesRep).replace(/</g, '&lt;') : '';
-                    winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(w.mrr || '—').replace(/</g, '&lt;')}${presalesPart}</label>`;
+                    const wCurr = w.currency || 'INR';
+                    const wMrrStr = (w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(Number(w.mrr), true, wCurr) : '—';
+                    winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(wMrrStr).replace(/</g, '&lt;')}${presalesPart}</label>`;
                 });
             }
             manualWins.forEach((mw, i) => {
@@ -608,13 +614,22 @@ const ReportsV2 = {
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
                                 const presalesRep = project.winLossData?.wonByUserName || userLookup.get(project.winLossData?.wonByUserId) || '—';
                                 const wl = project.winLossData || {};
-                                const currency = wl.currency || 'INR';
-                                const mrrVal = wl.mrr ?? project.mrr;
+                                const accountName = account.name || 'Unknown';
+                                const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
+                                let currency = wl.currency || 'INR';
+                                let mrrVal = wl.mrr ?? project.mrr;
+                                if (isAlhamra) {
+                                    currency = 'AED';
+                                    if (wl.currency === 'INR' && mrrVal != null && mrrVal !== '' && mrrVal !== '—') {
+                                        const num = Number(mrrVal);
+                                        if (Number.isFinite(num)) mrrVal = Math.round(num * ReportsV2.INR_TO_AED);
+                                    }
+                                }
                                 const mrrInInr = wl.mrrInInr != null && Number.isFinite(Number(wl.mrrInInr)) ? Number(wl.mrrInInr) : (currency === 'INR' && mrrVal != null ? Number(mrrVal) : null);
                                 winsForPeriod.push({
                                     projectId: project.id,
                                     accountId: account.id,
-                                    accountName: account.name || 'Unknown',
+                                    accountName: accountName,
                                     mrr: mrrVal ?? '—',
                                     currency,
                                     mrrInInr,
@@ -848,7 +863,8 @@ const ReportsV2 = {
                                 const manual = (o.manualWins || []).concat(seedForPeriod);
                                 const renderManualWinCard = (mw) => {
                                     const hasRich = mw.product || mw.channel || mw.industry || mw.buyerCentre || mw.stakeholders || mw.commercials || mw.expansionPlan;
-                                    const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true) : '—';
+                                    const mrrCurr = mw.currency || 'INR';
+                                    const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true, mrrCurr) : '—';
                                     if (hasRich) {
                                         const lines = [];
                                         lines.push('<strong>' + safe(mw.clientName || '') + '</strong>');
@@ -867,10 +883,11 @@ const ReportsV2 = {
                                     return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : '') + '</div>';
                                 };
                                 const cards = displayWins.slice(0, 12).map(w => {
-                                    const mrrInInr = w.mrrInInr != null && Number.isFinite(w.mrrInInr) ? w.mrrInInr : (w.currency === 'INR' && w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
-                                    const mrrStr = mrrInInr != null ? ReportsV2.formatReportCurrency(mrrInInr, true) : ((w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(w.mrr, true) : '—');
-                                    const otdInInr = w.otdInInr != null && Number.isFinite(w.otdInInr) ? w.otdInInr : (w.otd != null && w.otd !== '' ? Number(w.otd) : null);
-                                    const otdStr = (otdInInr != null ? ReportsV2.formatReportCurrency(otdInInr, true) : ((w.otd != null && w.otd !== '') ? ReportsV2.formatReportCurrency(w.otd, true) : ''));
+                                    const curr = w.currency || 'INR';
+                                    const mrrNum = (curr === 'INR' && (w.mrrInInr != null && Number.isFinite(w.mrrInInr))) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
+                                    const mrrStr = mrrNum != null ? ReportsV2.formatReportCurrency(mrrNum, true, curr) : '—';
+                                    const otdNum = w.otdInInr != null && Number.isFinite(w.otdInInr) ? w.otdInInr : (w.otd != null && w.otd !== '' ? Number(w.otd) : null);
+                                    const otdStr = (otdNum != null ? ReportsV2.formatReportCurrency(otdNum, true, curr) : '');
                                     const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
                                     return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
                                 });

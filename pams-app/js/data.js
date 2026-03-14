@@ -851,13 +851,36 @@ const DataManager = {
                             this.cache.users = normalized;
                             return normalized;
                         }
+                        // 401/403: don't cache empty so Retry can work after re-login or when session is ready
+                        if (res.status === 401 || res.status === 403) {
+                            if (attempt === 0) console.warn('[DataManager] Fallback GET /api/admin/users: admin auth required (', res.status, ')');
+                            lastErr = new Error('Admin access required');
+                        }
                     } catch (apiErr) {
                         lastErr = apiErr;
                         if (attempt === 0) console.warn('[DataManager] Fallback GET /api/admin/users failed (will retry once):', apiErr);
                     }
                 }
                 if (lastErr) console.warn('[DataManager] Fallback GET /api/admin/users failed after retry:', lastErr);
-                this.cache.users = [];
+                // Second fallback: GET /api/users (roster) - returns active users from DB; works for any logged-in user (session). Shows Nikhil, Puru, etc. when admin API is unavailable.
+                try {
+                    const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+                    const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+                    const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+                    const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+                    const rosterUrl = root ? (root.replace(/\/$/, '') + '/api/users') : '/api/users';
+                    const rosterRes = await fetch(rosterUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+                    if (rosterRes.ok) {
+                        const fromRoster = await rosterRes.json();
+                        const list = Array.isArray(fromRoster) ? fromRoster : [];
+                        const normalized = list.map(normalizeUser).filter(Boolean);
+                        this.cache.users = normalized;
+                        return normalized;
+                    }
+                } catch (rosterErr) {
+                    console.warn('[DataManager] Fallback GET /api/users failed:', rosterErr);
+                }
+                // Do not cache empty when fallback failed so Retry / next load can try again
                 return [];
             } catch (err) {
                 console.warn('[DataManager] Async getUsers failed:', err);
