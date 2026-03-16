@@ -59,6 +59,17 @@ REMOTE_STORAGE_BASE=https://YOUR-APP.up.railway.app/api/storage REMOTE_STORAGE_U
 - Hard refresh (Ctrl+Shift+R / Cmd+Shift+R) and test as needed.
 - If something goes wrong, you can restore from the snapshot using the restore script (see server docs or `restore-storage-from-snapshot.js`).
 
+## Step 5 (optional): Backfill normalized tables
+
+If this deploy includes **D-002** (normalized `accounts`/`projects`/`activities`/`internal_activities`), you can run a one-time backfill so existing storage data is mirrored into those tables (e.g. for future read-path cutover). From a environment where the production DB is reachable (e.g. Railway shell or a one-off job):
+
+```bash
+npm run backfill-normalized-dry   # dry run (counts only)
+npm run backfill-normalized      # apply
+```
+
+Skip if you do not need the normalized copy yet; dual-write will keep new writes in sync either way.
+
 ---
 
 ## API: current production build number

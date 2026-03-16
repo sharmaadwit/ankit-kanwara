@@ -21,11 +21,6 @@ const Admin = {
             label: 'Admin Monthly Export',
             description: 'Allow admins to download monthly analytics CSV snapshots.',
             dashboardKey: null
-        },
-        migrationMode: {
-            label: 'Migration Mode',
-            description: 'When enabled, show only migration UI: Accounts, Projects, Activities, Suggestions, Wins, Merge/update, and Migration dashboard. Normal dashboard and full nav are hidden. Default Off.',
-            dashboardKey: null
         }
     },
     currentFeatureFlags: {},
@@ -336,6 +331,7 @@ const Admin = {
             features: () => this.loadControls(),
             login: () => this.loadLoginLogs(),
             audit: () => this.loadActivityLogs(),
+            submissionLog: () => this.loadActivitySubmissionLogs(),
             storageDrafts: () => this.loadStorageDraftsSection(),
             activityRecovery: () => this.loadActivityRecoverySection(),
             monthly: () => this.populateReportExportRegionOptions(),
@@ -740,25 +736,32 @@ const Admin = {
             industrySelect.value = (sel === currentName ? newName.trim() : sel) || '';
         }
         await this.renderUseCasesForIndustry();
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(result.accountsUpdated > 0 ? `Industry renamed. ${result.accountsUpdated} account(s) updated.` : 'Industry renamed.', 'success');
+        const parts = [];
+        if (result.accountsUpdated > 0) parts.push(`${result.accountsUpdated} account(s)`);
+        if (result.activitiesUpdated > 0) parts.push(`${result.activitiesUpdated} activity/activities`);
+        const msg = parts.length > 0 ? `Industry renamed. ${parts.join(', ')} updated.` : 'Industry renamed.';
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
     async removeIndustryFromAdmin(industry) {
         if (!industry) return;
-        if (!window.confirm('Remove industry "' + String(industry).replace(/"/g, '') + '"?')) return;
-        if (typeof DataManager === 'undefined') return;
-        const rawIndustries = await DataManager.getIndustries();
-        const currentIndustries = Array.isArray(rawIndustries) ? rawIndustries : [];
-        const list = currentIndustries.filter(i => i !== industry);
-        await DataManager.saveIndustries(list);
+        if (!window.confirm('Remove industry "' + String(industry).replace(/"/g, '') + '"? Accounts with this industry will be set to no industry.')) return;
+        if (typeof DataManager === 'undefined' || !DataManager.removeIndustryWithCleanup) return;
+        const result = await DataManager.removeIndustryWithCleanup(industry);
         await this.renderAdminIndustriesList();
         const industrySelect = document.getElementById('adminUseCaseIndustrySelect') || document.getElementById('adminUseCaseIndustrySelectConfig');
         if (industrySelect) {
+            const raw = await DataManager.getIndustries();
+            const list = Array.isArray(raw) ? raw : [];
             industrySelect.innerHTML = '<option value="">Select industry...</option>' +
                 list.map(ind => `<option value="${ind.replace(/"/g, '&quot;')}">${ind}</option>`).join('');
             await this.renderUseCasesForIndustry();
         }
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Industry removed.', 'success');
+        const parts = [];
+        if (result.accountsUpdated > 0) parts.push(`${result.accountsUpdated} account(s)`);
+        if (result.activitiesUpdated > 0) parts.push(`${result.activitiesUpdated} activity/activities`);
+        const msg = parts.length > 0 ? `Industry removed. ${parts.join(', ')} cleared.` : 'Industry removed.';
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
 
     async renderAdminPendingIndustries() {
@@ -839,8 +842,11 @@ const Admin = {
         await this.renderAdminIndustriesList();
         await this.renderAdminPendingIndustries();
         await this.updatePendingBadges();
-        const msg = result.accountsUpdated > 0
-            ? `Merged into "${targetIndustry}". ${result.accountsUpdated} account(s) updated.`
+        const parts = [];
+        if (result.accountsUpdated > 0) parts.push(`${result.accountsUpdated} account(s)`);
+        if (result.activitiesUpdated > 0) parts.push(`${result.activitiesUpdated} activity/activities`);
+        const msg = parts.length > 0
+            ? `Merged into "${targetIndustry}". ${parts.join(', ')} updated.`
             : `Merged into "${targetIndustry}".`;
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(msg, 'success');
     },
@@ -3315,7 +3321,7 @@ const Admin = {
 
         const csvRows = [header, ...rows];
         const regionSuffix = selectedRegion ? `_${selectedRegion.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
-        const filename = `pams_region_${selectedMonth}${regionSuffix}.csv`;
+        const filename = `presight_region_${selectedMonth}${regionSuffix}.csv`;
         if (typeof App !== 'undefined' && typeof App.downloadCsv === 'function') {
             await App.downloadCsv(filename, csvRows);
         } else {
@@ -3525,6 +3531,79 @@ const Admin = {
             .catch(error => {
                 console.error('Failed to export activity logs:', error);
                 UI.showNotification('Unable to export activity logs.', 'error');
+            });
+    },
+
+    loadActivitySubmissionLogs(force = false) {
+        const container = document.getElementById('activitySubmissionLogsTable');
+        if (!container) return;
+        if (!force) {
+            container.innerHTML = '<div class="text-muted">Loading…</div>';
+        }
+        const outcome = (document.getElementById('submissionLogOutcome') || {}).value || '';
+        const action = (document.getElementById('submissionLogAction') || {}).value || '';
+        const params = new URLSearchParams({ limit: '150' });
+        if (outcome) params.set('outcome', outcome);
+        if (action) params.set('action', action);
+        fetch(`/api/admin/activity-submission-logs?${params}`, {
+            cache: 'no-store',
+            credentials: 'include',
+            headers: this.getAdminHeaders()
+        })
+            .then(response => {
+                if (response.status === 401) {
+                    container.innerHTML = '<div class="text-muted">Session expired or admin access required.</div>';
+                    return null;
+                }
+                if (!response.ok) throw new Error('Failed to fetch');
+                return response.json();
+            })
+            .then(payload => {
+                if (payload == null) return;
+                const logs = Array.isArray(payload.logs) ? payload.logs : [];
+                if (!logs.length) {
+                    container.innerHTML = '<div class="text-muted">No submission log entries yet. Entries appear when users save activities (put/append/remove).</div>';
+                    return;
+                }
+                const rows = logs.map(log => {
+                    let payloadPreview = '—';
+                    if (log.payload != null) {
+                        try {
+                            const str = typeof log.payload === 'object' ? JSON.stringify(log.payload) : String(log.payload);
+                            payloadPreview = str.length > 120 ? str.slice(0, 120) + '…' : str;
+                        } catch (_) {
+                            payloadPreview = '…';
+                        }
+                    }
+                    const safe = (s) => (s || '—').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    return `<tr>
+                        <td>${this.formatDateTime(log.createdAt)}</td>
+                        <td>${safe(log.username)}</td>
+                        <td>${safe(log.action)}</td>
+                        <td>${safe(log.outcome)}</td>
+                        <td>${log.activityCount != null ? log.activityCount : '—'}</td>
+                        <td><code class="log-detail" title="${safe(payloadPreview)}">${safe(payloadPreview)}</code></td>
+                    </tr>`;
+                }).join('');
+                container.innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Outcome</th>
+                                <th>Count</th>
+                                <th>Payload (preview)</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            })
+            .catch(error => {
+                console.error('Activity submission logs:', error);
+                container.innerHTML = '<div class="text-muted">Unable to load activity submission logs.</div>';
             });
     },
 

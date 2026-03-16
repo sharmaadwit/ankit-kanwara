@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PAMS - Presales Activity Management System</title>
+    <title>PreSight – Presales Activity Management</title>
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/interfaces.css">
@@ -20,7 +20,7 @@
                 <div class="app-loading-spinner"></div>
                 <div class="app-loading-spinner-ring"></div>
             </div>
-            <p id="appLoadingMessage" class="app-loading-message">Loading PAMS…</p>
+            <p id="appLoadingMessage" class="app-loading-message">Loading PreSight…</p>
             <p id="appLoadingTip" class="app-loading-tip"></p>
             <div class="app-loading-progress-wrap">
                 <div id="appLoadingProgress" class="app-loading-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
@@ -31,7 +31,12 @@
     <!-- Login Screen -->
     <div id="loginScreen" class="login-screen">
         <div class="login-container">
-            <p class="login-subtitle" id="loginSubtitle">Presales Activity Management System</p>
+            <div class="login-brand">
+                <div class="login-logo">
+                    <img src="images/presight-logo.svg" alt="PreSight" width="80" height="46">
+                </div>
+                <p class="login-subtitle" id="loginSubtitle">PreSight – Presales Activity Management</p>
+            </div>
             <form id="loginForm" class="login-form">
                 <div class="form-group">
                     <label class="form-label">Username or email</label>
@@ -77,11 +82,11 @@
                             <path d="M3 12h18M3 6h18M3 18h18" />
                         </svg>
                     </button>
-                    <button class="app-home-button" onclick="App.switchView('dashboard')"
-                        title="Presales Activity Management System">
-                        <span class="app-home-acronym">PAMS</span>
-                        <span class="app-home-title">Presales Activity Management System</span>
-                    </button>
+                    <a href="#" class="app-home-button" onclick="App.switchView('dashboard'); return false;"
+                        title="PreSight – Presales Activity Management">
+                        <img src="images/presight-logo.svg" alt="" class="app-logo" width="40" height="24">
+                        <span class="app-home-brand">PreSight</span>
+                    </a>
                 </div>
                 <div class="header-right">
                     <span id="currentUsernameDisplay" class="header-username hidden"></span>
@@ -94,16 +99,6 @@
             <!-- Sidebar Navigation -->
             <nav id="sidebar" class="sidebar">
                 <ul class="sidebar-menu">
-                    <li data-dashboard="migrationDashboard" id="migrationDashboardNavItem"><a href="#" data-view="migrationDashboard" class="sidebar-link">
-                            <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="16" y1="13" x2="8" y2="13"></line>
-                                <line x1="16" y1="17" x2="8" y2="17"></line>
-                            </svg>
-                            <span>Migration</span>
-                        </a></li>
                     <li data-dashboard="dashboard"><a href="#" data-view="dashboard" class="sidebar-link active">
                             <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2">
@@ -214,54 +209,6 @@
 
             <!-- Main Content Area -->
             <main class="main-content">
-                <!-- Migration Dashboard (visible when migration mode is on) -->
-                <div id="migrationDashboardView" class="view hidden">
-                    <div class="page-header">
-                        <h1 class="page-title">Migration dashboard</h1>
-                        <p class="page-subtitle">Review migration progress and load migration data.</p>
-                    </div>
-                    <div class="card mb-4">
-                        <div class="card-body">
-                            <h3 class="h5 mb-3">Status</h3>
-                            <p class="text-muted mb-2" id="migrationDataStatus"><strong>Migration data:</strong> Preloaded at server startup (migration CSV + wins).</p>
-                            <p class="small text-muted mb-0" id="migrationWinsStatus"></p>
-                            <hr>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-4">
-                                    <div class="p-3 border rounded">
-                                        <div class="text-muted small">Accounts pending review</div>
-                                        <div class="h4 mb-0" id="migrationStatsAccounts">—</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="p-3 border rounded">
-                                        <div class="text-muted small">Projects pending review</div>
-                                        <div class="h4 mb-0" id="migrationStatsProjects">—</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="p-3 border rounded">
-                                        <div class="text-muted small">Activities confirmed</div>
-                                        <div class="h4 mb-0" id="migrationStatsActivities">— / —</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="small text-muted hidden" id="migrationMonthList"></p>
-                            <div id="migrationConfirmSection" class="mt-3" style="display: none;">
-                                <hr>
-                                <h3 class="h6 mb-2">Confirm &amp; promote</h3>
-                                <p class="small text-muted">Copy draft to confirmed, then promote to main storage when ready. Admin only.</p>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="migrationConfirmDraftBtn">Confirm draft (copy to confirmed)</button>
-                                    <button type="button" class="btn btn-primary btn-sm" id="migrationPromoteBtn">Confirm migration (promote to main)</button>
-                                    <span class="small text-muted align-self-center" id="migrationConfirmMessage"></span>
-                                </div>
-                            </div>
-                            <p class="small text-muted mt-2">When migrating, confirm month first (months in reverse from Dec 2025). Turn off migration mode in <a href="#" onclick="App.switchView('configuration'); return false;">Configuration → Feature Flags</a>.</p>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Dashboard View -->
                 <div id="dashboardView" class="view active">
                     <!-- Dashboard content is dynamically loaded by loadCardDashboard() -->
@@ -585,9 +532,13 @@
                                             onclick="Admin.openAdminSection('audit', event)">
                                             <span>Audit Log</span>
                                         </a>
+                                        <a href="#" class="admin-nav-item" data-admin-nav="submissionLog"
+                                            onclick="Admin.openAdminSection('submissionLog', event)">
+                                            <span>Activity submission log</span>
+                                        </a>
                                         <a href="#" class="admin-nav-item" data-admin-nav="storageDrafts"
                                             onclick="Admin.openAdminSection('storageDrafts', event)">
-                                            <span>All drafts</span>
+                                            <span>All drafts (deprecated)</span>
                                         </a>
                                         <a href="#" class="admin-nav-item" data-admin-nav="activityRecovery"
                                             onclick="Admin.openAdminSection('activityRecovery', event)">
@@ -749,6 +700,41 @@
                                     </div>
                                 </div>
 
+                                <!-- Activity submission log (every Send: put/append/remove + outcome) -->
+                                <div class="admin-section hidden" data-admin-section="submissionLog">
+                                    <div class="card">
+                                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                            <h3>Activity submission log</h3>
+                                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                                <select id="submissionLogOutcome" class="form-control form-control-sm" style="width: auto;" onchange="Admin.loadActivitySubmissionLogs(true)">
+                                                    <option value="">All outcomes</option>
+                                                    <option value="success">Success</option>
+                                                    <option value="conflict">Conflict</option>
+                                                    <option value="validation_failed">Validation failed</option>
+                                                    <option value="not_found">Not found</option>
+                                                    <option value="dropped">Dropped</option>
+                                                    <option value="error">Error</option>
+                                                    <option value="if_match_required">If-Match required</option>
+                                                    <option value="mutation_conflict">Mutation conflict</option>
+                                                </select>
+                                                <select id="submissionLogAction" class="form-control form-control-sm" style="width: auto;" onchange="Admin.loadActivitySubmissionLogs(true)">
+                                                    <option value="">All actions</option>
+                                                    <option value="put">Put (full list)</option>
+                                                    <option value="append">Append</option>
+                                                    <option value="remove">Remove</option>
+                                                </select>
+                                                <button type="button" class="btn btn-secondary btn-sm" onclick="Admin.loadActivitySubmissionLogs(true)">Refresh</button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted small">Every time someone hits Send (save activities), the submission is recorded here with payload and outcome. Use this to debug conflicts or recover data.</p>
+                                            <div id="activitySubmissionLogsTable" class="table-responsive">
+                                                <div class="text-muted">Click Refresh to load entries.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Activity Audit Log -->
                                 <div class="admin-section hidden" data-admin-section="audit">
                                     <div class="card">
@@ -778,12 +764,12 @@
                                     </div>
                                 </div>
 
-                                <!-- All drafts (server-side pending saves after 409; admin only) -->
+                                <!-- All drafts (deprecated: no new entries; use Activity submission log for conflicts) -->
                                 <div class="admin-section hidden" data-admin-section="storageDrafts">
                                     <div class="card">
                                         <div class="card-header"
                                             style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                                            <h3>All drafts</h3>
+                                            <h3>All drafts <span class="text-muted" style="font-size: 0.85rem;">(deprecated)</span></h3>
                                             <div style="display: flex; gap: 0.5rem;">
                                                 <button type="button" class="btn btn-primary btn-sm"
                                                     id="adminStorageDraftsSubmitAllBtn"
@@ -793,9 +779,7 @@
                                             </div>
                                         </div>
                                         <div class="card-body">
-                                            <p class="text-muted small">Drafts stored on the server after a save
-                                                conflict (409). Apply them to merge into current data, or delete to
-                                                discard.</p>
+                                            <p class="text-muted small">No new entries are stored here. Conflict payloads are recorded in <strong>Activity submission log</strong>. This list shows existing rows only; you can still Apply or Delete them. For new conflicts, use Admin → Activity submission log.</p>
                                             <div id="adminStorageDraftsList"></div>
                                         </div>
                                     </div>
@@ -1366,7 +1350,7 @@
                         </div>
                         <div class="card-body" data-csv-import-section>
                             <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                <input type="file" id="importFileInput" accept=".csv" class="form-control"
+                                <input type="file" id="importFileInput" accept=".csv,.txt" class="form-control"
                                     style="max-width: 320px;">
                                 <button class="btn btn-primary" id="importDryRunBtn" disabled>Run Dry-Run</button>
                                 <div id="importLoadingIndicator" class="text-muted" style="display: none;">
@@ -1377,6 +1361,9 @@
                                 The dry-run validates each row, auto-creates missing accounts/projects virtually,
                                 and
                                 reports duplicates/errors before import.
+                            </p>
+                            <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.8rem;">
+                                If upload or dry-run fails, open the browser console (F12) and check <code>__csvImportTrace</code> for step-by-step logs; run <code>__csvImportTraceClear()</code> then try again to capture a fresh trace.
                             </p>
                         </div>
                     </div>

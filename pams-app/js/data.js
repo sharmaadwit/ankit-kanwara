@@ -1210,6 +1210,53 @@ const DataManager = {
         await this.saveIndustries(industries);
     },
 
+    /**
+     * Remove an industry and clean all dependencies: update accounts that had this industry (set to ''),
+     * remove from industryUseCases map, then remove from industries list. Use when admin "removes" an industry.
+     * @param {string} industry - Industry name to remove
+     * @returns {{ accountsUpdated: number }}
+     */
+    async removeIndustryWithCleanup(industry) {
+        const toRemove = (industry && typeof industry === 'string' ? industry.trim() : '') || '';
+        if (!toRemove) return { accountsUpdated: 0, activitiesUpdated: 0 };
+
+        const accounts = await this.getAccounts();
+        let accountsUpdated = 0;
+        accounts.forEach((acc) => {
+            if ((acc.industry || '').trim() === toRemove) {
+                acc.industry = '';
+                accountsUpdated++;
+            }
+        });
+        if (accountsUpdated > 0) await this.saveAccounts(accounts, { skipDraft: true });
+
+        let activitiesUpdated = 0;
+        try {
+            const activities = await this.getActivities();
+            if (Array.isArray(activities)) {
+                activities.forEach((a) => {
+                    if ((a.industry || '').trim() === toRemove) {
+                        a.industry = '';
+                        activitiesUpdated++;
+                    }
+                });
+                if (activitiesUpdated > 0) await this.saveActivities(activities);
+            }
+        } catch (e) {
+            console.warn('[DataManager] removeIndustryWithCleanup: could not update activity.industry', e);
+        }
+
+        const map = await this.getIndustryUseCases();
+        if (Object.prototype.hasOwnProperty.call(map, toRemove)) {
+            delete map[toRemove];
+            await this.saveIndustryUseCases(map);
+        }
+
+        const industries = (await this.getIndustries()).filter(i => i !== toRemove);
+        await this.saveIndustries(industries);
+        return { accountsUpdated, activitiesUpdated };
+    },
+
     // Industry Use Cases (per-industry)
     async getIndustryUseCases() {
         const key = (typeof INDUSTRY_USE_CASES_KEY !== 'undefined' ? INDUSTRY_USE_CASES_KEY : 'industryUseCases');
@@ -1539,7 +1586,7 @@ const DataManager = {
                 }
             });
         });
-        if (projectsUpdated > 0) await this.saveAccounts(accounts);
+        if (projectsUpdated > 0) await this.saveAccounts(accounts, { skipDraft: true });
         return true;
     },
 
@@ -1577,9 +1624,25 @@ const DataManager = {
                 count++;
             }
         });
-        if (count > 0) await this.saveAccounts(accounts);
+        if (count > 0) await this.saveAccounts(accounts, { skipDraft: true });
+
+        let activitiesUpdated = 0;
+        try {
+            const activities = await this.getActivities();
+            if (Array.isArray(activities)) {
+                activities.forEach((a) => {
+                    if ((a.industry || '').trim() === fromVal) {
+                        a.industry = toVal;
+                        activitiesUpdated++;
+                    }
+                });
+                if (activitiesUpdated > 0) await this.saveActivities(activities);
+            }
+        } catch (e) {
+            console.warn('[DataManager] mergePendingIndustryInto: could not update activity.industry', e);
+        }
         await this.rejectPendingIndustry(fromVal);
-        return { success: true, accountsUpdated: count };
+        return { success: true, accountsUpdated: count, activitiesUpdated };
     },
 
     /**
@@ -1620,7 +1683,7 @@ const DataManager = {
                 }
             });
         });
-        if (projectsUpdated > 0) await this.saveAccounts(accounts);
+        if (projectsUpdated > 0) await this.saveAccounts(accounts, { skipDraft: true });
         await this.rejectPendingUseCase(fromVal, ind);
         return { success: true, projectsUpdated };
     },
@@ -1649,8 +1712,24 @@ const DataManager = {
                 count++;
             }
         });
-        if (count > 0) await this.saveAccounts(accounts);
-        return { success: true, accountsUpdated: count };
+        if (count > 0) await this.saveAccounts(accounts, { skipDraft: true });
+
+        let activitiesUpdated = 0;
+        try {
+            const activities = await this.getActivities();
+            if (Array.isArray(activities)) {
+                activities.forEach((a) => {
+                    if ((a.industry || '').trim() === fromVal) {
+                        a.industry = toVal;
+                        activitiesUpdated++;
+                    }
+                });
+                if (activitiesUpdated > 0) await this.saveActivities(activities);
+            }
+        } catch (e) {
+            console.warn('[DataManager] renameIndustry: could not update activity.industry', e);
+        }
+        return { success: true, accountsUpdated: count, activitiesUpdated: activitiesUpdated || 0 };
     },
 
     /** Rename a use case within an industry; updates list and all project.useCases for that industry. */
@@ -1680,7 +1759,7 @@ const DataManager = {
                 }
             });
         });
-        if (projectsUpdated > 0) await this.saveAccounts(accounts);
+        if (projectsUpdated > 0) await this.saveAccounts(accounts, { skipDraft: true });
         return { success: true, projectsUpdated };
     },
 
@@ -1986,17 +2065,31 @@ const DataManager = {
         return accounts;
     },
 
-    async saveAccounts(accounts) {
+    async saveAccounts(accounts, options) {
         const payload = JSON.stringify(accounts);
-        // Use async with draft for conflict handling
-        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
-            try {
-                await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('accounts', payload, { type: 'external' });
-                this.invalidateCache('accounts', 'allActivities');
-                return;
-            } catch (err) {
-                console.warn('[DataManager] Async saveAccounts failed; preserving draft and aborting sync overwrite:', err);
-                throw err;
+        const skipDraft = options && options.skipDraft === true;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__) {
+            const useDirect = skipDraft && window.__REMOTE_STORAGE_ASYNC__.setItemAsync;
+            const useDraft = !skipDraft && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft;
+            if (useDirect) {
+                try {
+                    await window.__REMOTE_STORAGE_ASYNC__.setItemAsync('accounts', payload);
+                    this.invalidateCache('accounts', 'allActivities');
+                    return;
+                } catch (err) {
+                    console.warn('[DataManager] saveAccounts (direct) failed:', err);
+                    throw err;
+                }
+            }
+            if (useDraft) {
+                try {
+                    await window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft('accounts', payload, { type: 'external' });
+                    this.invalidateCache('accounts', 'allActivities');
+                    return;
+                } catch (err) {
+                    console.warn('[DataManager] Async saveAccounts failed; preserving draft and aborting sync overwrite:', err);
+                    throw err;
+                }
             }
         }
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) {

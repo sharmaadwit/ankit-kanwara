@@ -1,4 +1,7 @@
 // Reports V2 - New reporting structure
+// Tabs: Presales Reports | Sales View | Regional Data | Monthly report (PDF) | AI Intelligence
+// Possible future reports: Activity trend (month-over-month), Pipeline by region, Win rate by rep,
+// Industry heatmap, Call-type mix over time, Export to Excel/CSV for all sections.
 const ReportsV2 = {
     charts: {},
     INR_TO_AED: 0.044, // 1 INR ≈ 0.044 AED (for Alhamra.ae and other AED wins stored as INR by mistake)
@@ -224,19 +227,37 @@ const ReportsV2 = {
         this.render();
     },
 
+    /** Export canvas as PNG with white background (no transparency). */
+    canvasToPngWithWhiteBackground(canvas) {
+        if (!canvas || canvas.width <= 0 || canvas.height <= 0) return null;
+        const w = canvas.width;
+        const h = canvas.height;
+        const off = document.createElement('canvas');
+        off.width = w;
+        off.height = h;
+        const ctx = off.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(canvas, 0, 0);
+        return off.toDataURL('image/png');
+    },
+
     downloadChartsAsImages() {
         const ids = ['monthlyReportDonut', 'monthlyReportCallType', 'monthlyReportRegion', 'monthlyReportMissingSfdc', 'monthlyReportPresales'];
         const names = ['activity-breakdown', 'call-types', 'region-activity', 'missing-sfdc', 'presales-by-user'];
         ids.forEach((id, i) => {
             const canvas = document.getElementById(id);
             if (canvas && canvas.width > 0) {
-                const link = document.createElement('a');
-                link.download = names[i] + '-' + (this.currentPeriod || 'report') + '.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
+                const dataUrl = this.canvasToPngWithWhiteBackground(canvas);
+                if (dataUrl) {
+                    const link = document.createElement('a');
+                    link.download = names[i] + '-' + (this.currentPeriod || 'report') + '.png';
+                    link.href = dataUrl;
+                    link.click();
+                }
             }
         });
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Charts downloaded.', 'success');
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Charts downloaded (white background).', 'success');
     },
 
     // Change activity breakdown filter
@@ -599,6 +620,7 @@ const ReportsV2 = {
         let winsPeriod = 0;
         let lossesPeriod = 0;
         const winsForPeriod = [];
+        const lossesForPeriod = [];
         const periodMonth = this.currentPeriodType === 'month' ? this.currentPeriod : null;
         if (periodMonth && accounts.length) {
             accounts.forEach(account => {
@@ -638,7 +660,17 @@ const ReportsV2 = {
                                     useCase: useCaseText,
                                     presalesRep
                                 });
-                            } else if (project.status === 'lost') lossesPeriod++;
+                            } else if (project.status === 'lost') {
+                                lossesPeriod++;
+                                const wl = project.winLossData || {};
+                                const uc0 = project.useCases && project.useCases[0];
+                                const reason = (wl.reason || '').trim() || (uc0 ? (typeof uc0 === 'string' ? uc0 : (uc0.name || '')) : '') || '—';
+                                lossesForPeriod.push({
+                                    accountName: account.name || 'Unknown',
+                                    reason: reason || '—',
+                                    lostTo: wl.lostTo || '—'
+                                });
+                            }
                         }
                     }
                 });
@@ -851,10 +883,10 @@ const ReportsV2 = {
                             })()}
                         </div>
                     </div>
-                    <!-- Page 3 – Wins (editable: include/exclude + manual) -->
+                    <!-- Page 3 – Wins (edit via actions bar only; no Edit in PDF content) -->
                     <div class="monthly-report-page">
-                        <h3>Wins – ${periodLabel} <button type="button" class="btn btn-link btn-sm" onclick="ReportsV2.openEditReportModal()" style="font-size: 0.875rem;">Edit</button></h3>
-                        <p class="text-muted">Use <strong>Edit report</strong> to include/exclude wins or add manual wins.</p>
+                        <h3>Wins – ${periodLabel}</h3>
+                        <p class="text-muted monthly-report-edit-hint">Use Edit report (above) to include/exclude wins or add manual wins.</p>
                         <div class="monthly-report-wins-grid">
                             ${(() => {
                                 const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -894,6 +926,45 @@ const ReportsV2 = {
                                 manual.forEach(mw => cards.push(renderManualWinCard(mw)));
                                 return cards.length ? cards.join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report or log win/loss on projects.</p>';
                             })()}
+                        </div>
+                    </div>
+                    <!-- Page 3b – Wins & Losses summary table (for PDF) -->
+                    <div class="monthly-report-page">
+                        <h3>Wins & Losses summary – ${periodLabel}</h3>
+                        <div class="monthly-report-summary-tables">
+                            <h4>Wins</h4>
+                            <table class="monthly-report-table">
+                                <thead><tr><th>Client</th><th>MRR / OTD</th><th>Use case</th><th>Presales rep</th></tr></thead>
+                                <tbody>
+                                    ${(() => {
+                                        const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                        const disp = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
+                                        const seed = (ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD[period]) || [];
+                                        const manual = (o.manualWins || []).concat(seed);
+                                        let rows = disp.slice(0, 20).map(w => {
+                                            const c = w.currency || 'INR';
+                                            const mrrN = (c === 'INR' && w.mrrInInr != null) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
+                                            const mrrStr = mrrN != null ? ReportsV2.formatReportCurrency(mrrN, true, c) : '—';
+                                            return `<tr><td>${safe(w.accountName)}</td><td>${mrrStr}</td><td>${safe(w.useCase)}</td><td>${safe(w.presalesRep)}</td></tr>`;
+                                        });
+                                        manual.forEach(mw => {
+                                            const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR') : '—';
+                                            rows.push(`<tr><td>${safe(mw.clientName)}</td><td>${mrrStr}</td><td>${safe(mw.useCase)}</td><td>${safe(mw.presalesRep)}</td></tr>`);
+                                        });
+                                        return rows.length ? rows.join('') : '<tr><td colspan="4">No wins in this period.</td></tr>';
+                                    })()}
+                                </tbody>
+                            </table>
+                            <h4 style="margin-top: 1.5rem;">Losses (${lossesForPeriod.length})</h4>
+                            <table class="monthly-report-table">
+                                <thead><tr><th>Client</th><th>Reason / use case</th><th>Lost to</th></tr></thead>
+                                <tbody>
+                                    ${lossesForPeriod.length ? lossesForPeriod.slice(0, 20).map(l => {
+                                        const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                        return `<tr><td>${safe(l.accountName)}</td><td>${safe(l.reason)}</td><td>${safe(l.lostTo)}</td></tr>`;
+                                    }).join('') : '<tr><td colspan="3">No losses in this period.</td></tr>'}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     <!-- Page 4 – Activity breakdown (donut chart) -->

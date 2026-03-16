@@ -12,8 +12,7 @@ const defaultFeatureFlags = {
   csvImport: true,
   csvExport: true,
   winLoss: true,
-  adminCsvExport: true,
-  migrationMode: false
+  adminCsvExport: true
 };
 
 const defaultDashboardVisibility = {

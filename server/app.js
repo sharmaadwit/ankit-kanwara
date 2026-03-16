@@ -14,7 +14,7 @@ const { checkHealth } = require('./db');
 const adminLogsRouter = require('./routes/adminLogs');
 const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
-const migrationRouter = require('./routes/migration');
+const activitySubmissionLogsRouter = require('./routes/activitySubmissionLogs');
 const logger = require('./logger');
 const { getAppConfig } = require('./services/appConfig');
 const {
@@ -134,6 +134,9 @@ const createApp = (options = {}) => {
     };
 
     res.on('finish', () => {
+      if (req.method === 'GET' && (pathName === '/api/health' || pathName.startsWith('/api/health?'))) {
+        return;
+      }
       if (res.statusCode >= 500) {
         finalize('error');
       } else if (res.statusCode >= 400) {
@@ -200,8 +203,8 @@ const createApp = (options = {}) => {
   app.use('/api/admin/config', adminLimiter, requireAdminAuth, adminConfigRouter);
   app.use('/api/admin/users', adminLimiter, sessionMiddleware, requireAdminAuth, require('./routes/adminUsers'));
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
+  app.use('/api/admin/activity-submission-logs', adminLimiter, activitySubmissionLogsRouter);
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
-  app.use('/api/migration', sessionMiddleware, requireStorageAuth, migrationRouter);
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const bootstrapStart = Date.now();

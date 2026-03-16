@@ -240,6 +240,104 @@ const initDb = async () => {
       ON storage_mutations (created_at DESC);
     `);
 
+    // D-002: Normalized tables (optional; enable with NORMALIZED_TABLES_ENABLED=true to test)
+    if (String(process.env.NORMALIZED_TABLES_ENABLED || '').toLowerCase() === 'true') {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        industry TEXT,
+        region TEXT,
+        sales_rep TEXT,
+        sales_rep_region TEXT,
+        sales_rep_email TEXT,
+        notes TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_accounts_name ON accounts (name);`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        name TEXT NOT NULL DEFAULT '',
+        sfdc_link TEXT,
+        use_cases TEXT[],
+        products_interested TEXT[],
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_projects_account_id ON projects (account_id);`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activities (
+        id TEXT PRIMARY KEY,
+        account_id TEXT,
+        project_id TEXT,
+        activity_date DATE,
+        activity_type TEXT,
+        call_type TEXT,
+        duration_hours NUMERIC CHECK (duration_hours IS NULL OR (duration_hours >= 0 AND duration_hours <= 24)),
+        duration_days NUMERIC CHECK (duration_days IS NULL OR (duration_days >= 0 AND duration_days <= 31)),
+        notes TEXT,
+        assigned_user_id TEXT,
+        account_name TEXT,
+        project_name TEXT,
+        source TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        payload JSONB
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activities_activity_date ON activities (activity_date);`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activities_account_id ON activities (account_id) WHERE account_id IS NOT NULL;`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_activities_project_id ON activities (project_id) WHERE project_id IS NOT NULL;`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS internal_activities (
+        id TEXT PRIMARY KEY,
+        activity_date DATE,
+        activity_type TEXT,
+        activity_name TEXT,
+        duration_hours NUMERIC CHECK (duration_hours IS NULL OR (duration_hours >= 0 AND duration_hours <= 24)),
+        duration_days NUMERIC CHECK (duration_days IS NULL OR (duration_days >= 0 AND duration_days <= 31)),
+        notes TEXT,
+        assigned_user_id TEXT,
+        source TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        payload JSONB
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_internal_activities_date ON internal_activities (activity_date);`);
+    }
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS activity_submission_logs (
+        id SERIAL PRIMARY KEY,
+        username TEXT,
+        action TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        payload JSONB,
+        activity_count INTEGER,
+        transaction_id TEXT,
+        storage_updated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_submission_logs_created_at
+      ON activity_submission_logs (created_at DESC);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_submission_logs_username
+      ON activity_submission_logs (username) WHERE username IS NOT NULL;
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_activity_submission_logs_outcome
+      ON activity_submission_logs (outcome);
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,

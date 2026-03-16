@@ -66,8 +66,7 @@ const App = {
         csvImport: true,
         csvExport: true,
         winLoss: true,
-        adminCsvExport: true,
-        migrationMode: false
+        adminCsvExport: true
     },
     featureFlags: {},
     defaultDashboardVisibility: {
@@ -190,7 +189,7 @@ const App = {
             this.setLoadingProgress(15, 'Loading your workspace…', this.getRandomLoadingTip());
             const bootstrap = await this.loadBootstrap();
             const bootstrapMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
-            console.log('[PAMS init] loadBootstrap:', bootstrapMs + 'ms');
+            console.log('[PreSight init] loadBootstrap:', bootstrapMs + 'ms');
 
             this.setAppConfiguration(bootstrap.config || {});
             this.loadAnalyticsTablePresetsDeferred();
@@ -213,13 +212,13 @@ const App = {
                 Auth.showMainApp();
                 hasSession = true;
                 const resolveMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
-                console.log('[PAMS init] bootstrap user applied:', resolveMs + 'ms');
+                console.log('[PreSight init] bootstrap user applied:', resolveMs + 'ms');
             } else {
                 this.setLoadingProgress(25, 'Checking session…', this.getRandomLoadingTip());
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 hasSession = await Auth.init();
                 const authInitMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
-                console.log('[PAMS init] Auth.init:', authInitMs + 'ms');
+                console.log('[PreSight init] Auth.init:', authInitMs + 'ms');
             }
             if (!hasSession) {
                 this.setLoading(false);
@@ -235,7 +234,7 @@ const App = {
             if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 await window.__REMOTE_STORAGE_RECONCILE__();
-                console.log('[PAMS init] reconcile:', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) + 'ms');
+                console.log('[PreSight init] reconcile:', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0) + 'ms');
             }
 
             this.setLoadingProgress(75, 'Almost there…', this.getRandomLoadingTip());
@@ -1017,8 +1016,9 @@ const App = {
         return messages[key]?.[type] || 'This section is currently unavailable.';
     },
 
+    /** Migration mode removed. Always false. */
     isMigrationMode() {
-        return this.featureFlags.migrationMode === true;
+        return false;
     },
 
     applyAppConfiguration() {
@@ -4235,7 +4235,7 @@ const App = {
 
             const rows = this.buildReportsCsvRows(analytics);
 
-            const filename = `pams_reports_${selectedMonth}.csv`;
+            const filename = `presight_reports_${selectedMonth}.csv`;
             this.downloadCsv(filename, rows);
             UI.showNotification('Report exported successfully.', 'success');
         } catch (error) {
@@ -5454,7 +5454,7 @@ const App = {
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'pams-recovery-' + new Date().toISOString().slice(0, 10) + '.json';
+            link.download = 'presight-recovery-' + new Date().toISOString().slice(0, 10) + '.json';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -7182,6 +7182,28 @@ const App = {
                 `;
             }));
 
+            const duplicateGroups = this.getDuplicateAccountGroups(accounts);
+            const isAdmin = typeof Auth !== 'undefined' && Auth.isAdmin && Auth.isAdmin();
+            const duplicateSection = (duplicateGroups.length > 0 && isAdmin)
+                ? `
+                <div class="card mb-3 border-warning">
+                    <div class="card-body py-2">
+                        <h4 class="h6 text-warning mb-2">Possible duplicate accounts (same name)</h4>
+                        <p class="small text-muted mb-2">Merge these to keep one account and move activities.</p>
+                        <ul class="list-unstyled mb-0">
+                            ${duplicateGroups.map(({ normalizedName, accounts: group }) => `
+                                <li class="mb-2">
+                                    <strong>${this.escapeHtml(normalizedName)}</strong> — ${group.length} account(s):
+                                    ${group.map(a => `<span class="badge bg-light text-dark me-1">${this.escapeHtml(a.name || a.id)}</span>`).join(' ')}
+                                    ${group.map(a => `<button type="button" class="btn btn-sm btn-outline-primary ms-1" onclick="App.showMergeAccountModal('${this.escapeHtml(a.id)}')">Merge</button>`).join(' ')}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+                `
+                : '';
+
             const gridContent = filtered.length === 0
                 ? `${UI.emptyState('No accounts match your filters.')}<div style="margin-top: 0.75rem;"><button class="btn btn-secondary btn-sm" onclick="App.resetAccountFilters(); return false;">Reset filters</button></div>`
                 : `<div class="accounts-grid">${cards.join('')}</div>`;
@@ -7190,6 +7212,7 @@ const App = {
                 ${accountsHeader}
                 ${sidebarFilters}
                 ${statsBar}
+                ${duplicateSection}
                 ${gridContent}
                     </div>
                 </div>
@@ -7428,7 +7451,7 @@ const App = {
             accounts[accountIndex].salesRepRegion = newRegion;
             accounts[accountIndex].updatedAt = new Date().toISOString();
             if (typeof console !== 'undefined' && console.log) {
-                console.log('PAMS: Account region set', { accountId, accountName: name, salesRepRegion: newRegion, fromRep: selectedSalesRep?.name });
+                console.log('PreSight: Account region set', { accountId, accountName: name, salesRepRegion: newRegion, fromRep: selectedSalesRep?.name });
             }
             await DataManager.saveAccounts(accounts);
 
@@ -7489,6 +7512,27 @@ const App = {
         });
         if (noResults) noResults.style.display = visible === 0 && rows.length > 0 ? 'block' : 'none';
     },
+
+    /** Normalize account name for duplicate detection: lowercase, trim, collapse spaces. */
+    normalizeAccountName(name) {
+        return (name || '').toString().toLowerCase().trim().replace(/\s+/g, ' ');
+    }
+
+    /** Groups accounts by normalized name; returns only groups with more than one account (possible duplicates). */
+    getDuplicateAccountGroups(accounts) {
+        if (!Array.isArray(accounts) || !accounts.length) return [];
+        const byNormalizedName = new Map();
+        accounts.forEach((acc) => {
+            if (!acc || !acc.id) return;
+            const key = this.normalizeAccountName(acc.name);
+            if (!key) return;
+            if (!byNormalizedName.has(key)) byNormalizedName.set(key, []);
+            byNormalizedName.get(key).push(acc);
+        });
+        return Array.from(byNormalizedName.entries())
+            .filter(([, list]) => list.length > 1)
+            .map(([normalizedName, list]) => ({ normalizedName, accounts: list }));
+    }
 
     // Show merge account modal with search + select list
     async showMergeAccountModal(accountId) {

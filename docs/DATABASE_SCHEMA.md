@@ -2,7 +2,7 @@
 
 ## Overview
 
-PAMS uses PostgreSQL with a hybrid model: (1) **Key-value:** the `storage` table holds most application data (users, accounts, activities, etc.) as JSON; (2) **Normalized tables:** `users`, `sessions` (auth), `login_logs`, `activity_logs` (audit), `storage_history`, `pending_storage_saves`, `storage_mutations` (storage support), and `pricing_calculations` (calculator audit). See `docs/ARCHITECTURE_AND_OPTIMIZATION_MEMO.md` for retention and cleanup.
+PAMS uses PostgreSQL with a hybrid model: (1) **Key-value:** the `storage` table holds most application data (users, accounts, activities, etc.) as JSON; (2) **Normalized tables:** `users`, `sessions` (auth), `login_logs`, `activity_logs` (audit), `storage_history`, `pending_storage_saves`, `storage_mutations` (storage support). **D-002:** Normalized copies of storage data: `accounts`, `projects`, `activities`, `internal_activities` — populated by dual-write on every storage write for those keys and by one-time backfill (`npm run backfill-normalized`). Read path can later switch to these tables via `READ_FROM_NORMALIZED_TABLES=true`. See `docs/ARCHITECTURE_AND_OPTIMIZATION_MEMO.md` and `docs/DATA_OPTIMISATION_AGENT_BUILD.md`.
 
 ---
 
@@ -202,7 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_storage_history_key_archived
 
 ### 5. `pending_storage_saves` Table
 
-**Purpose:** “Lost & Found” for writes rejected with 409 (conflict). Admin can inspect and re-apply or discard.
+**Purpose:** *(Deprecated.)* Previously “Lost & Found” for writes rejected with 409. **No new rows are inserted**; conflict payloads are recorded in `activity_submission_logs`. This table still exists; GET/DELETE pending API and Admin “All drafts” work for existing rows only. See `docs/DEPRECATIONS_AND_LOGGING.md`.
 
 **Schema:**
 ```sql
@@ -239,6 +239,34 @@ CREATE INDEX IF NOT EXISTS idx_storage_mutations_created_at
 ```
 
 **Retention:** Cleaned when running cleanup with `full: true`; `STORAGE_MUTATIONS_RETENTION_DAYS` (default 30).
+
+---
+
+### 6a. D-002 Normalized tables (accounts, projects, activities, internal_activities)
+
+**Purpose:** Normalized copies of storage keys `accounts`, `activities`, `internalActivities` for future read path and reporting. Populated by dual-write on every successful storage PUT/append/remove for those keys, and by one-time backfill: `npm run backfill-normalized`. Storage remains source of truth until cutover.
+
+**Tables:**
+- **accounts** — id (PK), name, industry, region, sales_rep, sales_rep_region, sales_rep_email, notes, created_at, updated_at. Indexes: name, industry, sales_rep.
+- **projects** — id (PK), account_id (FK → accounts), name, sfdc_link, use_cases (TEXT[]), products_interested (TEXT[]), created_at, updated_at. Index: account_id.
+- **activities** — id (PK), account_id, project_id (no FK so activity-only writes succeed), activity_date, activity_type, call_type, duration_hours (0–24), duration_days (0–31), notes, assigned_user_id, account_name, project_name, source, payload (JSONB), created_at, updated_at. Indexes: activity_date, account_id, project_id, (assigned_user_id, activity_date).
+- **internal_activities** — id (PK), activity_date, activity_type, activity_name, duration_hours/days, notes, assigned_user_id, source, payload (JSONB), created_at, updated_at. Indexes: activity_date, (assigned_user_id, activity_date).
+
+**Migration:** `server/scripts/migrations/001_normalized_tables.sql`. Tables are also created in `server/db.js` initDb.
+
+**Cutover:** When ready, set `READ_FROM_NORMALIZED_TABLES=true` and switch API read path to these tables (optional step; not yet implemented).
+
+---
+
+### 6b. `activity_submission_logs` Table
+
+**Purpose:** Audit trail of every activity submission (put full list, append one, remove one). Stores payload and outcome so nothing is lost on conflict, validation failure, or error. Logged for every submit attempt regardless of result.
+
+**Columns:** `id`, `username`, `action` ('put' | 'append' | 'remove'), `outcome` ('success' | 'conflict' | 'validation_failed' | 'not_found' | 'dropped' | 'error' | 'if_match_required' | 'mutation_conflict'), `payload` (JSONB: full list for put, single activity for append, `{ activityId }` for remove), `activity_count`, `transaction_id`, `storage_updated_at` (when storage was updated, if success), `created_at`.
+
+**Indexes:** `created_at DESC`, `username`, `outcome`.
+
+**Migration:** `server/scripts/migrations/002_activity_submission_logs.sql`. Table also created in `server/db.js` initDb.
 
 ---
 

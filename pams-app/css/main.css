@@ -499,15 +499,22 @@ body.migration-mode-on [data-migration-hide] {
     margin-top: 0.2rem;
 }
 
-.login-logo {
-    display: flex;
-    justify-content: center;
+.login-brand {
+    text-align: center;
     margin-bottom: 1.5rem;
 }
 
+.login-logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+}
+
 .login-logo img {
-    width: 180px;
+    width: 80px;
     height: auto;
+    max-height: 46px;
+    object-fit: contain;
 }
 
 .header-right {
@@ -518,17 +525,18 @@ body.migration-mode-on [data-migration-hide] {
 
 .app-home-button {
     display: inline-flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
     border: none;
     background: transparent;
     margin-left: 0.75rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.35rem 0.5rem;
     cursor: pointer;
     border-radius: 0.5rem;
     transition: background 0.2s ease;
-    text-align: left;
+    text-decoration: none;
+    color: inherit;
 }
 
 .app-home-button:hover,
@@ -541,17 +549,27 @@ body.migration-mode-on [data-migration-hide] {
     outline-offset: 2px;
 }
 
-.app-home-acronym {
+.app-logo {
+    display: block;
+    height: 24px;
+    width: auto;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.app-home-brand {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.02em;
+}
+
+/* Legacy classes kept for any JS that might reference them */
+.app-home-acronym,
+.app-home-title {
     font-size: 1rem;
     font-weight: 700;
     color: var(--white);
-    letter-spacing: 0.08em;
-}
-
-.app-home-title {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.8);
-    line-height: 1.2;
 }
 
 @media (max-width: 1024px) {
@@ -559,8 +577,12 @@ body.migration-mode-on [data-migration-hide] {
         padding: 0.25rem;
     }
 
-    .app-home-title {
-        display: none;
+    .app-logo {
+        height: 20px;
+    }
+
+    .app-home-brand {
+        font-size: 1rem;
     }
 }
 

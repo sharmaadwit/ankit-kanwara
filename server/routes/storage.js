@@ -5,6 +5,9 @@ const router = express.Router();
 const { getPool } = require('../db');
 const logger = require('../logger');
 const { requireAdminAuth } = require('../middleware/auth');
+const { validateStoragePayload, validateActivities, validateInternalActivities } = require('../lib/storageValidation');
+const { dualWriteAfterStorageWrite } = require('../lib/normalizedDualWrite');
+const { logActivitySubmissionSafe } = require('../lib/activitySubmissionLog');
 
 const GZIP_PREFIX = '__gz__';
 const STORAGE_READ_CACHE_TTL_MS = Math.max(
@@ -62,12 +65,9 @@ const archiveCurrentValue = async (client, key) => {
   );
 };
 
-/** Store rejected payload in pending_storage_saves (Lost & Found on 409). */
-const savePendingDraft = async (storageKey, value, reason, username) => {
-  await getPool().query(
-    `INSERT INTO pending_storage_saves (storage_key, value, reason, username, created_at) VALUES ($1, $2, $3, $4, NOW());`,
-    [storageKey, value, reason, username || null]
-  );
+/** Store rejected payload in pending_storage_saves (Lost & Found on 409). DEPRECATED: no longer writes; conflict payloads are recorded in activity_submission_logs. Kept as no-op so callers need no change. */
+const savePendingDraft = async (_storageKey, _value, _reason, _username) => {
+  /* Deprecated: use Activity submission log for conflict recovery. */
 };
 
 const maybeDecompressValue = (value) => {
@@ -241,6 +241,56 @@ const deleteValue = async (key) => {
 const isActivityStorageKey = (key) =>
   key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key);
 
+/** Validation key for storage: activities:YYYY-MM uses same rules as activities. */
+const validationKey = (key) =>
+  key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key) ? 'activities' : key;
+
+/** D-002: Trigger dual-write to normalized tables after successful storage write. Fire-and-forget. */
+function triggerDualWrite(key, serializedValue) {
+  const vkey = key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key) ? 'activities' : key;
+  if (!['accounts', 'activities', 'internalActivities'].includes(vkey)) return;
+  let parsed;
+  try {
+    const raw = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX) ? maybeDecompressValue(serializedValue) : serializedValue;
+    parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (_) {
+    return;
+  }
+  if (!Array.isArray(parsed)) return;
+  dualWriteAfterStorageWrite(getPool(), vkey, parsed).catch(() => {});
+}
+
+/** Parse serialized value to array for activity submission log (PUT). Returns array or null. */
+function parseActivityPayloadForLog(serializedValue) {
+  if (serializedValue == null || serializedValue === '') return null;
+  try {
+    const raw = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX) ? maybeDecompressValue(serializedValue) : serializedValue;
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Parse and validate payload for keys we validate. Returns { valid, error? }. No-op for other keys. */
+const parseAndValidate = (key, serializedValue) => {
+  const vkey = validationKey(key);
+  if (!['activities', 'internalActivities', 'accounts', 'users'].includes(vkey)) {
+    return { valid: true };
+  }
+  const sizeCheck = validateStoragePayload(vkey, null, serializedValue);
+  if (!sizeCheck.valid) return sizeCheck;
+  let parsed;
+  try {
+    const toParse = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX)
+      ? maybeDecompressValue(serializedValue) : serializedValue;
+    parsed = typeof toParse === 'string' ? JSON.parse(toParse) : toParse;
+  } catch (e) {
+    return { valid: false, error: 'Invalid JSON or decompression failed' };
+  }
+  return validateStoragePayload(vkey, parsed, serializedValue);
+};
+
 /** Merge two activity arrays by id; newer updatedAt/createdAt wins. Prevents one client from overwriting with partial list. */
 const mergeActivitiesPayload = (currentSerialized, incomingSerialized) => {
   const parse = (s) => {
@@ -389,7 +439,11 @@ router.get('/pending', requireAdminAuth, async (req, res) => {
       username: r.username,
       created_at: r.created_at ? new Date(r.created_at).toISOString() : null
     }));
-    res.json({ pending });
+    res.json({
+      pending,
+      _deprecated: true,
+      _message: 'Server-side pending drafts are deprecated. New conflicts are not stored here; use Admin → Activity submission log for recovery.'
+    });
   } catch (error) {
     logger.error('storage_pending_failed', {
       message: error.message,
@@ -481,6 +535,10 @@ async function appendActivityWithClient(client, activity) {
     logger.warn('storage_append_activity_dropped', { activityId: activity.id });
     return { ok: false, dropped: true };
   }
+  const validation = validateActivities(parsedMerged);
+  if (!validation.valid) {
+    return { ok: false, validationError: validation.error };
+  }
   await archiveCurrentValue(client, 'activities');
   const { rows } = await client.query(
     `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
@@ -490,7 +548,7 @@ async function appendActivityWithClient(client, activity) {
   );
   invalidateStorageReadCache('activities');
   const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
-  return { ok: true, updated_at: updatedAt };
+  return { ok: true, updated_at: updatedAt, mergedArray: parsedMerged };
 }
 
 router.appendActivityWithClient = appendActivityWithClient;
@@ -501,22 +559,68 @@ router.appendActivityWithClient = appendActivityWithClient;
  * Returns: { ok: true, key: 'activities', updated_at } or 4xx/5xx.
  */
 router.post('/activities/append', async (req, res) => {
+  const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
+  const transactionId = req.transactionId;
   try {
     const { activity } = req.body || {};
     if (!activity || typeof activity !== 'object' || !activity.id) {
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username,
+        action: 'append',
+        outcome: 'validation_failed',
+        payload: activity || {},
+        activityCount: 0,
+        transactionId
+      });
       return res.status(400).json({ message: 'Body must include { activity: { id, ... } }' });
     }
     const client = await getPool().connect();
     try {
       await client.query('BEGIN');
       const result = await appendActivityWithClient(client, activity);
+      if (!result.ok && result.validationError) {
+        await client.query('ROLLBACK').catch(() => {});
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username,
+          action: 'append',
+          outcome: 'validation_failed',
+          payload: activity,
+          activityCount: 1,
+          transactionId
+        });
+        return res.status(400).json({ message: result.validationError });
+      }
       if (!result.ok && result.dropped) {
         await client.query('ROLLBACK').catch(() => {});
-        logger.error('storage_append_activity_dropped', { activityId: activity.id, transactionId: req.transactionId });
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username,
+          action: 'append',
+          outcome: 'dropped',
+          payload: activity,
+          activityCount: 1,
+          transactionId
+        });
+        logger.error('storage_append_activity_dropped', { activityId: activity.id, transactionId });
         return res.status(500).json({ message: 'Append merge did not include activity; not written.' });
       }
       await client.query('COMMIT');
-      logger.info('storage_append_activity', { activityId: activity.id, transactionId: req.transactionId });
+      if (result.mergedArray && Array.isArray(result.mergedArray)) {
+        dualWriteAfterStorageWrite(getPool(), 'activities', result.mergedArray).catch(() => {});
+      }
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username,
+        action: 'append',
+        outcome: 'success',
+        payload: activity,
+        activityCount: 1,
+        transactionId,
+        storageUpdatedAt: result.updated_at
+      });
+      logger.info('storage_append_activity', { activityId: activity.id, transactionId });
       return res.status(200).json({ ok: true, key: 'activities', updated_at: result.updated_at });
     } catch (txErr) {
       await client.query('ROLLBACK').catch(() => {});
@@ -536,9 +640,21 @@ router.post('/activities/append', async (req, res) => {
  * Returns: { ok: true, key: 'activities', updated_at } or 404 / 5xx.
  */
 router.post('/activities/remove', async (req, res) => {
+  const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
+  const transactionId = req.transactionId;
+  const payloadRemove = (id) => ({ activityId: id });
   try {
     const activityId = req.body?.activityId;
     if (!activityId || typeof activityId !== 'string') {
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username,
+        action: 'remove',
+        outcome: 'validation_failed',
+        payload: payloadRemove(''),
+        activityCount: 0,
+        transactionId
+      });
       return res.status(400).json({ message: 'Body must include { activityId: string }' });
     }
     const client = await getPool().connect();
@@ -564,8 +680,31 @@ router.post('/activities/remove', async (req, res) => {
       const filtered = list.filter((a) => a && a.id !== activityId);
       if (filtered.length === list.length) {
         await client.query('ROLLBACK').catch(() => {});
-        logger.warn('storage_remove_activity_not_found', { activityId, transactionId: req.transactionId });
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username,
+          action: 'remove',
+          outcome: 'not_found',
+          payload: payloadRemove(activityId),
+          activityCount: 0,
+          transactionId
+        });
+        logger.warn('storage_remove_activity_not_found', { activityId, transactionId });
         return res.status(404).json({ message: 'Activity not found' });
+      }
+      const validation = validateActivities(filtered);
+      if (!validation.valid) {
+        await client.query('ROLLBACK').catch(() => {});
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username,
+          action: 'remove',
+          outcome: 'validation_failed',
+          payload: payloadRemove(activityId),
+          activityCount: 0,
+          transactionId
+        });
+        return res.status(400).json({ message: validation.error });
       }
       await archiveCurrentValue(client, 'activities');
       const newSerialized = JSON.stringify(filtered);
@@ -577,8 +716,19 @@ router.post('/activities/remove', async (req, res) => {
       );
       await client.query('COMMIT');
       invalidateStorageReadCache('activities');
+      dualWriteAfterStorageWrite(getPool(), 'activities', filtered).catch(() => {});
       const updatedAt = rows[0] && rows[0].updated_at ? new Date(rows[0].updated_at).toISOString() : new Date().toISOString();
-      logger.info('storage_remove_activity', { activityId, transactionId: req.transactionId });
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username,
+        action: 'remove',
+        outcome: 'success',
+        payload: payloadRemove(activityId),
+        activityCount: 0,
+        transactionId,
+        storageUpdatedAt: updatedAt
+      });
+      logger.info('storage_remove_activity', { activityId, transactionId });
       return res.status(200).json({ ok: true, key: 'activities', updated_at: updatedAt });
     } catch (txErr) {
       await client.query('ROLLBACK').catch(() => {});
@@ -641,8 +791,36 @@ router.put('/:key', async (req, res) => {
       serializedValue = mergeActivitiesPayload(current ? current.value : null, serializedValue);
     }
 
+    const validation = parseAndValidate(req.params.key, serializedValue);
+    if (!validation.valid) {
+      logger.warn('storage_validation_failed', { key: req.params.key, error: validation.error, transactionId: req.transactionId });
+      if (isActivityStorageKey(req.params.key)) {
+        const payload = parseActivityPayloadForLog(serializedValue);
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
+          action: 'put',
+          outcome: 'validation_failed',
+          payload: payload || [],
+          activityCount: Array.isArray(payload) ? payload.length : 0,
+          transactionId: req.transactionId
+        });
+      }
+      return res.status(400).json({ message: validation.error || 'Validation failed' });
+    }
+
     const ifMatch = req.get('If-Match') || req.get('if-match');
     if (isActivityStorageKey(req.params.key) && (ifMatch === undefined || ifMatch === null || ifMatch === '')) {
+      const payload = parseActivityPayloadForLog(serializedValue);
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
+        action: 'put',
+        outcome: 'if_match_required',
+        payload: payload || [],
+        activityCount: Array.isArray(payload) ? payload.length : 0,
+        transactionId: req.transactionId
+      });
       return res.status(400).json({
         message: 'If-Match required for activities to prevent data loss. Refresh the page and try again.'
       });
@@ -663,6 +841,18 @@ router.put('/:key', async (req, res) => {
         const mutationState = await lockClientMutation(client, clientMutationId, req.params.key);
         if (mutationState.conflict) {
           await client.query('ROLLBACK');
+          if (isActivityStorageKey(req.params.key)) {
+            const payload = parseActivityPayloadForLog(serializedValue);
+            logActivitySubmissionSafe({
+              pool: getPool(),
+              username,
+              action: 'put',
+              outcome: 'mutation_conflict',
+              payload: payload || [],
+              activityCount: Array.isArray(payload) ? payload.length : 0,
+              transactionId: req.transactionId
+            });
+          }
           logger.warn('storage_mutation_conflict', {
             key: req.params.key,
             mutationId: clientMutationId,
@@ -710,27 +900,21 @@ router.put('/:key', async (req, res) => {
               message: 'Key was updated by another request; client should merge and retry'
             });
             try {
-              await savePendingDraft(
-                req.params.key,
-                serializedValue,
-                'conflict',
-                username
-              );
-              logger.info('storage_pending_draft_saved', {
-                key: req.params.key,
-                username: username || 'unknown',
-                transactionId: req.transactionId,
-                reason: 'conflict'
-              });
-            } catch (archiveErr) {
-              logger.warn('storage_pending_draft_failed', {
-                message: archiveErr.message,
-                key: req.params.key,
-                username: username || 'unknown',
+              await savePendingDraft(req.params.key, serializedValue, 'conflict', username);
+            } catch (_) {}
+            const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
+            if (isActivityStorageKey(req.params.key)) {
+              const payload = parseActivityPayloadForLog(serializedValue);
+              logActivitySubmissionSafe({
+                pool: getPool(),
+                username,
+                action: 'put',
+                outcome: 'conflict',
+                payload: payload || [],
+                activityCount: Array.isArray(payload) ? payload.length : 0,
                 transactionId: req.transactionId
               });
             }
-            const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
             return res.status(409).json({
               message: 'Conflict: key was updated by another request',
               value: conflictValue,
@@ -740,6 +924,20 @@ router.put('/:key', async (req, res) => {
           await completeClientMutation(client, clientMutationId, result.updated_at);
           await client.query('COMMIT');
           logStorageWrite(req.params.key, serializedValue, true, req.transactionId, username);
+          triggerDualWrite(req.params.key, serializedValue);
+          if (isActivityStorageKey(req.params.key)) {
+            const payload = parseActivityPayloadForLog(serializedValue);
+            logActivitySubmissionSafe({
+              pool: getPool(),
+              username,
+              action: 'put',
+              outcome: 'success',
+              payload: payload || [],
+              activityCount: Array.isArray(payload) ? payload.length : 0,
+              transactionId: req.transactionId,
+              storageUpdatedAt: result.updated_at
+            });
+          }
           return res.status(200).json({
             key: req.params.key,
             updated_at: result.updated_at
@@ -750,6 +948,20 @@ router.put('/:key', async (req, res) => {
         await completeClientMutation(client, clientMutationId, setResult.updated_at);
         await client.query('COMMIT');
         logStorageWrite(req.params.key, serializedValue, false, req.transactionId, username);
+        triggerDualWrite(req.params.key, serializedValue);
+        if (isActivityStorageKey(req.params.key)) {
+          const payload = parseActivityPayloadForLog(serializedValue);
+          logActivitySubmissionSafe({
+            pool: getPool(),
+            username,
+            action: 'put',
+            outcome: 'success',
+            payload: payload || [],
+            activityCount: Array.isArray(payload) ? payload.length : 0,
+            transactionId: req.transactionId,
+            storageUpdatedAt: setResult.updated_at
+          });
+        }
         return res.status(200).json({
           key: req.params.key,
           updated_at: setResult.updated_at
@@ -787,27 +999,21 @@ router.put('/:key', async (req, res) => {
           message: 'Key was updated by another request; client should merge and retry'
         });
         try {
-          await savePendingDraft(
-            req.params.key,
-            serializedValue,
-            'conflict',
-            username
-          );
-          logger.info('storage_pending_draft_saved', {
-            key: req.params.key,
-            username: username || 'unknown',
-            transactionId: req.transactionId,
-            reason: 'conflict'
-          });
-        } catch (archiveErr) {
-          logger.warn('storage_pending_draft_failed', {
-            message: archiveErr.message,
-            key: req.params.key,
-            username: username || 'unknown',
+          await savePendingDraft(req.params.key, serializedValue, 'conflict', username);
+        } catch (_) {}
+        const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
+        if (isActivityStorageKey(req.params.key)) {
+          const payload = parseActivityPayloadForLog(serializedValue);
+          logActivitySubmissionSafe({
+            pool: getPool(),
+            username,
+            action: 'put',
+            outcome: 'conflict',
+            payload: payload || [],
+            activityCount: Array.isArray(payload) ? payload.length : 0,
             transactionId: req.transactionId
           });
         }
-        const conflictValue = result.value != null ? maybeDecompressValue(result.value) : null;
         return res.status(409).json({
           message: 'Conflict: key was updated by another request',
           value: conflictValue,
@@ -816,6 +1022,20 @@ router.put('/:key', async (req, res) => {
       }
       const username = req.get('X-Admin-User') || req.get('x-admin-user');
       logStorageWrite(req.params.key, serializedValue, true, req.transactionId, username);
+      triggerDualWrite(req.params.key, serializedValue);
+      if (isActivityStorageKey(req.params.key)) {
+        const payload = parseActivityPayloadForLog(serializedValue);
+        logActivitySubmissionSafe({
+          pool: getPool(),
+          username,
+          action: 'put',
+          outcome: 'success',
+          payload: payload || [],
+          activityCount: Array.isArray(payload) ? payload.length : 0,
+          transactionId: req.transactionId,
+          storageUpdatedAt: result.updated_at
+        });
+      }
       return res.status(200).json({
         key: req.params.key,
         updated_at: result.updated_at
@@ -825,6 +1045,20 @@ router.put('/:key', async (req, res) => {
     const setResult = await setValue(req.params.key, serializedValue);
     const username = req.get('X-Admin-User') || req.get('x-admin-user');
     logStorageWrite(req.params.key, serializedValue, false, req.transactionId, username);
+    triggerDualWrite(req.params.key, serializedValue);
+    if (isActivityStorageKey(req.params.key)) {
+      const payload = parseActivityPayloadForLog(serializedValue);
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username,
+        action: 'put',
+        outcome: 'success',
+        payload: payload || [],
+        activityCount: Array.isArray(payload) ? payload.length : 0,
+        transactionId: req.transactionId,
+        storageUpdatedAt: setResult.updated_at
+      });
+    }
     return res.status(200).json({
       key: req.params.key,
       updated_at: setResult.updated_at
@@ -835,12 +1069,36 @@ router.put('/:key', async (req, res) => {
       transactionId: req.transactionId,
       key: req.params.key
     });
+    if (isActivityStorageKey(req.params.key)) {
+      let payload = null;
+      try {
+        const raw = req.body?.value;
+        if (raw != null) payload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch (_) {}
+      logActivitySubmissionSafe({
+        pool: getPool(),
+        username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
+        action: 'put',
+        outcome: 'error',
+        payload: Array.isArray(payload) ? payload : (payload ? [payload] : []),
+        activityCount: Array.isArray(payload) ? payload.length : 0,
+        transactionId: req.transactionId
+      });
+    }
     res.status(500).json({ message: 'Failed to save key' });
   }
 });
 
+/** Migration keys are protected until data retention is done. Do not delete via API. */
+const isMigrationKey = (key) => typeof key === 'string' && /^migration_/.test(key);
+
 router.delete('/:key', async (req, res) => {
   try {
+    if (isMigrationKey(req.params.key)) {
+      return res.status(403).json({
+        message: 'Migration storage keys are protected until data retention is complete. Do not delete.'
+      });
+    }
     await deleteValue(req.params.key);
     res.status(204).send();
   } catch (error) {
@@ -855,6 +1113,13 @@ router.delete('/:key', async (req, res) => {
 
 router.delete('/', async (req, res) => {
   try {
+    const keys = await listKeys();
+    const hasMigration = keys.some((k) => isMigrationKey(k));
+    if (hasMigration) {
+      return res.status(403).json({
+        message: 'Storage cannot be cleared while migration keys exist. Retain or export migrated data first, then remove migration_* keys manually if needed.'
+      });
+    }
     await clearAll();
     res.status(204).send();
   } catch (error) {

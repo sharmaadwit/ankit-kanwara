@@ -154,7 +154,7 @@ const Auth = {
                 const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 const res = await fetch('/api/auth/me', { credentials: 'include' });
                 const meMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
-                console.log('[PAMS init] /api/auth/me:', meMs + 'ms');
+                console.log('[PreSight init] /api/auth/me:', meMs + 'ms');
                 if (res.ok) {
                     const me = await res.json();
                     const user = {
@@ -169,7 +169,7 @@ const Auth = {
                     };
                     const r0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                     const { role, salesLeaderRegion } = await this.resolveRole(user);
-                    console.log('[PAMS init] resolveRole (cookie path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
+                    console.log('[PreSight init] resolveRole (cookie path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
                     user.role = role;
                     user.salesLeaderRegion = salesLeaderRegion || undefined;
                     this.currentUser = user;
@@ -203,7 +203,7 @@ const Auth = {
             const s0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             const user = await DataManager.getUserById(sessionData.userId);
             const getUserMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - s0);
-            console.log('[PAMS init] getUserById (session path):', getUserMs + 'ms');
+                console.log('[PreSight init] getUserById (session path):', getUserMs + 'ms');
             if (user && user.isActive) {
                 if (user.forcePasswordChange) {
                     this.clearSession();
@@ -212,7 +212,7 @@ const Auth = {
                 const r0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
                 const role = sessionData.role || (await this.resolveRole(user)).role;
                 const salesLeaderRegion = sessionData.salesLeaderRegion != null ? sessionData.salesLeaderRegion : (await this.resolveRole(user)).salesLeaderRegion;
-                console.log('[PAMS init] resolveRole (session path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
+                console.log('[PreSight init] resolveRole (session path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
                 user.role = role;
                 user.salesLeaderRegion = salesLeaderRegion || undefined;
                 this.currentUser = user;
@@ -435,7 +435,7 @@ const Auth = {
         }
         demoTexts.forEach(el => el.classList.remove('hidden'));
         if (subtitle) {
-            subtitle.textContent = 'Presales Activity Management System';
+            subtitle.textContent = 'PreSight – Presales Activity Management';
         }
         if (newPasswordInput) newPasswordInput.value = '';
         if (confirmPasswordInput) confirmPasswordInput.value = '';

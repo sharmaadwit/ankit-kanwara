@@ -51,8 +51,12 @@ Single reference for what is **live in production**. Build ID = Git commit SHA (
 - **Snapshot on deploy** – Workflow can run on push to `main` to capture snapshot with `[skip ci]`.
 - **Verify** – Actions → “Daily storage backup” (or deploy workflow) to confirm runs and secrets.
 
+### Data optimisation (D-002 + activity submission logs)
+- **Normalized tables** – `accounts`, `projects`, `activities`, `internal_activities` created on app start; dual-write from storage on every successful write for those keys. Optional one-time backfill: `npm run backfill-normalized` (run where DB is reachable). See `docs/DATABASE_SCHEMA.md` §6a.
+- **Activity submission logs** – `activity_submission_logs` table records every activity submit (put/append/remove) with payload and outcome (success, conflict, validation_failed, etc.). See `docs/DATABASE_SCHEMA.md` §6b.
+
 ### Database and ops
-- **PostgreSQL** – `storage` table (key-value JSON), `sessions`, `users` (for Phase 3), `pending_storage_saves`, `activity_logs`, `admin_logs`, etc. See schema in codebase if needed.
+- **PostgreSQL** – `storage` table (key-value JSON), `sessions`, `users` (for Phase 3), `pending_storage_saves`, `activity_logs`, `admin_logs`, `activity_submission_logs`, normalized tables above. See `docs/DATABASE_SCHEMA.md`.
 - **Pool tuning** – Conservative default pg pool (`PGPOOL_MAX=5`, `PGPOOL_CONNECTION_TIMEOUT_MS=5000`, `PGPOOL_IDLE_TIMEOUT_MS=30000`) with env override.
 - **Storage read cache** – In-memory hot-read cache for storage GET/batch (`STORAGE_READ_CACHE_TTL_MS`, default 3000ms) with invalidation on writes/deletes.
 - **Conflict safety** – Entity saves keep async draft path in remote mode; no sync fallback overwrite when async save fails.

@@ -4,6 +4,12 @@ const { getTransactionId } = require('./middleware/requestContext');
 const RAILWAY_LOGS_ENDPOINT = process.env.RAILWAY_LOGS_ENDPOINT;
 const RAILWAY_LOGS_TOKEN = process.env.RAILWAY_LOGS_TOKEN;
 
+// LOG_LEVEL: 'error' | 'warn' | 'info' (default). Only events at or above this level are logged.
+const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
+const LEVEL_ORDER = { error: 0, warn: 1, info: 2 };
+const currentLevel = LEVEL_ORDER[LOG_LEVEL] ?? LEVEL_ORDER.info;
+const shouldLog = (level) => (LEVEL_ORDER[level] ?? 2) <= currentLevel;
+
 const resolveTransactionId = (explicit) =>
   explicit || getTransactionId() || crypto.randomUUID();
 
@@ -49,18 +55,21 @@ const forwardToRailway = (payload) => {
 };
 
 const info = (event, metadata = {}) => {
+  if (!shouldLog('info')) return;
   const payload = buildPayload('info', event, metadata);
   console.log(JSON.stringify(payload));
   forwardToRailway(payload);
 };
 
 const warn = (event, metadata = {}) => {
+  if (!shouldLog('warn')) return;
   const payload = buildPayload('warn', event, metadata);
   console.warn(JSON.stringify(payload));
   forwardToRailway(payload);
 };
 
 const error = (event, metadata = {}) => {
+  if (!shouldLog('error')) return;
   const payload = buildPayload('error', event, metadata);
   console.error(JSON.stringify(payload));
   forwardToRailway(payload);

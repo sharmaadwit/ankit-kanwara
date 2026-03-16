@@ -1,4 +1,23 @@
 // Bulk Import Module
+(function () {
+    const TRACE_KEY = '__csvImportTrace';
+    const TRACE_MAX = 100;
+    function csvImportTrace(step, detail) {
+        try {
+            if (typeof window === 'undefined') return;
+            if (!window[TRACE_KEY]) window[TRACE_KEY] = [];
+            const entry = { t: Date.now(), step, detail: detail != null ? detail : undefined };
+            window[TRACE_KEY].push(entry);
+            if (window[TRACE_KEY].length > TRACE_MAX) window[TRACE_KEY].shift();
+            if (typeof console !== 'undefined' && console.log) {
+                console.log('[CSV Import]', step, detail != null ? detail : '');
+            }
+        } catch (_) {}
+    }
+    window.__csvImportTraceLog = csvImportTrace;
+    window.__csvImportTraceClear = function () { try { if (window[TRACE_KEY]) window[TRACE_KEY].length = 0; } catch (_) {} };
+})();
+
 const BulkImport = {
     isEnabled: true,
     state: {
@@ -310,8 +329,8 @@ const BulkImport = {
         const link = document.createElement('a');
         link.href = url;
         link.download = normalizedType === 'external'
-            ? 'pams_external_activities_template.csv'
-            : 'pams_internal_activities_template.csv';
+            ? 'presight_external_activities_template.csv'
+            : 'presight_internal_activities_template.csv';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -345,7 +364,7 @@ const BulkImport = {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'pams_field_value_reference.csv';
+        link.download = 'presight_field_value_reference.csv';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -353,6 +372,9 @@ const BulkImport = {
     },
 
     handleFileSelection(file) {
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('fileSelection', file ? { name: file.name, size: file.size, type: file.type } : null);
+        }
         if (!this.isEnabled) {
             this.notifyFeatureDisabled();
             if (this.fileInput) {
@@ -383,30 +405,62 @@ const BulkImport = {
         }
         if (!this.state.file) return;
 
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('dryRunStart', { fileName: this.state.file.name });
+        }
         const reader = new FileReader();
         this.setLoading(true);
         reader.onload = async (event) => {
             const text = event.target.result;
+            if (typeof window.__csvImportTraceLog === 'function') {
+                window.__csvImportTraceLog('fileReadDone', { textLength: (text && text.length) || 0, first100: (text || '').slice(0, 100) });
+            }
             try {
                 this.state.rows = this.parseCsv(text);
+                if (typeof window.__csvImportTraceLog === 'function') {
+                    window.__csvImportTraceLog('parseCsvDone', { rowCount: this.state.rows.length, headers: this.state.rows[0] });
+                }
+                if (this.state.rows.length < 2) {
+                    UI.showNotification('No data rows found. The CSV must have a header row and at least one data row (rows starting with # are ignored).', 'error');
+                    this.setLoading(false);
+                    return;
+                }
                 await this.processRows();
+                if (typeof window.__csvImportTraceLog === 'function' && this.state.summary) {
+                    window.__csvImportTraceLog('processRowsDone', {
+                        totalRows: this.state.summary.totalRows,
+                        readyCount: this.state.summary.readyCount,
+                        errorCount: this.state.summary.errorCount,
+                        duplicateCount: this.state.summary.duplicateCount,
+                        firstError: this.state.errorRows[0] ? { row: this.state.errorRows[0].index, messages: this.state.errorRows[0].messages } : null
+                    });
+                }
                 this.renderPreview();
             } catch (error) {
                 console.error('Error parsing CSV:', error);
+                if (typeof window.__csvImportTraceLog === 'function') {
+                    window.__csvImportTraceLog('dryRunError', { message: error.message, stack: (error.stack || '').slice(0, 200) });
+                }
                 UI.showNotification(`Failed to parse CSV: ${error.message}`, 'error');
                 this.reset();
             } finally {
                 this.setLoading(false);
             }
         };
-        reader.onerror = () => {
+        reader.onerror = (err) => {
+            if (typeof window.__csvImportTraceLog === 'function') {
+                window.__csvImportTraceLog('fileReadError', { message: (err && err.message) || 'FileReader error' });
+            }
             UI.showNotification('Unable to read the selected file.', 'error');
             this.setLoading(false);
         };
-        reader.readAsText(this.state.file);
+        reader.readAsText(this.state.file, 'UTF-8');
     },
 
     parseCsv(text) {
+        if (typeof text !== 'string') throw new Error('CSV input must be a string.');
+        // Strip BOM so header normalizes correctly (e.g. "Activity Category" not "﻿Activity Category")
+        if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
         const rows = [];
         let currentRow = [];
         let currentValue = '';
@@ -516,11 +570,32 @@ const BulkImport = {
         const [headerRow, ...dataRows] = this.state.rows;
         const headers = headerRow.map(h => this.normalizeHeader(h));
         const results = [];
-        const [users, accounts, existingActivities] = await Promise.all([
-            DataManager.getUsers(),
-            DataManager.getAccounts(),
-            DataManager.getAllActivities()
-        ]);
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('processRowsDataLoadStart', { dataRowCount: dataRows.length });
+        }
+        let users = [];
+        let accounts = [];
+        let existingActivities = [];
+        try {
+            [users, accounts, existingActivities] = await Promise.all([
+                DataManager.getUsers(),
+                DataManager.getAccounts(),
+                DataManager.getAllActivities()
+            ]);
+        } catch (err) {
+            if (typeof window.__csvImportTraceLog === 'function') {
+                window.__csvImportTraceLog('processRowsDataLoadError', { message: err && err.message });
+            }
+            throw err;
+        }
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('processRowsDataLoadDone', {
+                usersCount: users.length,
+                accountsCount: accounts.length,
+                activitiesCount: existingActivities.length,
+                userSample: users[0] ? { id: users[0].id, username: users[0].username } : null
+            });
+        }
         const duplicateHash = new Set();
 
         const summary = {
@@ -538,6 +613,9 @@ const BulkImport = {
             const isEmpty = rowValues.every(value => !value || !value.trim());
             if (isEmpty) {
                 return;
+            }
+            if (typeof window.__csvImportTraceLog === 'function' && rowIndex === 0) {
+                window.__csvImportTraceLog('processRowsFirstRow', { headers, rowValues, normalized: headers.reduce((o, k, i) => { if (k) o[k] = rowValues[i]; return o; }, {}) });
             }
             const rowObject = {};
             headers.forEach((key, idx) => {
@@ -1010,7 +1088,7 @@ const BulkImport = {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'pams_import_errors.csv';
+        link.download = 'presight_import_errors.csv';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -1018,6 +1096,9 @@ const BulkImport = {
     },
 
     async commitImport() {
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('commitStart', { readyCount: (this.state.parsedRows || []).filter(r => r.status === 'ready').length });
+        }
         if (!this.isEnabled) {
             this.notifyFeatureDisabled();
             return;
@@ -1073,19 +1154,37 @@ const BulkImport = {
         let createdProjects = 0;
         const savedAccountIds = new Set();
 
-        for (const row of readyRows) {
-            if (row.category === 'external') {
-                const result = await this.commitExternalRow(row.payload, savedAccountIds);
-                externalCount++;
-                createdAccounts += result.newAccount ? 1 : 0;
-                createdProjects += result.newProject ? 1 : 0;
-            } else if (row.category === 'internal') {
-                await this.commitInternalRow(row.payload);
-                internalCount++;
+        for (let i = 0; i < readyRows.length; i++) {
+            const row = readyRows[i];
+            try {
+                if (row.category === 'external') {
+                    const result = await this.commitExternalRow(row.payload, savedAccountIds);
+                    externalCount++;
+                    createdAccounts += result.newAccount ? 1 : 0;
+                    createdProjects += result.newProject ? 1 : 0;
+                    if (typeof window.__csvImportTraceLog === 'function' && (i === 0 || i === readyRows.length - 1)) {
+                        window.__csvImportTraceLog('commitExternalRow', { index: i + 1, total: readyRows.length, accountName: row.payload?.accountName });
+                    }
+                } else if (row.category === 'internal') {
+                    await this.commitInternalRow(row.payload);
+                    internalCount++;
+                    if (typeof window.__csvImportTraceLog === 'function' && (i === 0 || i === readyRows.length - 1)) {
+                        window.__csvImportTraceLog('commitInternalRow', { index: i + 1, total: readyRows.length });
+                    }
+                }
+            } catch (err) {
+                if (typeof window.__csvImportTraceLog === 'function') {
+                    window.__csvImportTraceLog('commitRowError', { index: i + 1, row: row.index, message: err && err.message });
+                }
+                UI.showNotification(`Import failed at row ${row.index}: ${(err && err.message) || 'Unknown error'}`, 'error');
+                throw err;
             }
         }
 
         this.state.committed = true;
+        if (typeof window.__csvImportTraceLog === 'function') {
+            window.__csvImportTraceLog('commitDone', { externalCount, internalCount, createdAccounts, createdProjects });
+        }
         this.renderCommitSummary({ externalCount, internalCount, createdAccounts, createdProjects });
         App.loadDashboard();
         App.loadActivitiesView();

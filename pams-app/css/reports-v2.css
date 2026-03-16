@@ -504,6 +504,22 @@
     max-width: 100%;
     line-height: 1.5;
 }
+.monthly-report-summary-tables { margin-top: 0.5rem; }
+.monthly-report-summary-tables h4 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--gray-700, #374151); }
+.monthly-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    background: #fff;
+}
+.monthly-report-table th,
+.monthly-report-table td {
+    border: 1px solid var(--gray-200, #e5e7eb);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+}
+.monthly-report-table th { background: var(--gray-100, #f3f4f6); font-weight: 600; }
 .monthly-report-chart-wrap {
     position: relative;
     width: 100%;
@@ -553,5 +569,21 @@
         padding: 0;
         background: #fff;
     }
-    .reports-v2-monthly-pdf-actions .btn { display: none; }
+    /* Hide all Edit / action buttons so PDF contains only content and charts */
+    .reports-v2-monthly-pdf-actions { display: none !important; }
+    #monthlyReportPdfContent .btn,
+    #monthlyReportPdfContent .btn-link,
+    #monthlyReportPdfContent button { display: none !important; }
+    /* White background for report pages and chart areas so no transparency in PDF */
+    #monthlyReportPdfContent .monthly-report-page,
+    #monthlyReportPdfContent .monthly-report-chart-wrap {
+        background: #fff !important;
+    }
+    #monthlyReportPdfContent .monthly-report-page {
+        border-color: #e5e7eb;
+        box-shadow: none;
+    }
+    /* Ensure canvases print (they are visible and rendered) */
+    #monthlyReportPdfContent canvas { background: #fff; }
+    .monthly-report-edit-hint { display: none !important; }
 }
