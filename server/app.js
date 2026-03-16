@@ -255,13 +255,8 @@ const createApp = (options = {}) => {
     }
   });
 
-  app.get('/api/health', async (req, res) => {
-    const dbOk = await checkHealth();
-    if (!dbOk) {
-      logger.warn('health_check_failed', { reason: 'database_unreachable' });
-      return res.status(503).json({ status: 'unhealthy', reason: 'database_unreachable' });
-    }
-    res.json({ status: 'ok' });
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
   });
 
   // Rich health endpoint for live incident debugging and auto-recovery visibility.
