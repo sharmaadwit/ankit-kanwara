@@ -31,10 +31,21 @@ jobs:
       - name: Create backups directory
         run: mkdir -p backups
 
+      - name: Check backup secrets
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+        run: |
+          if [ -z "$REMOTE_STORAGE_BASE" ]; then
+            echo "::error::REMOTE_STORAGE_BASE secret is not set. Add it in Settings > Secrets and variables > Actions (e.g. https://YOUR-APP.up.railway.app/api/storage)."
+            exit 1
+          fi
+          echo "REMOTE_STORAGE_BASE is set (value redacted)."
+
       - name: Run storage snapshot
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
         run: |
           export SNAPSHOT_FILE="backups/storage-snapshot-latest.json"
           node server/scripts/export-storage-snapshot.js "" "$SNAPSHOT_FILE"

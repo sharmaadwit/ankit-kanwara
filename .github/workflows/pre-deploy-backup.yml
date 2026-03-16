@@ -27,10 +27,20 @@ jobs:
       - name: Create backups directory
         run: mkdir -p backups
 
+      - name: Check backup secrets
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+        run: |
+          if [ -z "$REMOTE_STORAGE_BASE" ]; then
+            echo "::error::REMOTE_STORAGE_BASE secret is not set. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
       - name: Run pre-deploy storage snapshot
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
         run: |
           ts=$(date -u +%Y%m%dT%H%M%S)
           export SNAPSHOT_FILE="backups/pre-deploy-${ts}.json"

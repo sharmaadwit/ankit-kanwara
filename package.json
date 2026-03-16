@@ -10,6 +10,7 @@
     "test": "jest",
     "uptime": "node server/scripts/uptime.js",
     "backup": "node server/scripts/export-storage-snapshot.js",
+    "purge-and-archive-backups": "node server/scripts/purge-and-archive-backups.js",
     "download-january": "node scripts/download-and-refresh-january.js",
     "backup-before-deploy": "node scripts/snapshot-before-deploy.js",
     "snapshot-before-deploy": "node scripts/snapshot-before-deploy.js",
@@ -21,7 +22,11 @@
     "logins-last-hour": "node server/scripts/logins-last-hour.js",
     "db-size-report": "node server/scripts/db-size-report.js",
     "cleanup-logs-and-history": "node server/scripts/cleanup-logs-and-history.js",
-    "cleanup-before-june2025": "node server/scripts/cleanup-logs-and-history.js 2025-06-01"
+    "cleanup-before-june2025": "node server/scripts/cleanup-logs-and-history.js 2025-06-01",
+    "merge-duplicates": "node server/scripts/merge-duplicate-accounts.js",
+    "merge-duplicates-apply": "node server/scripts/merge-duplicate-accounts.js --apply",
+    "backfill-normalized": "node server/scripts/backfill-normalized-from-storage.js",
+    "backfill-normalized-dry": "node server/scripts/backfill-normalized-from-storage.js --dry-run"
   },
   "engines": {
     "node": ">=18 <22"

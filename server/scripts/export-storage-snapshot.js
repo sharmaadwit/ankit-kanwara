@@ -108,10 +108,22 @@ const writeSnapshot = (filePath, payload) => {
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
 };
 
+const AUTH_HINT = ' For CI backups: set GitHub Actions secrets REMOTE_STORAGE_BASE, REMOTE_STORAGE_USER (admin username/email). If the server uses an API key, set REMOTE_STORAGE_API_KEY to match.';
+
 const fetchKeyList = async (base, fetchImpl, headers) => {
     const response = await fetchImpl(base, { headers });
     if (!response.ok) {
-        throw new Error(`Failed to fetch key list: ${response.status} ${response.statusText}`);
+        const body = await response.text();
+        let msg = `Failed to fetch key list: ${response.status} ${response.statusText}`;
+        if (response.status === 401) {
+            msg += '.' + AUTH_HINT;
+        } else if (body) {
+            try {
+                const j = JSON.parse(body);
+                if (j && j.message) msg += ` (${j.message})`;
+            } catch (_) {}
+        }
+        throw new Error(msg);
     }
     const payload = await response.json();
     if (Array.isArray(payload)) {
@@ -129,7 +141,11 @@ const fetchValue = async (base, key, fetchImpl, headers) => {
         if (response.status === 404) {
             return null;
         }
-        throw new Error(`Failed to fetch key "${key}": ${response.status} ${response.statusText}`);
+        let msg = `Failed to fetch key "${key}": ${response.status} ${response.statusText}`;
+        if (response.status === 401) {
+            msg += '.' + AUTH_HINT;
+        }
+        throw new Error(msg);
     }
     const payload = await response.json();
     if (!payload || typeof payload !== 'object') {

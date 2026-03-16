@@ -1,11 +1,12 @@
-# Daily storage snapshot backup (Option C)
-# Runs on schedule and can be triggered manually. Commits latest snapshot to the repo.
+# Daily storage snapshot backup – 1 per day at 9 AM IST
+# Keeps only storage-snapshot-latest.json (deploy snapshot also overwrites this).
+# Deploy snapshots: snapshot-on-deploy.yml runs on push to main (no extra retention).
 name: Daily storage backup
 
 on:
   schedule:
-    # Daily at 6 AM IST (00:30 UTC) – safe for LATAM and India
-    - cron: '30 0 * * *'
+    # 9 AM IST = 03:30 UTC
+    - cron: '30 3 * * *'
   workflow_dispatch:
 
 env:
@@ -25,46 +26,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # No cache: package-lock.json is not in repo; backup script needs only Node + repo files
+
+      - name: Check backup secrets
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+        run: |
+          if [ -z "$REMOTE_STORAGE_BASE" ]; then
+            echo "::error::REMOTE_STORAGE_BASE secret is not set. Add it in Settings > Secrets and variables > Actions (e.g. https://YOUR-APP.up.railway.app/api/storage)."
+            exit 1
+          fi
+          echo "REMOTE_STORAGE_BASE is set (value redacted)."
 
       - name: Run storage snapshot export
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
           SNAPSHOT_FILE: backups/storage-snapshot-latest.json
         run: |
           mkdir -p backups
           node server/scripts/export-storage-snapshot.js "" "backups/storage-snapshot-latest.json"
 
-      - name: Create dated snapshot (15-day retention)
+      - name: Purge other backups (keep only latest; leave backups/archive/ intact)
         run: |
-          if [ -f backups/storage-snapshot-latest.json ]; then
-            cp backups/storage-snapshot-latest.json "backups/storage-snapshot-$(date +%Y-%m-%d).json"
-          fi
-
-      - name: Retain only last 15 dated snapshots
-        run: |
-          # List dated files (storage-snapshot-YYYY-MM-DD.json), sort descending, keep first 15, delete rest
-          for f in $(ls backups/storage-snapshot-20*.json 2>/dev/null | grep -E 'storage-snapshot-[0-9]{4}-[0-9]{2}-[0-9]{2}\.json$' | sort -r | tail -n +16); do
-            [ -f "$f" ] && rm -f "$f" && echo "Removed old snapshot: $f"
+          shopt -s nullglob 2>/dev/null || true
+          for f in backups/storage-snapshot-2*.json backups/pre-deploy-*.json backups/pre-deploy-manifest-*.json backups/local-insurance-*.json; do
+            [ -f "$f" ] && [ "$f" != "backups/storage-snapshot-latest.json" ] && rm -f "$f" && echo "Removed: $f"
           done
-
-      - name: List backups (debug)
-        run: |
-          echo "Contents of backups/:"
-          ls -la backups/
-          echo "---"
-          test -f backups/storage-snapshot-latest.json && echo "File exists, size:" && wc -c < backups/storage-snapshot-latest.json || echo "File not found"
+          ls -la backups/ 2>/dev/null; ls -la backups/archive/ 2>/dev/null || true
 
       - name: Commit and push snapshot
         if: success()
         run: |
           if [ ! -f backups/storage-snapshot-latest.json ]; then
-            echo "Snapshot file not found; check 'List backups' step above."
+            echo "Snapshot file not found."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add backups/storage-snapshot-latest.json backups/storage-snapshot-20*.json 2>/dev/null || true
+          git add backups/storage-snapshot-latest.json
           git status
-          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: daily storage snapshot backup (15-day retention) [skip ci]" && git push)
+          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: daily storage snapshot (9 AM IST) [skip ci]" && git push)
