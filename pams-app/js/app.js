@@ -1714,15 +1714,17 @@ const App = {
         });
 
         let unlinkedPricing = [];
-        try {
-            const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
-            const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
-            const pricingRes = await fetch(pricingUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
-            if (pricingRes.ok) {
-                const pricingData = await pricingRes.json().catch(() => ({}));
-                if (pricingData.ok && Array.isArray(pricingData.items)) unlinkedPricing = pricingData.items;
-            }
-        } catch (_) {}
+        if (this.isFeatureEnabled('pricingCalculatorSync')) {
+            try {
+                const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
+                const pricingRes = await fetch(pricingUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+                if (pricingRes.ok) {
+                    const pricingData = await pricingRes.json().catch(() => ({}));
+                    if (pricingData.ok && Array.isArray(pricingData.items)) unlinkedPricing = pricingData.items;
+                }
+            } catch (_) {}
+        }
         this._unlinkedPricingForDashboard = unlinkedPricing;
 
         const escapeHtml = (s) => {
@@ -1776,7 +1778,7 @@ const App = {
                 </div>
             </div>
             
-            <!-- Pricing (above charts): sync from API, log activity or delete -->
+            ${this.isFeatureEnabled('pricingCalculatorSync') ? `<!-- Pricing (above charts): sync from API, log activity or delete -->
             <div class="dashboard-charts-row" id="dashboardPricingSection">
                 <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
                     <div class="dashboard-chart-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -1811,6 +1813,7 @@ const App = {
                     `}
                 </div>
             </div>
+            ` : ''}
             
             <!-- Charts Row 1: Pie Charts -->
             <div class="dashboard-charts-row">

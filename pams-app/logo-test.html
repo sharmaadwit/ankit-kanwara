@@ -11,36 +11,49 @@
         .white { background: #fff; border: 1px solid #eee; }
         .purple { background: linear-gradient(90deg, #5E34F1 0%, #D01692 50%, #FF3964 100%); }
         .logo-wrap { display: inline-flex; align-items: center; padding: 0.35rem 0; }
-        .logo-wrap img { height: auto; width: auto; max-height: 46px; display: block; background: transparent; object-fit: contain; }
-        .logo-white { height: 40px; width: auto; }
-        .logo-purple { height: 32px; width: auto; mix-blend-mode: multiply; object-fit: contain; }
+        .logo-wrap img { display: block; background: transparent; object-fit: contain; width: auto; }
+        .logo-crop-wrap { height: 64px; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; }
+        .logo-login { height: 88px; width: auto; object-fit: contain; object-position: center; }
+        .logo-header { height: 88px; width: auto; mix-blend-mode: multiply; object-fit: contain; object-position: center; }
+        .logo-header-sm { height: 77px; width: auto; mix-blend-mode: multiply; object-fit: contain; object-position: center; }
+        .size-note { font-size: 0.75rem; color: #666; margin-top: 0.5rem; }
         h1 { margin: 0 0 0.5rem 0; font-size: 1rem; color: #666; }
     </style>
 </head>
 <body>
     <h1>PreSight logo – local test</h1>
-    <p>Same image everywhere; no hover. Open in browser to test.</p>
+    <p><strong>Image file:</strong> presight-logo.png · <strong>Actual dimensions:</strong> 1024 × 558 px. Top/bottom whitespace cropped so logo fills a <strong>64px</strong> slot.</p>
 
     <div class="row">
         <div class="block white">
-            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:#999;">On white (login)</h2>
-            <div class="logo-wrap">
-                <img src="images/presight-logo.png" alt="PreSight" class="logo-white">
+            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:#999;">On white (login) – 64px, cropped</h2>
+            <div class="logo-wrap logo-crop-wrap">
+                <img src="images/presight-logo.png" alt="PreSight" class="logo-login">
             </div>
+            <p class="size-note">64px visible, img 88px (top/bottom trimmed)</p>
         </div>
         <div class="block purple">
-            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:rgba(255,255,255,0.8);">On purple (header) – same PNG, blend so no white box</h2>
-            <div class="logo-wrap">
-                <img src="images/presight-logo.png" alt="PreSight" class="logo-purple">
+            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:rgba(255,255,255,0.8);">On purple (header) – 64px, cropped</h2>
+            <div class="logo-wrap logo-crop-wrap">
+                <img src="images/presight-logo.png" alt="PreSight" class="logo-header">
             </div>
+            <p class="size-note" style="color: rgba(255,255,255,0.8);">64px visible, img 88px, mix-blend-mode: multiply</p>
         </div>
     </div>
 
     <div class="row">
         <div class="block white">
-            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:#999;">Sizes</h2>
-            <img src="images/presight-logo.png" alt="" style="height:32px; margin-right:1rem;">
-            <img src="images/presight-logo.png" alt="" style="height:46px;">
+            <h2 style="margin:0 0 1rem 0; font-size:0.9rem; color:#999;">Sizes (all 64px visible, crop applied)</h2>
+            <div style="display: flex; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap;">
+                <div>
+                    <div class="logo-crop-wrap" style="height: 56px;"><img src="images/presight-logo.png" alt="" class="logo-header-sm" style="margin: 0;"></div>
+                    <p class="size-note">Header &lt;1024px: 56px</p>
+                </div>
+                <div>
+                    <div class="logo-crop-wrap"><img src="images/presight-logo.png" alt="" class="logo-header" style="margin: 0;"></div>
+                    <p class="size-note">Header / Login: 64px</p>
+                </div>
+            </div>
         </div>
     </div>
 </body>

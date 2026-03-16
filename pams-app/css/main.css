@@ -511,11 +511,23 @@ body.migration-mode-on [data-migration-hide] {
     background: transparent;
 }
 
+/* Crop top/bottom whitespace so the actual logo fills the 64px slot */
+.logo-crop-wrap {
+    height: 64px;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-logo.logo-crop-wrap {
+    display: flex;
+}
+
 .login-logo img {
-    height: 44px;
+    height: 88px;
     width: auto;
-    max-height: 48px;
     object-fit: contain;
+    object-position: center;
     background: transparent;
 }
 
@@ -561,16 +573,19 @@ body.migration-mode-on [data-migration-hide] {
     flex-shrink: 0;
 }
 
-/* Header: same PNG as login. Lock aspect ratio so it never looks squashed in flex layout. */
+/* Header: same PNG, 64px visible with top/bottom whitespace cropped out */
 .app-logo-header {
-    height: 32px;
+    height: 88px;
     width: auto;
     min-width: 0;
-    aspect-ratio: 3;
     object-fit: contain;
+    object-position: center;
     flex-shrink: 0;
     background: transparent;
     mix-blend-mode: multiply;
+}
+.app-header .logo-crop-wrap {
+    height: 64px;
 }
 .app-header .app-logo-header {
     /* No filter – keep your colors; multiply makes white bg → purple, logo darkens slightly */
@@ -599,9 +614,11 @@ body.migration-mode-on [data-migration-hide] {
     .app-logo {
         height: 20px;
     }
+    .app-header .logo-crop-wrap {
+        height: 56px;
+    }
     .app-logo-header {
-        height: 28px;
-        aspect-ratio: 3;
+        height: 77px;
     }
 
     .app-home-brand {

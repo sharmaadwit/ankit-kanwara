@@ -26,6 +26,11 @@ const Admin = {
             label: 'Pricing: Full activity form',
             description: 'When logging a pricing calculation, use the full Log Activity form (account, project, industry, sales rep, use cases, products, etc.). When off, only account and project are required.',
             dashboardKey: null
+        },
+        pricingCalculatorSync: {
+            label: 'Pricing calculator sync',
+            description: 'Show the Pricing section on the dashboard (Sync unlinked calculations from the pricing API, log activity, delete).',
+            dashboardKey: null
         }
     },
     currentFeatureFlags: {},

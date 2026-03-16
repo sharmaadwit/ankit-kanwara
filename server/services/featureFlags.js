@@ -8,7 +8,8 @@ const defaultFlags = {
   winLoss: true,
   adminCsvExport: true,
   migrationMode: false,
-  pricingFullActivityForm: false
+  pricingFullActivityForm: false,
+  pricingCalculatorSync: false
 };
 
 const sanitizeFlags = (flags = {}) => {
