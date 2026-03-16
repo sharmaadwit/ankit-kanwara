@@ -512,9 +512,9 @@ body.migration-mode-on [data-migration-hide] {
 }
 
 .login-logo img {
-    width: 80px;
-    height: auto;
-    max-height: 46px;
+    height: 44px;
+    width: auto;
+    max-height: 48px;
     object-fit: contain;
     background: transparent;
 }
@@ -557,13 +557,19 @@ body.migration-mode-on [data-migration-hide] {
     width: auto;
     object-fit: contain;
     flex-shrink: 0;
-    transition: filter 0.2s ease;
 }
 
-/* Default: POC gradient from SVG; hover: entire logo (icon + text) all white */
-.app-home-button:hover .app-logo,
-.app-home-button:focus-visible .app-logo {
-    filter: brightness(0) invert(1);
+/* Header: same PNG as login. Height only so aspect ratio stays correct (no stretch). */
+.app-logo-header {
+    height: 30px;
+    width: auto;
+    max-width: none;
+    object-fit: contain;
+    background: transparent;
+    mix-blend-mode: multiply;
+}
+.app-header .app-logo-header {
+    /* No filter – keep your colors; multiply makes white bg → purple, logo darkens slightly */
 }
 
 .app-home-brand {
@@ -571,12 +577,6 @@ body.migration-mode-on [data-migration-hide] {
     font-weight: 700;
     color: var(--white);
     letter-spacing: 0.02em;
-    transition: color 0.2s ease;
-}
-
-.app-home-button:hover .app-home-brand,
-.app-home-button:focus-visible .app-home-brand {
-    color: #fff;
 }
 
 /* Legacy classes kept for any JS that might reference them */
@@ -594,6 +594,9 @@ body.migration-mode-on [data-migration-hide] {
 
     .app-logo {
         height: 20px;
+    }
+    .app-logo-header {
+        height: 26px;
     }
 
     .app-home-brand {
