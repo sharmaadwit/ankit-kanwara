@@ -7516,7 +7516,7 @@ const App = {
     /** Normalize account name for duplicate detection: lowercase, trim, collapse spaces. */
     normalizeAccountName(name) {
         return (name || '').toString().toLowerCase().trim().replace(/\s+/g, ' ');
-    }
+    },
 
     /** Groups accounts by normalized name; returns only groups with more than one account (possible duplicates). */
     getDuplicateAccountGroups(accounts) {
