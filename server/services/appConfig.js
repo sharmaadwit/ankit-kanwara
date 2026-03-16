@@ -12,7 +12,8 @@ const defaultFeatureFlags = {
   csvImport: true,
   csvExport: true,
   winLoss: true,
-  adminCsvExport: true
+  adminCsvExport: true,
+  pricingFullActivityForm: false
 };
 
 const defaultDashboardVisibility = {

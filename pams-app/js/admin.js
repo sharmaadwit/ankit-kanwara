@@ -21,6 +21,11 @@ const Admin = {
             label: 'Admin Monthly Export',
             description: 'Allow admins to download monthly analytics CSV snapshots.',
             dashboardKey: null
+        },
+        pricingFullActivityForm: {
+            label: 'Pricing: Full activity form',
+            description: 'When logging a pricing calculation, use the full Log Activity form (account, project, industry, sales rep, use cases, products, etc.). When off, only account and project are required.',
+            dashboardKey: null
         }
     },
     currentFeatureFlags: {},

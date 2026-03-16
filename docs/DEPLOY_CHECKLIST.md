@@ -2,8 +2,13 @@
 
 Before **every** deploy (and especially before testing migration or major changes):
 
-1. **Capture the build number currently live in production** and take a **full snapshot of all data** (industries, users, accounts, activities, internalActivities, config, etc.).
-2. Then deploy and test.
+1. **Run syntax check** so deploy does not fail at startup:
+   ```bash
+   npm run syntax-check
+   ```
+   Fix any reported errors before pushing. CI may also run this step.
+2. **Capture the build number currently live in production** and take a **full snapshot of all data** (industries, users, accounts, activities, internalActivities, config, etc.).
+3. Then deploy and test.
 
 ---
 
@@ -85,6 +90,7 @@ Skip if you do not need the normalized copy yet; dual-write will keep new writes
 
 | Step | Action |
 |------|--------|
+| 0 | **Syntax check:** Run `npm run syntax-check`. Fix any errors before deploying. |
 | 1 | Run `npm run snapshot-before-deploy` with `REMOTE_STORAGE_BASE` (and auth if needed). |
 | 2 | Note “previous build name” from `backups/pre-deploy-manifest-<timestamp>.json` and share with team. |
 | 3 | Deploy. |

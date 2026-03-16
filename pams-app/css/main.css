@@ -539,6 +539,8 @@ body.migration-mode-on [data-migration-hide] {
     transition: background 0.2s ease;
     text-decoration: none;
     color: inherit;
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .app-home-button:hover,
@@ -559,12 +561,14 @@ body.migration-mode-on [data-migration-hide] {
     flex-shrink: 0;
 }
 
-/* Header: same PNG as login. Height only so aspect ratio stays correct (no stretch). */
+/* Header: same PNG as login. Lock aspect ratio so it never looks squashed in flex layout. */
 .app-logo-header {
-    height: 30px;
+    height: 32px;
     width: auto;
-    max-width: none;
+    min-width: 0;
+    aspect-ratio: 3;
     object-fit: contain;
+    flex-shrink: 0;
     background: transparent;
     mix-blend-mode: multiply;
 }
@@ -596,7 +600,8 @@ body.migration-mode-on [data-migration-hide] {
         height: 20px;
     }
     .app-logo-header {
-        height: 26px;
+        height: 28px;
+        aspect-ratio: 3;
     }
 
     .app-home-brand {

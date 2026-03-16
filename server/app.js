@@ -15,6 +15,7 @@ const adminLogsRouter = require('./routes/adminLogs');
 const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
 const activitySubmissionLogsRouter = require('./routes/activitySubmissionLogs');
+const pricingCalculationsRouter = require('./routes/pricingCalculations');
 const logger = require('./logger');
 const { getAppConfig } = require('./services/appConfig');
 const {
@@ -211,6 +212,7 @@ const createApp = (options = {}) => {
   app.use('/api/admin/activity', adminLimiter, activityLogsRouter);
   app.use('/api/admin/activity-submission-logs', adminLimiter, activitySubmissionLogsRouter);
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
+  app.use('/api/pricing-calculations', sessionMiddleware, pricingCalculationsRouter);
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const bootstrapStart = Date.now();

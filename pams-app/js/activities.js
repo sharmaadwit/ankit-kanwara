@@ -57,6 +57,7 @@ const Activities = {
             activity = null,
             isInternal = false,
             fromDraftId = null,
+            fromPricingCalculation = null,
             restoreFormData = null
         } = context || {};
         this._restoreFormDataPending = restoreFormData || null;
@@ -71,14 +72,21 @@ const Activities = {
                 originalProjectId: activity.projectId || null,
                 fromDraftId: fromDraftId || null
             }
-            : (fromDraftId ? { fromDraftId } : null);
+            : (fromDraftId ? { fromDraftId } : {});
+        if (fromPricingCalculation) {
+            this.editingContext = this.editingContext || {};
+            this.editingContext.fromPricingCalculation = fromPricingCalculation;
+        }
 
         const modalId = 'activityModal';
         const modalTitle = document.querySelector(`#${modalId} .modal-title`);
         const submitButton = document.querySelector(`#${modalId} .modal-footer .btn-primary`);
 
         if (modalTitle) {
-            modalTitle.textContent = isEdit ? 'Edit Activity' : 'Log Activity';
+            const pricingLabel = this.editingContext && this.editingContext.fromPricingCalculation
+                ? ' (Pricing: ' + (this.editingContext.fromPricingCalculation.calculationId || '').toString().replace(/</g, '&lt;') + ')'
+                : '';
+            modalTitle.textContent = (isEdit ? 'Edit Activity' : 'Log Activity') + pricingLabel;
         }
 
         if (submitButton) {
@@ -2379,8 +2387,12 @@ const Activities = {
                 notes: document.getElementById('rfxNotes')?.value || ''
             };
         } else if (activityType === 'pricing') {
-            // No details for pricing
-            activity.details = {};
+            if (editingContext.fromPricingCalculation && editingContext.fromPricingCalculation.calculationId) {
+                activity.details = { calculationId: editingContext.fromPricingCalculation.calculationId };
+                activity.source = 'pricing_calc';
+            } else {
+                activity.details = {};
+            }
         }
 
         const originalAccountId = editingContext.originalAccountId ?? original?.accountId ?? null;
@@ -2532,6 +2544,28 @@ const Activities = {
                     if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
                         Drafts.removeDraft(this.editingContext.fromDraftId);
                     }
+                    // Link pricing calculation to this activity when opened from dashboard/draft pricing flow
+                    const fromPricing = this.editingContext && this.editingContext.fromPricingCalculation;
+                    if (fromPricing && fromPricing.calculationId && created && created.id) {
+                        try {
+                            const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                            const linkUrl = apiBase ? `${apiBase}/api/pricing-calculations/link` : '/api/pricing-calculations/link';
+                            const linkRes = await fetch(linkUrl, {
+                                method: 'PATCH',
+                                credentials: 'include',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ calculation_id: fromPricing.calculationId, activity_id: created.id })
+                            });
+                            const linkData = await linkRes.json().catch(() => ({}));
+                            if (!linkRes.ok || !linkData.ok) throw new Error(linkData.error || 'Failed to link calculation');
+                            if (fromPricing.draftId && typeof Drafts !== 'undefined' && Drafts.removeDraft) {
+                                Drafts.removeDraft(fromPricing.draftId);
+                            }
+                        } catch (e) {
+                            console.warn('Pricing link failed:', e);
+                            UI.showNotification('Activity saved but linking to pricing calculation failed. You can edit the activity to retry.', 'warning');
+                        }
+                    }
                     if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
                         try {
                             await DataManager.saveAccounts(pendingAccountsSave);
@@ -2543,6 +2577,7 @@ const Activities = {
                     this.closeActivityModal();
                     let msg = 'Activity logged successfully!';
                     if (this.editingContext && this.editingContext.fromDraftId) msg += ' Draft removed.';
+                    if (fromPricing && fromPricing.calculationId) msg = 'Pricing activity logged and linked.';
                     const activityMonth = (created.date || created.createdAt || '').toString().slice(0, 7);
                     const now = new Date();
                     const currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');

@@ -7,7 +7,8 @@ const defaultFlags = {
   csvExport: true,
   winLoss: true,
   adminCsvExport: true,
-  migrationMode: false
+  migrationMode: false,
+  pricingFullActivityForm: false
 };
 
 const sanitizeFlags = (flags = {}) => {

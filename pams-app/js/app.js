@@ -66,7 +66,8 @@ const App = {
         csvImport: true,
         csvExport: true,
         winLoss: true,
-        adminCsvExport: true
+        adminCsvExport: true,
+        pricingFullActivityForm: false
     },
     featureFlags: {},
     defaultDashboardVisibility: {
@@ -1712,6 +1713,24 @@ const App = {
             });
         });
 
+        let unlinkedPricing = [];
+        try {
+            const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+            const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
+            const pricingRes = await fetch(pricingUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+            if (pricingRes.ok) {
+                const pricingData = await pricingRes.json().catch(() => ({}));
+                if (pricingData.ok && Array.isArray(pricingData.items)) unlinkedPricing = pricingData.items;
+            }
+        } catch (_) {}
+        this._unlinkedPricingForDashboard = unlinkedPricing;
+
+        const escapeHtml = (s) => {
+            if (s == null) return '';
+            const str = String(s);
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
         let html = `
             <!-- Log Activity + Admin month selector -->
             <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
@@ -1754,6 +1773,42 @@ const App = {
                     <div class="dashboard-stat-card-title">Losses (${viewMonthName})</div>
                     <div class="dashboard-stat-card-value" style="color: #F56565;">${lossesThisMonth}</div>
                     <div class="dashboard-stat-card-detail">Projects lost</div>
+                </div>
+            </div>
+            
+            <!-- Pricing (above charts): sync from API, log activity or delete -->
+            <div class="dashboard-charts-row" id="dashboardPricingSection">
+                <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
+                    <div class="dashboard-chart-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div>
+                            <h3>Pricing</h3>
+                            <span class="text-muted">${unlinkedPricing.length > 0 ? 'Select account and project, then Log activity' : 'Unlinked pricing calculations from the pricing API'}</span>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" id="dashboardPricingSyncBtn" title="Fetch your unlinked pricing calculations from the API">
+                            Sync
+                        </button>
+                    </div>
+                    ${unlinkedPricing.length > 0 ? `
+                    <div class="table-responsive" style="margin-top: 1rem;">
+                        <table class="table table-sm">
+                            <thead><tr><th>Pricing ID</th><th>Created</th><th></th></tr></thead>
+                            <tbody>
+                                ${unlinkedPricing.map((item, idx) => `
+                                <tr>
+                                    <td>${escapeHtml(item.calculation_id || item.id || '')}</td>
+                                    <td>${escapeHtml((item.created_at || '').toString().slice(0, 10))}</td>
+                                    <td style="white-space: nowrap;">
+                                        <button type="button" class="btn btn-primary btn-sm pricing-log-activity-btn" data-pricing-index="${idx}">Log activity</button>
+                                        <button type="button" class="btn btn-outline btn-sm pricing-delete-btn" data-pricing-calculation-id="${escapeHtml(item.calculation_id || '')}" data-pricing-index="${idx}">Delete</button>
+                                    </td>
+                                </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    ` : `
+                    <p class="text-muted" style="margin-top: 1rem;">No unlinked pricing calculations. Click <strong>Sync</strong> to fetch your data from the pricing API.</p>
+                    `}
                 </div>
             </div>
             
@@ -1859,6 +1914,56 @@ const App = {
         dashboardView.innerHTML = html;
         this.applyAppConfiguration();
 
+        dashboardView.querySelectorAll('.pricing-log-activity-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-pricing-index'), 10);
+                const list = this._unlinkedPricingForDashboard;
+                if (!Array.isArray(list) || idx < 0 || idx >= list.length) return;
+                this.openPricingLinkModal(list[idx]);
+            });
+        });
+        dashboardView.querySelectorAll('.pricing-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const calculationId = btn.getAttribute('data-pricing-calculation-id');
+                if (!calculationId) return;
+                if (!confirm('Delete this pricing calculation? This cannot be undone.')) return;
+                const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                const deleteUrl = apiBase ? `${apiBase}/api/pricing-calculations/${encodeURIComponent(calculationId)}` : `/api/pricing-calculations/${encodeURIComponent(calculationId)}`;
+                try {
+                    const res = await fetch(deleteUrl, { method: 'DELETE', credentials: 'include', headers: { Accept: 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.ok) throw new Error(data.error || 'Failed to delete');
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Pricing calculation deleted.', 'success');
+                    await this.loadCardDashboard();
+                } catch (e) {
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification((e && e.message) || 'Could not delete. Try again.', 'error');
+                }
+            });
+        });
+        const syncBtn = dashboardView.querySelector('#dashboardPricingSyncBtn');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                syncBtn.disabled = true;
+                syncBtn.textContent = 'Syncing…';
+                try {
+                    const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                    const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
+                    const pricingRes = await fetch(pricingUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+                    if (!pricingRes.ok) throw new Error('Failed to fetch');
+                    const pricingData = await pricingRes.json().catch(() => ({}));
+                    const items = pricingData.ok && Array.isArray(pricingData.items) ? pricingData.items : [];
+                    this._unlinkedPricingForDashboard = items;
+                    await this.loadCardDashboard();
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification(items.length > 0 ? 'Synced. ' + items.length + ' unlinked calculation(s).' : 'Synced. No unlinked calculations.', 'success');
+                } catch (e) {
+                    if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification((e && e.message) || 'Sync failed. Try again.', 'error');
+                } finally {
+                    syncBtn.disabled = false;
+                    syncBtn.textContent = 'Sync';
+                }
+            });
+        }
+
         // Initialize charts after DOM is ready
         setTimeout(() => {
             this.initDashboardCharts({
@@ -1868,6 +1973,153 @@ const App = {
                 regionBreakdown
             });
         }, 100);
+    },
+
+    /**
+     * Open modal to link a pricing calculation to an activity. When feature flag pricingFullActivityForm
+     * is on: full Log Activity form (account, project, industry, sales rep, use cases, products, etc.).
+     * When off: small modal with account and project only.
+     * Accepts a raw item from GET /api/pricing-calculations/my-unlinked, or a draft with payload._pricingCalc (legacy).
+     */
+    async openPricingLinkModal(calculationOrDraft) {
+        const isDraft = calculationOrDraft && calculationOrDraft.payload && calculationOrDraft.payload._pricingCalc === true;
+        const calculationItem = isDraft
+            ? {
+                calculation_id: calculationOrDraft.payload.calculationId,
+                created_at: calculationOrDraft.payload.date,
+                total_invoice: calculationOrDraft.payload.calculationSummary && calculationOrDraft.payload.calculationSummary.total_invoice,
+                total_mandays: calculationOrDraft.payload.calculationSummary && calculationOrDraft.payload.calculationSummary.total_mandays
+            }
+            : calculationOrDraft;
+        if (!calculationItem || !calculationItem.calculation_id) return;
+        const user = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+        if (!user || !user.id) {
+            if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please log in to log this pricing activity.', 'error');
+            return;
+        }
+        const calcId = calculationItem.calculation_id;
+        const date = (calculationItem.created_at || '').toString().slice(0, 10) || new Date().toISOString().slice(0, 10);
+
+        if (this.isFeatureEnabled('pricingFullActivityForm')) {
+            // Full Log Activity form: all account/project-level fields
+            if (typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                await Activities.openActivityModal({
+                    mode: 'create',
+                    fromPricingCalculation: {
+                        calculationId: calcId,
+                        createdAt: calculationItem.created_at,
+                        draftId: isDraft && calculationOrDraft && calculationOrDraft.id ? calculationOrDraft.id : null
+                    },
+                    restoreFormData: {
+                        activityCategory: 'external',
+                        activityType: 'pricing',
+                        date: date
+                    }
+                });
+            }
+            return;
+        }
+
+        // Flag off: small modal with account and project only
+        const accounts = await DataManager.getAccounts();
+        const modalId = 'pricingLinkModal';
+        let modal = document.getElementById(modalId);
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal-overlay hidden';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-label', 'Log activity – account and project');
+            document.body.appendChild(modal);
+        }
+        const summary = calculationItem.total_invoice != null
+            ? `Total invoice: ${calculationItem.total_invoice}` + (calculationItem.total_mandays != null ? ` · Mandays: ${calculationItem.total_mandays}` : '')
+            : calculationItem.calculation_id;
+        modal.innerHTML =
+            '<div class="modal-content" style="max-width: 420px;">' +
+            '<h3 class="modal-title">Log activity</h3>' +
+            '<p class="text-muted small">Pricing ID: ' + (calcId || '').replace(/</g, '&lt;') + '</p>' +
+            (summary && summary !== calcId ? '<p class="text-muted small">' + String(summary).replace(/</g, '&lt;') + '</p>' : '') +
+            '<div class="form-group"><label class="form-label">Account</label><select id="pricingLinkAccount" class="form-control"><option value="">Select account…</option></select></div>' +
+            '<div class="form-group"><label class="form-label">Project</label><select id="pricingLinkProject" class="form-control"><option value="">Select project…</option></select></div>' +
+            '<div class="modal-actions" style="margin-top: 1rem;"><button type="button" class="btn btn-primary" id="pricingLinkSave">Log activity</button> <button type="button" class="btn btn-outline" id="pricingLinkCancel">Cancel</button></div>' +
+            '</div>';
+        const accountSelect = modal.querySelector('#pricingLinkAccount');
+        const projectSelect = modal.querySelector('#pricingLinkProject');
+        accounts.forEach(acc => {
+            const opt = document.createElement('option');
+            opt.value = acc.id;
+            opt.textContent = acc.name || acc.id;
+            accountSelect.appendChild(opt);
+        });
+        const updateProjects = () => {
+            const accountId = accountSelect.value;
+            projectSelect.innerHTML = '<option value="">Select project…</option>';
+            if (!accountId) return;
+            const acc = accounts.find(a => a.id === accountId);
+            if (acc && Array.isArray(acc.projects)) {
+                acc.projects.forEach(proj => {
+                    const opt = document.createElement('option');
+                    opt.value = proj.id;
+                    opt.textContent = proj.name || proj.id;
+                    projectSelect.appendChild(opt);
+                });
+            }
+        };
+        accountSelect.addEventListener('change', updateProjects);
+        const closeModal = () => { modal.classList.add('hidden'); };
+        modal.querySelector('#pricingLinkCancel').addEventListener('click', closeModal);
+        modal.querySelector('#pricingLinkSave').addEventListener('click', async () => {
+            const accountId = accountSelect.value;
+            const projectId = projectSelect.value;
+            if (!accountId || !projectId) {
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please select account and project.', 'warning');
+                return;
+            }
+            const acc = accounts.find(a => a.id === accountId);
+            const proj = acc && acc.projects ? acc.projects.find(pr => pr.id === projectId) : null;
+            const activity = {
+                id: DataManager.generateId(),
+                date: date,
+                type: 'pricing',
+                accountId,
+                projectId,
+                accountName: acc ? acc.name : '',
+                projectName: proj ? proj.name : '',
+                userId: user.id,
+                userName: user.username || '',
+                details: { calculationId: calcId },
+                source: 'pricing_calc',
+                isInternal: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            try {
+                await DataManager.appendActivity(activity);
+                const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                const linkUrl = apiBase ? `${apiBase}/api/pricing-calculations/link` : '/api/pricing-calculations/link';
+                const linkRes = await fetch(linkUrl, {
+                    method: 'PATCH',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ calculation_id: calcId, activity_id: activity.id })
+                });
+                const linkData = await linkRes.json().catch(() => ({}));
+                if (!linkRes.ok || !linkData.ok) throw new Error(linkData.error || 'Failed to link calculation');
+                closeModal();
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Pricing activity logged.', 'success');
+                if (isDraft && calculationOrDraft && calculationOrDraft.id && typeof Drafts !== 'undefined' && Drafts.removeDraft) {
+                    Drafts.removeDraft(calculationOrDraft.id);
+                    this.loadDraftsView();
+                    this.updateDraftsBadge();
+                } else {
+                    this.loadCardDashboard();
+                }
+            } catch (e) {
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification((e && e.message) || 'Could not save. Try again.', 'error');
+            }
+        });
+        modal.classList.remove('hidden');
     },
 
     async calculateMissingSfdcStats(externalActivities, currentUser, defaultRegion, userMap = null) {
@@ -3187,7 +3439,8 @@ const App = {
             const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
             const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : (isActivityUpdate ? 'Edit & Save' : 'Submit again'));
             const submitDisabled = isSubmitting ? ' disabled' : '';
-            const showEdit = !isPendingDelete && !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || (!isWinlossForm && !isActivityForm));
+            const isPricingCalc = !!(p && p._pricingCalc === true);
+            const showEdit = !isPendingDelete && !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || isPricingCalc || (!isWinlossForm && !isActivityForm));
             return (
                 '<div class="draft-card" data-draft-id="' + (d.id || '') + '">' +
                 '<div class="draft-card-body">' +
@@ -3232,13 +3485,22 @@ const App = {
                             App.loadDraftsView();
                             return;
                         }
-                        if (p && p._activityUpdate === true && p.activity && typeof Activities !== 'undefined' && Activities.openActivityModal) {
-                            if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
-                            await Activities.openActivityModal({ mode: 'edit', activity: p.activity, isInternal: false, fromDraftId: draft.id });
+                        if (p && p._pricingCalc === true) {
+                            App.openPricingLinkModal(draft);
                             App.loadDraftsView();
                             return;
                         }
-                        if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
+                if (p && p._activityUpdate === true && p.activity && typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                    if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
+                    await Activities.openActivityModal({ mode: 'edit', activity: p.activity, isInternal: false, fromDraftId: draft.id });
+                    App.loadDraftsView();
+                    return;
+                }
+                if (p && p._pricingCalc === true) {
+                    App.openPricingLinkModal(draft);
+                    return;
+                }
+                if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
                         if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
                             try {
                                 await DataManager.submitSingleActivityToServer(p.activity);
@@ -3264,6 +3526,11 @@ const App = {
                             App.loadDraftsView();
                             App.updateDraftsBadge();
                             if (App.currentView !== 'drafts' && typeof App.refreshCurrentViewData === 'function') App.refreshCurrentViewData();
+                            return;
+                        }
+                        if (p && p._pricingCalc === true) {
+                            App.openPricingLinkModal(draft);
+                            App.loadDraftsView();
                             return;
                         }
                         var isFullList = isFullListDraftPayload(p);
@@ -3378,6 +3645,10 @@ const App = {
         for (const draft of drafts) {
             const p = draft.payload;
             if (p && p._activityForm === true) {
+                skippedForms++;
+                continue;
+            }
+            if (p && p._pricingCalc === true) {
                 skippedForms++;
                 continue;
             }

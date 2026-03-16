@@ -376,6 +376,36 @@ const initDb = async () => {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pricing_calculations (
+        id SERIAL PRIMARY KEY,
+        calculation_id TEXT NOT NULL UNIQUE,
+        user_email TEXT,
+        country TEXT,
+        channel_type TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        payload JSONB NOT NULL DEFAULT '{}',
+        total_mandays NUMERIC,
+        voice_mandays NUMERIC,
+        text_mandays NUMERIC,
+        total_invoice NUMERIC,
+        activity_id TEXT
+      );
+    `);
+    await client.query(`
+      ALTER TABLE pricing_calculations ADD COLUMN IF NOT EXISTS activity_id TEXT;
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pricing_calculations_calculation_id ON pricing_calculations (calculation_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pricing_calculations_user_email ON pricing_calculations (user_email) WHERE user_email IS NOT NULL;
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_pricing_calculations_activity_id ON pricing_calculations (activity_id) WHERE activity_id IS NOT NULL;
+    `);
   } finally {
     client.release();
   }

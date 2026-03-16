@@ -26,7 +26,8 @@
     "merge-duplicates": "node server/scripts/merge-duplicate-accounts.js",
     "merge-duplicates-apply": "node server/scripts/merge-duplicate-accounts.js --apply",
     "backfill-normalized": "node server/scripts/backfill-normalized-from-storage.js",
-    "backfill-normalized-dry": "node server/scripts/backfill-normalized-from-storage.js --dry-run"
+    "backfill-normalized-dry": "node server/scripts/backfill-normalized-from-storage.js --dry-run",
+    "syntax-check": "node scripts/syntax-check.js"
   },
   "engines": {
     "node": ">=18 <22"
