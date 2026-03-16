@@ -51,6 +51,12 @@ const createApp = (options = {}) => {
     String(process.env.FORCE_REMOTE_STORAGE || '').toLowerCase() === 'true';
 
   app.use(requestContextMiddleware);
+
+  // Health check before CORS so platform probes (e.g. Railway) always get 200 regardless of Origin.
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   const explicitOrigins = (process.env.CORS_ALLOW_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
@@ -253,10 +259,6 @@ const createApp = (options = {}) => {
         user: null
       });
     }
-  });
-
-  app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: 'ok' });
   });
 
   // Rich health endpoint for live incident debugging and auto-recovery visibility.

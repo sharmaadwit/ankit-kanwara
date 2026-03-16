@@ -10,4 +10,4 @@ startCommand = "npm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 healthcheckInterval = 10
-healthcheckGracePeriod = 45
+healthcheckGracePeriod = 60
