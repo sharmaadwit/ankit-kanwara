@@ -7532,7 +7532,7 @@ const App = {
         return Array.from(byNormalizedName.entries())
             .filter(([, list]) => list.length > 1)
             .map(([normalizedName, list]) => ({ normalizedName, accounts: list }));
-    }
+    },
 
     // Show merge account modal with search + select list
     async showMergeAccountModal(accountId) {
