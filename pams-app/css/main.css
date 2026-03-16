@@ -508,6 +508,7 @@ body.migration-mode-on [data-migration-hide] {
     display: flex;
     justify-content: center;
     margin-bottom: 0.75rem;
+    background: transparent;
 }
 
 .login-logo img {
@@ -515,6 +516,7 @@ body.migration-mode-on [data-migration-hide] {
     height: auto;
     max-height: 46px;
     object-fit: contain;
+    background: transparent;
 }
 
 .header-right {
@@ -555,6 +557,13 @@ body.migration-mode-on [data-migration-hide] {
     width: auto;
     object-fit: contain;
     flex-shrink: 0;
+    transition: filter 0.2s ease;
+}
+
+/* Default: POC gradient from SVG; hover: entire logo (icon + text) all white */
+.app-home-button:hover .app-logo,
+.app-home-button:focus-visible .app-logo {
+    filter: brightness(0) invert(1);
 }
 
 .app-home-brand {
@@ -562,6 +571,12 @@ body.migration-mode-on [data-migration-hide] {
     font-weight: 700;
     color: var(--white);
     letter-spacing: 0.02em;
+    transition: color 0.2s ease;
+}
+
+.app-home-button:hover .app-home-brand,
+.app-home-button:focus-visible .app-home-brand {
+    color: #fff;
 }
 
 /* Legacy classes kept for any JS that might reference them */
