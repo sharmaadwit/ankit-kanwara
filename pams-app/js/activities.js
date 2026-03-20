@@ -72,7 +72,7 @@ const Activities = {
                 originalProjectId: activity.projectId || null,
                 fromDraftId: fromDraftId || null
             }
-            : (fromDraftId ? { fromDraftId } : {});
+            : (fromDraftId ? { fromDraftId } : (fromPricingCalculation ? {} : null));
         if (fromPricingCalculation) {
             this.editingContext = this.editingContext || {};
             this.editingContext.fromPricingCalculation = fromPricingCalculation;
@@ -202,7 +202,10 @@ const Activities = {
         const salesRepSelect = document.getElementById('salesRepSelect');
         if (salesRepSelect && formData.salesRep) salesRepSelect.value = formData.salesRep;
         const typeSelect = document.getElementById('activityTypeSelect');
-        if (typeSelect && formData.activityType) typeSelect.value = formData.activityType;
+        if (typeSelect && formData.activityType) {
+            typeSelect.value = formData.activityType;
+            this.showActivityFields();
+        }
         const dateInput = document.getElementById('activityDate');
         if (dateInput && formData.date) dateInput.value = formData.date;
         if (Array.isArray(formData.selectedUseCases)) this.selectedUseCases = formData.selectedUseCases.slice();
@@ -214,6 +217,35 @@ const Activities = {
         if (sowLink && formData.sowLink) sowLink.value = formData.sowLink;
         const rfxType = document.getElementById('rfxType');
         if (rfxType && formData.rfxType) rfxType.value = formData.rfxType;
+        if (formData.activityType === 'poc') {
+            const accessTypeEl = document.getElementById('accessType');
+            if (accessTypeEl && formData.accessType) {
+                accessTypeEl.value = formData.accessType;
+                this.togglePOCFields('');
+            }
+            const ucd = document.getElementById('useCaseDescription');
+            if (ucd && formData.useCaseDescription) ucd.value = formData.useCaseDescription;
+            if (formData.pocStartDate) {
+                const sd = document.getElementById('pocStartDate');
+                if (sd) sd.value = formData.pocStartDate;
+            }
+            if (formData.pocEndDate) {
+                const ed = document.getElementById('pocEndDate');
+                if (ed) ed.value = formData.pocEndDate;
+            }
+            const demoEnv = document.getElementById('demoEnvironment');
+            if (demoEnv && formData.demoEnvironment) demoEnv.value = formData.demoEnvironment;
+            const botUrl = document.getElementById('botTriggerUrl');
+            if (botUrl && formData.botTriggerUrl) botUrl.value = formData.botTriggerUrl;
+        }
+        if (formData.activityType === 'rfx') {
+            const gfl = document.getElementById('googleFolderLink');
+            if (gfl && formData.googleFolderLink) gfl.value = formData.googleFolderLink;
+            const rfxNotes = document.getElementById('rfxNotes');
+            if (rfxNotes && formData.rfxNotes) rfxNotes.value = formData.rfxNotes;
+            const subDl = document.getElementById('submissionDeadline');
+            if (subDl && formData.submissionDeadline) subDl.value = formData.submissionDeadline;
+        }
         this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases || []);
         this.syncMultiSelectState('useCase', this.selectedUseCases || []);
     },
@@ -222,8 +254,8 @@ const Activities = {
         const btn = document.getElementById('addAnotherActivityBtn');
         if (!btn) return;
         const externalChecked = document.querySelector('input[name="activityCategory"][value="external"]')?.checked;
-        const isEditing = !!this.editingContext;
-        btn.style.display = externalChecked && !isEditing ? 'inline-block' : 'none';
+        const isEditingExisting = !!(this.editingContext && this.editingContext.activity);
+        btn.style.display = externalChecked && !isEditingExisting ? 'inline-block' : 'none';
     },
 
     removeExtraActivityRows() {
@@ -949,11 +981,63 @@ const Activities = {
             } else if (type === 'rfx') {
                 html = this.getRFxFields('');
             } else if (type === 'pricing') {
-                html = ''; // No fields for pricing
+                html = this.getPricingFields();
             }
         }
 
         container.innerHTML = html;
+        if (this.activityType === 'external' && type === 'pricing') {
+            setTimeout(() => this.loadPricingCalculationsOptions(), 50);
+        }
+    },
+
+    /**
+     * HTML for Pricing type: optional multi-select of synced (unlinked) pricing calculations.
+     * Populated by loadPricingCalculationsOptions() after fetch of my-unlinked.
+     */
+    getPricingFields() {
+        return `
+            <div class="form-group">
+                <label class="form-label">Link to pricing calculation(s) (optional)</label>
+                <p class="text-muted small">Select one or more to create one pricing activity per selection with the same account/project.</p>
+                <div id="pricingCalculationsMultiSelectContainer"><span class="text-muted">Loading…</span></div>
+            </div>
+        `;
+    },
+
+    /**
+     * Fetch current user's unlinked pricing calculations and fill the multi-select container with checkboxes.
+     */
+    async loadPricingCalculationsOptions() {
+        const container = document.getElementById('pricingCalculationsMultiSelectContainer');
+        if (!container) return;
+        let items = [];
+        try {
+            const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+            const url = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
+            const res = await fetch(url, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                if (data.ok && Array.isArray(data.items)) items = data.items;
+            }
+        } catch (_) {}
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-muted small">No synced pricing calculations. Use the dashboard Pricing section and click Sync to fetch.</p>';
+            return;
+        }
+        const escapeHtml = (s) => {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+        container.innerHTML = `
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem;">
+                ${items.map((item) => {
+                    const id = item.calculation_id || item.id || '';
+                    const label = id + (item.created_at ? ' · ' + String(item.created_at).slice(0, 10) : '');
+                    return `<label class="form-check" style="display: block; margin-bottom: 0.35rem;"><input type="checkbox" name="pricingCalculationIds" value="${escapeHtml(id)}" class="form-check-input"> <span class="form-check-label">${escapeHtml(label)}</span></label>`;
+                }).join('')}
+            </div>
+        `;
     },
 
     // Get customer call fields (suffix = '' for main row, '_1', '_2' for extra rows)
@@ -997,16 +1081,16 @@ const Activities = {
                 <label class="form-label required">Use Case Description</label>
                 <textarea class="form-control" id="useCaseDescription${suffix}" rows="3" required></textarea>
             </div>
-            <!-- Sandbox Fields -->
+            <!-- Sandbox Fields (required is set by togglePOCFields when Access Type = Sandbox so hidden section doesn't block submit) -->
             <div id="pocSandboxFields${suffix}" class="hidden">
                 <div class="form-grid">
                     <div class="form-group">
                         <label class="form-label required">Start Date</label>
-                        <input type="date" class="form-control" id="pocStartDate${suffix}" required onchange="Activities.setPOCEndDate('${suffix}')">
+                        <input type="date" class="form-control" id="pocStartDate${suffix}" onchange="Activities.setPOCEndDate('${suffix}')">
                     </div>
                     <div class="form-group">
                         <label class="form-label required">End Date</label>
-                        <input type="date" class="form-control" id="pocEndDate${suffix}" required>
+                        <input type="date" class="form-control" id="pocEndDate${suffix}">
                     </div>
                 </div>
             </div>
@@ -1754,10 +1838,17 @@ const Activities = {
     },
 
     async openActivityModalByActivityId(activityId) {
-        const activities = typeof DataManager !== 'undefined' && DataManager.getActivities ? await DataManager.getActivities() : [];
-        const activity = activities.find(a => a.id === activityId) || null;
+        if (!activityId || typeof DataManager === 'undefined') return;
+        const external = typeof DataManager.getActivities === 'function' ? await DataManager.getActivities() : [];
+        let activity = Array.isArray(external) ? external.find(a => a.id === activityId) : null;
+        let isInternal = !!(activity && activity.isInternal);
+        if (!activity && typeof DataManager.getInternalActivities === 'function') {
+            const internal = await DataManager.getInternalActivities();
+            activity = Array.isArray(internal) ? internal.find(a => a.id === activityId) : null;
+            if (activity) isInternal = true;
+        }
         if (activity) {
-            await this.openActivityModal({ mode: 'edit', activity, isInternal: false });
+            await this.openActivityModal({ mode: 'edit', activity, isInternal });
         }
     },
 
@@ -2028,11 +2119,12 @@ const Activities = {
             }
 
             const editingContext = this.editingContext;
-            const isEditing = !!editingContext;
-            const originalCategoryIsInternal = editingContext ? editingContext.isInternal : null;
+            // Only treat as "editing" when we have an existing activity record (not `{}` from create mode)
+            const isEditingExisting = !!(editingContext && editingContext.activity);
+            const originalCategoryIsInternal = isEditingExisting ? !!editingContext.isInternal : null;
             const currentIsInternal = activityCategory === 'internal';
 
-            if (isEditing && originalCategoryIsInternal !== currentIsInternal) {
+            if (isEditingExisting && originalCategoryIsInternal !== currentIsInternal) {
                 UI.showNotification('Switching between internal and external is not supported while editing. Please cancel and create a new activity instead.', 'error');
                 return;
             }
@@ -2329,6 +2421,14 @@ const Activities = {
             }
         }
 
+        // For pricing: optional multi-select of calculation IDs (from form or fromPricingCalculation)
+        let pricingIdsToLink = [];
+        if (activityType === 'pricing') {
+            pricingIdsToLink = (editingContext.fromPricingCalculation && editingContext.fromPricingCalculation.calculationId)
+                ? [editingContext.fromPricingCalculation.calculationId]
+                : Array.from(document.querySelectorAll('input[name="pricingCalculationIds"]:checked')).map(cb => (cb.value || '').trim()).filter(Boolean);
+        }
+
         // Create activity based on type
         const activity = {
             userId: currentUser.id,
@@ -2363,15 +2463,33 @@ const Activities = {
                 sowLink: document.getElementById('sowLink')?.value || ''
             };
         } else if (activityType === 'poc') {
+            if (typeof this.togglePOCFields === 'function') {
+                this.togglePOCFields('');
+            }
             const accessType = document.getElementById('accessType')?.value || '';
+            if (!accessType || !accessType.trim()) {
+                UI.showNotification('Please select an Access Type for this POC activity.', 'error');
+                return;
+            }
+            const useCaseDescription = document.getElementById('useCaseDescription')?.value || '';
+            if (!useCaseDescription.trim()) {
+                UI.showNotification('Use Case Description is required for POC activities.', 'error');
+                return;
+            }
             activity.details = {
                 accessType: accessType,
-                useCaseDescription: document.getElementById('useCaseDescription')?.value || ''
+                useCaseDescription: useCaseDescription.trim()
             };
 
             if (accessType === 'Sandbox') {
-                activity.details.startDate = document.getElementById('pocStartDate')?.value || '';
-                activity.details.endDate = document.getElementById('pocEndDate')?.value || '';
+                const startDate = document.getElementById('pocStartDate')?.value || '';
+                const endDate = document.getElementById('pocEndDate')?.value || '';
+                if (!startDate || !endDate) {
+                    UI.showNotification('Start Date and End Date are required for Sandbox Access. Please fill both dates.', 'error');
+                    return;
+                }
+                activity.details.startDate = startDate;
+                activity.details.endDate = endDate;
                 // POC Environment Name - default empty, admin can set later
                 activity.details.pocEnvironmentName = '';
                 activity.details.assignedStatus = 'Unassigned';
@@ -2387,11 +2505,13 @@ const Activities = {
                 notes: document.getElementById('rfxNotes')?.value || ''
             };
         } else if (activityType === 'pricing') {
-            if (editingContext.fromPricingCalculation && editingContext.fromPricingCalculation.calculationId) {
-                activity.details = { calculationId: editingContext.fromPricingCalculation.calculationId };
+            if (pricingIdsToLink.length === 0) {
+                activity.details = {};
+            } else if (pricingIdsToLink.length === 1) {
+                activity.details = { calculationId: pricingIdsToLink[0] };
                 activity.source = 'pricing_calc';
             } else {
-                activity.details = {};
+                activity.details = {}; // multiple: handled in create path below
             }
         }
 
@@ -2472,6 +2592,29 @@ const Activities = {
                             return;
                         }
                     }
+                    if (typeVal === 'poc') {
+                        if (typeof this.togglePOCFields === 'function') {
+                            this.togglePOCFields(suffix);
+                        }
+                        const accessType = document.getElementById('accessType' + suffix)?.value || '';
+                        if (!accessType || !accessType.trim()) {
+                            UI.showNotification('Please select an Access Type for POC in activity ' + (i + 1) + '.', 'error');
+                            return;
+                        }
+                        const useCaseDesc = document.getElementById('useCaseDescription' + suffix)?.value || '';
+                        if (!useCaseDesc.trim()) {
+                            UI.showNotification('Use Case Description is required for POC in activity ' + (i + 1) + '.', 'error');
+                            return;
+                        }
+                        if (accessType === 'Sandbox') {
+                            const startDate = document.getElementById('pocStartDate' + suffix)?.value || '';
+                            const endDate = document.getElementById('pocEndDate' + suffix)?.value || '';
+                            if (!startDate || !endDate) {
+                                UI.showNotification('Start Date and End Date are required for Sandbox Access in activity ' + (i + 1) + '.', 'error');
+                                return;
+                            }
+                        }
+                    }
                 }
                 let createdCount = 0;
                 let draftsCount = 0;
@@ -2527,6 +2670,40 @@ const Activities = {
                 }
             } else {
                 try {
+                    // Multiple pricing activities: one per selected calculation (same account/project)
+                    if (activityType === 'pricing' && pricingIdsToLink.length > 1) {
+                        const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                        const linkUrl = apiBase ? `${apiBase}/api/pricing-calculations/link` : '/api/pricing-calculations/link';
+                        for (const calculationId of pricingIdsToLink) {
+                            const act = { ...activity, details: { calculationId }, source: 'pricing_calc' };
+                            const created = await DataManager.addActivity(act);
+                            await this.syncProjectActivityReference({
+                                activity: created,
+                                targetAccountId: created.accountId,
+                                targetProjectId: created.projectId
+                            });
+                            const linkRes = await fetch(linkUrl, {
+                                method: 'PATCH',
+                                credentials: 'include',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ calculation_id: calculationId, activity_id: created.id })
+                            });
+                            const linkData = await linkRes.json().catch(() => ({}));
+                            if (!linkRes.ok || !linkData.ok) {
+                                console.warn('Pricing link failed for', calculationId, linkData);
+                            }
+                        }
+                        if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
+                            try {
+                                await DataManager.saveAccounts(pendingAccountsSave);
+                            } catch (e) {
+                                console.warn('Project use cases/products save failed:', e);
+                            }
+                        }
+                        this.closeActivityModal();
+                        UI.showNotification('Logged ' + pricingIdsToLink.length + ' pricing activities.', 'success');
+                        this.setLastActivityDateForUser(currentUser.id, date);
+                    } else {
                     if (typeof window.__activitySaveTracePush === 'function') {
                         window.__activitySaveTracePush('external activity submit', {
                             type: activity.type,
@@ -2544,7 +2721,7 @@ const Activities = {
                     if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
                         Drafts.removeDraft(this.editingContext.fromDraftId);
                     }
-                    // Link pricing calculation to this activity when opened from dashboard/draft pricing flow
+                    // Link pricing calculation to this activity when opened from dashboard/draft pricing flow or single selection
                     const fromPricing = this.editingContext && this.editingContext.fromPricingCalculation;
                     if (fromPricing && fromPricing.calculationId && created && created.id) {
                         try {
@@ -2564,6 +2741,24 @@ const Activities = {
                         } catch (e) {
                             console.warn('Pricing link failed:', e);
                             UI.showNotification('Activity saved but linking to pricing calculation failed. You can edit the activity to retry.', 'warning');
+                        }
+                    }
+                    // Also link when single pricing selected from form (not from dashboard)
+                    if (activityType === 'pricing' && pricingIdsToLink.length === 1 && !fromPricing && created && created.id) {
+                        try {
+                            const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
+                            const linkUrl = apiBase ? `${apiBase}/api/pricing-calculations/link` : '/api/pricing-calculations/link';
+                            const linkRes = await fetch(linkUrl, {
+                                method: 'PATCH',
+                                credentials: 'include',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ calculation_id: pricingIdsToLink[0], activity_id: created.id })
+                            });
+                            const linkData = await linkRes.json().catch(() => ({}));
+                            if (!linkRes.ok || !linkData.ok) throw new Error(linkData.error || 'Failed to link calculation');
+                        } catch (e) {
+                            console.warn('Pricing link failed:', e);
+                            UI.showNotification('Activity saved but linking to pricing calculation failed.', 'warning');
                         }
                     }
                     if (pendingAccountsSave && typeof DataManager !== 'undefined' && DataManager.saveAccounts) {
@@ -2587,6 +2782,7 @@ const Activities = {
                     }
                     UI.showNotification(msg, 'success');
                     this.setLastActivityDateForUser(currentUser.id, date);
+                    }
                 } catch (err) {
                     if (typeof window.__activitySaveTracePush === 'function') {
                         window.__activitySaveTracePush('external activity save threw', {
