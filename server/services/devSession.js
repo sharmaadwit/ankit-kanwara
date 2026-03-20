@@ -1,6 +1,7 @@
 /**
  * In-memory session store for local dev when DB is unavailable.
- * Currently disabled (isDevLoginAllowed always returns false). Was only for ALLOW_DEV_LOGIN + non-production.
+ * Active only when ALLOW_DEV_LOGIN=true and NODE_ENV !== 'production'.
+ * Credentials: username dev, password dev (see docs/LOCAL_DEV_LOGIN.md).
  */
 
 const DEV_USER = {
@@ -15,8 +16,10 @@ const DEV_USER = {
 
 const sessions = new Map(); // sessionId -> { userId, username, email, roles, regions, salesReps, defaultRegion }
 
-// Disabled: dev login is off everywhere to avoid any risk to production. Re-enable locally only if needed.
-const isDevLoginAllowed = () => false;
+const isDevLoginAllowed = () => {
+  if (process.env.NODE_ENV === 'production') return false;
+  return String(process.env.ALLOW_DEV_LOGIN || '').toLowerCase() === 'true';
+};
 
 const setDevSession = (sessionId, user = DEV_USER) => {
   if (!isDevLoginAllowed()) return;

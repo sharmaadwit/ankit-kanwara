@@ -67,7 +67,8 @@ const App = {
         csvExport: true,
         winLoss: true,
         adminCsvExport: true,
-        pricingFullActivityForm: false
+        pricingFullActivityForm: false,
+        pricingCalculatorSync: false
     },
     featureFlags: {},
     defaultDashboardVisibility: {
@@ -608,6 +609,10 @@ const App = {
                 e.preventDefault();
                 const view = e.currentTarget.dataset.view;
                 this.switchView(view);
+                // Card interface uses a drawer sidebar — close it after navigating
+                if (typeof document !== 'undefined' && document.body && document.body.classList.contains('interface-card')) {
+                    if (typeof UI !== 'undefined' && UI.closeSidebar) UI.closeSidebar();
+                }
             });
 
             // Warm likely next view data on intent (hover/focus/touch) without rendering.
@@ -842,10 +847,13 @@ const App = {
     },
 
     setAppConfiguration(config = {}) {
-        this.featureFlags = {
-            ...this.defaultFeatureFlags,
-            ...(config.featureFlags || {})
-        };
+        const incoming = config.featureFlags || {};
+        const merged = { ...this.defaultFeatureFlags, ...incoming };
+        if (Object.prototype.hasOwnProperty.call(incoming, 'pricingCalculatorSync')) {
+            const v = incoming.pricingCalculatorSync;
+            merged.pricingCalculatorSync = v === true || v === 1 || String(v).toLowerCase() === 'true' || String(v) === '1';
+        }
+        this.featureFlags = merged;
         this.dashboardVisibility = {
             ...this.defaultDashboardVisibility,
             ...(config.dashboardVisibility || {})
@@ -892,8 +900,16 @@ const App = {
         }
     },
 
+    /** True only when Admin has enabled “Pricing calculator sync” — controls dashboard Pricing block and related UI. */
+    isPricingCalculatorSyncEnabled() {
+        return this.featureFlags.pricingCalculatorSync === true;
+    },
+
     isFeatureEnabled(flag) {
         if (!flag) return true;
+        if (flag === 'pricingCalculatorSync') {
+            return this.isPricingCalculatorSyncEnabled();
+        }
         const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
         if (isAdmin) return true;
         return this.featureFlags[flag] !== false;
@@ -1714,7 +1730,7 @@ const App = {
         });
 
         let unlinkedPricing = [];
-        if (this.isFeatureEnabled('pricingCalculatorSync')) {
+        if (this.isPricingCalculatorSyncEnabled()) {
             try {
                 const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
                 const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
@@ -1732,30 +1748,6 @@ const App = {
             const str = String(s);
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
-
-        const monthWins = [];
-        const monthLosses = [];
-        accounts.forEach(account => {
-            account.projects?.forEach(project => {
-                const monthForWinLoss = project.winLossData?.monthOfWin ||
-                    (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
-                if (monthForWinLoss !== viewMonth) return;
-                const projName = project.name || '—';
-                if (project.status === 'won') {
-                    monthWins.push({
-                        accountName: account.name || '—',
-                        projectName: projName,
-                        reason: (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : '—'
-                    });
-                } else if (project.status === 'lost') {
-                    monthLosses.push({
-                        accountName: account.name || '—',
-                        projectName: projName,
-                        reason: (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : '—'
-                    });
-                }
-            });
-        });
 
         let html = `
             <!-- Log Activity + Admin month selector -->
@@ -1804,7 +1796,7 @@ const App = {
                 </div>
             </div>
             
-            ${this.isFeatureEnabled('pricingCalculatorSync') ? `<!-- Pricing (above charts): sync from API, log activity or delete -->
+            ${this.isPricingCalculatorSyncEnabled() ? `<!-- Pricing (above charts): sync from API, log activity or delete -->
             <div class="dashboard-charts-row" id="dashboardPricingSection">
                 <div class="dashboard-chart-card" style="grid-column: 1 / -1;">
                     <div class="dashboard-chart-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -1978,8 +1970,15 @@ const App = {
                     const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
                     const pricingUrl = apiBase ? `${apiBase}/api/pricing-calculations/my-unlinked` : '/api/pricing-calculations/my-unlinked';
                     const pricingRes = await fetch(pricingUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
-                    if (!pricingRes.ok) throw new Error('Failed to fetch');
                     const pricingData = await pricingRes.json().catch(() => ({}));
+                    if (!pricingRes.ok) {
+                        const code = pricingData.code || '';
+                        const errMsg = pricingData.error || pricingRes.statusText || 'Request failed';
+                        if (pricingRes.status === 403 && code === 'PRICING_CALC_DISABLED') {
+                            throw new Error('Pricing sync is off on the server. Enable “Pricing calculator sync” in Admin → Feature flags (or set PRICING_CALC_API_FORCE_ENABLED for ops).');
+                        }
+                        throw new Error(errMsg + (code ? ` (${code})` : ''));
+                    }
                     const items = pricingData.ok && Array.isArray(pricingData.items) ? pricingData.items : [];
                     this._unlinkedPricingForDashboard = items;
                     await this.loadCardDashboard();
@@ -2021,6 +2020,12 @@ const App = {
             }
             : calculationOrDraft;
         if (!calculationItem || !calculationItem.calculation_id) return;
+        if (!this.isPricingCalculatorSyncEnabled()) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Pricing calculator sync is turned off. Enable it under Configuration → Feature flags to use pricing integration.', 'warning');
+            }
+            return;
+        }
         const user = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
         if (!user || !user.id) {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please log in to log this pricing activity.', 'error');

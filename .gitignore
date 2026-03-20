@@ -44,4 +44,27 @@ build/
 # Local insurance copies (do not push; keep on machine only)
 backups/local-insurance-*.json
 
+# Cursor / local workspace
+.cursor/
+
+# Local migration dumps & one-off backup JSON (not the tracked snapshot series)
+Migration Source Data/
+backups/from-git-*.json
+backups/merged-for-restore-*.json
+backups/pre-deploy-manifest-*.json
+
+# Local scratch
+pams-app/archive/
+pams-app/diff_output.txt
+pams-app/css/dashboard-lean.css
+push-deploy.ps1
+pams-app/images/presight-logo-eye-outline.svg
+pams-app/js/db.js
+
+# Ad-hoc scripts (optional local)
+scripts/extract-cai-cube-industries-usecases.js
+scripts/extract-current-cube-only.js
+scripts/fetch_logs.js
+scripts/inspect-cai-cube-current.js
+
 

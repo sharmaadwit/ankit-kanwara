@@ -29,7 +29,7 @@ const Admin = {
         },
         pricingCalculatorSync: {
             label: 'Pricing calculator sync',
-            description: 'Show the Pricing section on the dashboard (Sync unlinked calculations from the pricing API, log activity, delete).',
+            description: 'Enables the pricing calculator integration: POST/GET /api/pricing-calculations (ingest/list), my-unlinked/link/delete, and the Pricing section on the dashboard. Off by default until you are ready to deploy and connect pricing-calc.',
             dashboardKey: null
         }
     },

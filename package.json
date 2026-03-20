@@ -5,6 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
+    "start:dev": "node server/start-dev.js",
     "dev": "nodemon server/index.js",
     "migrate": "node server/scripts/migrate.js",
     "test": "jest",
@@ -27,7 +28,9 @@
     "merge-duplicates-apply": "node server/scripts/merge-duplicate-accounts.js --apply",
     "backfill-normalized": "node server/scripts/backfill-normalized-from-storage.js",
     "backfill-normalized-dry": "node server/scripts/backfill-normalized-from-storage.js --dry-run",
-    "syntax-check": "node scripts/syntax-check.js"
+    "syntax-check": "node scripts/syntax-check.js",
+    "verify": "npm run syntax-check",
+    "push:safe": "npm run syntax-check && git push"
   },
   "engines": {
     "node": ">=18 <22"

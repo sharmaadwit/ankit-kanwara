@@ -52,11 +52,18 @@ const UI = {
         });
     },
 
-    // Toggle sidebar (mobile)
+    // Toggle sidebar (mobile + card interface drawer)
     toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         if (sidebar) {
             sidebar.classList.toggle('open');
+        }
+    },
+
+    closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+            sidebar.classList.remove('open');
         }
     },
 

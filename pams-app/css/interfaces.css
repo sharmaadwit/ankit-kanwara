@@ -74,9 +74,27 @@
     font-size: 2.5rem;
 }
 
-/* Interface Styles - Card Interface */
+/* Interface Styles - Card Interface
+   Full-width main area; sidebar is a slide-out drawer (header toggle always visible). */
+.interface-card .sidebar-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
 .interface-card .sidebar {
-    display: none;
+    display: block;
+    left: -100%;
+    width: var(--sidebar-width);
+    max-width: min(var(--sidebar-width), 92vw);
+    z-index: 250;
+    transition: left 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: none;
+}
+
+.interface-card .sidebar.open {
+    left: 0;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.18);
 }
 
 .interface-card .main-content {

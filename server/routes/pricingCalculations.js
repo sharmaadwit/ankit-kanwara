@@ -10,8 +10,36 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../db');
 const logger = require('../logger');
+const { getFeatureFlags } = require('../services/featureFlags');
 
 const PRICING_CALC_API_KEY = (process.env.PRICING_CALC_API_KEY || process.env.STORAGE_API_KEY || '').trim();
+
+/**
+ * When off (default): all /api/pricing-calculations routes return 403.
+ * Enable via Admin → Feature flags → "Pricing calculator sync", or set PRICING_CALC_API_FORCE_ENABLED=true (ops/staging only).
+ */
+const requirePricingCalculationsEnabled = (req, res, next) => {
+  getFeatureFlags()
+    .then((flags) => {
+      const envForce =
+        String(process.env.PRICING_CALC_API_FORCE_ENABLED || '').toLowerCase() === 'true';
+      if (flags.pricingCalculatorSync || envForce) {
+        return next();
+      }
+      logger.warn('pricing_calc_feature_disabled', { path: req.path, method: req.method });
+      return res.status(403).json({
+        ok: false,
+        error: 'Pricing calculator integration is disabled.',
+        code: 'PRICING_CALC_DISABLED'
+      });
+    })
+    .catch((e) => {
+      logger.error('pricing_calc_flag_error', { message: e.message });
+      return res.status(503).json({ ok: false, error: 'Unable to verify feature flag' });
+    });
+};
+
+router.use(requirePricingCalculationsEnabled);
 
 const requirePricingApiKey = (req, res, next) => {
   if (!PRICING_CALC_API_KEY) {

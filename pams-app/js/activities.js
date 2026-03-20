@@ -47,6 +47,28 @@ const Activities = {
         } catch (e) { }
     },
 
+    /**
+     * External activity type options. "Pricing" only when pricingCalculatorSync is on (matches server 403 when off).
+     * @param {{ longLabels?: boolean }} opts - long labels for main form vs compact for "add another row"
+     */
+    getExternalActivityTypeOptionsHtml(opts = {}) {
+        const long = opts.longLabels === true;
+        const pricingOn = typeof App !== 'undefined' && typeof App.isPricingCalculatorSyncEnabled === 'function' && App.isPricingCalculatorSyncEnabled();
+        const pricingOpt = pricingOn
+            ? `<option value="pricing">${long ? 'Pricing' : 'Pricing'}</option>\n`
+            : '';
+        const sow = long ? 'SOW (Statement of Work)' : 'SOW';
+        const poc = long ? 'POC (Proof of Concept)' : 'POC';
+        return `
+            <option value="">Select Activity Type</option>
+            <option value="customerCall">Customer Call</option>
+            <option value="sow">${sow}</option>
+            <option value="poc">${poc}</option>
+            <option value="rfx">RFx</option>
+            ${pricingOpt}<option value="other">Other</option>
+        `;
+    },
+
     // Open unified activity modal
     async openActivityModal(context = {}) {
         await this.resetActivityForm();
@@ -270,15 +292,7 @@ const Activities = {
         if (!container) return;
         const rows = container.querySelectorAll('.activity-detail-row');
         const nextIndex = rows.length;
-        const externalTypeOptions = `
-            <option value="">Select Activity Type</option>
-            <option value="customerCall">Customer Call</option>
-            <option value="sow">SOW</option>
-            <option value="poc">POC</option>
-            <option value="rfx">RFx</option>
-            <option value="pricing">Pricing</option>
-            <option value="other">Other</option>
-        `;
+        const externalTypeOptions = this.getExternalActivityTypeOptionsHtml({ longLabels: false });
         const rowHtml = `
             <div class="activity-detail-row" data-row="${nextIndex}" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
                 <div class="form-grid">
@@ -996,6 +1010,12 @@ const Activities = {
      * Populated by loadPricingCalculationsOptions() after fetch of my-unlinked.
      */
     getPricingFields() {
+        const syncOn = typeof App !== 'undefined' && typeof App.isPricingCalculatorSyncEnabled === 'function' && App.isPricingCalculatorSyncEnabled();
+        if (!syncOn) {
+            return `
+                <p class="text-muted small">Pricing calculator sync is turned off. An admin can enable <strong>Pricing calculator sync</strong> under Configuration → Feature flags to link calculations from the pricing API.</p>
+            `;
+        }
         return `
             <div class="form-group">
                 <label class="form-label">Link to pricing calculation(s) (optional)</label>
@@ -1011,6 +1031,9 @@ const Activities = {
     async loadPricingCalculationsOptions() {
         const container = document.getElementById('pricingCalculationsMultiSelectContainer');
         if (!container) return;
+        if (typeof App === 'undefined' || typeof App.isPricingCalculatorSyncEnabled !== 'function' || !App.isPricingCalculatorSyncEnabled()) {
+            return;
+        }
         let items = [];
         try {
             const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
@@ -1022,7 +1045,7 @@ const Activities = {
             }
         } catch (_) {}
         if (items.length === 0) {
-            container.innerHTML = '<p class="text-muted small">No synced pricing calculations. Use the dashboard Pricing section and click Sync to fetch.</p>';
+            container.innerHTML = '<p class="text-muted small">No unlinked pricing calculations for your account yet. If you use the pricing calculator, calculations will appear here after they are saved to PreSight.</p>';
             return;
         }
         const escapeHtml = (s) => {
@@ -2969,16 +2992,9 @@ const Activities = {
             this.refreshUseCaseOptions(industrySelect ? industrySelect.value : '').catch(() => { });
             this.updateAddAnotherActivityButtonVisibility();
 
-            // Populate External activity types
+            // Populate External activity types (Pricing only if pricingCalculatorSync enabled)
             if (activityTypeSelect) {
-                activityTypeSelect.innerHTML = `
-                    <option value="">Select Activity Type</option>
-                    <option value="customerCall">Customer Call</option>
-                    <option value="sow">SOW (Statement of Work)</option>
-                    <option value="poc">POC (Proof of Concept)</option>
-                    <option value="rfx">RFx</option>
-                    <option value="pricing">Pricing</option>
-                `;
+                activityTypeSelect.innerHTML = this.getExternalActivityTypeOptionsHtml({ longLabels: true });
             }
         }
 

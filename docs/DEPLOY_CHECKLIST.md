@@ -2,11 +2,11 @@
 
 Before **every** deploy (and especially before testing migration or major changes):
 
-1. **Run syntax check** so deploy does not fail at startup:
+1. **Run full syntax check** (`pams-app/js/*.js` + `server/**/*.js`, excluding tests/archive) so deploy does not fail at startup:
    ```bash
    npm run syntax-check
    ```
-   Fix any reported errors before pushing. CI may also run this step.
+   Fix any reported errors **before `git push`**. The Deploy workflow and this checklist both expect a clean run.
 2. **Capture the build number currently live in production** and take a **full snapshot of all data** (industries, users, accounts, activities, internalActivities, config, etc.).
 3. Then deploy and test.
 
