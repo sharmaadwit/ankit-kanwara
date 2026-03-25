@@ -37,6 +37,29 @@ describe('storageValidation', () => {
       expect(r.valid).toBe(false);
       expect(r.error).toMatch(/durationHours/);
     });
+    it('accepts YYYY-MM as date (first of month)', () => {
+      expect(validateActivities([
+        { id: 'a1', date: '2025-06', type: 'call' }
+      ])).toEqual({ valid: true });
+    });
+    it('accepts activityType as array (multi-select)', () => {
+      expect(validateActivities([
+        { id: 'a1', date: '2025-01-15', type: ['a', 'b'] }
+      ])).toEqual({ valid: true });
+    });
+    it('rejects plain object as type', () => {
+      const r = validateActivities([{ id: 'a1', date: '2025-01-15', type: { x: 1 } }]);
+      expect(r.valid).toBe(false);
+      expect(r.error).toMatch(/object/);
+    });
+  });
+
+  describe('validateInternalActivities', () => {
+    it('accepts monthOfActivity YYYY-MM', () => {
+      expect(validateInternalActivities([
+        { id: 'i1', monthOfActivity: '2025-03', type: 'note' }
+      ])).toEqual({ valid: true });
+    });
   });
 
   describe('validateAccounts', () => {

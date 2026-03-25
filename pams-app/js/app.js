@@ -1401,14 +1401,19 @@ const App = {
         if (!Array.isArray(serverArr)) serverArr = [];
         if (!Array.isArray(draftArr)) draftArr = [];
         const byId = new Map();
-        serverArr.forEach((s) => { if (s && s.id) byId.set(s.id, s); });
+        const keyOf = (a) => (a && a.id != null && String(a.id).trim() ? String(a.id) : null);
+        serverArr.forEach((s) => {
+            const k = keyOf(s);
+            if (k) byId.set(k, s);
+        });
         draftArr.forEach((l) => {
-            if (!l || !l.id) return;
-            const existing = byId.get(l.id);
+            const k = keyOf(l);
+            if (!k) return;
+            const existing = byId.get(k);
             const lTs = this._getActivityTimestamp(l);
-            if (!existing) { byId.set(l.id, l); return; }
+            if (!existing) { byId.set(k, l); return; }
             const sTs = this._getActivityTimestamp(existing);
-            if (lTs > sTs) byId.set(l.id, l);
+            if (lTs > sTs) byId.set(k, l);
         });
         return Array.from(byId.values());
     },
@@ -1497,6 +1502,15 @@ const App = {
             return;
         }
         if (keyToSave === 'internalActivities' && DataManager.saveInternalActivities) {
+            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__) {
+                if (typeof DataManager.invalidateCache === 'function') {
+                    DataManager.invalidateCache('internalActivities', 'allActivities');
+                }
+                const current = await DataManager.getInternalActivities();
+                const merged = this._mergeActivitiesByIdNewerWins(current || [], payloadArray);
+                await DataManager.saveInternalActivities(merged);
+                return;
+            }
             await DataManager.saveInternalActivities(payloadArray);
             return;
         }

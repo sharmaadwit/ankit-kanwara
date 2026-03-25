@@ -2281,7 +2281,9 @@ const DataManager = {
         const tMax = new Date('2050-12-31').getTime();
         const inRange = (val) => {
             if (val == null || val === '') return false;
-            const d = new Date(val);
+            const s = typeof val === 'string' ? val.trim() : val;
+            const toParse = typeof s === 'string' && /^\d{4}-\d{2}$/.test(s) ? `${s}-01` : s;
+            const d = new Date(toParse);
             if (!Number.isFinite(d.getTime())) return false;
             const t = d.getTime();
             return t >= tMin && t <= tMax;
@@ -2290,15 +2292,23 @@ const DataManager = {
             .filter((item) => item != null && typeof item === 'object')
             .map((item) => {
                 const out = { ...item };
-                if (!out.id || typeof out.id !== 'string' || !String(out.id).trim()) {
+                if (out.id != null && out.id !== '' && typeof out.id !== 'string') {
+                    out.id = String(out.id);
+                }
+                if (!out.id || !String(out.id).trim()) {
                     out.id = this.generateId();
                 }
                 let dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.monthOfActivity;
                 if (!inRange(dateVal)) {
-                    for (const cand of [out.updatedAt, out.createdAt, out.date, new Date().toISOString()]) {
+                    for (const cand of [out.updatedAt, out.createdAt, out.date, out.monthOfActivity, new Date().toISOString()]) {
                         if (inRange(cand)) {
                             const iso = typeof cand === 'string' ? cand : new Date(cand).toISOString();
-                            if (!out.date) out.date = iso.slice(0, 10);
+                            if (!out.date) {
+                                const mo = typeof out.monthOfActivity === 'string' && /^\d{4}-\d{2}$/.test(out.monthOfActivity.trim())
+                                    ? out.monthOfActivity.trim()
+                                    : null;
+                                out.date = mo ? `${mo}-01` : iso.slice(0, 10);
+                            }
                             break;
                         }
                     }
@@ -2311,8 +2321,14 @@ const DataManager = {
                 }
                 const tv = out.activityType ?? out.type;
                 if (tv != null && typeof tv === 'object') {
-                    out.type = 'customerCall';
-                    if (out.activityType && typeof out.activityType === 'object') out.activityType = out.type;
+                    if (Array.isArray(tv)) {
+                        const joined = tv.map((x) => String(x)).filter(Boolean).join(', ') || 'customerCall';
+                        out.type = joined;
+                        if (out.activityType != null && Array.isArray(out.activityType)) out.activityType = joined;
+                    } else {
+                        out.type = 'customerCall';
+                        if (out.activityType && typeof out.activityType === 'object') out.activityType = out.type;
+                    }
                 } else if (tv != null && typeof tv !== 'string') {
                     const s = String(tv);
                     out.type = s;
@@ -2768,7 +2784,9 @@ const DataManager = {
         const tMax = new Date('2050-12-31').getTime();
         const inRange = (val) => {
             if (val == null || val === '') return false;
-            const d = new Date(val);
+            const s = typeof val === 'string' ? val.trim() : val;
+            const toParse = typeof s === 'string' && /^\d{4}-\d{2}$/.test(s) ? `${s}-01` : s;
+            const d = new Date(toParse);
             if (!Number.isFinite(d.getTime())) return false;
             const t = d.getTime();
             return t >= tMin && t <= tMax;
@@ -2777,20 +2795,28 @@ const DataManager = {
             .filter((item) => item != null && typeof item === 'object')
             .map((item) => {
                 const out = { ...item };
-                if (!out.id || typeof out.id !== 'string' || !String(out.id).trim()) {
+                if (out.id != null && out.id !== '' && typeof out.id !== 'string') {
+                    out.id = String(out.id);
+                }
+                if (!out.id || !String(out.id).trim()) {
                     out.id = this.generateId();
                 }
-                let dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.updatedAt;
+                let dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.monthOfActivity ?? out.updatedAt;
                 if (!inRange(dateVal)) {
-                    for (const cand of [out.updatedAt, out.createdAt, new Date().toISOString()]) {
+                    for (const cand of [out.updatedAt, out.createdAt, out.monthOfActivity, new Date().toISOString()]) {
                         if (inRange(cand)) {
                             const iso = typeof cand === 'string' ? cand : new Date(cand).toISOString();
-                            if (!out.date) out.date = iso.slice(0, 10);
+                            if (!out.date) {
+                                const mo = typeof out.monthOfActivity === 'string' && /^\d{4}-\d{2}$/.test(out.monthOfActivity.trim())
+                                    ? out.monthOfActivity.trim()
+                                    : null;
+                                out.date = mo ? `${mo}-01` : iso.slice(0, 10);
+                            }
                             break;
                         }
                     }
                 }
-                dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.updatedAt;
+                dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.monthOfActivity ?? out.updatedAt;
                 if (!inRange(dateVal)) {
                     const today = new Date().toISOString().slice(0, 10);
                     out.date = today;
@@ -2798,8 +2824,14 @@ const DataManager = {
                 }
                 const tv = out.activityType ?? out.type;
                 if (tv != null && typeof tv === 'object') {
-                    out.type = 'Other';
-                    if (out.activityType && typeof out.activityType === 'object') out.activityType = 'Other';
+                    if (Array.isArray(tv)) {
+                        const joined = tv.map((x) => String(x)).filter(Boolean).join(', ') || 'Other';
+                        out.type = joined;
+                        if (out.activityType != null && Array.isArray(out.activityType)) out.activityType = joined;
+                    } else {
+                        out.type = 'Other';
+                        if (out.activityType && typeof out.activityType === 'object') out.activityType = 'Other';
+                    }
                 } else if (tv != null && typeof tv !== 'string') {
                     const s = String(tv);
                     out.type = s;

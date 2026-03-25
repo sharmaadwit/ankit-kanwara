@@ -14,6 +14,13 @@ function safeString(x) {
 
 function parseDate(value) {
   if (value == null) return null;
+  if (typeof value === 'string') {
+    const t = value.trim();
+    if (/^\d{4}-\d{2}$/.test(t)) {
+      const d = new Date(`${t}-01`);
+      return Number.isFinite(d.getTime()) ? d : null;
+    }
+  }
   const d = new Date(value);
   return Number.isFinite(d.getTime()) ? d : null;
 }
@@ -46,8 +53,13 @@ function validateActivities(value) {
       return { valid: false, error: `activities[${i}]: valid date (activityDate/date) required (2020–2050)` };
     }
     const typeVal = item.activityType ?? item.type;
-    if (typeVal !== undefined && typeVal !== null && typeof typeVal === 'object') {
-      return { valid: false, error: `activities[${i}]: activityType/type must be a primitive (string/number)` };
+    if (
+      typeVal !== undefined &&
+      typeVal !== null &&
+      typeof typeVal === 'object' &&
+      !Array.isArray(typeVal)
+    ) {
+      return { valid: false, error: `activities[${i}]: activityType/type must not be a plain object` };
     }
     let dh = item.durationHours;
     if (dh !== undefined && dh !== null && dh !== '') {
@@ -89,13 +101,18 @@ function validateInternalActivities(value) {
     if (!item.id || typeof item.id !== 'string' || !safeString(item.id)) {
       return { valid: false, error: `internalActivities[${i}]: id required (non-empty string)` };
     }
-    const dateVal = item.activityDate ?? item.date ?? item.createdAt;
+    const dateVal = item.activityDate ?? item.date ?? item.createdAt ?? item.monthOfActivity;
     if (!isValidDateRange(dateVal)) {
       return { valid: false, error: `internalActivities[${i}]: valid date required (2020–2050)` };
     }
     const typeVal = item.activityType ?? item.type;
-    if (typeVal !== undefined && typeVal !== null && typeof typeVal === 'object') {
-      return { valid: false, error: `internalActivities[${i}]: activityType/type must be a primitive (string/number)` };
+    if (
+      typeVal !== undefined &&
+      typeVal !== null &&
+      typeof typeVal === 'object' &&
+      !Array.isArray(typeVal)
+    ) {
+      return { valid: false, error: `internalActivities[${i}]: activityType/type must not be a plain object` };
     }
     let idh = item.durationHours;
     if (idh !== undefined && idh !== null && idh !== '') {

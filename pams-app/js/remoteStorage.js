@@ -704,9 +704,17 @@
                     throw err;
                 }).catch((e) => { if (e.status === 409) throw e; throw new Error(`Remote storage conflict: ${method} ${url} -> 409`); });
             }
-            const err = new Error(`Remote storage request failed: ${method} ${url} -> ${res.status}`);
-            err.status = res.status;
-            throw err;
+            return res.text().then((text) => {
+                let detail = '';
+                try {
+                    const j = JSON.parse(text);
+                    if (j && j.message) detail = ': ' + j.message;
+                } catch (_) { /* ignore */ }
+                const err = new Error(`Remote storage request failed: ${method} ${url} -> ${res.status}${detail}`);
+                err.status = res.status;
+                err.responseBody = text;
+                throw err;
+            });
         });
     };
 
