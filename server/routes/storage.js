@@ -1,5 +1,6 @@
 const express = require('express');
 const zlib = require('zlib');
+const LZString = require('lz-string');
 const router = express.Router();
 
 const { getPool } = require('../db');
@@ -10,6 +11,8 @@ const { dualWriteAfterStorageWrite } = require('../lib/normalizedDualWrite');
 const { logActivitySubmissionSafe } = require('../lib/activitySubmissionLog');
 
 const GZIP_PREFIX = '__gz__';
+/** Browser client uses LZString.compressToBase64 with this prefix (see pams-app/js/remoteStorage.js). */
+const LZ_PREFIX = '__lz__';
 const STORAGE_READ_CACHE_TTL_MS = Math.max(
   0,
   parseInt(process.env.STORAGE_READ_CACHE_TTL_MS || '3000', 10) || 3000
@@ -72,6 +75,19 @@ const savePendingDraft = async (_storageKey, _value, _reason, _username) => {
 
 const maybeDecompressValue = (value) => {
   if (typeof value !== 'string') {
+    return value;
+  }
+  if (value.startsWith(LZ_PREFIX)) {
+    try {
+      const restored = LZString.decompressFromBase64(value.slice(LZ_PREFIX.length));
+      if (restored != null) {
+        return restored;
+      }
+    } catch (error) {
+      logger.warn('storage_lz_decompress_failed', {
+        message: error.message
+      });
+    }
     return value;
   }
   if (!value.startsWith(GZIP_PREFIX)) {
@@ -251,7 +267,8 @@ function triggerDualWrite(key, serializedValue) {
   if (!['accounts', 'activities', 'internalActivities'].includes(vkey)) return;
   let parsed;
   try {
-    const raw = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX) ? maybeDecompressValue(serializedValue) : serializedValue;
+    const raw =
+      typeof serializedValue === 'string' ? maybeDecompressValue(serializedValue) : serializedValue;
     parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
   } catch (_) {
     return;
@@ -264,7 +281,8 @@ function triggerDualWrite(key, serializedValue) {
 function parseActivityPayloadForLog(serializedValue) {
   if (serializedValue == null || serializedValue === '') return null;
   try {
-    const raw = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX) ? maybeDecompressValue(serializedValue) : serializedValue;
+    const raw =
+      typeof serializedValue === 'string' ? maybeDecompressValue(serializedValue) : serializedValue;
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return Array.isArray(parsed) ? parsed : null;
   } catch (_) {
@@ -282,8 +300,8 @@ const parseAndValidate = (key, serializedValue) => {
   if (!sizeCheck.valid) return sizeCheck;
   let parsed;
   try {
-    const toParse = typeof serializedValue === 'string' && serializedValue.startsWith(GZIP_PREFIX)
-      ? maybeDecompressValue(serializedValue) : serializedValue;
+    const toParse =
+      typeof serializedValue === 'string' ? maybeDecompressValue(serializedValue) : serializedValue;
     parsed = typeof toParse === 'string' ? JSON.parse(toParse) : toParse;
   } catch (e) {
     return { valid: false, error: 'Invalid JSON or decompression failed' };
@@ -297,7 +315,7 @@ const mergeActivitiesPayload = (currentSerialized, incomingSerialized) => {
     if (s == null || s === '') return [];
     try {
       const v = typeof s === 'string' ? s : String(s);
-      const decoded = v.startsWith(GZIP_PREFIX) ? maybeDecompressValue(v) : v;
+      const decoded = typeof v === 'string' ? maybeDecompressValue(v) : v;
       const parsed = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
       return Array.isArray(parsed) ? parsed : [];
     } catch (_) {
@@ -669,7 +687,7 @@ router.post('/activities/remove', async (req, res) => {
         if (s == null || s === '') return [];
         try {
           const v = typeof s === 'string' ? s : String(s);
-          const decoded = v.startsWith(GZIP_PREFIX) ? maybeDecompressValue(v) : v;
+          const decoded = typeof v === 'string' ? maybeDecompressValue(v) : v;
           const parsed = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
           return Array.isArray(parsed) ? parsed : [];
         } catch (_) {

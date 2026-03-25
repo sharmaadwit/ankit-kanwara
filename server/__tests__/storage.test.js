@@ -83,6 +83,7 @@ jest.mock('../db', () => {
 });
 
 const request = require('supertest');
+const LZString = require('lz-string');
 
 const { createApp } = require('../app');
 const db = require('../db');
@@ -197,6 +198,20 @@ describe('Storage API', () => {
       .set('X-Client-Mutation-Id', 'mut-same')
       .send({ value: 'beta' });
     expect(conflict.status).toBe(409);
+  });
+
+  test('accepts LZ-compressed internalActivities (__lz__, same as browser client)', async () => {
+    const arr = [{ id: 'ia-lz-1', date: '2024-06-15', type: 'Review' }];
+    const json = JSON.stringify(arr);
+    const compressed = `__lz__${LZString.compressToBase64(json)}`;
+    const putRes = await request(app)
+      .put('/api/storage/internalActivities')
+      .send({ value: compressed });
+    expect(putRes.status).toBe(200);
+
+    const getRes = await request(app).get('/api/storage/internalActivities');
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.value).toBe(json);
   });
 
   test('clears all keys', async () => {
