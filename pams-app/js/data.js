@@ -2270,12 +2270,89 @@ const DataManager = {
         });
         return Array.from(seen.values());
     },
+
+    /**
+     * External `activities` bucket: server validates the full array on PUT. Normalize legacy rows so one bad
+     * activity does not block saves (same idea as normalizeInternalActivitiesForRemoteSave).
+     */
+    normalizeActivitiesForRemoteSave(activities) {
+        if (!Array.isArray(activities)) return [];
+        const tMin = new Date('2020-01-01').getTime();
+        const tMax = new Date('2050-12-31').getTime();
+        const inRange = (val) => {
+            if (val == null || val === '') return false;
+            const d = new Date(val);
+            if (!Number.isFinite(d.getTime())) return false;
+            const t = d.getTime();
+            return t >= tMin && t <= tMax;
+        };
+        return activities
+            .filter((item) => item != null && typeof item === 'object')
+            .map((item) => {
+                const out = { ...item };
+                if (!out.id || typeof out.id !== 'string' || !String(out.id).trim()) {
+                    out.id = this.generateId();
+                }
+                let dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.monthOfActivity;
+                if (!inRange(dateVal)) {
+                    for (const cand of [out.updatedAt, out.createdAt, out.date, new Date().toISOString()]) {
+                        if (inRange(cand)) {
+                            const iso = typeof cand === 'string' ? cand : new Date(cand).toISOString();
+                            if (!out.date) out.date = iso.slice(0, 10);
+                            break;
+                        }
+                    }
+                }
+                dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.monthOfActivity;
+                if (!inRange(dateVal)) {
+                    const today = new Date().toISOString().slice(0, 10);
+                    out.date = today;
+                    if (!out.createdAt) out.createdAt = new Date().toISOString();
+                }
+                const tv = out.activityType ?? out.type;
+                if (tv != null && typeof tv === 'object') {
+                    out.type = 'customerCall';
+                    if (out.activityType && typeof out.activityType === 'object') out.activityType = out.type;
+                } else if (tv != null && typeof tv !== 'string') {
+                    const s = String(tv);
+                    out.type = s;
+                    if (out.activityType != null && typeof out.activityType !== 'string') out.activityType = s;
+                }
+                if (out.durationHours !== undefined && out.durationHours !== null && out.durationHours !== '') {
+                    const n = typeof out.durationHours === 'number' ? out.durationHours : Number(out.durationHours);
+                    if (!Number.isFinite(n) || n < 0 || n > 24) delete out.durationHours;
+                    else out.durationHours = n;
+                }
+                if (out.durationDays !== undefined && out.durationDays !== null && out.durationDays !== '') {
+                    const n = typeof out.durationDays === 'number' ? out.durationDays : Number(out.durationDays);
+                    if (!Number.isFinite(n) || n < 0 || n > 31) delete out.durationDays;
+                    else out.durationDays = n;
+                }
+                if (out.accountId !== undefined && out.accountId !== null && typeof out.accountId !== 'string') {
+                    out.accountId = String(out.accountId);
+                }
+                if (out.projectId !== undefined && out.projectId !== null && typeof out.projectId !== 'string') {
+                    out.projectId = String(out.projectId);
+                }
+                return out;
+            });
+    },
+
     async saveActivities(activities) {
-        const count = Array.isArray(activities) ? activities.length : 0;
+        const rawLen = Array.isArray(activities) ? activities.length : 0;
+        const normalized = this.normalizeActivitiesForRemoteSave(activities);
+        if (normalized.length < rawLen) {
+            console.warn(
+                '[DataManager] saveActivities: removed',
+                rawLen - normalized.length,
+                'invalid entries before save'
+            );
+        }
+        const count = normalized.length;
         if (typeof window.__activitySaveTracePush === 'function') {
             window.__activitySaveTracePush('saveActivities called', { count });
         }
-        const payload = JSON.stringify(activities);
+        const payload = JSON.stringify(normalized);
         // Use async with draft for conflict handling
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {
@@ -2298,7 +2375,7 @@ const DataManager = {
                     try {
                         const serverArr = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
                         if (Array.isArray(serverArr)) {
-                            const merged = this._mergeActivitiesByIdNewerWins(serverArr, activities);
+                            const merged = this._mergeActivitiesByIdNewerWins(serverArr, normalized);
                             const deduped = this._dedupeActivitiesBySignature(merged);
                             this.invalidateCache('activities', 'allActivities');
                             await this.saveActivities(deduped);
@@ -2681,8 +2758,78 @@ const DataManager = {
         return activities;
     },
 
+    /**
+     * Server validates every internal activity on PUT. Legacy rows (bad dates, non-string type, NaN durations)
+     * block all saves — normalize before upload so one bad row cannot break logging.
+     */
+    normalizeInternalActivitiesForRemoteSave(activities) {
+        if (!Array.isArray(activities)) return [];
+        const tMin = new Date('2020-01-01').getTime();
+        const tMax = new Date('2050-12-31').getTime();
+        const inRange = (val) => {
+            if (val == null || val === '') return false;
+            const d = new Date(val);
+            if (!Number.isFinite(d.getTime())) return false;
+            const t = d.getTime();
+            return t >= tMin && t <= tMax;
+        };
+        return activities
+            .filter((item) => item != null && typeof item === 'object')
+            .map((item) => {
+                const out = { ...item };
+                if (!out.id || typeof out.id !== 'string' || !String(out.id).trim()) {
+                    out.id = this.generateId();
+                }
+                let dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.updatedAt;
+                if (!inRange(dateVal)) {
+                    for (const cand of [out.updatedAt, out.createdAt, new Date().toISOString()]) {
+                        if (inRange(cand)) {
+                            const iso = typeof cand === 'string' ? cand : new Date(cand).toISOString();
+                            if (!out.date) out.date = iso.slice(0, 10);
+                            break;
+                        }
+                    }
+                }
+                dateVal = out.activityDate ?? out.date ?? out.createdAt ?? out.updatedAt;
+                if (!inRange(dateVal)) {
+                    const today = new Date().toISOString().slice(0, 10);
+                    out.date = today;
+                    if (!out.createdAt) out.createdAt = new Date().toISOString();
+                }
+                const tv = out.activityType ?? out.type;
+                if (tv != null && typeof tv === 'object') {
+                    out.type = 'Other';
+                    if (out.activityType && typeof out.activityType === 'object') out.activityType = 'Other';
+                } else if (tv != null && typeof tv !== 'string') {
+                    const s = String(tv);
+                    out.type = s;
+                    if (out.activityType != null && typeof out.activityType !== 'string') out.activityType = s;
+                }
+                if (out.durationHours !== undefined && out.durationHours !== null && out.durationHours !== '') {
+                    const n = typeof out.durationHours === 'number' ? out.durationHours : Number(out.durationHours);
+                    if (!Number.isFinite(n) || n < 0 || n > 24) delete out.durationHours;
+                    else out.durationHours = n;
+                }
+                if (out.durationDays !== undefined && out.durationDays !== null && out.durationDays !== '') {
+                    const n = typeof out.durationDays === 'number' ? out.durationDays : Number(out.durationDays);
+                    if (!Number.isFinite(n) || n < 0 || n > 31) delete out.durationDays;
+                    else out.durationDays = n;
+                }
+                return out;
+            });
+    },
+
     async saveInternalActivities(activities) {
-        const payload = JSON.stringify(activities);
+        const rawLen = Array.isArray(activities) ? activities.length : 0;
+        const normalized = this.normalizeInternalActivitiesForRemoteSave(activities);
+        if (normalized.length < rawLen) {
+            console.warn(
+                '[DataManager] saveInternalActivities: removed',
+                rawLen - normalized.length,
+                'invalid entries before save'
+            );
+        }
+        const payload = JSON.stringify(normalized);
         // Use async with draft for conflict handling
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.setItemAsyncWithDraft) {
             try {

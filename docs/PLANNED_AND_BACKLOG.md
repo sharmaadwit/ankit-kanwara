@@ -1,4 +1,4 @@
-# PAMS - Planned Work and Backlog
+# PreSight (formerly PAMS) - Planned Work and Backlog
 
 Single source of truth for roadmap, backlog, and deployment priorities.
 Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Feature, Optimising, Ops & reliability, AI / Smart features, Testing & validation, Optional.
@@ -8,9 +8,12 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 ## 1) Current Status Snapshot
 
 - **Deployed:** Backup retention, activity date refresh, remember last date, bootstrap init, batch reconcile, dashboard-first load, conflict-safe draft flow.
+- **Recently shipped (product):** **PreSight** branding (UI); **pricing calculator integration** — server API (`POST` ingest, `GET` list, `GET /my-unlinked`, `PATCH /link`, `DELETE` unlinked); dashboard **Pricing** card **above charts** with **Sync** (fetch user’s unlinked calcs), **Delete**, **Log activity**; admin feature flag **`pricingFullActivityForm`** (full Log Activity vs account+project-only modal); Log Activity type **Pricing** with optional **multi-select** of synced calculations → **one pricing activity per selection** (same account/project).
 - **Platform direction:** Fast first paint, no data loss/conflicts, minimal DB load on Railway free tier.
 - **Reference:** `docs/DEPLOYED.md`.
 - **Note:** Migration mode is implemented (server + client) but **not yet fully tested or used in production**; see § Testing & validation below.
+
+**Verified in code (Mar 2026):** P-001 / P-002 / P-003 are implemented (`pams-app/js/activities.js` last-activity date in localStorage + default on open; `app.js` `getDefaultActivityOwnerFilter` + `applyActivitySorting` with `dateDesc`; Enablement confirm without time). P-005 merge UX exists in Admin (`admin.js`). P-004 not implemented as described: Log Activity intentionally does **not** auto-select a single project (`activities.js` comment); Win/Loss opens with a chosen project or picker, not an account→project cascade. P-006 still pending (cookie-first + header/API-key fallback per `docs/DEPLOYED.md`).
 
 ---
 
@@ -20,11 +23,11 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 
 | No. | Stream | Project | Description | Status | Priority |
 |-----|--------|---------|-------------|--------|----------|
-| P-001 | Activities | Activity date default | Default new activity date to last logged. | Planned | High |
-| P-002 | Activities | Sort + owner defaults | Sort by logged date; default filter "My activities". | Planned | High |
-| P-003 | Activities | Enablement optional warning | Allow save without days/hours for Enablement with explicit warning. | Planned | Medium |
+| P-001 | Activities | Activity date default | Default new activity date to last logged. | **Done** | High |
+| P-002 | Activities | Sort + owner defaults | Sort by logged date; default filter "My activities". | **Done** | High |
+| P-003 | Activities | Enablement optional warning | Allow save without days/hours for Enablement with explicit warning. | **Done** | Medium |
 | P-004 | Accounts/Win-Loss | Single-project default | If account has one project, auto-select in win/loss forms. | Planned | High |
-| P-005 | Industries | Industry/use-case merge UX | Merge flow: enter merged name, choose base, tweak, confirm. | Planned | Medium |
+| P-005 | Industries | Industry/use-case merge UX | Merge flow: enter merged name, choose base, tweak, confirm. | **Done** | Medium |
 | P-006 | Auth | Cookie-only final cutover | Remove header/API-key fallback after all users on cookie auth. | Planned | High |
 | P-013 | Reports | Reports enhancements | Continue analytics and reports UI/presets. | Planned | Medium |
 | P-014 | Reports | Export suite | Expand CSV/XLSX/PDF export for reports and admin views. | Planned | Medium |
@@ -104,11 +107,11 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 
 | No. | Category | Project | Description | Status | Priority |
 |-----|----------|---------|-------------|--------|----------|
-| P-001 | Feature | Activity date default | Default new activity date to last logged. | Planned | High |
-| P-002 | Feature | Sort + owner defaults | Sort by logged date; default "My activities". | Planned | High |
-| P-003 | Feature | Enablement optional warning | Save without days/hours with warning. | Planned | Medium |
+| P-001 | Feature | Activity date default | Default new activity date to last logged. | Done | High |
+| P-002 | Feature | Sort + owner defaults | Sort by logged date; default "My activities". | Done | High |
+| P-003 | Feature | Enablement optional warning | Save without days/hours with warning. | Done | Medium |
 | P-004 | Feature | Single-project default | Auto-select project in win/loss when one project. | Planned | High |
-| P-005 | Feature | Industry/use-case merge UX | Merge flow with base, rename, confirm. | Planned | Medium |
+| P-005 | Feature | Industry/use-case merge UX | Merge flow with base, rename, confirm. | Done | Medium |
 | P-006 | Feature | Cookie-only final cutover | Remove header/API-key fallback. | Planned | High |
 | P-007 | Optimising | Non-entity async hardening | Replace sync fallbacks for async paths. | In progress | High |
 | P-008 | Optimising | Draft-first conflict UX | Better conflict/retry from Drafts. | Planned | High |
@@ -183,6 +186,7 @@ Once you have a sample Excel (column names and 1–2 example rows), the parsing 
 | B-004 | First-load performance | Bootstrap + batch reconcile + deferred presets. | Deployed |
 | B-005 | Dashboard-first perf/safety | Lazy refresh, draft-safe saves, cache, pool tuning. | Deployed |
 | B-006 | Intent prefetch | Sidebar hover/focus prefetch with throttle. | Deployed |
+| B-007 | PreSight + pricing calculator | DB `pricing_calculations`, ingest/link/delete APIs; dashboard Pricing section (sync/delete/log); feature flag for full activity form; multi-select pricing activities from Log Activity. | Deployed |
 
 ---
 

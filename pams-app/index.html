@@ -182,7 +182,7 @@
                             </svg>
                             <span>Suggestions and Bugs</span>
                         </a></li>
-                    <li id="systemAdminNav" class="hidden" data-dashboard="systemAdmin" data-admin-only="true"><a
+                    <li id="systemAdminNav" class="hidden" data-dashboard="admin" data-admin-only="true"><a
                             href="#" data-view="systemAdmin" class="sidebar-link">
                             <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2">
@@ -192,7 +192,7 @@
                             </svg>
                             <span>System Admin</span>
                         </a></li>
-                    <li id="configurationNav" class="hidden" data-dashboard="configuration" data-admin-only="true"><a
+                    <li id="configurationNav" class="hidden" data-dashboard="admin" data-admin-only="true"><a
                             href="#" data-view="configuration" class="sidebar-link">
                             <svg class="sidebar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="2">
@@ -364,7 +364,7 @@
                                         <input type="text" class="form-control" placeholder="Search activities..."
                                             id="activitySearch" oninput="App.handleActivitySearch(this.value)">
                                     </div>
-                                    <button class="btn btn-primary log-activity-btn" data-migration-hide onclick="Activities.openActivityModal()">+ Log
+                                    <button class="btn btn-primary log-activity-btn" data-migration-hide data-dashboard="logActivity" onclick="Activities.openActivityModal()">+ Log
                                         Activity</button>
                                 </div>
                             </div>
@@ -381,7 +381,7 @@
                 </div>
 
                 <!-- Win/Loss View -->
-                <div id="winlossView" class="view hidden">
+                <div id="winlossView" class="view hidden" data-feature="winLoss" data-dashboard="winLoss">
                     <div class="page-header">
                         <h1 class="page-title">Win/Loss Tracking</h1>
                         <p class="page-subtitle">Track project wins and losses</p>
@@ -489,7 +489,7 @@
                                     <div class="admin-nav-group-items">
                                         <a href="#" class="admin-nav-item" data-admin-nav="users"
                                             onclick="Admin.openAdminSection('users', event)">
-                                            <span>System Users</span>
+                                            <span>Users</span>
                                         </a>
                                         <a href="#" class="admin-nav-item" data-admin-nav="sales"
                                             onclick="Admin.openAdminSection('sales', event)">
@@ -551,11 +551,12 @@
                         <!-- Admin Content Area -->
                         <div class="admin-content">
                             <div id="systemAdminSectionsContainer">
-                                <!-- System Users -->
+                                <!-- Users (DB / presales accounts) -->
                                 <div class="admin-section hidden" data-admin-section="users">
                                     <div class="card">
                                         <div class="card-header">
-                                            <h3>System Users</h3>
+                                            <h3>Users</h3>
+                                            <p class="text-muted small" style="margin: 0.5rem 0 0;">Presales, admin, and analytics accounts. Managed here only (not duplicated under Configuration).</p>
                                         </div>
                                         <div class="card-body">
                                             <div class="admin-config-toolbar"
@@ -816,18 +817,6 @@
                             <nav class="admin-sidebar-nav" id="configurationSectionsNav">
                                 <div class="admin-nav-group">
                                     <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
-                                        <span>Users & Access</span>
-                                        <span class="admin-nav-group-icon">▼</span>
-                                    </div>
-                                    <div class="admin-nav-group-items">
-                                        <a href="#" class="admin-nav-item" data-admin-nav="presalesUsers"
-                                            onclick="Admin.openAdminSection('presalesUsers', event)">
-                                            <span>Presales Users</span>
-                                        </a>
-                                    </div>
-                                </div>
-                                <div class="admin-nav-group">
-                                    <div class="admin-nav-group-header" onclick="Admin.toggleNavGroup(this)">
                                         <span>Data Configuration</span>
                                         <span class="admin-nav-group-icon">▼</span>
                                     </div>
@@ -892,32 +881,6 @@
                         <!-- Configuration Content Area -->
                         <div class="admin-content">
                             <div id="configurationSectionsContainer">
-                                <!-- Presales Users (Configuration) -->
-                                <div class="admin-section hidden" data-admin-section="presalesUsers">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h3>Presales Users</h3>
-                                            <p class="text-muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">Manage presales team members who log activities. Same as <strong>System Admin → System Users</strong>.</p>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="admin-config-toolbar"
-                                                style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem;">
-                                                <div class="form-group" style="margin-bottom:0; min-width: 160px;">
-                                                    <label class="form-label">Status</label>
-                                                    <select id="usersFilterStatusConfig" class="form-control"
-                                                        onchange="Admin.loadUsers('usersListConfig')">
-                                                        <option value="active">Active only</option>
-                                                        <option value="inactive">Inactive only</option>
-                                                        <option value="all">All</option>
-                                                    </select>
-                                                </div>
-                                                <button id="addUserBtnConfig" class="btn btn-primary"
-                                                    onclick="Admin.showAddUserModal()">Add New User</button>
-                                            </div>
-                                            <div id="usersListConfig" class="space-y-2"></div>
-                                        </div>
-                                    </div>
-                                </div>
                                 <!-- Industry & Use Cases -->
                                 <div class="admin-section hidden" data-admin-section="industryUseCases">
                                     <div class="card">
@@ -1199,9 +1162,8 @@
                                         </div>
                                         <div class="card-body">
                                             <p class="text-muted" style="margin-bottom: 1rem;">Enable or disable
-                                                features for everyone except admins. Disabling hides related
-                                                navigation
-                                                links and prevents access.</p>
+                                                features and navigation for <strong>all users including admins</strong>.
+                                                Disabled items are hidden from the UI; turn them back on here to test or restore access.</p>
                                             <div id="featureDashboardControlsConfig" class="admin-config-shell">
                                             </div>
                                         </div>
@@ -1316,11 +1278,14 @@
                                 required columns and then upload your CSV file.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
                                 <button class="btn btn-secondary"
-                                    onclick="BulkImport.downloadTemplate('external')">Download External Activity
+                                    onclick="void BulkImport.downloadTemplate('external')">Download External Activity
                                     Template</button>
                                 <button class="btn btn-secondary"
-                                    onclick="BulkImport.downloadTemplate('internal')">Download Internal Activity
+                                    onclick="void BulkImport.downloadTemplate('internal')">Download Internal Activity
                                     Template</button>
+                                <button class="btn btn-secondary"
+                                    onclick="void BulkImport.downloadAccountsProjectsCatalog()">Download accounts &amp;
+                                    projects</button>
                                 <button class="btn btn-secondary"
                                     onclick="BulkImport.downloadLookupReference()">Download Field Value
                                     Reference</button>
@@ -1329,6 +1294,17 @@
                                 <li>Use the external template for customer-facing workstreams and the internal
                                     template
                                     for presales enablement or back-office tasks.</li>
+                                <li><strong>External rows:</strong> you can leave <strong>Account Name</strong> and
+                                    <strong>Project Name</strong> both blank in the CSV, run a dry-run, then use
+                                    <strong>Link account &amp; project</strong> (dropdowns) before commit—same idea as
+                                    linking pricing after sync. Or pre-fill names from <strong>Download accounts &amp;
+                                        projects</strong>.</li>
+                                <li>The external template still pre-fills sample account/project from your data when
+                                    possible.</li>
+                                <li><strong>Dependent dropdowns</strong> (pick account → then only its projects) are
+                                    <strong>not feasible inside a .csv file</strong>—that needs Excel (.xlsx) or in-app
+                                    pickers. We can add an optional .xlsx template or Import-page account/project
+                                    selectors later if you want.</li>
                                 <li>Activity Category will auto-populate based on the template filename—feel free to
                                     leave that column blank.</li>
                                 <li>Each CSV includes comment rows with key reminders; they are ignored during
@@ -1357,9 +1333,9 @@
                                 </div>
                             </div>
                             <p class="text-muted" style="margin-top: 0.75rem; font-size: 0.85rem;">
-                                The dry-run validates each row, auto-creates missing accounts/projects virtually,
-                                and
-                                reports duplicates/errors before import.
+                                The dry-run validates each row. Rows with blank Account and Project can be linked on
+                                this page before commit. Other rows still auto-map to existing accounts/projects or
+                                create new ones on commit when names don’t match.
                             </p>
                             <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.8rem;">
                                 If upload or dry-run fails, open the browser console (F12) and check <code>__csvImportTrace</code> for step-by-step logs; run <code>__csvImportTraceClear()</code> then try again to capture a fresh trace.
@@ -1380,6 +1356,15 @@
                         </div>
                         <div class="card-body" data-csv-import-section>
                             <div id="importSummary" style="margin-bottom: 1rem;"></div>
+                            <div id="importMappingSection" class="hidden" style="margin-bottom: 1.5rem;">
+                                <h4 style="margin-bottom: 0.5rem; font-size: 1rem;">Link account &amp; project</h4>
+                                <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;">For rows
+                                    uploaded <strong>without</strong> Account and Project in the CSV, pick a real
+                                    account and project here (dependent dropdown), then <strong>Apply link</strong>.
+                                    Create missing projects under <strong>Accounts</strong> first—they must exist to
+                                    appear in the list.</p>
+                                <div id="importMappingBody"></div>
+                            </div>
                             <div id="importProjectReviewSection" class="hidden" style="margin-bottom: 1.5rem;">
                                 <h4 style="margin-bottom: 0.75rem; font-size: 1rem;">Project review</h4>
                                 <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 0.75rem;">Review which accounts and projects are existing (will be linked) vs new (will be created) on commit.</p>
@@ -1400,15 +1385,16 @@
                             <div
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
                                 <div class="text-muted" style="font-size: 0.85rem;">
-                                    Use the filter to focus on duplicates or rows with validation issues. Update
-                                    your
-                                    CSV and re-run the dry-run until all rows are ready.
+                                    Use the filter to focus on duplicates, errors, or rows that still need account/project.
+                                    For mapping rows, use <strong>Link account &amp; project</strong> above; for other issues,
+                                    fix the CSV and re-run dry-run.
                                 </div>
                                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                                     <label for="importPreviewFilter" class="form-label" style="margin: 0;">Show:</label>
                                     <select id="importPreviewFilter" class="form-control" style="min-width: 180px;">
                                         <option value="all">All Rows</option>
                                         <option value="ready">Ready to Import</option>
+                                        <option value="needs_mapping">Needs account/project</option>
                                         <option value="error">Errors</option>
                                         <option value="duplicate">Duplicates</option>
                                     </select>

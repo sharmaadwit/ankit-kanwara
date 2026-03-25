@@ -905,19 +905,16 @@ const App = {
         return this.featureFlags.pricingCalculatorSync === true;
     },
 
+    /** Respect config for everyone (including admins). Use Configuration → Feature Flags to re-enable. */
     isFeatureEnabled(flag) {
         if (!flag) return true;
         if (flag === 'pricingCalculatorSync') {
             return this.isPricingCalculatorSyncEnabled();
         }
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-        if (isAdmin) return true;
         return this.featureFlags[flag] !== false;
     },
     isDashboardVisible(key) {
         if (!key) return true;
-        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
-        if (isAdmin) return true;
         return this.dashboardVisibility[key] !== false;
     },
 
@@ -1753,7 +1750,7 @@ const App = {
             <!-- Log Activity + Admin month selector -->
             <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                 <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                <button class="btn btn-primary log-activity-btn" data-migration-hide onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
+                <button class="btn btn-primary log-activity-btn" data-migration-hide data-dashboard="logActivity" onclick="Activities.openActivityModal()" style="padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600;">
                     + Log Activity
                 </button>
                 </div>
@@ -1784,6 +1781,7 @@ const App = {
                     <div class="dashboard-stat-card-value" style="color: #805AD5;">${lastMonthActivities.length}</div>
                     <div class="dashboard-stat-card-detail">${lastMonthLabel}</div>
                 </div>
+                ${this.isAccessible('winLoss') ? `
                 <div class="dashboard-stat-card" style="border-left-color: #48BB78;">
                     <div class="dashboard-stat-card-title">Wins (${viewMonthName})</div>
                     <div class="dashboard-stat-card-value" style="color: #48BB78;">${winsThisMonth}</div>
@@ -1794,6 +1792,7 @@ const App = {
                     <div class="dashboard-stat-card-value" style="color: #F56565;">${lossesThisMonth}</div>
                     <div class="dashboard-stat-card-detail">Projects lost</div>
                 </div>
+                ` : ''}
             </div>
             
             ${this.isPricingCalculatorSyncEnabled() ? `<!-- Pricing (above charts): sync from API, log activity or delete -->
@@ -2680,7 +2679,7 @@ const App = {
             </a>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                 <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900);">All Activities</h1>
-                <button class="btn btn-primary log-activity-btn" data-migration-hide onclick="Activities.openActivityModal()">+ Log Activity</button>
+                <button class="btn btn-primary log-activity-btn" data-migration-hide data-dashboard="logActivity" onclick="Activities.openActivityModal()">+ Log Activity</button>
             </div>
             <div class="analytics-filter-bar">
                 <div class="form-group">
@@ -2768,6 +2767,7 @@ const App = {
         }
 
         activitiesView.innerHTML = html;
+        this.applyAppConfiguration();
         await this.populateActivityFilterControls();
     },
 
@@ -2897,6 +2897,7 @@ const App = {
         }
 
         winlossView.innerHTML = html;
+        this.applyAppConfiguration();
         await this.populateWinLossOwnerFilter();
     },
 

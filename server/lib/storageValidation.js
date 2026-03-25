@@ -5,7 +5,8 @@
 
 const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024; // 5MB
 const DATE_MIN = new Date('2020-01-01').getTime();
-const DATE_MAX = new Date('2030-12-31').getTime();
+/** Allow planned / forward-dated activities without blocking saves (legacy data may extend past 2030). */
+const DATE_MAX = new Date('2050-12-31').getTime();
 
 function safeString(x) {
   return x == null ? '' : String(x).trim();
@@ -42,17 +43,25 @@ function validateActivities(value) {
     }
     const dateVal = item.activityDate ?? item.date ?? item.createdAt ?? item.monthOfActivity;
     if (!isValidDateRange(dateVal)) {
-      return { valid: false, error: `activities[${i}]: valid date (activityDate/date) required (2020–2030)` };
+      return { valid: false, error: `activities[${i}]: valid date (activityDate/date) required (2020–2050)` };
     }
     const typeVal = item.activityType ?? item.type;
-    if (typeVal !== undefined && typeVal !== null && typeof typeVal !== 'string') {
-      return { valid: false, error: `activities[${i}]: activityType/type must be string` };
+    if (typeVal !== undefined && typeVal !== null && typeof typeVal === 'object') {
+      return { valid: false, error: `activities[${i}]: activityType/type must be a primitive (string/number)` };
     }
-    if (item.durationHours !== undefined && (typeof item.durationHours !== 'number' || item.durationHours < 0 || item.durationHours > 24)) {
-      return { valid: false, error: `activities[${i}]: durationHours must be 0–24` };
+    let dh = item.durationHours;
+    if (dh !== undefined && dh !== null && dh !== '') {
+      if (typeof dh === 'string') dh = Number(dh);
+      if (typeof dh !== 'number' || !Number.isFinite(dh) || dh < 0 || dh > 24) {
+        return { valid: false, error: `activities[${i}]: durationHours must be 0–24` };
+      }
     }
-    if (item.durationDays !== undefined && (typeof item.durationDays !== 'number' || item.durationDays < 0 || item.durationDays > 31)) {
-      return { valid: false, error: `activities[${i}]: durationDays must be 0–31` };
+    let dd = item.durationDays;
+    if (dd !== undefined && dd !== null && dd !== '') {
+      if (typeof dd === 'string') dd = Number(dd);
+      if (typeof dd !== 'number' || !Number.isFinite(dd) || dd < 0 || dd > 31) {
+        return { valid: false, error: `activities[${i}]: durationDays must be 0–31` };
+      }
     }
     if (item.accountId !== undefined && (typeof item.accountId !== 'string')) {
       return { valid: false, error: `activities[${i}]: accountId must be string` };
@@ -82,17 +91,25 @@ function validateInternalActivities(value) {
     }
     const dateVal = item.activityDate ?? item.date ?? item.createdAt;
     if (!isValidDateRange(dateVal)) {
-      return { valid: false, error: `internalActivities[${i}]: valid date required (2020–2030)` };
+      return { valid: false, error: `internalActivities[${i}]: valid date required (2020–2050)` };
     }
     const typeVal = item.activityType ?? item.type;
-    if (typeVal !== undefined && typeVal !== null && typeof typeVal !== 'string') {
-      return { valid: false, error: `internalActivities[${i}]: activityType/type must be string` };
+    if (typeVal !== undefined && typeVal !== null && typeof typeVal === 'object') {
+      return { valid: false, error: `internalActivities[${i}]: activityType/type must be a primitive (string/number)` };
     }
-    if (item.durationHours !== undefined && (typeof item.durationHours !== 'number' || item.durationHours < 0 || item.durationHours > 24)) {
-      return { valid: false, error: `internalActivities[${i}]: durationHours must be 0–24` };
+    let idh = item.durationHours;
+    if (idh !== undefined && idh !== null && idh !== '') {
+      if (typeof idh === 'string') idh = Number(idh);
+      if (typeof idh !== 'number' || !Number.isFinite(idh) || idh < 0 || idh > 24) {
+        return { valid: false, error: `internalActivities[${i}]: durationHours must be 0–24` };
+      }
     }
-    if (item.durationDays !== undefined && (typeof item.durationDays !== 'number' || item.durationDays < 0 || item.durationDays > 31)) {
-      return { valid: false, error: `internalActivities[${i}]: durationDays must be 0–31` };
+    let idd = item.durationDays;
+    if (idd !== undefined && idd !== null && idd !== '') {
+      if (typeof idd === 'string') idd = Number(idd);
+      if (typeof idd !== 'number' || !Number.isFinite(idd) || idd < 0 || idd > 31) {
+        return { valid: false, error: `internalActivities[${i}]: durationDays must be 0–31` };
+      }
     }
   }
   return { valid: true };

@@ -5,12 +5,14 @@ const Admin = {
         csvImport: {
             label: 'CSV Import',
             description: 'Allow users to upload activities via CSV templates.',
-            dashboardKey: 'csvImport'
+            dashboardKey: 'csvImport',
+            bundledInComposite: 'csv'
         },
         csvExport: {
             label: 'CSV Export',
             description: 'Allow analytics CSV exports from the Reports view.',
-            dashboardKey: null
+            dashboardKey: null,
+            bundledInComposite: 'csv'
         },
         winLoss: {
             label: 'Win/Loss Tracking',
@@ -25,11 +27,38 @@ const Admin = {
         pricingFullActivityForm: {
             label: 'Pricing: Full activity form',
             description: 'When logging a pricing calculation, use the full Log Activity form (account, project, industry, sales rep, use cases, products, etc.). When off, only account and project are required.',
-            dashboardKey: null
+            dashboardKey: null,
+            /** Shown only as part of composite row `pricing` */
+            bundledInComposite: 'pricing'
         },
         pricingCalculatorSync: {
             label: 'Pricing calculator sync',
             description: 'Enables the pricing calculator integration: POST/GET /api/pricing-calculations (ingest/list), my-unlinked/link/delete, and the Pricing section on the dashboard. Off by default until you are ready to deploy and connect pricing-calc.',
+            dashboardKey: null,
+            bundledInComposite: 'pricing'
+        }
+    },
+
+    /**
+     * Single admin row → multiple `featureFlags` keys (server merges by key).
+     * `masterFlag` drives the on/off label when flags disagree (e.g. after manual DB edit).
+     */
+    compositeFeatureControls: {
+        csv: {
+            label: 'CSV import & export',
+            description:
+                'Bulk import (templates + Import Activities) and CSV downloads from Reports. Also controls whether Import appears in the sidebar. One switch for all CSV-related access.',
+            flags: ['csvImport', 'csvExport'],
+            /** Both flags must be on for the row to show “Enabled” (keeps UI honest if DB ever drifts). */
+            compositeMatch: 'all',
+            dashboardKey: 'csvImport'
+        },
+        pricing: {
+            label: 'Pricing calculator',
+            description:
+                'Turns on the pricing API integration (dashboard Pricing section, sync/link/delete) and, when enabled, uses the full Log Activity form when logging from pricing (account, project, industry, reps, use cases, products). When off, both are off.',
+            flags: ['pricingCalculatorSync', 'pricingFullActivityForm'],
+            masterFlag: 'pricingCalculatorSync',
             dashboardKey: null
         }
     },
@@ -328,8 +357,7 @@ const Admin = {
 
     getSectionLoaders() {
         return {
-            users: () => this.loadUsers('usersList'),
-            presalesUsers: () => this.loadUsers('usersListConfig'),
+            users: () => this.loadUsers(),
             sales: () => this.loadSalesReps(),
             salesLeaders: () => this.renderSalesLeadersPanel(),
             leaders: () => this.renderLeadersPanel(),
@@ -1259,12 +1287,11 @@ const Admin = {
         return { ...user, defaultRegion, regions, roles, salesReps: Array.isArray(user.salesReps) ? user.salesReps : (Array.isArray(user.sales_reps) ? user.sales_reps : []) };
     },
 
-    // User Management (containerId: 'usersList' for System Admin, 'usersListConfig' for Configuration)
+    // User Management — single list under System Admin → Users (same API as former Configuration → Presales Users).
     // Loads when user opens the section; fetches directly from DB (bypasses cache) so list shows all actual users.
-    async loadUsers(containerId = 'usersList') {
-        const container = document.getElementById(containerId);
-        const statusElId = containerId === 'usersListConfig' ? 'usersFilterStatusConfig' : 'usersFilterStatus';
-        const statusEl = document.getElementById(statusElId);
+    async loadUsers() {
+        const container = document.getElementById('usersList');
+        const statusEl = document.getElementById('usersFilterStatus');
         if (!container) return;
 
         container.innerHTML = '<p class="text-muted">Loading users…</p>';
@@ -1274,7 +1301,7 @@ const Admin = {
             users = fromApi.map(u => this.normalizeUserForDisplay(u)).filter(Boolean);
         } catch (e) {
             console.warn('[Admin] loadUsers failed:', e);
-            container.innerHTML = '<p class="text-warning">Unable to load users. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>';
+            container.innerHTML = '<p class="text-warning">Unable to load users. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers()">Retry</button></p>';
             return;
         }
 
@@ -1288,7 +1315,7 @@ const Admin = {
 
         if (filtered.length === 0) {
             container.innerHTML = users.length === 0
-                ? '<p class="text-muted">No users found. If you use database login, ensure you\'re logged in as an admin. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers(\'' + containerId + '\')">Retry</button></p>'
+                ? '<p class="text-muted">No users found. If you use database login, ensure you\'re logged in as an admin. <button type="button" class="btn btn-sm btn-outline" onclick="Admin.loadUsers()">Retry</button></p>'
                 : '<p class="text-muted">No users match the current filter.</p>';
             return;
         }
@@ -1469,8 +1496,7 @@ const Admin = {
         await DataManager.addUser(user);
         UI.hideModal('addUserModal');
         UI.showNotification('User added successfully', 'success');
-        await this.loadUsers('usersList');
-        await this.loadUsers('usersListConfig');
+        await this.loadUsers();
 
         // Reset form
         document.getElementById('addUserForm').reset();
@@ -1613,8 +1639,7 @@ const Admin = {
             }
             UI.hideModal('editUserModal');
             UI.showNotification('User updated successfully', 'success');
-            await this.loadUsers('usersList');
-            await this.loadUsers('usersListConfig');
+            await this.loadUsers();
         } else {
             UI.showNotification('Failed to update user', 'error');
         }
@@ -1635,8 +1660,7 @@ const Admin = {
             });
             if (response.ok) {
                 UI.showNotification('User deleted successfully', 'success');
-                await this.loadUsers('usersList');
-                await this.loadUsers('usersListConfig');
+                await this.loadUsers();
                 return;
             }
             if (response.status === 404) {
@@ -1647,8 +1671,7 @@ const Admin = {
         }
         await DataManager.deleteUser(userId);
         UI.showNotification('User deleted successfully', 'success');
-        await this.loadUsers('usersList');
-        await this.loadUsers('usersListConfig');
+        await this.loadUsers();
     },
 
     async resetUserPassword(username) {
@@ -1674,8 +1697,7 @@ const Admin = {
             if (response.ok) {
                 const data = await response.json();
                 UI.showNotification(data.message || 'Password reset. User can log in with ' + defaultPassword + '. Refresh the page to see updated list.', 'success');
-                await this.loadUsers('usersList');
-                await this.loadUsers('usersListConfig');
+                await this.loadUsers();
                 return;
             }
             const body = await response.json();
@@ -1689,8 +1711,7 @@ const Admin = {
             if (user) {
                 await DataManager.updateUser(user.id, { password: defaultPassword, forcePasswordChange: false });
                 UI.showNotification('Password reset (local). User can log in with ' + defaultPassword + '. If using remote storage, refresh and use Reset password again after deploy.', 'success');
-                await this.loadUsers('usersList');
-                await this.loadUsers('usersListConfig');
+                await this.loadUsers();
             } else {
                 UI.showNotification(err.message || 'Failed to reset password. User not found locally.', 'error');
             }
@@ -1714,8 +1735,7 @@ const Admin = {
                 throw new Error(data.message || 'Failed to set force password change');
             }
             UI.showNotification(data.message || 'User will be prompted to change password on next login.', 'success');
-            this.loadUsers('usersList');
-            this.loadUsers('usersListConfig');
+            this.loadUsers();
         } catch (err) {
             console.error('Force password change failed:', err);
             UI.showNotification(err.message || 'Failed to force password change', 'error');
@@ -2707,8 +2727,15 @@ const Admin = {
 
     buildControlDefinitions() {
         const definitions = [];
+        const bundledKeys = new Set();
+        Object.values(this.compositeFeatureControls || {}).forEach((spec) => {
+            (spec.flags || []).forEach((f) => bundledKeys.add(f));
+        });
 
         Object.keys(this.featureFlagMetadata).forEach((flag) => {
+            if (bundledKeys.has(flag)) {
+                return;
+            }
             const meta = this.featureFlagMetadata[flag] || {};
             definitions.push({
                 key: flag,
@@ -2716,6 +2743,23 @@ const Admin = {
                 description: meta.description || '',
                 supportsFeature: true,
                 dashboardKey: meta.dashboardKey || null
+            });
+        });
+
+        const compositeOrder = ['csv', 'pricing'];
+        compositeOrder.forEach((key) => {
+            const spec = (this.compositeFeatureControls || {})[key];
+            if (!spec) return;
+            const flags = spec.flags || [];
+            definitions.push({
+                key,
+                label: spec.label || key,
+                description: spec.description || '',
+                supportsFeature: true,
+                dashboardKey: spec.dashboardKey || null,
+                compositeFeatureKeys: flags,
+                compositeMasterKey: spec.masterFlag || flags[0] || key,
+                compositeMatch: spec.compositeMatch === 'all' ? 'all' : null
             });
         });
 
@@ -2741,12 +2785,24 @@ const Admin = {
     buildControlDraft() {
         const draft = {};
         this.controlDefinitions.forEach((def) => {
-            const featureEnabled = def.supportsFeature
-                ? this.currentFeatureFlags[def.key] !== false
-                : true;
-            const dashboardVisible = def.dashboardKey
+            let featureEnabled = true;
+            let dashboardVisible = def.dashboardKey
                 ? this.currentDashboardVisibility[def.dashboardKey] !== false
                 : true;
+
+            if (def.compositeFeatureKeys && def.compositeFeatureKeys.length) {
+                if (def.compositeMatch === 'all') {
+                    featureEnabled = def.compositeFeatureKeys.every(
+                        (k) => this.currentFeatureFlags[k] !== false
+                    );
+                } else {
+                    const master = def.compositeMasterKey || def.compositeFeatureKeys[0];
+                    featureEnabled = this.currentFeatureFlags[master] !== false;
+                }
+            } else if (def.supportsFeature) {
+                featureEnabled = this.currentFeatureFlags[def.key] !== false;
+            }
+
             const value = def.supportsFeature ? (featureEnabled && dashboardVisible) : dashboardVisible;
 
             draft[def.key] = {
@@ -2861,12 +2917,22 @@ const Admin = {
 
         this.controlDefinitions.forEach((def) => {
             const draftValue = (this.controlDraft[def.key] || {}).value !== false;
-            const currentFeature = def.supportsFeature
-                ? this.currentFeatureFlags[def.key] !== false
-                : true;
             const currentDashboardVisible = def.dashboardKey
                 ? this.currentDashboardVisibility[def.dashboardKey] !== false
                 : true;
+            let currentFeature = true;
+            if (def.compositeFeatureKeys && def.compositeFeatureKeys.length) {
+                if (def.compositeMatch === 'all') {
+                    currentFeature = def.compositeFeatureKeys.every(
+                        (k) => this.currentFeatureFlags[k] !== false
+                    );
+                } else {
+                    const master = def.compositeMasterKey || def.compositeFeatureKeys[0];
+                    currentFeature = this.currentFeatureFlags[master] !== false;
+                }
+            } else if (def.supportsFeature) {
+                currentFeature = this.currentFeatureFlags[def.key] !== false;
+            }
             const currentValue = def.supportsFeature
                 ? (currentFeature && currentDashboardVisible)
                 : currentDashboardVisible;
@@ -2926,7 +2992,14 @@ const Admin = {
         this.controlDefinitions.forEach((def) => {
             if (!def.supportsFeature) return;
             const draft = this.controlDraft[def.key] || {};
-            featurePayload[def.key] = draft.value !== false;
+            const on = draft.value !== false;
+            if (def.compositeFeatureKeys && def.compositeFeatureKeys.length) {
+                def.compositeFeatureKeys.forEach((k) => {
+                    featurePayload[k] = on;
+                });
+                return;
+            }
+            featurePayload[def.key] = on;
         });
 
         const visibilityPayload = { ...this.currentDashboardVisibility };

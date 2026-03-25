@@ -110,6 +110,10 @@ const BulkImport = {
         if (this.issuesPanelBody) this.issuesPanelBody.innerHTML = '';
         if (this.projectReviewSection) this.projectReviewSection.classList.add('hidden');
         if (this.projectReviewBody) this.projectReviewBody.innerHTML = '';
+        const mapSec = document.getElementById('importMappingSection');
+        const mapBody = document.getElementById('importMappingBody');
+        if (mapSec) mapSec.classList.add('hidden');
+        if (mapBody) mapBody.innerHTML = '';
         if (typeof App !== 'undefined' && App.clearPendingDuplicateAlerts) {
             App.clearPendingDuplicateAlerts();
         }
@@ -138,7 +142,12 @@ const BulkImport = {
 
         if (this.fileInput) this.fileInput.disabled = !allowed;
         if (this.dryRunBtn) this.dryRunBtn.disabled = !allowed || !this.state.file;
-        if (this.confirmBtn) this.confirmBtn.disabled = !allowed || !this.state.parsedRows?.length;
+        if (this.confirmBtn) {
+            const hasReady =
+                Array.isArray(this.state.parsedRows) &&
+                this.state.parsedRows.some((r) => r.status === 'ready');
+            this.confirmBtn.disabled = !allowed || !hasReady;
+        }
         if (this.downloadErrorsBtn) this.downloadErrorsBtn.disabled = !allowed;
     },
 
@@ -218,7 +227,96 @@ const BulkImport = {
         return options;
     },
 
-    downloadTemplate(type) {
+    /** First real account+project from storage (for external sample row). */
+    async getFirstAccountProjectSample() {
+        try {
+            if (typeof DataManager === 'undefined' || typeof DataManager.getAccounts !== 'function') {
+                return null;
+            }
+            const accounts = await DataManager.getAccounts();
+            for (const a of accounts || []) {
+                const an = (a.name || '').trim();
+                if (!an) continue;
+                for (const p of a.projects || []) {
+                    const pn = (p.name || '').trim();
+                    if (pn) {
+                        return { accountName: an, projectName: pn };
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[BulkImport] getFirstAccountProjectSample', e);
+        }
+        return null;
+    },
+
+    /**
+     * All Account Name / Project Name pairs (for copying into the external template).
+     * Plain CSV only — not Excel; no dependent dropdowns in the file itself.
+     */
+    async downloadAccountsProjectsCatalog() {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            return;
+        }
+        const today = new Date().toISOString().split('T')[0];
+        const rows = [
+            ['Account Name', 'Project Name'],
+            [
+                `# Valid pairs from your workspace (${today}). Copy exact text into the external template. Rows starting with # are ignored during import.`
+            ],
+            ['# Accounts with no projects are listed only in a comment row below (add projects under Accounts).', '']
+        ];
+
+        try {
+            if (typeof DataManager === 'undefined' || typeof DataManager.getAccounts !== 'function') {
+                throw new Error('DataManager unavailable');
+            }
+            const accounts = await DataManager.getAccounts();
+            let pairCount = 0;
+            for (const a of accounts || []) {
+                const an = (a.name || '').trim();
+                if (!an) continue;
+                const projects = a.projects || [];
+                if (!projects.length) {
+                    rows.push([`# "${an}" — no projects yet`, '']);
+                    continue;
+                }
+                for (const p of projects) {
+                    const pn = (p.name || '').trim();
+                    if (pn) {
+                        rows.push([an, pn]);
+                        pairCount += 1;
+                    }
+                }
+            }
+            if (pairCount === 0) {
+                rows.push([
+                    '# No account+project pairs found. Create accounts and projects first, or type new names in the template.',
+                    ''
+                ]);
+            }
+        } catch (e) {
+            console.error('[BulkImport] downloadAccountsProjectsCatalog', e);
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Could not load accounts for the catalog.', 'error');
+            }
+            return;
+        }
+
+        const csv = this.toCsv(rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'presight_accounts_and_projects.csv';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    },
+
+    async downloadTemplate(type) {
         const today = new Date().toISOString().split('T')[0];
         const normalizedType = type === 'internal' || type === 'external' ? type : null;
 
@@ -273,15 +371,34 @@ const BulkImport = {
             ]
         };
 
-        const instructionRow = ['# Leave "Activity Category" blank—imports infer it from the filename. Multi-select values use a pipe (WhatsApp | Web).'];
+        let sampleAccount = 'Acme Corp';
+        let sampleProject = 'Acme AI Project';
+        if (normalizedType === 'external') {
+            const pair = await this.getFirstAccountProjectSample();
+            if (pair) {
+                sampleAccount = pair.accountName;
+                sampleProject = pair.projectName;
+            }
+        }
+
+        const instructionRowExternal = [
+            '# Leave "Activity Category" blank—imports infer it from the filename. Multi-select values use a pipe (WhatsApp | Web).'
+        ];
+        const instructionRowExternal2 = [
+            '# Optional: leave BOTH Account Name and Project Name blank, then link them on the Import page after dry-run (dropdowns). Or fill names exactly; use Download accounts & projects as a lookup.'
+        ];
+        const instructionRowInternal = [
+            '# Leave "Activity Category" blank — imports infer it from the template filename.'
+        ];
+
         const sampleRow = normalizedType === 'external'
             ? [
                 '# external',
                     today,
                 'user.name',
                     'customerCall',
-                    'Acme Corp',
-                    'Acme AI Project',
+                sampleAccount,
+                sampleProject,
                     'Jane Smith',
                     'jane.smith@example.com',
                     'IT & Software',
@@ -315,12 +432,21 @@ const BulkImport = {
                     'Prepared deck for upcoming enablement session'
             ];
 
-        const rows = [
-            headersByType[normalizedType],
-            instructionRow,
-            sampleRow,
-            ['# Rows beginning with "#" are ignored during import.']
-        ];
+        const rows =
+            normalizedType === 'external'
+                ? [
+                      headersByType[normalizedType],
+                      instructionRowExternal,
+                      instructionRowExternal2,
+                      sampleRow,
+                      ['# Rows beginning with "#" are ignored during import.']
+                  ]
+                : [
+                      headersByType[normalizedType],
+                      instructionRowInternal,
+                      sampleRow,
+                      ['# Rows beginning with "#" are ignored during import.']
+                  ];
 
         const csv = this.toCsv(rows);
 
@@ -605,6 +731,7 @@ const BulkImport = {
             readyCount: 0,
             errorCount: 0,
             duplicateCount: 0,
+            needsMappingCount: 0,
             newAccounts: new Set(),
             newProjects: new Set()
         };
@@ -631,6 +758,7 @@ const BulkImport = {
             if (result.category === 'internal') summary.internalCount++;
             if (result.status === 'ready') summary.readyCount++;
             if (result.status === 'error') summary.errorCount++;
+            if (result.status === 'needs_mapping') summary.needsMappingCount++;
             if (result.duplicate) summary.duplicateCount++;
             if (result.newAccount) summary.newAccounts.add(result.newAccount);
             if (result.newProject) summary.newProjects.add(result.newProject);
@@ -749,12 +877,15 @@ const BulkImport = {
             duplicateHash
         } = context;
 
-        const accountName = row.account;
-        const projectName = row.project;
+        const accountName = (row.account || '').trim();
+        const projectName = (row.project || '').trim();
+        const deferAccountProject = !accountName && !projectName;
         const activityTypeRaw = row.activitytype;
 
-        if (!accountName) errors.push('Account Name is required for external rows.');
-        if (!projectName) errors.push('Project Name is required for external rows.');
+        if (!deferAccountProject) {
+            if (!accountName) errors.push('Account Name is required unless both Account and Project are left blank (map after upload).');
+            if (!projectName) errors.push('Project Name is required unless both Account and Project are left blank (map after upload).');
+        }
         if (!activityTypeRaw) errors.push('Activity Type is required for external rows.');
 
         const activityType = this.normalizeExternalActivityType(activityTypeRaw);
@@ -765,6 +896,62 @@ const BulkImport = {
         const callDescription = row.description;
         if (activityType === 'customerCall' && !callDescription) {
             errors.push('Description is required for Customer Call activities.');
+        }
+
+        if (deferAccountProject) {
+            const messagesDefer = errors.length
+                ? []
+                : [
+                      'Leave Account & Project blank in the CSV to map them here after upload (similar to linking pricing items).'
+                  ];
+            const statusDefer = errors.length ? 'error' : 'needs_mapping';
+            const payloadDefer = {
+                category: 'external',
+                displayRowNumber,
+                user,
+                date,
+                activityType,
+                accountName: '',
+                projectName: '',
+                salesRepName: row.salesrepname || '',
+                salesRepEmail: row.salesrepemail || '',
+                industry: row.industry || '',
+                sfdcLink: row.sfdclink || '',
+                useCases: this.parseMulti(row.usecases),
+                useCaseOther: row.usecaseother || '',
+                products: this.parseMulti(row.products),
+                productsOther: row.productsother || '',
+                channels: this.parseMulti(row.channels),
+                channelsOther: row.channelsother || '',
+                callType: row.calltype || '',
+                description: callDescription || '',
+                pocAccessType: row.pocaccesstype || '',
+                pocUseCaseDescription: row.pocusecasedescription || '',
+                pocSandboxStartDate: row.pocsandboxstartdate || '',
+                pocSandboxEndDate: row.pocsandboxenddate || '',
+                pocDemoEnvironment: row.pocdemoenvironment || '',
+                pocBotTriggerUrl: row.pocbottriggerurl || '',
+                sowLink: row.sowlink || '',
+                rfxType: row.rfxtype || '',
+                rfxDeadline: row.rfxdeadline || '',
+                rfxFolderLink: row.rfxfolderlink || '',
+                rfxNotes: row.rfxnotes || '',
+                newAccount: null,
+                newProject: null
+            };
+            return {
+                index: displayRowNumber,
+                category: 'external',
+                status: statusDefer,
+                duplicate: false,
+                needsMapping: !errors.length,
+                messages: [...errors, ...warnings, ...messagesDefer],
+                errors,
+                warnings,
+                payload: payloadDefer,
+                newAccount: null,
+                newProject: null
+            };
         }
 
         const matchedAccount = this.findAccount(accounts, accountName);
@@ -905,6 +1092,232 @@ const BulkImport = {
         return (account.projects || []).find(p => (p.name || '').toLowerCase() === projectName.toLowerCase()) || null;
     },
 
+    recomputeSummaryCounts() {
+        const summary = this.state.summary;
+        if (!summary || !Array.isArray(this.state.parsedRows)) return;
+        const rows = this.state.parsedRows;
+        summary.readyCount = rows.filter((r) => r.status === 'ready').length;
+        summary.errorCount = rows.filter((r) => r.status === 'error').length;
+        summary.needsMappingCount = rows.filter((r) => r.status === 'needs_mapping').length;
+        summary.duplicateCount = rows.filter((r) => r.duplicate === true).length;
+        const na = new Set();
+        const np = new Set();
+        rows.forEach((r) => {
+            if (r.newAccount) na.add(r.newAccount);
+            if (r.newProject) np.add(r.newProject);
+        });
+        summary.newAccounts = Array.from(na).filter(Boolean);
+        summary.newProjects = Array.from(np).filter(Boolean);
+    },
+
+    /**
+     * After user maps account/project in the UI, refresh duplicate flags and new-account hints for all external rows.
+     */
+    async refreshExternalRowsValidation() {
+        const accounts = await DataManager.getAccounts();
+        const existingActivities = await DataManager.getAllActivities();
+        const sorted = this.state.parsedRows
+            .filter((r) => r.category === 'external')
+            .sort((a, b) => a.index - b.index);
+        const duplicateHash = new Set();
+        const dupMsg = 'Row flagged as duplicate and will not be imported until resolved.';
+
+        for (const row of sorted) {
+            const p = row.payload;
+            if (!p) continue;
+
+            if (!p.accountName?.trim() || !p.projectName?.trim()) {
+                row.duplicate = false;
+                row.newAccount = null;
+                row.newProject = null;
+                p.newAccount = null;
+                p.newProject = null;
+                if (row.status === 'needs_mapping') {
+                    row.messages = [
+                        ...(row.errors || []),
+                        ...(row.warnings || []),
+                        'Leave Account & Project blank in the CSV to map them here after upload (similar to linking pricing items).'
+                    ];
+                } else {
+                    row.messages = [...(row.errors || []), ...(row.warnings || [])];
+                }
+                continue;
+            }
+
+            const matchedAccount = this.findAccount(accounts, p.accountName);
+            const matchedProject = matchedAccount && this.findProject(matchedAccount, p.projectName);
+            p.newAccount = matchedAccount ? null : p.accountName;
+            p.newProject = matchedProject ? null : `${p.accountName} › ${p.projectName}`;
+            row.newAccount = p.newAccount;
+            row.newProject = p.newProject;
+
+            const dupKey = `${(p.accountName || '').toLowerCase()}|${(p.projectName || '').toLowerCase()}|${(p.date || '').substring(0, 10)}|${p.activityType || ''}`;
+            let duplicate = false;
+            if (duplicateHash.has(dupKey)) {
+                duplicate = true;
+            } else {
+                duplicateHash.add(dupKey);
+                const existing = existingActivities.find(
+                    (a) =>
+                        !a.isInternal &&
+                        (a.accountName || '').toLowerCase() === (p.accountName || '').toLowerCase() &&
+                        (a.projectName || '').toLowerCase() === (p.projectName || '').toLowerCase() &&
+                        (a.date || '').substring(0, 10) === (p.date || '').substring(0, 10) &&
+                        (a.type || '') === p.activityType
+                );
+                if (existing) duplicate = true;
+            }
+            row.duplicate = duplicate;
+
+            if (row.errors && row.errors.length) {
+                row.status = 'error';
+                row.messages = [...row.errors, ...(row.warnings || [])];
+            } else if (duplicate) {
+                row.status = 'duplicate';
+                row.messages = [...(row.warnings || []), dupMsg];
+            } else {
+                row.status = 'ready';
+                row.messages = [...(row.warnings || [])];
+            }
+        }
+
+        this.state.errorRows = this.state.parsedRows.filter((r) => r.status === 'error');
+        this.state.duplicateRows = this.state.parsedRows.filter((r) => r.duplicate === true);
+        this.recomputeSummaryCounts();
+    },
+
+    escapeAttr(s) {
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    },
+
+    onImportMappingAccountChange(rowIndex) {
+        const accSel = document.querySelector(`.import-map-account[data-row-index="${rowIndex}"]`);
+        const projSel = document.querySelector(`.import-map-project[data-row-index="${rowIndex}"]`);
+        if (!accSel || !projSel) return;
+        const aid = accSel.value;
+        projSel.innerHTML = '<option value="">Select project…</option>';
+        projSel.disabled = !aid;
+        if (!aid) return;
+        DataManager.getAccounts()
+            .then((accounts) => {
+                const a = accounts.find((x) => x.id === aid);
+                (a?.projects || []).forEach((p) => {
+                    projSel.add(new Option(p.name || 'Untitled', p.id));
+                });
+            })
+            .catch(() => {});
+    },
+
+    async applyImportMapping(rowIndex) {
+        const row = this.state.parsedRows.find((r) => r.index === rowIndex);
+        if (!row || row.category !== 'external' || row.status !== 'needs_mapping') {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('This row is not waiting for account/project mapping.', 'info');
+            }
+            return;
+        }
+        const accSel = document.querySelector(`.import-map-account[data-row-index="${rowIndex}"]`);
+        const projSel = document.querySelector(`.import-map-project[data-row-index="${rowIndex}"]`);
+        if (!accSel?.value || !projSel?.value) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Select both an account and a project.', 'warning');
+            }
+            return;
+        }
+        const accounts = await DataManager.getAccounts();
+        const account = accounts.find((a) => a.id === accSel.value);
+        const project = account?.projects?.find((p) => p.id === projSel.value);
+        if (!account || !project) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Account or project not found.', 'error');
+            }
+            return;
+        }
+        row.payload.accountName = account.name;
+        row.payload.projectName = project.name;
+        row.payload.industry = row.payload.industry || account.industry || '';
+        row.payload.salesRepName = row.payload.salesRepName || account.salesRep || '';
+        row.needsMapping = false;
+        await this.refreshExternalRowsValidation();
+        this.renderPreview();
+        if (typeof UI !== 'undefined' && UI.showNotification) {
+            UI.showNotification(`Row ${rowIndex}: linked to ${account.name} › ${project.name}.`, 'success');
+        }
+    },
+
+    async renderMappingPanel() {
+        const section = document.getElementById('importMappingSection');
+        const body = document.getElementById('importMappingBody');
+        if (!section || !body) return;
+
+        const needs = (this.state.parsedRows || []).filter((r) => r.status === 'needs_mapping');
+        if (!needs.length) {
+            section.classList.add('hidden');
+            body.innerHTML = '';
+            return;
+        }
+
+        section.classList.remove('hidden');
+        let accounts = [];
+        try {
+            accounts = await DataManager.getAccounts();
+        } catch (e) {
+            console.warn('[BulkImport] renderMappingPanel accounts', e);
+        }
+
+        const esc = (v) =>
+            typeof App !== 'undefined' && typeof App.escapeHtml === 'function'
+                ? App.escapeHtml(String(v ?? ''))
+                : String(v ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/"/g, '&quot;');
+
+        const accOptions =
+            '<option value="">Select account…</option>' +
+            accounts
+                .map((a) => `<option value="${this.escapeAttr(a.id)}">${esc(a.name)}</option>`)
+                .join('');
+
+        body.innerHTML = needs
+            .map((row) => {
+                const desc = (row.payload?.description || '').slice(0, 120);
+                return `
+            <div class="card card-body" style="margin-bottom: 0.75rem;">
+                <div><strong>Row ${row.index}</strong> · ${esc(row.payload?.date)} · ${esc(row.payload?.activityType)}</div>
+                ${desc ? `<div class="text-muted small" style="margin-top:0.25rem;">${esc(desc)}</div>` : ''}
+                <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem; align-items:flex-end;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Account</label>
+                        <select class="form-control import-map-account" data-row-index="${row.index}" style="min-width:220px;">${accOptions}</select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Project</label>
+                        <select class="form-control import-map-project" data-row-index="${row.index}" style="min-width:220px;" disabled>
+                            <option value="">Select account first…</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm import-map-apply" data-row-index="${row.index}">Apply link</button>
+                </div>
+            </div>`;
+            })
+            .join('');
+
+        body.querySelectorAll('.import-map-account').forEach((sel) => {
+            sel.addEventListener('change', () =>
+                this.onImportMappingAccountChange(Number(sel.getAttribute('data-row-index')))
+            );
+        });
+        body.querySelectorAll('.import-map-apply').forEach((btn) => {
+            btn.addEventListener('click', () =>
+                void this.applyImportMapping(Number(btn.getAttribute('data-row-index')))
+            );
+        });
+    },
+
     renderPreview() {
         if (!this.previewSection) return;
         this.previewSection.classList.remove('hidden');
@@ -917,19 +1330,24 @@ const BulkImport = {
 
         if (this.summaryContainer && this.state.summary) {
             const summary = this.state.summary;
+            const nm = summary.needsMappingCount || 0;
             this.summaryContainer.innerHTML = `
                 <div style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
                     <div><strong>Total rows:</strong> ${summary.totalRows}</div>
                     <div><strong>External:</strong> ${summary.externalCount}</div>
                     <div><strong>Internal:</strong> ${summary.internalCount}</div>
                     <div><strong>Ready:</strong> ${summary.readyCount}</div>
+                    <div><strong>Needs account/project:</strong> ${nm}</div>
                     <div><strong>Errors:</strong> ${summary.errorCount}</div>
                     <div><strong>Duplicates:</strong> ${summary.duplicateCount}</div>
                 </div>
+                ${nm > 0 ? `<p class="text-muted" style="margin-top: 0.75rem; font-size: 0.9rem;">Use <strong>Link account &amp; project</strong> below for rows uploaded without Account/Project in the CSV (like pricing link).</p>` : ''}
                 ${summary.newAccounts.length ? `<p style="margin-top: 1rem;"><strong>New accounts to be created:</strong> ${summary.newAccounts.join(', ')}</p>` : ''}
                 ${summary.newProjects.length ? `<p><strong>New projects to be created:</strong> ${summary.newProjects.join(', ')}</p>` : ''}
             `;
         }
+
+        void this.renderMappingPanel();
 
         this.renderProjectReview();
 
@@ -939,6 +1357,7 @@ const BulkImport = {
 
         const canCommit = rows.some(row => row.status === 'ready');
         this.confirmBtn && (this.confirmBtn.disabled = !canCommit);
+        this.evaluateFeatureAvailability();
         if (this.previewFilter) {
             this.previewFilter.value = this.state.previewFilter || 'all';
         }
@@ -964,6 +1383,7 @@ const BulkImport = {
         const rows = this.state.parsedRows.filter(row => {
             if (filter === 'ready') return row.status === 'ready';
             if (filter === 'error') return row.status === 'error';
+            if (filter === 'needs_mapping') return row.status === 'needs_mapping';
             if (filter === 'duplicate') return row.duplicate === true;
             return true;
         });
@@ -978,22 +1398,27 @@ const BulkImport = {
         }
 
         this.previewTableBody.innerHTML = rows.map(row => `
-            <tr class="${row.status === 'error' ? 'text-danger' : row.duplicate ? 'text-warning' : ''}">
+            <tr class="${row.status === 'error' ? 'text-danger' : row.duplicate ? 'text-warning' : row.status === 'needs_mapping' ? 'text-info' : ''}">
                 <td>${row.index}</td>
                 <td>${row.category}</td>
-                <td>${row.payload?.accountName || ''}</td>
-                <td>${row.payload?.projectName || ''}</td>
+                <td>${row.payload?.accountName || '—'}</td>
+                <td>${row.payload?.projectName || '—'}</td>
                 <td>${row.payload?.activityType || ''}</td>
                 <td>${row.payload?.date || ''}</td>
-                <td>${row.status.toUpperCase()}</td>
-                <td>${row.messages.join('<br>')}</td>
+                <td>${String(row.status || '').replace(/_/g, ' ').toUpperCase()}</td>
+                <td>${(row.messages || []).join('<br>')}</td>
             </tr>
         `).join('');
     },
 
     renderProjectReview() {
         if (!this.projectReviewSection || !this.projectReviewBody) return;
-        const externalRows = (this.state.parsedRows || []).filter(r => r.category === 'external');
+        const externalRows = (this.state.parsedRows || []).filter(
+            (r) =>
+                r.category === 'external' &&
+                (r.payload?.accountName || '').trim() &&
+                (r.payload?.projectName || '').trim()
+        );
         if (!externalRows.length) {
             this.projectReviewSection.classList.add('hidden');
             return;

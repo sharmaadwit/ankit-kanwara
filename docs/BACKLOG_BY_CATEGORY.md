@@ -1,4 +1,4 @@
-# PAMS - Backlog by Category
+# PreSight (formerly PAMS) - Backlog by Category
 
 Backlog items grouped by category. **Numbering is sequential per section (1, 2, 3 …)** within each category.
 
@@ -8,6 +8,7 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 
 **Recently deployed (2025–2026):**
 
+- **PreSight + pricing calculator:** UI rebrand to **PreSight**; **pricing calculator** server integration (`pricing_calculations` table, ingest `POST`, `GET /my-unlinked`, `PATCH /link`, `DELETE` unlinked owned row); dashboard **Pricing** block **above charts** with **Sync** (refetch user’s unlinked calculations), **Delete**, **Log activity**; admin feature flag **`pricingFullActivityForm`** (full Log Activity form vs minimal account+project modal); **Log Activity → type Pricing:** optional checkboxes for synced calculations — **multiple selections log multiple pricing activities** (one per calculation, same account/project).
 - **Activities:** Default "My activities" filter; activity date default; sort by date; enablement optional warning; **Group by Month / Project / Activity type**; editable project name in Log activity; project dropdown fixed (no auto-close, fixed positioning, stays open).
 - **Dashboard & drafts:** Total activities exclude drafts; "Submit all" removed (submit per draft via Edit & Save); draft error message cleared when opening; better empty state; drafts per user only.
 - **Suggestions:** localStorage fallback when remote key is empty (restore from local if remote cleared).
@@ -59,6 +60,7 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 | 12 | Optional | Win of the month UI | Featured win callout module. | Backlog | Low |
 | 13 | Optional | File attachments | Attach files to activities/accounts with controlled storage. | Backlog | Low |
 | 14 | Wins/Comms | Salesforce wins Excel + presales notifications | Upload Excel (Salesforce win data); parse; store; notify presales; dashboard notification + callout. | Planned | High |
+| 15 | Pricing / Integrations | Pricing calculator + PreSight | External calculator `POST` → DB; user sees unlinked calcs on dashboard; link to activities; sync/delete; optional full-form flag; multi-select in Log Activity (Pricing). | **Done** | — |
 
 ---
 
