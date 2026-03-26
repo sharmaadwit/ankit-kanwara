@@ -200,6 +200,37 @@ describe('Storage API', () => {
     expect(conflict.status).toBe(409);
   });
 
+  test('POST internalActivities/append merges one row without full PUT', async () => {
+    await request(app)
+      .put('/api/storage/internalActivities')
+      .send({
+        value: JSON.stringify([
+          { id: 'int-a', date: '2024-01-10', type: 'Meeting', activityName: 'Old' }
+        ])
+      })
+      .expect(200);
+    const appendRes = await request(app)
+      .post('/api/storage/internalActivities/append')
+      .send({
+        activity: {
+          id: 'int-b',
+          date: '2024-02-15',
+          type: 'Review',
+          activityName: 'New',
+          createdAt: '2024-02-15T12:00:00.000Z',
+          updatedAt: '2024-02-15T12:00:00.000Z'
+        }
+      });
+    expect(appendRes.status).toBe(200);
+    expect(appendRes.body.ok).toBe(true);
+    const getRes = await request(app).get('/api/storage/internalActivities');
+    expect(getRes.status).toBe(200);
+    const list = JSON.parse(getRes.body.value);
+    expect(Array.isArray(list)).toBe(true);
+    expect(list.find((x) => x.id === 'int-a')).toBeTruthy();
+    expect(list.find((x) => x.id === 'int-b')).toBeTruthy();
+  });
+
   test('accepts LZ-compressed internalActivities (__lz__, same as browser client)', async () => {
     const arr = [{ id: 'ia-lz-1', date: '2024-06-15', type: 'Review' }];
     const json = JSON.stringify(arr);

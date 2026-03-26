@@ -3560,9 +3560,18 @@ const App = {
                     return;
                 }
                 if (typeof Drafts !== 'undefined' && Drafts.updateDraft) Drafts.updateDraft(draft.id, { errorMessage: '' });
-                        if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
+                        if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined') {
+                            const singleIsInternal = draft.type === 'internal' || p.activity.isInternal === true;
+                            const canSubmitInt = singleIsInternal && typeof DataManager.submitSingleInternalActivityToServer === 'function';
+                            const canSubmitExt = !singleIsInternal && typeof DataManager.submitSingleActivityToServer === 'function';
                             try {
-                                await DataManager.submitSingleActivityToServer(p.activity);
+                                if (canSubmitInt) {
+                                    await DataManager.submitSingleInternalActivityToServer(p.activity);
+                                } else if (canSubmitExt) {
+                                    await DataManager.submitSingleActivityToServer(p.activity);
+                                } else {
+                                    throw new Error('Submit not available');
+                                }
                                 if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
                                 if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Submitted successfully.', 'success');
                             } catch (e) {
@@ -3734,8 +3743,15 @@ const App = {
                     submitted++;
                     continue;
                 }
-                if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined' && typeof DataManager.submitSingleActivityToServer === 'function') {
-                    await DataManager.submitSingleActivityToServer(p.activity);
+                if (p && p._singleActivity === true && p.activity && typeof DataManager !== 'undefined') {
+                    const bulkSingleIsInt = draft.type === 'internal' || p.activity.isInternal === true;
+                    if (bulkSingleIsInt && typeof DataManager.submitSingleInternalActivityToServer === 'function') {
+                        await DataManager.submitSingleInternalActivityToServer(p.activity);
+                    } else if (!bulkSingleIsInt && typeof DataManager.submitSingleActivityToServer === 'function') {
+                        await DataManager.submitSingleActivityToServer(p.activity);
+                    } else {
+                        throw new Error('Submit not available');
+                    }
                     if (typeof Drafts !== 'undefined') Drafts.removeDraft(draft.id);
                     submitted++;
                     continue;

@@ -881,8 +881,10 @@
                 type: draftType
             };
             const queued = enqueueOutboxEntry(outboxEntry);
-            if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                window.__activitySaveTracePush('PUT activities (storage)', {
+            const traceEntityPut = key === 'activities' || key === 'internalActivities';
+            if (traceEntityPut && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush(key === 'internalActivities' ? 'PUT internalActivities (storage)' : 'PUT activities (storage)', {
+                    key,
                     count: isEntityListKey && payloadForDraft && payloadForDraft.count != null ? payloadForDraft.count : null,
                     payloadLen: typeof payloadStr === 'string' ? payloadStr.length : 0
                 });
@@ -904,8 +906,8 @@
                 extraHeaders: { 'X-Client-Mutation-Id': outboxId }
             })
                 .then(() => {
-                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                        window.__activitySaveTracePush('PUT activities response 200', { key });
+                    if (traceEntityPut && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush(key === 'internalActivities' ? 'PUT internalActivities response 200' : 'PUT activities response 200', { key });
                     }
                     removeOutboxEntry(outboxId);
                     if (draft && draft.id && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
@@ -916,8 +918,9 @@
                     }
                 })
                 .catch((err) => {
-                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                        window.__activitySaveTracePush('PUT activities response error', {
+                    if (traceEntityPut && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush(key === 'internalActivities' ? 'PUT internalActivities response error' : 'PUT activities response error', {
+                            key,
                             status: err && err.status,
                             message: err && err.message,
                             conflict: !!(err && err.status === 409)
@@ -954,11 +957,11 @@
                         });
                         draftSaved = !!fallbackDraft;
                     }
-                    if (key === 'activities' && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
-                        window.__activitySaveTracePush('Draft created (activities)', {
-                            status: err && err.status,
-                            draftSaved: !!draftSaved
-                        });
+                    if (traceEntityPut && typeof window !== 'undefined' && typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush(
+                            key === 'internalActivities' ? 'Draft created (internalActivities)' : 'Draft created (activities)',
+                            { key, status: err && err.status, draftSaved: !!draftSaved }
+                        );
                     }
                     try {
                         const finalMessage = draftSaved
@@ -1332,7 +1335,7 @@
             }
         }
         // Clear any pending full-list activities PUT from outbox so we don't overwrite server with stale data (e.g. after user edited an activity date).
-        updateOutbox((items) => items.filter((e) => !e || e.key !== ACTIVITIES_KEY));
+        updateOutbox((items) => items.filter((e) => !e || (e.key !== ACTIVITIES_KEY && e.key !== 'internalActivities')));
     };
 
     try {

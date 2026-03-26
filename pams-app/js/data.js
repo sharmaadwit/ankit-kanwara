@@ -2251,12 +2251,17 @@ const DataManager = {
         if (!Array.isArray(localArr)) localArr = [];
         const byId = new Map();
         const ts = (a) => (a && (a.updatedAt || a.createdAt)) ? String(a.updatedAt || a.createdAt) : '';
-        serverArr.forEach((s) => { if (s && s.id) byId.set(s.id, s); });
+        const keyOf = (a) => (a && a.id != null && String(a.id).trim() ? String(a.id) : null);
+        serverArr.forEach((s) => {
+            const k = keyOf(s);
+            if (k) byId.set(k, s);
+        });
         localArr.forEach((l) => {
-            if (!l || !l.id) return;
-            const existing = byId.get(l.id);
-            if (!existing) { byId.set(l.id, l); return; }
-            if (ts(l) > ts(existing)) byId.set(l.id, l);
+            const k = keyOf(l);
+            if (!k) return;
+            const existing = byId.get(k);
+            if (!existing) { byId.set(k, l); return; }
+            if (ts(l) > ts(existing)) byId.set(k, l);
         });
         return Array.from(byId.values());
     },
@@ -2536,9 +2541,190 @@ const DataManager = {
         throw lastErr || new Error('Append failed');
     },
 
+    /**
+     * Append one internal activity via POST /internalActivities/append (no full-list PUT).
+     * Caller must set id, createdAt, updatedAt. Draft + retries mirror appendActivity.
+     */
+    async appendInternalActivity(activity) {
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('appendInternalActivity start', {
+                type: activity && activity.type,
+                date: activity && (activity.date || activity.createdAt),
+                id: activity && activity.id
+            });
+        }
+        const normalized = { ...activity, isInternal: true };
+        const referenceDate = normalized.date || normalized.createdAt;
+        if (referenceDate) {
+            const parsed = new Date(referenceDate);
+            if (!Number.isNaN(parsed.getTime())) normalized.date = parsed.toISOString();
+        }
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__) this.cache.internalActivities = null;
+        var draftId = null;
+        if (typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+            var dInt = window.Drafts.addDraft({
+                type: 'internal',
+                storageKey: 'internalActivities',
+                payload: { _singleActivity: true, activity: normalized },
+                errorMessage: 'Submitting…'
+            });
+            if (dInt && dInt.id) draftId = dInt.id;
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('appendInternalActivity draft added', { draftId: draftId });
+            }
+        }
+        var apiBaseInt = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        var urlInt = apiBaseInt + '/internalActivities/append';
+        var bodyStrInt = JSON.stringify({ activity: normalized });
+        var lastErrInt = null;
+        var maxAttemptsInt = 3;
+        var retryDelaysInt = [0, 1000, 2000];
+        for (var attemptInt = 0; attemptInt < maxAttemptsInt; attemptInt++) {
+            if (attemptInt > 0 && retryDelaysInt[attemptInt] > 0) {
+                if (draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+                    window.Drafts.updateDraft(draftId, { errorMessage: 'Retrying in ' + (retryDelaysInt[attemptInt] / 1000) + 's…' });
+                }
+                await new Promise(function (r) { setTimeout(r, retryDelaysInt[attemptInt]); });
+            }
+            try {
+                var resInt = await fetch(urlInt, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: bodyStrInt
+                });
+                var dataInt = await resInt.json().catch(function () { return {}; });
+                if (resInt.ok && dataInt && dataInt.ok) {
+                    if (draftId && window.Drafts && typeof window.Drafts.removeDraft === 'function') {
+                        window.Drafts.removeDraft(draftId);
+                    }
+                    this.invalidateCache('internalActivities', 'allActivities');
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('appendInternalActivity success', { id: normalized.id, attempt: attemptInt + 1 });
+                    }
+                    try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e1) {}
+                    this.cache.internalActivities = null;
+                    this.recordAudit('activity.create', 'internalActivity', normalized.id, {
+                        type: normalized.type || '',
+                        name: normalized.activityName || '',
+                        fullSnapshot: normalized
+                    });
+                    return normalized;
+                }
+                var errMsgInt = (dataInt && dataInt.message) || ('Request failed: ' + resInt.status);
+                lastErrInt = new Error(errMsgInt);
+                if (resInt.status >= 400 && resInt.status < 500 && resInt.status !== 408) {
+                    break;
+                }
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('appendInternalActivity attempt failed', {
+                        attempt: attemptInt + 1,
+                        status: resInt.status,
+                        message: errMsgInt
+                    });
+                }
+            } catch (errI) {
+                lastErrInt = errI;
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('appendInternalActivity attempt threw', {
+                        attempt: attemptInt + 1,
+                        message: errI && errI.message
+                    });
+                }
+            }
+        }
+        var msgInt = lastErrInt && (lastErrInt.message || lastErrInt.status);
+        if (draftId && window.Drafts && typeof window.Drafts.updateDraft === 'function') {
+            window.Drafts.updateDraft(draftId, { errorMessage: msgInt || 'Could not save. Click Submit again or Edit & Save.' });
+        } else if (!draftId && typeof window !== 'undefined' && window.Drafts && typeof window.Drafts.addDraft === 'function') {
+            window.Drafts.addDraft({
+                type: 'internal',
+                storageKey: 'internalActivities',
+                payload: { _singleActivity: true, activity: normalized },
+                errorMessage: msgInt || 'Could not save. Click Submit again or Edit & Save.'
+            });
+            if (typeof window.__activitySaveTracePush === 'function') {
+                window.__activitySaveTracePush('appendInternalActivity failed: draft added for retry', { id: normalized.id });
+            }
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('appendInternalActivity failed after retries', { message: msgInt });
+        }
+        if (typeof window.__activitySaveTracePersistFailure === 'function') {
+            window.__activitySaveTracePersistFailure('appendInternalActivity');
+        }
+        throw lastErrInt || new Error('Internal append failed');
+    },
+
+    /** Submit one existing internal activity (draft retry). */
+    async submitSingleInternalActivityToServer(activity) {
+        if (!activity || !activity.id) throw new Error('Activity must have an id');
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('submitSingleInternalActivityToServer start', {
+                id: activity.id,
+                type: activity.type,
+                date: activity.date || activity.createdAt
+            });
+        }
+        var apiBaseI = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        var urlI = apiBaseI + '/internalActivities/append';
+        var bodyI = JSON.stringify({ activity: { ...activity, isInternal: true } });
+        var lastErrI = null;
+        for (var att = 0; att < 3; att++) {
+            if (att > 0) await new Promise(function (r) { setTimeout(r, 1000 * att); });
+            try {
+                var resI = await fetch(urlI, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: bodyI });
+                var dataI = await resI.json().catch(function () { return {}; });
+                if (resI.ok && dataI && dataI.ok) {
+                    this.invalidateCache('internalActivities', 'allActivities');
+                    this.cache.internalActivities = null;
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('submitSingleInternalActivityToServer success', { id: activity.id, attempt: att + 1 });
+                    }
+                    try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e2) {}
+                    return activity;
+                }
+                lastErrI = new Error((dataI && dataI.message) || ('Request failed: ' + resI.status));
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('submitSingleInternalActivityToServer attempt failed', {
+                        attempt: att + 1,
+                        status: resI.status,
+                        message: lastErrI.message
+                    });
+                }
+                if (resI.status >= 400 && resI.status < 500 && resI.status !== 408) break;
+            } catch (errB) {
+                lastErrI = errB;
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('submitSingleInternalActivityToServer attempt threw', {
+                        attempt: att + 1,
+                        message: errB && errB.message
+                    });
+                }
+            }
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('submitSingleInternalActivityToServer failed after retries', {
+                id: activity.id,
+                message: lastErrI && lastErrI.message
+            });
+            if (typeof window.__activitySaveTracePersistFailure === 'function') {
+                window.__activitySaveTracePersistFailure('submitSingleInternalActivityToServer');
+            }
+        }
+        throw lastErrI || new Error('Submit failed');
+    },
+
     /** Submit one existing activity (e.g. from draft) to the append API. Auto-retries up to 3 times on failure. */
     async submitSingleActivityToServer(activity) {
         if (!activity || !activity.id) throw new Error('Activity must have an id');
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('submitSingleActivityToServer start', {
+                id: activity.id,
+                type: activity.type,
+                date: activity.date || activity.createdAt
+            });
+        }
         var apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
         var url = apiBase + '/activities/append';
         var bodyStr = JSON.stringify({ activity: activity });
@@ -2550,13 +2736,39 @@ const DataManager = {
                 if (res.ok) {
                     this.invalidateCache('activities', 'allActivities');
                     this.cache.activities = null;
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        window.__activitySaveTracePush('submitSingleActivityToServer success', { id: activity.id, attempt: attempt + 1 });
+                    }
+                    try { window.localStorage.removeItem('__activitySaveTraceLastFailure'); } catch (e) {}
                     return activity;
                 }
                 var data = await res.json().catch(function () { return {}; });
                 lastErr = new Error((data && data.message) || ('Request failed: ' + res.status));
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('submitSingleActivityToServer attempt failed', {
+                        attempt: attempt + 1,
+                        status: res.status,
+                        message: lastErr.message
+                    });
+                }
                 if (res.status >= 400 && res.status < 500 && res.status !== 408) break;
             } catch (err) {
                 lastErr = err;
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('submitSingleActivityToServer attempt threw', {
+                        attempt: attempt + 1,
+                        message: err && err.message
+                    });
+                }
+            }
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('submitSingleActivityToServer failed after retries', {
+                id: activity.id,
+                message: lastErr && lastErr.message
+            });
+            if (typeof window.__activitySaveTracePersistFailure === 'function') {
+                window.__activitySaveTracePersistFailure('submitSingleActivityToServer');
             }
         }
         throw lastErr || new Error('Submit failed');
@@ -2869,7 +3081,43 @@ const DataManager = {
                 this.invalidateCache('internalActivities', 'allActivities');
                 return;
             } catch (err) {
+                if (err && err.status === 409 && err.value != null) {
+                    if (typeof window.__activitySaveTracePush === 'function') {
+                        let serverCount = null;
+                        try {
+                            const v = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
+                            if (Array.isArray(v)) serverCount = v.length;
+                        } catch (_) { }
+                        window.__activitySaveTracePush('internalActivities 409 conflict, merging and retrying', { serverCount });
+                    }
+                    try {
+                        const serverArr = typeof err.value === 'string' ? JSON.parse(err.value) : err.value;
+                        if (Array.isArray(serverArr)) {
+                            const merged = this._mergeActivitiesByIdNewerWins(serverArr, normalized);
+                            this.invalidateCache('internalActivities', 'allActivities');
+                            await this.saveInternalActivities(merged);
+                            if (typeof window.__activitySaveTracePush === 'function') {
+                                window.__activitySaveTracePush('internalActivities merge retry success', { mergedCount: merged.length });
+                            }
+                            return;
+                        }
+                    } catch (mergeErr) {
+                        if (typeof window.__activitySaveTracePush === 'function') {
+                            window.__activitySaveTracePush('internalActivities merge retry failed', { message: mergeErr && mergeErr.message });
+                        }
+                        console.warn('[DataManager] internalActivities 409 merge retry failed', mergeErr);
+                    }
+                }
                 console.warn('[DataManager] Async saveInternalActivities failed; preserving draft and aborting sync overwrite:', err);
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('saveInternalActivities failed', {
+                        status: err && err.status,
+                        message: err && err.message
+                    });
+                    if (typeof window.__activitySaveTracePersistFailure === 'function') {
+                        window.__activitySaveTracePersistFailure('saveInternalActivities');
+                    }
+                }
                 throw err;
             }
         }
@@ -2896,7 +3144,10 @@ const DataManager = {
         }
         activity.id = this.generateId();
         activity.createdAt = new Date().toISOString();
-        activity.updatedAt = new Date().toISOString();
+        activity.updatedAt = activity.createdAt;
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__ && typeof this.appendInternalActivity === 'function') {
+            return this.appendInternalActivity(activity);
+        }
         activities.push(activity);
         try {
             await this.saveInternalActivities(activities);
@@ -2913,7 +3164,8 @@ const DataManager = {
 
     async updateInternalActivity(activityId, updates) {
         const activities = await this.getInternalActivities();
-        const index = activities.findIndex(a => a.id === activityId);
+        const idStr = activityId != null ? String(activityId) : '';
+        const index = activities.findIndex(a => a && String(a.id) === idStr);
         if (index !== -1) {
             activities[index] = { ...activities[index], ...updates, updatedAt: new Date().toISOString() };
             await this.saveInternalActivities(activities);
@@ -2924,7 +3176,8 @@ const DataManager = {
     },
 
     async deleteInternalActivity(activityId) {
-        const activities = (await this.getInternalActivities()).filter(a => a.id !== activityId);
+        const idDel = activityId != null ? String(activityId) : '';
+        const activities = (await this.getInternalActivities()).filter(a => !a || String(a.id) !== idDel);
         await this.saveInternalActivities(activities);
         this.recordAudit('activity.delete', 'internalActivity', activityId);
     },

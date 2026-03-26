@@ -2217,7 +2217,9 @@ const Activities = {
         };
 
         if (isEditing && original) {
-            const updated = await DataManager.updateInternalActivity(original.id, {
+            const useSingleInternalUpdate = typeof window !== 'undefined' && window.__REMOTE_STORAGE_ENABLED__
+                && typeof DataManager.submitSingleInternalActivityToServer === 'function';
+            const updatePayload = {
                 date,
                 type: activityType,
                 timeSpent,
@@ -2225,11 +2227,25 @@ const Activities = {
                 topic,
                 description,
                 isInternal: true
-            });
+            };
+            let updated;
+            if (useSingleInternalUpdate) {
+                updated = await DataManager.submitSingleInternalActivityToServer({
+                    ...original,
+                    ...updatePayload,
+                    updatedAt: new Date().toISOString()
+                });
+            } else {
+                updated = await DataManager.updateInternalActivity(original.id, updatePayload);
+            }
 
             if (!updated) {
                 UI.showNotification('Unable to update internal activity. Please try again.', 'error');
                 return;
+            }
+
+            if (useSingleInternalUpdate && typeof DataManager.recordAudit === 'function') {
+                DataManager.recordAudit('activity.update', 'internalActivity', original.id, updatePayload);
             }
 
             this.closeActivityModal();
@@ -2242,9 +2258,17 @@ const Activities = {
                     Drafts.removeDraft(this.editingContext.fromDraftId);
                 }
                 this.closeActivityModal();
-                UI.showNotification('Internal activity logged successfully! Draft removed.', 'success');
+                let internalMsg = 'Internal activity logged successfully!';
+                if (this.editingContext && this.editingContext.fromDraftId) internalMsg += ' Draft removed.';
+                UI.showNotification(internalMsg, 'success');
                 this.setLastActivityDateForUser(currentUser.id, date);
             } catch (err) {
+                if (typeof window.__activitySaveTracePush === 'function') {
+                    window.__activitySaveTracePush('internal activity save threw', {
+                        status: err && err.status,
+                        message: err && err.message
+                    });
+                }
                 UI.showNotification('Could not save. Activity was saved to Drafts. You can submit again from the Drafts section.', 'warning');
                 if (window.app) window.app.loadDraftsView && window.app.loadDraftsView();
             }
