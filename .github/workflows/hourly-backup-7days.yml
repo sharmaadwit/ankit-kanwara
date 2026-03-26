@@ -1,6 +1,6 @@
-# HOURLY backup – temporary for 7 days
-# Runs every hour, commits timestamped snapshot to Git.
-# After 7 days: disable this workflow (Actions tab → Hourly backup 7 days → Disable) or delete this file.
+# HOURLY backup – timestamped snapshots to Git (retention: last 168 files ≈ 7 days).
+# Schedule: every hour at :00 UTC. Manual run: Actions → this workflow → Run workflow.
+# If backups stopped: Actions → Hourly backup (7 days) → … → Enable workflow (if disabled).
 name: Hourly backup (7 days)
 
 on:

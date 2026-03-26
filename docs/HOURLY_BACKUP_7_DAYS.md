@@ -1,5 +1,11 @@
 # Hourly backup (7-day trial)
 
+## Restart or run once
+
+1. **Re-enable after disable:** GitHub → **Actions** → **Hourly backup (7 days)** → **⋯** → **Enable workflow**.
+2. **Run immediately (does not wait for the hour):** Same page → **Run workflow** → **Run workflow** (`workflow_dispatch`).
+3. **Paused schedules:** Pushing any commit to `main` often resumes inactive repo schedules; ensure the workflow is not disabled in the UI.
+
 ## What’s on
 
 - **Workflow:** `.github/workflows/hourly-backup-7days.yml`
