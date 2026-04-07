@@ -363,7 +363,7 @@ async function loadImportUsers(pool, storageUsers) {
   if (!pool) return storageUsers;
   try {
     const { rows } = await pool.query(
-      `SELECT id, username, COALESCE(email::text, '') AS email
+      `SELECT id, username, email
        FROM users
        WHERE is_active = true
        ORDER BY username ASC`
@@ -372,7 +372,7 @@ async function loadImportUsers(pool, storageUsers) {
       return rows.map((r) => ({
         id: r.id,
         username: r.username,
-        email: r.email || ''
+        email: r.email == null ? '' : String(r.email).trim()
       }));
     }
   } catch (e) {
