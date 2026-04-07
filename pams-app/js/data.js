@@ -117,7 +117,7 @@ const SUGGESTIONS_AND_BUGS_KEY = 'suggestionsAndBugs';
 const UNIVERSAL_USE_CASES_KEY = 'universalUseCases';
 
 const DEFAULT_INDUSTRY_USE_CASES = {
-    'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Customer Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
+    'BFSI': ['Account Opening', 'Transaction Alerts', 'Loan Processing', 'KYC Verification', 'Payment Reminders', 'Fraud Alerts', 'Support', 'Investment Advisory', 'Claims Processing', 'Credit Card Services', 'EMI Reminders'],
     'IT & Software': ['Product Onboarding', 'Feature Updates', 'Technical Support', 'License Management', 'User Training', 'Bug Reports', 'API Documentation', 'System Alerts'],
     'Retail & eCommerce': ['WhatsApp Commerce', 'Order Management', 'Returns & Refunds', 'Loyalty Updates', 'Inventory Management', 'In-store Appointments'],
     'E-commerce': ['Shopping Cart Recovery', 'Product Recommendations', 'Order Status', 'Flash Sales', 'Feedback'],
@@ -223,6 +223,53 @@ if (typeof window !== 'undefined') {
     };
 }
 
+/**
+ * Coerce roles from DB, legacy storage, or string JSON into string[].
+ * Win/Loss and analytics depend on this when storage-shaped users omit roles.
+ */
+function coerceUserRoles(roles) {
+    if (roles == null) return [];
+    if (Array.isArray(roles)) {
+        return roles.map((r) => String(r).trim()).filter(Boolean);
+    }
+    if (typeof roles === 'string') {
+        const s = roles.trim();
+        if (!s) return [];
+        try {
+            const parsed = JSON.parse(s);
+            if (Array.isArray(parsed)) {
+                return parsed.map((r) => String(r).trim()).filter(Boolean);
+            }
+        } catch (_) {
+            /* not JSON */
+        }
+        return s.split(',').map((x) => x.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+/** Admin/industry lists: Customer Support → Support, dedupe. */
+function migrateCustomerSupportInIndustryUseCaseMap(map) {
+    if (!map || typeof map !== 'object') return { map: map || {}, changed: false };
+    let changed = false;
+    const out = { ...map };
+    for (const k of Object.keys(out)) {
+        if (!Array.isArray(out[k])) continue;
+        const arr = out[k].map((uc) => {
+            const s = String(uc || '').trim();
+            if (s === 'Customer Support' || s.toLowerCase() === 'customer support') {
+                changed = true;
+                return 'Support';
+            }
+            return uc;
+        });
+        const deduped = [...new Set(arr)];
+        if (deduped.length !== arr.length) changed = true;
+        out[k] = deduped;
+    }
+    return { map: out, changed };
+}
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -287,7 +334,7 @@ const DataManager = {
                         username: 'admin',
                         email: 'admin@example.com',
                         password: 'admin123', // In production, this should be hashed
-                        roles: ['Admin', 'Presales User', 'Analytics Access'],
+                        roles: ['Admin', 'Presales User'],
                         regions: ['India South', 'India North'],
                         salesReps: ['John Doe', 'Jane Smith'],
                         defaultRegion: 'India South',
@@ -807,7 +854,8 @@ const DataManager = {
                 ...user,
                 regions,
                 salesReps,
-                defaultRegion
+                defaultRegion,
+                roles: coerceUserRoles(user.roles)
             };
         };
         const toRawUsers = (parsed) => {
@@ -896,6 +944,46 @@ const DataManager = {
         return normalized;
     },
 
+    userIsPresalesUser(user) {
+        if (!user || typeof user !== 'object') return false;
+        return coerceUserRoles(user.roles).some((r) => String(r).trim().toLowerCase() === 'presales user');
+    },
+
+    /**
+     * Active users from GET /api/users (DB). Bypasses storage-backed user list so roles stay accurate for dropdowns.
+     */
+    async getActiveRosterUsers() {
+        const normalizeUser = (user) => {
+            if (!user || typeof user !== 'object') return user;
+            const defaultRegion =
+                typeof (user.defaultRegion || user.default_region) === 'string' ? (user.defaultRegion || user.default_region).trim() : '';
+            const regions = Array.isArray(user.regions) ? user.regions : [];
+            const salesReps = Array.isArray(user.salesReps) ? user.salesReps : (Array.isArray(user.sales_reps) ? user.sales_reps : []);
+            return {
+                ...user,
+                regions,
+                salesReps,
+                defaultRegion,
+                roles: coerceUserRoles(user.roles)
+            };
+        };
+        try {
+            const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+            const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+            const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+            const rosterUrl = root ? (root.replace(/\/$/, '') + '/api/users') : '/api/users';
+            const rosterRes = await fetch(rosterUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+            if (!rosterRes.ok) return [];
+            const fromRoster = await rosterRes.json();
+            const list = Array.isArray(fromRoster) ? fromRoster : [];
+            return list.map(normalizeUser).filter(Boolean);
+        } catch (e) {
+            console.warn('[DataManager] getActiveRosterUsers failed:', e);
+            return [];
+        }
+    },
+
     // Ensure default users exist (call this if needed)
     async ensureDefaultUsers() {
         const users = await this.getUsers();
@@ -906,7 +994,7 @@ const DataManager = {
                     username: 'admin',
                     email: 'admin@example.com',
                     password: 'admin123',
-                    roles: ['Admin', 'Presales User', 'POC Admin', 'Analytics Access'],
+                    roles: ['Admin', 'Presales User', 'POC Admin'],
                     regions: ['India South', 'India North'],
                     salesReps: ['John Doe', 'Jane Smith'],
                     defaultRegion: 'India South',
@@ -1265,7 +1353,10 @@ const DataManager = {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
                 if (!stored) return {};
                 const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
-                return typeof parsed === 'object' && parsed !== null ? parsed : {};
+                const base = typeof parsed === 'object' && parsed !== null ? parsed : {};
+                const { map: migrated, changed } = migrateCustomerSupportInIndustryUseCaseMap(base);
+                if (changed) await this.saveIndustryUseCases(migrated);
+                return migrated;
             } catch (e) {
                 console.warn('[DataManager] Async getIndustryUseCases failed:', e);
             }
@@ -1274,10 +1365,20 @@ const DataManager = {
         if (!stored) return {};
         try {
             const parsed = JSON.parse(stored);
-            return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            const base = typeof parsed === 'object' && parsed !== null ? parsed : {};
+            const { map: migrated, changed } = migrateCustomerSupportInIndustryUseCaseMap(base);
+            if (changed) await this.saveIndustryUseCases(migrated);
+            return migrated;
         } catch (e) {
             return {};
         }
+    },
+
+    normalizePrimaryUseCaseLabel(uc) {
+        if (uc == null) return uc;
+        const s = String(uc).trim();
+        if (s === 'Customer Support' || s.toLowerCase() === 'customer support') return 'Support';
+        return uc;
     },
 
     async getUseCasesForIndustry(industry) {
@@ -1286,7 +1387,7 @@ const DataManager = {
         const map = await this.getIndustryUseCases();
         let list = map[trimmed];
         if (!Array.isArray(list) || list.length === 0) {
-            const defaults = DEFAULT_INDUSTRY_USE_CASES[trimmed] || ['Marketing', 'Commerce', 'Support', 'Customer Support', 'Other'];
+            const defaults = DEFAULT_INDUSTRY_USE_CASES[trimmed] || ['Support', 'Commerce', 'Marketing'];
             const sorted = [...defaults].sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
             map[trimmed] = sorted;
             await this.saveIndustryUseCases(map);
@@ -1378,7 +1479,7 @@ const DataManager = {
         let changed = false;
         industries.forEach(ind => {
             if (!Array.isArray(map[ind]) || !map[ind].length) {
-                const defaults = DEFAULT_INDUSTRY_USE_CASES[ind] || ['Marketing', 'Commerce', 'Support', 'Customer Support', 'Other'];
+                const defaults = DEFAULT_INDUSTRY_USE_CASES[ind] || ['Support', 'Commerce', 'Marketing'];
                 map[ind] = [...defaults];
                 changed = true;
             }
@@ -3128,6 +3229,42 @@ const DataManager = {
         this.invalidateCache('internalActivities', 'allActivities');
     },
 
+    /**
+     * CSV import only: write cloned accounts, external activities, and internal activities together.
+     * Does not use appendActivity / appendInternalActivity. Normal manual logging is unchanged.
+     * Audits run only after all three saves succeed (individual audit failures are logged, not thrown).
+     */
+    async persistCsvImportBatch(accounts, activities, internalActivities, auditRecords = []) {
+        if (!Array.isArray(accounts) || !Array.isArray(activities) || !Array.isArray(internalActivities)) {
+            throw new Error('persistCsvImportBatch: accounts, activities, and internalActivities must be arrays');
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('persistCsvImportBatch start', {
+                accounts: accounts.length,
+                activities: activities.length,
+                internalActivities: internalActivities.length,
+                auditRecords: auditRecords.length
+            });
+        }
+        await this.saveAccounts(accounts, { skipDraft: true });
+        await this.saveActivities(activities);
+        await this.saveInternalActivities(internalActivities);
+        this.cache.accounts = accounts;
+        this.cache.activities = activities;
+        this.cache.internalActivities = internalActivities;
+        this.cache.allActivities = null;
+        for (const rec of auditRecords) {
+            try {
+                this.recordAudit(rec.action, rec.entity, rec.entityId, rec.detail);
+            } catch (e) {
+                console.warn('[DataManager] persistCsvImportBatch audit record failed', e);
+            }
+        }
+        if (typeof window.__activitySaveTracePush === 'function') {
+            window.__activitySaveTracePush('persistCsvImportBatch done', {});
+        }
+    },
+
     async addInternalActivity(activity) {
         const activities = await this.getInternalActivities();
         const dateDay = (activity.date || activity.createdAt || '').toString().slice(0, 10);
@@ -3372,7 +3509,7 @@ const DataManager = {
         const targetValue = Number(targetInfo.value) >= 0 ? Number(targetInfo.value) : 0;
 
         const users = await this.getUsers();
-        const presalesUsers = users.filter(user => Array.isArray(user.roles) && user.roles.includes('Presales User'));
+        const presalesUsers = users.filter((user) => this.userIsPresalesUser(user));
         const userLookup = new Map(users.map(user => [user.id, user]));
         const userMap = new Map(users.map(user => [user.id, user]));
 

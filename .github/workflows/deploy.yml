@@ -18,7 +18,7 @@ jobs:
     name: Backup (pre-deploy)
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,13 +66,14 @@ jobs:
           if [ -z "$f" ] || [ ! -f "$f" ]; then echo "No snapshot file"; exit 1; fi
           echo "Backup: $f"
 
-      - name: Commit and push pre-deploy snapshot
-        run: |
-          f=$(ls -t backups/pre-deploy-*.json 2>/dev/null | head -1)
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$f"
-          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: pre-deploy backup [skip ci]" && git push)
+      - name: Upload pre-deploy artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-backup-${{ github.run_id }}
+          path: backups/pre-deploy-*.json
+          retention-days: 30
+          if-no-files-found: error
 
   deploy:
     name: Deploy (merge to main)
@@ -99,4 +100,4 @@ jobs:
       - name: No merge (main only)
         if: ${{ github.event.inputs.branch == 'main' }}
         run: |
-          echo "Branch is main – backup already pushed. Push your commits to main to deploy."
+          echo "Branch is main – backup artifact uploaded. Push your commits to main to deploy."

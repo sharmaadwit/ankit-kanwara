@@ -16,6 +16,7 @@ const adminConfigRouter = require('./routes/adminConfig');
 const activityLogsRouter = require('./routes/activityLogs');
 const activitySubmissionLogsRouter = require('./routes/activitySubmissionLogs');
 const pricingCalculationsRouter = require('./routes/pricingCalculations');
+const superAgentImportRouter = require('./routes/superAgentImport');
 const logger = require('./logger');
 const { getAppConfig } = require('./services/appConfig');
 const {
@@ -117,6 +118,26 @@ const createApp = (options = {}) => {
   const jsonBodyLimit = process.env.API_JSON_LIMIT || '20mb';
   app.use(express.json({ limit: jsonBodyLimit }));
   app.use(cookieParser());
+
+  const isAppMaintenance = () =>
+    String(process.env.APP_MAINTENANCE_MODE || '').toLowerCase() === 'true';
+  app.use((req, res, next) => {
+    if (!isAppMaintenance()) return next();
+    const p = req.path || '';
+    if (p === '/api/health' || p.startsWith('/api/health?')) return next();
+    if (p === '/api/healthz' || p.startsWith('/api/healthz?')) return next();
+    if (p === '/api/bootstrap' || p.startsWith('/api/bootstrap?')) return next();
+    if (p === '/api/config' || p.startsWith('/api/config?')) return next();
+    if (p === '/api/version' || p.startsWith('/api/version?')) return next();
+    if (p.startsWith('/api/')) {
+      return res.status(503).json({
+        message: 'PreSight is temporarily unavailable for maintenance.',
+        maintenance: true
+      });
+    }
+    return next();
+  });
+
   app.use((req, res, next) => {
     const start = process.hrtime.bigint();
     const pathName = req.originalUrl || req.url;
@@ -213,6 +234,7 @@ const createApp = (options = {}) => {
   app.use('/api/admin/activity-submission-logs', adminLimiter, activitySubmissionLogsRouter);
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
   app.use('/api/pricing-calculations', sessionMiddleware, pricingCalculationsRouter);
+  app.use('/api/integrations/super-agent/import', superAgentImportRouter);
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const bootstrapStart = Date.now();
@@ -221,19 +243,21 @@ const createApp = (options = {}) => {
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
-    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'true').toLowerCase() !== 'false';
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'false').toLowerCase() === 'true';
+    const maintenanceMode = isAppMaintenance();
     try {
       const config = await getAppConfig();
       const configPayload = {
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
+        maintenanceMode,
         featureFlags: config.featureFlags,
         dashboardVisibility: config.dashboardVisibility,
         dashboardMonth: config.dashboardMonth
       };
       let user = null;
-      if (cookieAuth && req.user) {
+      if (!maintenanceMode && req.user) {
         user = {
           userId: req.user.id,
           username: req.user.username,
@@ -254,6 +278,7 @@ const createApp = (options = {}) => {
         config: {
           remoteStorage: forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
           cookieAuth,
+          maintenanceMode,
           featureFlags: {},
           dashboardVisibility: {},
           dashboardMonth: 'last'
@@ -286,13 +311,15 @@ const createApp = (options = {}) => {
       hostname.includes('localhost') ||
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
-    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'true').toLowerCase() !== 'false';
+    const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'false').toLowerCase() === 'true';
+    const maintenanceMode = isAppMaintenance();
     try {
       const config = await getAppConfig();
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
+        maintenanceMode,
         featureFlags: config.featureFlags,
         dashboardVisibility: config.dashboardVisibility,
         dashboardMonth: config.dashboardMonth
@@ -303,6 +330,7 @@ const createApp = (options = {}) => {
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
+        maintenanceMode,
         featureFlags: {},
         dashboardVisibility: {},
         dashboardMonth: 'last'

@@ -18,6 +18,20 @@
     window.__csvImportTraceClear = function () { try { if (window[TRACE_KEY]) window[TRACE_KEY].length = 0; } catch (_) {} };
 })();
 
+/** Keep in sync with CSV template / getTemplateOptions().internalActivityTypes */
+const INTERNAL_ACTIVITY_TYPES_CSV = Object.freeze([
+    'Enablement',
+    'Video Creation',
+    'Webinar',
+    'Event/Booth Hosting',
+    'Product Feedback',
+    'Content Creation',
+    'Training',
+    'Documentation',
+    'Internal Meeting',
+    'Other'
+]);
+
 const BulkImport = {
     isEnabled: true,
     state: {
@@ -170,7 +184,7 @@ const BulkImport = {
         }).join('\r\n');
     },
 
-    getTemplateOptions() {
+    async getTemplateOptions() {
         const products = [
             'AI Agents',
             'Campaign Manager',
@@ -181,21 +195,35 @@ const BulkImport = {
             'Other'
         ];
 
-        const options = {
+        let industries = [];
+        let salesRepNames = [];
+        try {
+            if (typeof DataManager !== 'undefined' && typeof DataManager.getIndustries === 'function') {
+                const list = await DataManager.getIndustries();
+                industries = Array.isArray(list)
+                    ? list.slice().sort((a, b) => String(a).localeCompare(String(b)))
+                    : [];
+            }
+        } catch (e) {
+            console.warn('[BulkImport] getTemplateOptions industries', e);
+        }
+        try {
+            if (typeof DataManager !== 'undefined' && typeof DataManager.getGlobalSalesReps === 'function') {
+                const reps = await DataManager.getGlobalSalesReps();
+                salesRepNames = (Array.isArray(reps) ? reps : [])
+                    .filter((rep) => rep && rep.isActive)
+                    .map((rep) => rep.name)
+                    .filter(Boolean)
+                    .sort((a, b) => String(a).localeCompare(String(b)));
+            }
+        } catch (e) {
+            console.warn('[BulkImport] getTemplateOptions sales reps', e);
+        }
+
+        return {
             activityCategories: ['external', 'internal'],
             externalActivityTypes: ['customerCall', 'sow', 'poc', 'rfx', 'pricing'],
-            internalActivityTypes: [
-                'Enablement',
-                'Video Creation',
-                'Webinar',
-                'Event/Booth Hosting',
-                'Product Feedback',
-                'Content Creation',
-                'Training',
-                'Documentation',
-                'Internal Meeting',
-                'Other'
-            ],
+            internalActivityTypes: [...INTERNAL_ACTIVITY_TYPES_CSV],
             callTypes: [
                 'Demo',
                 'Discovery',
@@ -214,17 +242,12 @@ const BulkImport = {
             ],
             rfxTypes: ['RFP', 'RFI', 'RFQ', 'Other'],
             channels: ['WhatsApp', 'Web', 'Voice', 'RCS', 'Instagram', 'Mobile SDK', 'Other'],
-            useCases: ['Marketing', 'Commerce', 'Support', 'Other'],
+            useCases: ['Support', 'Commerce', 'Marketing', 'Other'],
             products,
             timeSpentTypes: ['day', 'hour'],
-            industries: DataManager.getIndustries().sort((a, b) => a.localeCompare(b)),
-            salesRepNames: DataManager.getGlobalSalesReps()
-                .filter(rep => rep.isActive)
-                .map(rep => rep.name)
-                .sort((a, b) => a.localeCompare(b))
+            industries,
+            salesRepNames
         };
-
-        return options;
     },
 
     /** First real account+project from storage (for external sample row). */
@@ -317,6 +340,10 @@ const BulkImport = {
     },
 
     async downloadTemplate(type) {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            return;
+        }
         const today = new Date().toISOString().split('T')[0];
         const normalizedType = type === 'internal' || type === 'external' ? type : null;
 
@@ -327,7 +354,16 @@ const BulkImport = {
             return;
         }
 
-        const options = this.getTemplateOptions();
+        let options;
+        try {
+            options = await this.getTemplateOptions();
+        } catch (e) {
+            console.error('[BulkImport] downloadTemplate getTemplateOptions', e);
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Could not build template. Try again after the app finishes loading.', 'error');
+            }
+            return;
+        }
 
         const headersByType = {
             external: [
@@ -463,8 +499,21 @@ const BulkImport = {
         URL.revokeObjectURL(url);
     },
 
-    downloadLookupReference() {
-        const options = this.getTemplateOptions();
+    async downloadLookupReference() {
+        if (!this.isEnabled) {
+            this.notifyFeatureDisabled();
+            return;
+        }
+        let options;
+        try {
+            options = await this.getTemplateOptions();
+        } catch (e) {
+            console.error('[BulkImport] downloadLookupReference getTemplateOptions', e);
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Could not build reference. Try again after the app finishes loading.', 'error');
+            }
+            return;
+        }
         const today = new Date().toISOString().split('T')[0];
 
         const rows = [
@@ -783,8 +832,8 @@ const BulkImport = {
         if (!category && hintCategory) {
             category = hintCategory;
         }
-        if (!category && row.activitytype) {
-            category = this.isInternalType(row.activitytype) ? 'internal' : 'external';
+        if (!category && row.activityType) {
+            category = this.isInternalType(row.activityType) ? 'internal' : 'external';
         }
         if (!category) {
             errors.push('Activity Category is required (internal/external).');
@@ -798,6 +847,8 @@ const BulkImport = {
         const date = row.date;
         if (!date) {
             errors.push('Date is required.');
+        } else if (!this.isValidCsvDate(date)) {
+            errors.push('Date is not a valid calendar date.');
         }
 
         const userIdentifier = row.user;
@@ -825,12 +876,14 @@ const BulkImport = {
 
     evaluateInternalRow(row, context) {
         const { errors, warnings, messages, user, date, displayRowNumber } = context;
-        const activityType = row.activitytype || '';
+        const activityType = row.activityType || '';
         if (!activityType) {
             errors.push('Activity Type is required for internal rows.');
+        } else if (!this.isValidInternalCsvActivityType(activityType)) {
+            errors.push(`Activity Type must match template values (e.g. ${INTERNAL_ACTIVITY_TYPES_CSV.slice(0, 3).join(', ')}, …).`);
         }
-        const timeSpentType = (row.timespenttype || '').toLowerCase();
-        const timeSpentValue = row.timespentvalue;
+        const timeSpentType = (row.timeSpentType || '').toLowerCase();
+        const timeSpentValue = row.timeSpentValue;
         if (timeSpentType && !['day', 'days', 'hour', 'hours'].includes(timeSpentType)) {
             warnings.push('Time Spent Type should be "day" or "hour".');
         }
@@ -846,9 +899,9 @@ const BulkImport = {
             activityType: activityType,
             timeSpentType: timeSpentType.startsWith('day') ? 'day' : timeSpentType.startsWith('hour') ? 'hour' : '',
             timeSpentValue: timeSpentValue ? Number(timeSpentValue) : '',
-            activityName: row.internalactivityname || '',
-            topic: row.internaltopic || '',
-            description: row.internaldescription || ''
+            activityName: row.internalActivityName || '',
+            topic: row.internalTopic || '',
+            description: row.internalDescription || ''
         };
 
         const status = errors.length ? 'error' : 'ready';
@@ -880,7 +933,7 @@ const BulkImport = {
         const accountName = (row.account || '').trim();
         const projectName = (row.project || '').trim();
         const deferAccountProject = !accountName && !projectName;
-        const activityTypeRaw = row.activitytype;
+        const activityTypeRaw = row.activityType;
 
         if (!deferAccountProject) {
             if (!accountName) errors.push('Account Name is required unless both Account and Project are left blank (map after upload).');
@@ -913,29 +966,29 @@ const BulkImport = {
                 activityType,
                 accountName: '',
                 projectName: '',
-                salesRepName: row.salesrepname || '',
-                salesRepEmail: row.salesrepemail || '',
+                salesRepName: row.salesRepName || '',
+                salesRepEmail: row.salesRepEmail || '',
                 industry: row.industry || '',
-                sfdcLink: row.sfdclink || '',
-                useCases: this.parseMulti(row.usecases),
-                useCaseOther: row.usecaseother || '',
+                sfdcLink: row.sfdcLink || '',
+                useCases: this.normalizeImportedUseCaseTokens(this.parseMulti(row.useCases)),
+                useCaseOther: row.useCaseOther || '',
                 products: this.parseMulti(row.products),
-                productsOther: row.productsother || '',
+                productsOther: row.productsOther || '',
                 channels: this.parseMulti(row.channels),
-                channelsOther: row.channelsother || '',
-                callType: row.calltype || '',
+                channelsOther: row.channelsOther || '',
+                callType: row.callType || '',
                 description: callDescription || '',
-                pocAccessType: row.pocaccesstype || '',
-                pocUseCaseDescription: row.pocusecasedescription || '',
-                pocSandboxStartDate: row.pocsandboxstartdate || '',
-                pocSandboxEndDate: row.pocsandboxenddate || '',
-                pocDemoEnvironment: row.pocdemoenvironment || '',
-                pocBotTriggerUrl: row.pocbottriggerurl || '',
-                sowLink: row.sowlink || '',
-                rfxType: row.rfxtype || '',
-                rfxDeadline: row.rfxdeadline || '',
-                rfxFolderLink: row.rfxfolderlink || '',
-                rfxNotes: row.rfxnotes || '',
+                pocAccessType: row.pocAccessType || '',
+                pocUseCaseDescription: row.pocUseCaseDescription || '',
+                pocSandboxStartDate: row.pocSandboxStartDate || '',
+                pocSandboxEndDate: row.pocSandboxEndDate || '',
+                pocDemoEnvironment: row.pocDemoEnvironment || '',
+                pocBotTriggerUrl: row.pocBotTriggerUrl || '',
+                sowLink: row.sowLink || '',
+                rfxType: row.rfxType || '',
+                rfxDeadline: row.rfxDeadline || '',
+                rfxFolderLink: row.rfxFolderLink || '',
+                rfxNotes: row.rfxNotes || '',
                 newAccount: null,
                 newProject: null
             };
@@ -956,11 +1009,11 @@ const BulkImport = {
 
         const matchedAccount = this.findAccount(accounts, accountName);
         const matchedProject = matchedAccount && this.findProject(matchedAccount, projectName);
-        const salesRepName = row.salesrepname || (matchedAccount ? matchedAccount.salesRep : '');
-        const salesRepEmail = row.salesrepemail || '';
+        const salesRepName = row.salesRepName || (matchedAccount ? matchedAccount.salesRep : '');
+        const salesRepEmail = row.salesRepEmail || '';
         const industry = row.industry || matchedAccount?.industry || '';
 
-        const useCases = this.parseMulti(row.usecases);
+        const useCases = this.normalizeImportedUseCaseTokens(this.parseMulti(row.useCases));
         const products = this.parseMulti(row.products);
         const channels = this.parseMulti(row.channels);
 
@@ -995,26 +1048,26 @@ const BulkImport = {
             salesRepName,
             salesRepEmail,
             industry,
-            sfdcLink: row.sfdclink || '',
+            sfdcLink: row.sfdcLink || '',
             useCases,
-            useCaseOther: row.usecaseother || '',
+            useCaseOther: row.useCaseOther || '',
             products,
-            productsOther: row.productsother || '',
+            productsOther: row.productsOther || '',
             channels,
-            channelsOther: row.channelsother || '',
-            callType: row.calltype || '',
+            channelsOther: row.channelsOther || '',
+            callType: row.callType || '',
             description: callDescription || '',
-            pocAccessType: row.pocaccesstype || '',
-            pocUseCaseDescription: row.pocusecasedescription || '',
-            pocSandboxStartDate: row.pocsandboxstartdate || '',
-            pocSandboxEndDate: row.pocsandboxenddate || '',
-            pocDemoEnvironment: row.pocdemoenvironment || '',
-            pocBotTriggerUrl: row.pocbottriggerurl || '',
-            sowLink: row.sowlink || '',
-            rfxType: row.rfxtype || '',
-            rfxDeadline: row.rfxdeadline || '',
-            rfxFolderLink: row.rfxfolderlink || '',
-            rfxNotes: row.rfxnotes || '',
+            pocAccessType: row.pocAccessType || '',
+            pocUseCaseDescription: row.pocUseCaseDescription || '',
+            pocSandboxStartDate: row.pocSandboxStartDate || '',
+            pocSandboxEndDate: row.pocSandboxEndDate || '',
+            pocDemoEnvironment: row.pocDemoEnvironment || '',
+            pocBotTriggerUrl: row.pocBotTriggerUrl || '',
+            sowLink: row.sowLink || '',
+            rfxType: row.rfxType || '',
+            rfxDeadline: row.rfxDeadline || '',
+            rfxFolderLink: row.rfxFolderLink || '',
+            rfxNotes: row.rfxNotes || '',
             newAccount: matchedAccount ? null : accountName,
             newProject: matchedProject ? null : `${accountName} › ${projectName}`
         };
@@ -1069,9 +1122,23 @@ const BulkImport = {
             'proof of concept': 'poc',
             'rfx': 'rfx',
             'rfp': 'rfx',
+            'rfi': 'rfx',
+            'rfq': 'rfx',
             'pricing': 'pricing'
         };
         return map[cleaned] || '';
+    },
+
+    isValidCsvDate(value) {
+        const s = (value == null ? '' : String(value)).trim();
+        if (!s) return false;
+        const parsed = new Date(s);
+        return !Number.isNaN(parsed.getTime());
+    },
+
+    isValidInternalCsvActivityType(type) {
+        const t = (type || '').trim().toLowerCase();
+        return INTERNAL_ACTIVITY_TYPES_CSV.some((x) => x.toLowerCase() === t);
     },
 
     parseMulti(value) {
@@ -1080,6 +1147,18 @@ const BulkImport = {
             .split(/\||,|;/)
             .map(item => item.trim())
             .filter(Boolean);
+    },
+
+    normalizeImportedUseCaseTokens(arr) {
+        if (!Array.isArray(arr)) return [];
+        return arr.map((item) => {
+            const s = String(item || '').trim();
+            if (typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function') {
+                return DataManager.normalizePrimaryUseCaseLabel(s);
+            }
+            if (s === 'Customer Support' || s.toLowerCase() === 'customer support') return 'Support';
+            return s;
+        });
     },
 
     findAccount(accounts, accountName) {
@@ -1577,33 +1656,50 @@ const BulkImport = {
         let internalCount = 0;
         let createdAccounts = 0;
         let createdProjects = 0;
-        const savedAccountIds = new Set();
 
-        for (let i = 0; i < readyRows.length; i++) {
-            const row = readyRows[i];
-            try {
+        DataManager.invalidateCache('accounts', 'activities', 'internalActivities', 'allActivities');
+
+        const accounts = JSON.parse(JSON.stringify(await DataManager.getAccounts()));
+        const activities = JSON.parse(JSON.stringify(await DataManager.getActivities()));
+        const internalActivities = JSON.parse(JSON.stringify(await DataManager.getInternalActivities()));
+
+        const auditRecords = [];
+        const newEntityStats = { createdAccounts: 0, createdProjects: 0 };
+
+        try {
+            for (let i = 0; i < readyRows.length; i++) {
+                const row = readyRows[i];
                 if (row.category === 'external') {
-                    const result = await this.commitExternalRow(row.payload, savedAccountIds);
+                    await this._applyExternalPayloadToWorkingState(accounts, activities, row.payload, auditRecords, newEntityStats);
                     externalCount++;
-                    createdAccounts += result.newAccount ? 1 : 0;
-                    createdProjects += result.newProject ? 1 : 0;
                     if (typeof window.__csvImportTraceLog === 'function' && (i === 0 || i === readyRows.length - 1)) {
-                        window.__csvImportTraceLog('commitExternalRow', { index: i + 1, total: readyRows.length, accountName: row.payload?.accountName });
+                        window.__csvImportTraceLog('batchApplyExternal', {
+                            index: i + 1,
+                            total: readyRows.length,
+                            accountName: row.payload?.accountName
+                        });
                     }
                 } else if (row.category === 'internal') {
-                    await this.commitInternalRow(row.payload);
+                    this._applyInternalPayloadToWorkingState(internalActivities, row.payload, auditRecords);
                     internalCount++;
                     if (typeof window.__csvImportTraceLog === 'function' && (i === 0 || i === readyRows.length - 1)) {
-                        window.__csvImportTraceLog('commitInternalRow', { index: i + 1, total: readyRows.length });
+                        window.__csvImportTraceLog('batchApplyInternal', { index: i + 1, total: readyRows.length });
                     }
                 }
-            } catch (err) {
-                if (typeof window.__csvImportTraceLog === 'function') {
-                    window.__csvImportTraceLog('commitRowError', { index: i + 1, row: row.index, message: err && err.message });
-                }
-                UI.showNotification(`Import failed at row ${row.index}: ${(err && err.message) || 'Unknown error'}`, 'error');
-                throw err;
             }
+            createdAccounts = newEntityStats.createdAccounts;
+            createdProjects = newEntityStats.createdProjects;
+            await DataManager.persistCsvImportBatch(accounts, activities, internalActivities, auditRecords);
+        } catch (err) {
+            if (typeof window.__csvImportTraceLog === 'function') {
+                window.__csvImportTraceLog('commitBatchError', { message: err && err.message });
+            }
+            UI.showNotification(
+                `Import failed: ${(err && err.message) || 'Unknown error'}. ` +
+                    'If failure was during save, refresh and verify accounts and activities before retrying.',
+                'error'
+            );
+            throw err;
         }
 
         this.state.committed = true;
@@ -1619,69 +1715,7 @@ const BulkImport = {
         }
     },
 
-    async commitExternalRow(payload, savedAccountIds = new Set()) {
-        const accounts = await DataManager.getAccounts();
-        let account = this.findAccount(accounts, payload.accountName);
-        let newAccountCreated = false;
-        if (!account) {
-            account = await DataManager.addAccount({
-                name: payload.accountName,
-                industry: payload.industry || '',
-                salesRep: payload.salesRepName || '',
-                createdBy: payload.user.id
-            });
-            newAccountCreated = true;
-            accounts.push(account);
-        } else {
-            if (payload.industry && payload.industry !== account.industry) {
-                account.industry = payload.industry;
-            }
-            if (payload.salesRepName && payload.salesRepName !== account.salesRep) {
-                account.salesRep = payload.salesRepName;
-            }
-            // Only save accounts once per account per batch to avoid redundant writes
-            if (!savedAccountIds.has(account.id)) {
-                await DataManager.saveAccounts(accounts);
-                savedAccountIds.add(account.id);
-            }
-        }
-
-        let project = this.findProject(account, payload.projectName);
-        let newProjectCreated = false;
-        if (!project) {
-            project = await DataManager.addProject(account.id, {
-                name: payload.projectName,
-                sfdcLink: payload.sfdcLink || '',
-                useCases: this.normalizeMultiValues(payload.useCases, payload.useCaseOther),
-                productsInterested: this.normalizeMultiValues(payload.products, payload.productsOther),
-                channels: this.normalizeMultiValues(payload.channels, payload.channelsOther),
-                createdBy: payload.user.id
-            });
-            newProjectCreated = true;
-            if (!Array.isArray(account.projects)) account.projects = [];
-            account.projects.push(project);
-        } else {
-            if (payload.sfdcLink) project.sfdcLink = payload.sfdcLink;
-            const accountsList = await DataManager.getAccounts();
-            const accountRef = accountsList.find(a => a.id === account.id);
-            if (accountRef && accountRef.projects) {
-                const projectRef = accountRef.projects.find(p => p.id === project.id);
-                if (projectRef) {
-                    if (payload.useCases.length || payload.useCaseOther) {
-                        projectRef.useCases = this.normalizeMultiValues(payload.useCases, payload.useCaseOther);
-                    }
-                    if (payload.products.length || payload.productsOther) {
-                        projectRef.productsInterested = this.normalizeMultiValues(payload.products, payload.productsOther);
-                    }
-                    if (payload.channels.length || payload.channelsOther) {
-                        projectRef.channels = this.normalizeMultiValues(payload.channels, payload.channelsOther);
-                    }
-                    Object.assign(project, projectRef);
-                }
-                await DataManager.saveAccounts(accountsList);
-            }
-        }
-
+    _buildExternalActivityShell(payload, account, project) {
         const activity = {
             userId: payload.user.id,
             userName: payload.user.username,
@@ -1695,16 +1729,13 @@ const BulkImport = {
             industry: payload.industry || account.industry || '',
             details: {}
         };
-
         if (payload.activityType === 'customerCall') {
             activity.details = {
                 callType: payload.callType || '',
                 description: payload.description || ''
             };
         } else if (payload.activityType === 'sow') {
-            activity.details = {
-                sowLink: payload.sowLink || ''
-            };
+            activity.details = { sowLink: payload.sowLink || '' };
         } else if (payload.activityType === 'poc') {
             activity.details = {
                 accessType: payload.pocAccessType || '',
@@ -1724,38 +1755,184 @@ const BulkImport = {
         } else if (payload.activityType === 'pricing') {
             activity.details = {};
         }
+        return activity;
+    },
 
-        await DataManager.addActivity(activity);
-
-        const accountsList = await DataManager.getAccounts();
-        const accountRef = accountsList.find(a => a.id === account.id);
-        if (accountRef) {
-            const projectRef = accountRef.projects?.find(p => p.id === project.id);
-            if (projectRef) {
-                if (!Array.isArray(projectRef.activities)) projectRef.activities = [];
-                projectRef.activities.push(activity);
-                await DataManager.saveAccounts(accountsList);
+    async _applyExternalPayloadToWorkingState(accounts, activities, payload, auditRecords, newEntityStats) {
+        let account = this.findAccount(accounts, payload.accountName);
+        if (!account) {
+            const acc = {
+                name: payload.accountName,
+                industry: payload.industry || '',
+                salesRep: payload.salesRepName || '',
+                salesRepEmail: payload.salesRepEmail || '',
+                projects: [],
+                createdBy: payload.user.id
+            };
+            acc.id = DataManager.generateId();
+            const resolvedRep = await DataManager.resolveSalesRepMetadata({
+                name: acc.salesRep || '',
+                email: acc.salesRepEmail || '',
+                fallbackRegion: acc.salesRepRegion
+            });
+            acc.salesRep = resolvedRep.name;
+            acc.salesRepEmail = resolvedRep.email;
+            acc.salesRepRegion = resolvedRep.region;
+            acc.createdAt = new Date().toISOString();
+            accounts.push(acc);
+            account = acc;
+            newEntityStats.createdAccounts++;
+            auditRecords.push({
+                action: 'account.create',
+                entity: 'account',
+                entityId: account.id,
+                detail: { name: account.name, industry: account.industry || '' }
+            });
+        } else {
+            if (payload.industry && payload.industry !== account.industry) {
+                account.industry = payload.industry;
+            }
+            if (payload.salesRepName && payload.salesRepName !== account.salesRep) {
+                account.salesRep = payload.salesRepName;
             }
         }
 
-        return { newAccount: newAccountCreated, newProject: newProjectCreated };
+        let project = this.findProject(account, payload.projectName);
+        if (!project) {
+            const proj = {
+                name: payload.projectName,
+                sfdcLink: payload.sfdcLink || '',
+                useCases: this.normalizeMultiValues(payload.useCases || [], payload.useCaseOther),
+                productsInterested: this.normalizeMultiValues(payload.products || [], payload.productsOther),
+                channels: this.normalizeMultiValues(payload.channels || [], payload.channelsOther),
+                createdBy: payload.user.id
+            };
+            proj.id = DataManager.generateId();
+            proj.activities = [];
+            proj.status = 'active';
+            proj.createdAt = new Date().toISOString();
+            if (!Array.isArray(account.projects)) account.projects = [];
+            account.projects.push(proj);
+            project = proj;
+            newEntityStats.createdProjects++;
+            auditRecords.push({
+                action: 'project.create',
+                entity: 'project',
+                entityId: project.id,
+                detail: { accountId: account.id, name: project.name, status: project.status }
+            });
+        } else {
+            if (payload.sfdcLink) project.sfdcLink = payload.sfdcLink;
+            const accountRef = accounts.find((a) => a.id === account.id);
+            if (accountRef && accountRef.projects) {
+                const projectRef = accountRef.projects.find((p) => p.id === project.id);
+                if (projectRef) {
+                    const uc = payload.useCases || [];
+                    const pr = payload.products || [];
+                    const ch = payload.channels || [];
+                    if (uc.length || payload.useCaseOther) {
+                        projectRef.useCases = this.normalizeMultiValues(uc, payload.useCaseOther);
+                    }
+                    if (pr.length || payload.productsOther) {
+                        projectRef.productsInterested = this.normalizeMultiValues(pr, payload.productsOther);
+                    }
+                    if (ch.length || payload.channelsOther) {
+                        projectRef.channels = this.normalizeMultiValues(ch, payload.channelsOther);
+                    }
+                    Object.assign(project, projectRef);
+                }
+            }
+        }
+
+        const shell = this._buildExternalActivityShell(payload, account, project);
+        const timestamp = new Date().toISOString();
+        const normalized = {
+            ...shell,
+            id: DataManager.generateId(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            source: 'manual',
+            isMigrated: false
+        };
+        const referenceDate = normalized.date || normalized.createdAt;
+        if (referenceDate) {
+            const parsed = new Date(referenceDate);
+            if (!Number.isNaN(parsed.getTime())) normalized.date = parsed.toISOString();
+        }
+        const dateDay = (normalized.date || normalized.createdAt || '').toString().slice(0, 10);
+        const activityDuplicate = activities.find(
+            (a) =>
+                (a.accountId || '') === (normalized.accountId || '') &&
+                (a.projectId || '') === (normalized.projectId || '') &&
+                (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
+                (a.type || '') === (normalized.type || '')
+        );
+        if (activityDuplicate) {
+            return;
+        }
+        activities.push(normalized);
+        const accountRef = accounts.find((a) => a.id === account.id);
+        if (accountRef) {
+            const projectRef = accountRef.projects?.find((p) => p.id === project.id);
+            if (projectRef) {
+                if (!Array.isArray(projectRef.activities)) projectRef.activities = [];
+                projectRef.activities.push(normalized);
+            }
+        }
+        auditRecords.push({
+            action: 'activity.create',
+            entity: 'activity',
+            entityId: normalized.id,
+            detail: {
+                accountId: normalized.accountId || null,
+                projectId: normalized.projectId || null,
+                type: normalized.type || '',
+                category: 'external',
+                fullSnapshot: normalized
+            }
+        });
     },
 
-    async commitInternalRow(payload) {
+    _applyInternalPayloadToWorkingState(internalActivities, payload, auditRecords) {
         const activity = {
             userId: payload.user.id,
             userName: payload.user.username,
             date: payload.date,
             type: payload.activityType,
-            timeSpent: payload.timeSpentType && payload.timeSpentValue
-                ? `${payload.timeSpentValue} ${payload.timeSpentType === 'day' ? 'day(s)' : 'hour(s)'}`
-                : null,
+            timeSpent:
+                payload.timeSpentType && payload.timeSpentValue
+                    ? `${payload.timeSpentValue} ${payload.timeSpentType === 'day' ? 'day(s)' : 'hour(s)'}`
+                    : null,
             activityName: payload.activityName || '',
             topic: payload.topic || '',
             description: payload.description || '',
             isInternal: true
         };
-        await DataManager.addInternalActivity(activity);
+        const dateDay = (activity.date || activity.createdAt || '').toString().slice(0, 10);
+        const internalDup = internalActivities.find(
+            (a) =>
+                (a.date || a.createdAt || '').toString().slice(0, 10) === dateDay &&
+                (a.type || '') === (activity.type || '') &&
+                (a.activityName || '') === (activity.activityName || '')
+        );
+        if (internalDup) {
+            return;
+        }
+        const ts = new Date().toISOString();
+        activity.id = DataManager.generateId();
+        activity.createdAt = ts;
+        activity.updatedAt = ts;
+        internalActivities.push(activity);
+        auditRecords.push({
+            action: 'activity.create',
+            entity: 'internalActivity',
+            entityId: activity.id,
+            detail: {
+                type: activity.type || '',
+                name: activity.activityName || '',
+                fullSnapshot: activity
+            }
+        });
     },
 
     normalizeMultiValues(values, otherText) {

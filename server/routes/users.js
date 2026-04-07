@@ -8,11 +8,28 @@ const express = require('express');
 const router = express.Router();
 const { getPool } = require('../db');
 
+function coerceRoles(roles) {
+  if (roles == null) return [];
+  if (Array.isArray(roles)) return roles.map((r) => String(r).trim()).filter(Boolean);
+  if (typeof roles === 'string') {
+    const s = roles.trim();
+    if (!s) return [];
+    try {
+      const p = JSON.parse(s);
+      if (Array.isArray(p)) return p.map((r) => String(r).trim()).filter(Boolean);
+    } catch (_) {
+      /* not JSON */
+    }
+    return s.split(',').map((x) => x.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 const toPublicUser = (row) => ({
   id: row.id,
   username: row.username,
   email: row.email || null,
-  roles: Array.isArray(row.roles) ? row.roles : (row.roles || []),
+  roles: coerceRoles(row.roles),
   regions: Array.isArray(row.regions) ? row.regions : (row.regions || []),
   salesReps: Array.isArray(row.sales_reps) ? row.sales_reps : (row.sales_reps || []),
   defaultRegion: row.default_region || '',

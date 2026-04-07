@@ -1,22 +1,17 @@
-# Daily storage snapshot backup – 1 per day at 9 AM IST
-# Keeps only storage-snapshot-latest.json (deploy snapshot also overwrites this).
-# Deploy snapshots: snapshot-on-deploy.yml runs on push to main (no extra retention).
+# Daily storage snapshot — runs once per day (9 AM IST). Does not commit to Git.
+# Artifacts are retained 14 days (download from Actions). For long-term retention, copy the latest artifact off GitHub.
 name: Daily storage backup
 
 on:
   schedule:
-    # 9 AM IST = 03:30 UTC
     - cron: '30 3 * * *'
   workflow_dispatch:
-
-env:
-  SNAPSHOT_FILE: backups/storage-snapshot-latest.json
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -32,7 +27,7 @@ jobs:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
         run: |
           if [ -z "$REMOTE_STORAGE_BASE" ]; then
-            echo "::error::REMOTE_STORAGE_BASE secret is not set. Add it in Settings > Secrets and variables > Actions (e.g. https://YOUR-APP.up.railway.app/api/storage)."
+            echo "::error::REMOTE_STORAGE_BASE secret is not set. Add it in Settings > Secrets and variables > Actions."
             exit 1
           fi
           echo "REMOTE_STORAGE_BASE is set (value redacted)."
@@ -42,28 +37,19 @@ jobs:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
           REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
-          SNAPSHOT_FILE: backups/storage-snapshot-latest.json
         run: |
           mkdir -p backups
-          node server/scripts/export-storage-snapshot.js "" "backups/storage-snapshot-latest.json"
+          TS=$(date +%Y-%m-%d)
+          node server/scripts/export-storage-snapshot.js "" "backups/storage-snapshot-${TS}.json"
+          cp "backups/storage-snapshot-${TS}.json" backups/storage-snapshot-latest.json
+          ls -la backups/
 
-      - name: Purge other backups (keep only latest; leave backups/archive/ intact)
-        run: |
-          shopt -s nullglob 2>/dev/null || true
-          for f in backups/storage-snapshot-2*.json backups/pre-deploy-*.json backups/pre-deploy-manifest-*.json backups/local-insurance-*.json; do
-            [ -f "$f" ] && [ "$f" != "backups/storage-snapshot-latest.json" ] && rm -f "$f" && echo "Removed: $f"
-          done
-          ls -la backups/ 2>/dev/null; ls -la backups/archive/ 2>/dev/null || true
-
-      - name: Commit and push snapshot
+      - name: Upload snapshot artifacts
         if: success()
-        run: |
-          if [ ! -f backups/storage-snapshot-latest.json ]; then
-            echo "Snapshot file not found."
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add backups/storage-snapshot-latest.json
-          git status
-          git diff --staged --quiet && echo "No changes to commit" || (git commit -m "chore: daily storage snapshot (9 AM IST) [skip ci]" && git push)
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-backup-${{ github.run_id }}
+          path: |
+            backups/storage-snapshot-*.json
+          retention-days: 14
+          if-no-files-found: error

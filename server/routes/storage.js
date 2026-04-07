@@ -1291,5 +1291,7 @@ router.delete('/', async (req, res) => {
   }
 });
 
+router.invalidateStorageReadCache = invalidateStorageReadCache;
+
 module.exports = router;
 

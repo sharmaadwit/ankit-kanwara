@@ -51,6 +51,11 @@ Migration Source Data/
 backups/from-git-*.json
 backups/merged-for-restore-*.json
 backups/pre-deploy-manifest-*.json
+# CI/export snapshots — never commit (use GitHub Actions artifacts)
+backups/storage-snapshot*.json
+backups/pre-deploy-*.json
+backups/archive/*.json
+backups/backup-before-*.json
 
 # Local scratch
 pams-app/archive/

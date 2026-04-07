@@ -9,7 +9,8 @@ const defaultFlags = {
   adminCsvExport: true,
   migrationMode: false,
   pricingFullActivityForm: false,
-  pricingCalculatorSync: false
+  pricingCalculatorSync: false,
+  superAgentImport: false
 };
 
 const sanitizeFlags = (flags = {}) => {

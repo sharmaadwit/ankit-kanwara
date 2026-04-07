@@ -847,6 +847,13 @@ textarea.form-control {
     user-select: none;
 }
 
+.primary-use-case-cbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1.25rem;
+    align-items: center;
+}
+
 /* Drafts view */
 .drafts-layout {
     padding: 1rem;

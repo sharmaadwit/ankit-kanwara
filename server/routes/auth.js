@@ -15,8 +15,11 @@ const { isDevLoginAllowed, DEV_USER, setDevSession, getDevSession, destroyDevSes
 const logger = require('../logger');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const { SESSION_COOKIE_NAME, getSessionIdFromRequest } = require('../utils/sessionToken');
 
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'pams_sid';
+const useCookieAuth = () =>
+  String(process.env.FORCE_COOKIE_AUTH || 'false').toLowerCase() === 'true';
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
@@ -162,6 +165,12 @@ const migrateLegacyUserToDb = async (pool, legacyUser) => {
  */
 router.post('/login', async (req, res) => {
   try {
+    if (String(process.env.APP_MAINTENANCE_MODE || '').toLowerCase() === 'true') {
+      return res.status(503).json({
+        message: 'PreSight is temporarily unavailable for maintenance.',
+        maintenance: true
+      });
+    }
     const { username, password } = req.body || {};
     const trimmedUsername = (username || '').trim().toLowerCase();
     if (!trimmedUsername || typeof password !== 'string') {
@@ -173,12 +182,16 @@ router.post('/login', async (req, res) => {
       const sessionId = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       setDevSession(sessionId, DEV_USER);
-      res.cookie(SESSION_COOKIE_NAME, sessionId, { ...COOKIE_OPTIONS, expires: expiresAt });
+      if (useCookieAuth()) {
+        res.cookie(SESSION_COOKIE_NAME, sessionId, { ...COOKIE_OPTIONS, expires: expiresAt });
+      }
+      const trackingSessionId = crypto.randomUUID();
       logger.info('auth_dev_login', { transactionId: req.transactionId });
       return res.status(200).json({
         user: { id: DEV_USER.id, username: DEV_USER.username, email: DEV_USER.email, roles: DEV_USER.roles, regions: DEV_USER.regions, salesReps: DEV_USER.salesReps, defaultRegion: DEV_USER.defaultRegion, isActive: true, forcePasswordChange: false },
         forcePasswordChange: false,
-        sessionId
+        sessionId: trackingSessionId,
+        authSessionId: sessionId
       });
     }
 
@@ -268,11 +281,14 @@ router.post('/login', async (req, res) => {
       sessionId: trackingSessionId
     }, req.transactionId);
 
-    res.cookie(SESSION_COOKIE_NAME, sessionId, { ...COOKIE_OPTIONS, expires: expiresAt });
+    if (useCookieAuth()) {
+      res.cookie(SESSION_COOKIE_NAME, sessionId, { ...COOKIE_OPTIONS, expires: expiresAt });
+    }
     res.status(200).json({
       user: toPublicUser(user),
       forcePasswordChange: user.force_password_change || false,
-      sessionId: trackingSessionId // Return session ID to client for logout tracking
+      sessionId: trackingSessionId,
+      authSessionId: sessionId
     });
   } catch (error) {
     // If dev login is allowed, suggest using dev/dev for local testing without DB
@@ -290,8 +306,8 @@ router.post('/login', async (req, res) => {
  * Clear cookie and destroy session.
  */
 router.post('/logout', async (req, res) => {
-  const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
-  const trackingSessionId = req.body?.sessionId; // Get tracking session ID from request body
+  const sessionId = getSessionIdFromRequest(req, { includeBody: true });
+  const trackingSessionId = req.body?.sessionId;
 
   if (sessionId) {
     destroyDevSession(sessionId);
@@ -324,7 +340,7 @@ router.post('/logout', async (req, res) => {
  */
 router.get('/me', async (req, res) => {
   const meStart = Date.now();
-  const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
+  const sessionId = getSessionIdFromRequest(req);
   if (!sessionId) {
     return res.status(401).json({ message: 'Not authenticated.' });
   }

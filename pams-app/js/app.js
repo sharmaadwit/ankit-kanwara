@@ -194,6 +194,11 @@ const App = {
             console.log('[PreSight init] loadBootstrap:', bootstrapMs + 'ms');
 
             this.setAppConfiguration(bootstrap.config || {});
+            if (bootstrap.config && bootstrap.config.maintenanceMode) {
+                this.showAppMaintenanceScreen();
+                this.setLoading(false);
+                return;
+            }
             this.loadAnalyticsTablePresetsDeferred();
 
             let hasSession = false;
@@ -736,6 +741,17 @@ const App = {
         }
     },
 
+    showAppMaintenanceScreen() {
+        const overlay = document.getElementById('appLoadingOverlay');
+        const login = document.getElementById('loginScreen');
+        const main = document.getElementById('mainApp');
+        const maintenance = document.getElementById('appMaintenanceScreen');
+        if (overlay) overlay.classList.add('hidden');
+        if (login) login.classList.add('hidden');
+        if (main) main.classList.add('hidden');
+        if (maintenance) maintenance.classList.remove('hidden');
+    },
+
     setLoadingProgress(pct, message, tip) {
         this.setupLoadingOverlay();
         const val = Math.min(100, Math.max(0, Number(pct)));
@@ -862,8 +878,8 @@ const App = {
             ? config.dashboardMonth.trim()
             : 'last';
         if (typeof window !== 'undefined') {
-            // Default to cookie auth unless explicitly disabled in config.
-            window.__USE_COOKIE_AUTH__ = config.cookieAuth !== false;
+            window.__USE_COOKIE_AUTH__ = config.cookieAuth === true;
+            window.__APP_MAINTENANCE_MODE__ = config.maintenanceMode === true;
         }
         this._configFetchedAt = Date.now();
         this.applyAppConfiguration();
@@ -1119,13 +1135,7 @@ const App = {
         const requestedView = params.get('view');
 
         if (requestedView && this.isValidView(requestedView)) {
-            if (!(typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly()) || requestedView === 'reports') {
-                return requestedView;
-            }
-        }
-
-        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly()) {
-            return 'reports';
+            return requestedView;
         }
 
         if (this.isMigrationMode() && this.isValidView('migrationDashboard')) {
@@ -1165,11 +1175,6 @@ const App = {
                 UI.showNotification(this.getAccessMessage(accessKey, 'visibility'), 'info');
                 return;
             }
-        }
-
-        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
-            console.warn('Analytics-only user restricted to reports view. Redirecting.');
-            viewName = 'reports';
         }
 
         // Hide all views
@@ -1331,9 +1336,6 @@ const App = {
         const migrationViews = ['migrationDashboard', 'accounts', 'activities', 'projectHealth', 'suggestionsBugs', 'winloss', 'configuration'];
         const allowInMigrationMode = this.isMigrationMode() && migrationViews.indexOf(viewName) !== -1;
         if (!allowInMigrationMode && !this.isAccessible(this.getDashboardVisibilityKey(viewName))) return false;
-        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
-            return false;
-        }
         return true;
     },
 
@@ -2032,13 +2034,32 @@ const App = {
                 total_mandays: calculationOrDraft.payload.calculationSummary && calculationOrDraft.payload.calculationSummary.total_mandays
             }
             : calculationOrDraft;
-        if (!calculationItem || !calculationItem.calculation_id) return;
         if (!this.isPricingCalculatorSyncEnabled()) {
+            const userEarly = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+            if (!userEarly || !userEarly.id) {
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please log in to log this pricing activity.', 'error');
+                return;
+            }
+            if (typeof Activities !== 'undefined' && Activities.openActivityModal) {
+                const dateStr = new Date().toISOString().split('T')[0];
+                await Activities.openActivityModal({
+                    mode: 'create',
+                    restoreFormData: {
+                        activityCategory: 'external',
+                        activityType: 'pricing',
+                        date: dateStr
+                    }
+                });
+            }
             if (typeof UI !== 'undefined' && UI.showNotification) {
-                UI.showNotification('Pricing calculator sync is turned off. Enable it under Configuration → Feature flags to use pricing integration.', 'warning');
+                UI.showNotification(
+                    'Pricing calculator sync is off — use Log Activity to record pricing. Enable sync under Feature flags to link API calculations.',
+                    'info'
+                );
             }
             return;
         }
+        if (!calculationItem || !calculationItem.calculation_id) return;
         const user = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
         if (!user || !user.id) {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Please log in to log this pricing activity.', 'error');
@@ -2485,10 +2506,6 @@ const App = {
             }
         }
 
-        if (typeof Auth !== 'undefined' && Auth.isAnalyticsOnly && Auth.isAnalyticsOnly() && viewName !== 'reports') {
-            console.warn('Analytics-only user restricted to reports view. Redirecting.');
-            viewName = 'reports';
-        }
         if (InterfaceManager.getCurrentInterface() !== 'card') {
             // Fallback to normal navigation
             this.switchView(viewName);
@@ -2890,7 +2907,7 @@ const App = {
                             <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--gray-200);">
                                 ${project.winLossData.reason ? `<p><strong>Reason:</strong> ${project.winLossData.reason}</p>` : ''}
                                 ${this.formatWinLossAmount(project.winLossData) ? `<p><strong>MRR:</strong> ${this.formatWinLossAmount(project.winLossData)}</p>` : ''}
-                                ${project.winLossData.otd ? `<p><strong>OTD:</strong> ${project.winLossData.otd}</p>` : ''}
+                                ${this.formatWinLossOtd(project.winLossData) ? `<p><strong>OTD:</strong> ${this.formatWinLossOtd(project.winLossData)}</p>` : ''}
                             </div>
                         ` : ''}
                         <p class="text-muted" style="margin-top: 0.75rem;">
@@ -3371,15 +3388,22 @@ const App = {
         const raw = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
         const all = Array.isArray(raw) ? raw : [];
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
-        const count = currentUser && currentUser.id
-            ? all.filter(d => {
-                const p = d && d.payload;
-                if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
-                return true;
-            }).length
-            : all.length;
-        badge.textContent = count;
-        badge.classList.toggle('hidden', count === 0);
+        const mine = (d) => {
+            const p = d && d.payload;
+            if (currentUser && currentUser.id && p && p._activityUpdate === true) {
+                return p.activity && String(p.activity.userId) === String(currentUser.id);
+            }
+            return true;
+        };
+        const failed = all.filter(d => {
+            if (!mine(d)) return false;
+            const e = (d.errorMessage || '').trim();
+            return e && e !== 'Submitting…';
+        });
+        const hasFailed = failed.length > 0;
+        badge.textContent = hasFailed ? '\u2022' : '';
+        badge.setAttribute('aria-label', hasFailed ? 'Draft save failed — open Drafts' : '');
+        badge.classList.toggle('hidden', !hasFailed);
     },
 
     loadDraftsView() {
@@ -3390,13 +3414,19 @@ const App = {
         const rawDrafts = typeof Drafts !== 'undefined' ? Drafts.getDrafts() : [];
         const allDrafts = Array.isArray(rawDrafts) ? rawDrafts : [];
         const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function' ? Auth.getCurrentUser() : null;
-        const drafts = currentUser && currentUser.id
+        const userDrafts = currentUser && currentUser.id
             ? allDrafts.filter(d => {
                 const p = d && d.payload;
                 if (p && p._activityUpdate === true) return p.activity && String(p.activity.userId) === String(currentUser.id);
                 return true;
             })
             : allDrafts;
+        const draftHasFailure = (d) => {
+            const e = (d.errorMessage || '').trim();
+            return e && e !== 'Submitting…';
+        };
+        const failedSorted = userDrafts.filter(draftHasFailure).sort((a, b) => String(b.attemptedAt || '').localeCompare(String(a.attemptedAt || '')));
+        const drafts = failedSorted.length ? [failedSorted[0]] : [];
         this.updateDraftsBadge();
 
         // No longer auto-moving Feb activities to drafts for missing use cases; keep counter correct without drafts.
@@ -3432,8 +3462,11 @@ const App = {
         }
 
         if (drafts.length === 0) {
-            let msg = '<p class="text-muted">No drafts. All caught up—activities only count once you submit each from here via <strong>Edit</strong> &amp; Save.</p>';
-            if (hasBackup) msg += '<p class="text-muted small mt-2">If drafts vanished after Submit all, use <strong>Restore from backup</strong> above to recover them.</p>';
+            let msg = '<p class="text-muted">No failed saves to fix here. This tab shows <strong>one</strong> draft at a time when a sync error occurred—use <strong>Edit</strong> to fix and <strong>Deploy</strong> to save.</p>';
+            if (userDrafts.some(d => !draftHasFailure(d))) {
+                msg += '<p class="text-muted small mt-2">You have other drafts without errors; finish them from the activity flow or wait until a save fails to see them here.</p>';
+            }
+            if (hasBackup) msg += '<p class="text-muted small mt-2">If drafts vanished after a bulk submit, use <strong>Restore from backup</strong> above.</p>';
             container.innerHTML = msg;
             return;
         }
@@ -3493,9 +3526,12 @@ const App = {
                                     ? (p && (p.type || p.activityName || 'Internal')) + ' – ' + dateStr
                                     : (p && (p.accountName || p.accountId || 'External')) + ' – ' + (p && p.type || '') + ' – ' + dateStr;
             const typeLabel = d.label ? d.label.split(' – ')[0] : (isPendingDelete ? 'Delete' : (isActivityUpdate ? 'Feb update' : (storageKey === 'accounts' ? 'Accounts' : storageKey === 'winloss' ? 'Win/Loss' : storageKey === 'activity_form' ? 'Activity' : (isInternal ? 'Internal' : 'External'))));
-            const err = (d.errorMessage || '').slice(0, 80);
+            const err = (d.errorMessage || '').trim().slice(0, 400);
             const isSubmitting = (d.errorMessage || '').trim() === 'Submitting…';
-            const submitBtnLabel = isSubmitting ? 'Saving…' : (isActivityForm ? 'Open & Save' : (isActivityUpdate ? 'Edit & Save' : 'Submit again'));
+            let submitBtnLabel = 'Deploy';
+            if (isSubmitting) submitBtnLabel = 'Saving…';
+            else if (isActivityForm) submitBtnLabel = 'Open & Save';
+            else if (isWinlossForm) submitBtnLabel = 'Submit again';
             const submitDisabled = isSubmitting ? ' disabled' : '';
             const isPricingCalc = !!(p && p._pricingCalc === true);
             const showEdit = !isPendingDelete && !isFullList && !isSubmitting && (isActivityForm || isActivityUpdate || isPricingCalc || (!isWinlossForm && !isActivityForm));
@@ -3504,7 +3540,7 @@ const App = {
                 '<div class="draft-card-body">' +
                 '<span class="draft-type">' + typeLabel + '</span>' +
                 '<p class="draft-label">' + (label || 'Activity') + '</p>' +
-                (err ? '<p class="draft-error text-muted small">' + err + '</p>' : '') +
+                (err ? '<p class="draft-error text-muted small">' + App.escapeHtml(err) + '</p>' : '') +
                 '<div class="draft-actions">' +
                 '<button type="button" class="btn btn-primary btn-sm draft-submit"' + submitDisabled + '>' + submitBtnLabel + '</button> ' +
                 (showEdit ? '<button type="button" class="btn btn-outline btn-sm draft-edit">Edit</button> ' : '') +
@@ -3672,13 +3708,6 @@ const App = {
             deleteAllBtn._wired = true;
             deleteAllBtn.addEventListener('click', function () {
                 App.draftsDeleteAll();
-            });
-        }
-        const submitAllBtn = document.getElementById('draftsSubmitAllBtn');
-        if (submitAllBtn && !submitAllBtn._wired) {
-            submitAllBtn._wired = true;
-            submitAllBtn.addEventListener('click', function () {
-                App.draftsSubmitAll();
             });
         }
     },
@@ -4086,7 +4115,7 @@ const App = {
                                 <div style="margin-top: 0.5rem;">
                                     ${this.formatWinLossAmount(project.winLossData) ? `<p><strong>MRR:</strong> ${this.formatWinLossAmount(project.winLossData)}</p>` : ''}
                                     ${project.winLossData.reason ? `<p><strong>Reason:</strong> ${project.winLossData.reason}</p>` : ''}
-                                    ${project.winLossData.otd ? `<p><strong>OTD:</strong> ${project.winLossData.otd}</p>` : ''}
+                                    ${this.formatWinLossOtd(project.winLossData) ? `<p><strong>OTD:</strong> ${this.formatWinLossOtd(project.winLossData)}</p>` : ''}
                                 </div>
                 ` : '';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
@@ -5846,6 +5875,14 @@ const App = {
             return converted ? `${primary} (${converted})` : primary;
         }
         return primary;
+    },
+
+    formatWinLossOtd(winLossData) {
+        if (!winLossData || winLossData.otd == null || winLossData.otd === '') return '';
+        const n = Number(winLossData.otd);
+        if (!Number.isFinite(n)) return '';
+        const currency = winLossData.currency || 'INR';
+        return this.formatCurrencyValue(n, currency);
     },
 
     updateWinLossMrrHelper() {
@@ -8786,19 +8823,53 @@ const App = {
         }
         const wonBySelect = document.getElementById('winLossWonBy');
         if (wonBySelect) {
-            const allUsers = (typeof DataManager !== 'undefined' && DataManager.getUsers) ? await DataManager.getUsers() : [];
-            const presalesUsers = allUsers.filter(u => u && Array.isArray(u.roles) && u.roles.includes('Presales User'));
-            wonBySelect.innerHTML = '<option value="">Select presales</option>' +
-                presalesUsers.map(u => `<option value="${u.id}">${u.username || u.name || u.id}</option>`).join('');
-            wonBySelect.value = project.winLossData?.wonByUserId || '';
+            let allUsers = [];
+            if (typeof DataManager !== 'undefined' && typeof DataManager.getActiveRosterUsers === 'function') {
+                allUsers = await DataManager.getActiveRosterUsers();
+            }
+            if (!allUsers.length && typeof DataManager !== 'undefined' && typeof DataManager.getUsers === 'function') {
+                allUsers = await DataManager.getUsers();
+            }
+            const presalesUsers = allUsers.filter((u) =>
+                typeof DataManager !== 'undefined' && typeof DataManager.userIsPresalesUser === 'function'
+                    ? DataManager.userIsPresalesUser(u)
+                    : u && Array.isArray(u.roles) && u.roles.includes('Presales User')
+            );
+            const escOpt = (v) =>
+                String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/"/g, '&quot;');
+            wonBySelect.innerHTML =
+                '<option value="">Select presales</option>' +
+                presalesUsers
+                    .map((u) => {
+                        const id = u.id != null ? String(u.id) : '';
+                        const label = u.username || u.name || id;
+                        return `<option value="${escOpt(id)}">${escOpt(label)}</option>`;
+                    })
+                    .join('');
         }
         if (project.winLossData) {
             if (reasonInput) reasonInput.value = project.winLossData.reason || '';
             if (competitorInput) competitorInput.value = project.winLossData.competitors || '';
             if (mrrInput) mrrInput.value = project.winLossData.mrr ?? '';
             if (accountTypeSelect) accountTypeSelect.value = project.winLossData.accountType || 'existing';
-            if (otdInput) otdInput.value = project.winLossData.otd || '';
-            if (wonBySelect) wonBySelect.value = project.winLossData.wonByUserId || '';
+            if (otdInput) {
+                const rawOtd = project.winLossData.otd;
+                if (rawOtd != null && rawOtd !== '') {
+                    const n = Number(rawOtd);
+                    otdInput.value = Number.isFinite(n) ? String(n) : '';
+                } else {
+                    otdInput.value = '';
+                }
+            }
+            if (wonBySelect) {
+                const wid = project.winLossData.wonByUserId;
+                const saved = wid != null && wid !== '' ? String(wid) : '';
+                wonBySelect.value =
+                    saved && [...wonBySelect.options].some((o) => o.value === saved) ? saved : '';
+            }
             if (sfdcInput) {
                 sfdcInput.value = project.sfdcLink || '';
             }
@@ -8843,11 +8914,17 @@ const App = {
     createWinLossModal() {
         const container = document.getElementById('modalsContainer');
         const modalId = 'winLossModal';
-
-        if (document.getElementById(modalId)) return;
+        const WIN_LOSS_MODAL_VERSION = '4';
+        const existing = document.getElementById(modalId);
+        if (existing) {
+            const okVersion = existing.getAttribute('data-modal-version') === WIN_LOSS_MODAL_VERSION;
+            const hasOtd = !!document.getElementById('winLossOtd');
+            if (okVersion && hasOtd) return;
+            existing.remove();
+        }
 
         const modalHTML = `
-            <div id="${modalId}" class="modal">
+            <div id="${modalId}" class="modal" data-modal-version="${WIN_LOSS_MODAL_VERSION}">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h2 class="modal-title">Update Project Status</h2>
@@ -8912,8 +8989,8 @@ const App = {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">OTD / Delivery Notes</label>
-                                <textarea class="form-control" id="winLossOtd" rows="2" placeholder="Implementation commitments, next steps, delivery dates, etc."></textarea>
+                                <label class="form-label">OTD</label>
+                                <input type="number" class="form-control" id="winLossOtd" min="0" step="0.01" placeholder="0" style="max-width: 14rem;">
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -8974,6 +9051,7 @@ const App = {
         const otdInput = document.getElementById('winLossOtd');
         UI.clearFieldError(sfdcInput);
         UI.clearFieldError(mrrInput);
+        if (otdInput) UI.clearFieldError(otdInput);
 
         const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
@@ -9011,6 +9089,21 @@ const App = {
             const mrrRounded = Number(mrrValue.toFixed(2));
             const mrrInInr = currency === 'INR' ? mrrRounded : (fxToInr ? Number((mrrRounded * fxToInr).toFixed(2)) : null);
 
+            const otdRaw = otdInput ? otdInput.value.trim() : '';
+            let otdNumeric = undefined;
+            if (otdRaw !== '') {
+                const otdNum = Number(otdRaw);
+                if (!Number.isFinite(otdNum) || otdNum < 0) {
+                    if (otdInput) {
+                        UI.setFieldError(otdInput, 'Enter a valid OTD amount (0 or greater).');
+                        otdInput.focus();
+                    }
+                    UI.showNotification('OTD must be a non-negative number.', 'error');
+                    return;
+                }
+                otdNumeric = Number(otdNum.toFixed(2));
+            }
+
             project.sfdcLink = sfdcLinkValue;
             const monthOfWinEl = document.getElementById('winLossMonthOfWin');
             const monthOfWin = monthOfWinEl && monthOfWinEl.value ? monthOfWinEl.value : null;
@@ -9021,9 +9114,13 @@ const App = {
                 if (wonByEl) { wonByEl.focus(); UI.setFieldError(wonByEl, 'Required for wins'); }
                 return;
             }
-            const wonByUserName = wonByUserId && typeof DataManager !== 'undefined' && DataManager.getUsers
-                ? (await DataManager.getUsers()).find(u => u.id === wonByUserId)?.username || null
-                : null;
+            let wonByUserName = null;
+            if (wonByUserId && typeof DataManager !== 'undefined') {
+                let roster = typeof DataManager.getActiveRosterUsers === 'function' ? await DataManager.getActiveRosterUsers() : [];
+                if (!roster.length && typeof DataManager.getUsers === 'function') roster = await DataManager.getUsers();
+                const match = roster.find((u) => String(u.id) === String(wonByUserId));
+                wonByUserName = match ? (match.username || match.name || null) : null;
+            }
             project.winLossData = {
                 reason: document.getElementById('winLossReason').value,
                 competitors: document.getElementById('competitorAnalysis').value,
@@ -9032,7 +9129,7 @@ const App = {
                 currency,
                 fxToInr,
                 mrrInInr,
-                otd: otdInput ? otdInput.value : '',
+                otd: otdNumeric,
                 monthOfWin: monthOfWin || undefined,
                 wonByUserId: wonByUserId || undefined,
                 wonByUserName: wonByUserName || undefined,
@@ -9122,6 +9219,18 @@ const App = {
         if (payload.sfdcLink) project.sfdcLink = payload.sfdcLink;
         if (payload.status === 'won' || payload.status === 'lost') {
             const mrr = Number(payload.mrr);
+            let draftOtd = undefined;
+            if (payload.otd != null && payload.otd !== '') {
+                const otdN = Number(payload.otd);
+                if (Number.isFinite(otdN) && otdN >= 0) draftOtd = Number(otdN.toFixed(2));
+            }
+            let draftWonByName = null;
+            if (payload.wonByUserId && typeof DataManager !== 'undefined') {
+                let roster = typeof DataManager.getActiveRosterUsers === 'function' ? await DataManager.getActiveRosterUsers() : [];
+                if (!roster.length && typeof DataManager.getUsers === 'function') roster = await DataManager.getUsers();
+                const matchUser = roster.find((u) => String(u.id) === String(payload.wonByUserId));
+                draftWonByName = matchUser ? (matchUser.username || matchUser.name || null) : null;
+            }
             project.winLossData = {
                 reason: payload.reason || '',
                 competitors: payload.competitors || '',
@@ -9130,12 +9239,10 @@ const App = {
                 currency: payload.currency || 'INR',
                 fxToInr: payload.fxToInr || null,
                 mrrInInr: payload.currency === 'INR' && Number.isFinite(mrr) ? mrr : (payload.fxToInr && Number.isFinite(mrr) ? Number((mrr * payload.fxToInr).toFixed(2)) : null),
-                otd: payload.otd || '',
+                otd: draftOtd,
                 monthOfWin: payload.monthOfWin || undefined,
                 wonByUserId: payload.wonByUserId || undefined,
-                wonByUserName: payload.wonByUserId && typeof DataManager !== 'undefined' && DataManager.getUsers
-                    ? (await DataManager.getUsers()).find(u => u.id === payload.wonByUserId)?.username || null
-                    : null,
+                wonByUserName: draftWonByName || undefined,
                 updatedAt: new Date().toISOString()
             };
         } else {

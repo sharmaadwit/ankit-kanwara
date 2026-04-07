@@ -76,6 +76,11 @@ const Auth = {
                 console.warn('Unable to clear session token', error);
             }
         }
+        try {
+            if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.removeItem('PAMS_AUTH_SESSION');
+            }
+        } catch (_) { /* ignore */ }
         this.clearRemoteSessionArtifact();
     },
 
@@ -147,6 +152,69 @@ const Auth = {
     async init() {
         this.clearRemoteSessionArtifact();
         const sessionData = this.readSession();
+
+        const protocolOk = typeof window !== 'undefined' && window.location.protocol !== 'file:';
+
+        // Bearer session (FORCE_COOKIE_AUTH=false): restore via GET /api/auth/me + Authorization (patched fetch)
+        if (protocolOk && typeof window !== 'undefined' && !window.__USE_COOKIE_AUTH__) {
+            let bearer = null;
+            try {
+                bearer = sessionStorage.getItem('PAMS_AUTH_SESSION');
+            } catch (_) {
+                bearer = null;
+            }
+            if (bearer) {
+                try {
+                    const t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+                    const res = await fetch('/api/auth/me', { credentials: 'include' });
+                    const meMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - t0);
+                    console.log('[PreSight init] /api/auth/me (bearer):', meMs + 'ms');
+                    if (res.ok) {
+                        const me = await res.json();
+                        const user = {
+                            id: me.userId,
+                            username: me.username,
+                            email: me.email || '',
+                            roles: me.roles || [],
+                            regions: me.regions || [],
+                            salesReps: me.salesReps || [],
+                            defaultRegion: me.defaultRegion || '',
+                            isActive: true
+                        };
+                        const r0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+                        const { role, salesLeaderRegion } = await this.resolveRole(user);
+                        console.log('[PreSight init] resolveRole (bearer path):', Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - r0) + 'ms');
+                        user.role = role;
+                        user.salesLeaderRegion = salesLeaderRegion || undefined;
+                        this.currentUser = user;
+                        this.writeSession({
+                            userId: user.id,
+                            loginTime: new Date().toISOString(),
+                            role,
+                            salesLeaderRegion: salesLeaderRegion || undefined
+                        });
+                        this.showMainApp();
+                        if ((role === 'leader' || role === 'sales_leader') && typeof App !== 'undefined' && App.switchView) {
+                            App.switchView('reports');
+                        }
+                        return true;
+                    }
+                    if (res.status === 401 && window.__REMOTE_STORAGE_ENABLED__) {
+                        try {
+                            sessionStorage.removeItem('PAMS_AUTH_SESSION');
+                        } catch (_) { /* ignore */ }
+                        this.clearSession();
+                        if (typeof this.showLoginScreen === 'function') this.showLoginScreen();
+                        if (typeof UI !== 'undefined' && UI.showNotification) {
+                            UI.showNotification('Session expired or invalid. Please sign in again to save activities.', 'warning');
+                        }
+                        return false;
+                    }
+                } catch (e) {
+                    console.warn('Bearer session restore failed:', e);
+                }
+            }
+        }
 
         // Cookie-first: restore session from GET /api/auth/me when server sent cookieAuth
         if (typeof window !== 'undefined' && window.__USE_COOKIE_AUTH__) {
@@ -237,8 +305,8 @@ const Auth = {
                 return { success: false, message: 'Username and password are required.' };
             }
 
-            // Cookie-first auth: POST /api/auth/login, then use returned user
-            if (typeof window !== 'undefined' && window.__USE_COOKIE_AUTH__) {
+            const useServerLogin = typeof window !== 'undefined' && window.location.protocol !== 'file:';
+            if (useServerLogin) {
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     credentials: 'include',
@@ -246,8 +314,16 @@ const Auth = {
                     body: JSON.stringify({ username: trimmedUsername, password: trimmedPassword })
                 });
                 const data = await res.json().catch(() => ({}));
+                if (res.status === 503 && data.maintenance) {
+                    return { success: false, message: data.message || 'PreSight is temporarily unavailable for maintenance.' };
+                }
                 if (res.ok && data.user) {
                     const user = data.user;
+                    if (data.authSessionId) {
+                        try {
+                            sessionStorage.setItem('PAMS_AUTH_SESSION', data.authSessionId);
+                        } catch (_) { /* ignore */ }
+                    }
                     if (data.forcePasswordChange) {
                         this.reportLoginEvent('success', { username: trimmedUsername, message: 'Password change required' });
                         this.pendingPasswordChangeUser = { ...user, forcePasswordChange: true };
@@ -349,19 +425,24 @@ const Auth = {
 
     // Logout
     logout() {
-        const sessionId = this.currentSessionId; // Get session ID before clearing
+        const sessionId = this.currentSessionId;
+        let authSessionId = null;
+        try {
+            authSessionId = sessionStorage.getItem('PAMS_AUTH_SESSION');
+        } catch (_) {
+            authSessionId = null;
+        }
         this.currentUser = null;
         this.pendingPasswordChangeUser = null;
         this.clearSession();
         this.clearRemoteSessionArtifact();
         this.showLoginScreen();
 
-        // Send logout event to server (cookie cleared when credentials: 'include')
         fetch('/api/auth/logout', {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId })
+            body: JSON.stringify({ sessionId, authSessionId })
         }).catch(err => console.warn('Logout logging failed:', err));
     },
 
@@ -598,17 +679,6 @@ const Auth = {
         document.querySelectorAll('[data-admin-only="true"]').forEach(el => {
             el.classList.toggle('hidden', !this.isAdmin());
         });
-
-        const analyticsOnly = this.isAnalyticsOnly();
-        document.querySelectorAll('.sidebar-link').forEach(link => {
-            const view = link.dataset.view;
-            const allow = !analyticsOnly || view === 'reports';
-            link.classList.toggle('hidden', !allow);
-        });
-        document.querySelectorAll('.nav-card.clickable').forEach(card => {
-            const allow = !analyticsOnly || card.classList.contains('reports');
-            card.classList.toggle('hidden', !allow);
-        });
     },
 
     // Check if user has role
@@ -644,20 +714,35 @@ const Auth = {
         return this.hasRole('Admin');
     },
 
-    isAnalyticsOnly() {
-        if (!this.currentUser) return false;
-        // Leader (CXO) or Sales leader: reports-only view
-        if (this.currentUser.role === 'leader' || this.currentUser.role === 'sales_leader') return true;
-        const roles = this.currentUser.roles;
-        if (!Array.isArray(roles)) return false;
-        const privilegedRoles = ['Admin', 'Presales User', 'POC Admin'];
-        const hasPrivileged = roles.some(role => privilegedRoles.includes(role));
-        return roles.includes('Analytics Access') && !hasPrivileged;
-    },
-
     // Get current user
     getCurrentUser() {
         return this.currentUser;
     }
 };
+
+(function installFetchBearer() {
+    if (typeof window === 'undefined' || window.__PAMS_FETCH_AUTH_PATCHED__) {
+        return;
+    }
+    window.__PAMS_FETCH_AUTH_PATCHED__ = true;
+    const orig = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+        const nextInit = init === undefined ? {} : { ...init };
+        const h = new Headers(nextInit.headers || {});
+        let sid = null;
+        try {
+            sid = sessionStorage.getItem('PAMS_AUTH_SESSION');
+        } catch (_) {
+            sid = null;
+        }
+        if (sid && !h.has('Authorization')) {
+            h.set('Authorization', 'Bearer ' + sid);
+        }
+        nextInit.headers = h;
+        if (nextInit.credentials === undefined) {
+            nextInit.credentials = 'include';
+        }
+        return orig(input, nextInit);
+    };
+}());
 

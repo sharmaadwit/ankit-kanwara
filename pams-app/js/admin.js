@@ -36,6 +36,12 @@ const Admin = {
             description: 'Enables the pricing calculator integration: POST/GET /api/pricing-calculations (ingest/list), my-unlinked/link/delete, and the Pricing section on the dashboard. Off by default until you are ready to deploy and connect pricing-calc.',
             dashboardKey: null,
             bundledInComposite: 'pricing'
+        },
+        superAgentImport: {
+            label: 'Super Agent import API',
+            description:
+                'Enables POST /api/integrations/super-agent/import/dry-run and /commit for third-party CSV/JSON activity ingest (X-Api-Key when SUPER_AGENT_API_KEY is set). Off by default.',
+            dashboardKey: null
         }
     },
 
@@ -1433,10 +1439,6 @@ const Admin = {
                                     <input type="checkbox" id="roleAdmin" value="Admin" class="role-checkbox">
                                     <label for="roleAdmin">Admin</label>
                                 </div>
-                                <div class="role-checkbox-item">
-                                    <input type="checkbox" id="roleAnalytics" value="Analytics Access" class="role-checkbox">
-                                    <label for="roleAnalytics">Analytics Access</label>
-                                </div>
                             </div>
                         </div>
                         <div class="form-group">
@@ -1526,8 +1528,7 @@ const Admin = {
 
         const roleOptions = [
             { id: 'editRolePresales', value: 'Presales User', label: 'Presales User' },
-            { id: 'editRoleAdmin', value: 'Admin', label: 'Admin' },
-            { id: 'editRoleAnalytics', value: 'Analytics Access', label: 'Analytics Access' }
+            { id: 'editRoleAdmin', value: 'Admin', label: 'Admin' }
         ];
 
         const modalHTML = `

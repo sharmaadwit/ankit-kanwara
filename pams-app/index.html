@@ -70,6 +70,23 @@
         </div>
     </div>
 
+    <div id="appMaintenanceScreen" class="login-screen hidden" role="status" aria-live="polite">
+        <div class="login-container">
+            <div class="login-brand">
+                <div class="login-logo logo-crop-wrap">
+                    <img src="images/presight-logo.png" alt="PreSight" class="login-logo-img">
+                </div>
+                <p class="login-subtitle">PreSight is temporarily unavailable</p>
+            </div>
+            <div class="reports-maintenance-placeholder" style="box-shadow:none;border:none;padding:0;">
+                <div class="reports-maintenance-inner">
+                    <h2 class="reports-maintenance-title">Maintenance</h2>
+                    <p class="reports-maintenance-body">We&rsquo;re updating the service. Please check back later. API access is paused except for health checks.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Main Application -->
     <div id="mainApp" class="main-app hidden">
         <!-- Header -->
@@ -218,9 +235,8 @@
                     <div class="drafts-layout">
                         <div class="drafts-header">
                             <h1 class="page-title">My drafts</h1>
-                            <p class="page-subtitle">Drafts are not counted in activity totals. Open each with <strong>Edit</strong>, complete and save—it will move to submitted and count then.</p>
+                            <p class="page-subtitle">When a save fails, the affected item appears here—use <strong>Edit</strong> to fix and <strong>Deploy</strong> to sync. Drafts are not counted in totals until deployed successfully.</p>
                             <div class="drafts-header-actions" id="draftsHeaderActions" style="display: none;">
-                                <button type="button" class="btn btn-primary btn-sm" id="draftsSubmitAllBtn">Submit all</button>
                                 <button type="button" class="btn btn-outline btn-danger" id="draftsDeleteAllBtn">Delete
                                     all</button>
                                 <button type="button" class="btn btn-outline btn-sm" id="draftsRestoreBackupBtn" style="display: none;" title="Restore draft cards from before last Submit all. You must then click Submit again on each to save to Activities.">Restore from backup</button>
@@ -1287,7 +1303,7 @@
                                     onclick="void BulkImport.downloadAccountsProjectsCatalog()">Download accounts &amp;
                                     projects</button>
                                 <button class="btn btn-secondary"
-                                    onclick="BulkImport.downloadLookupReference()">Download Field Value
+                                    onclick="void BulkImport.downloadLookupReference()">Download Field Value
                                     Reference</button>
                             </div>
                             <ul class="text-muted" style="font-size: 0.85rem; line-height: 1.6;">

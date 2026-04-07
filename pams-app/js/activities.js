@@ -48,15 +48,11 @@ const Activities = {
     },
 
     /**
-     * External activity type options. "Pricing" only when pricingCalculatorSync is on (matches server 403 when off).
+     * External activity type options. "Pricing" is always available for manual logging; calculator linking only when sync is on.
      * @param {{ longLabels?: boolean }} opts - long labels for main form vs compact for "add another row"
      */
     getExternalActivityTypeOptionsHtml(opts = {}) {
         const long = opts.longLabels === true;
-        const pricingOn = typeof App !== 'undefined' && typeof App.isPricingCalculatorSyncEnabled === 'function' && App.isPricingCalculatorSyncEnabled();
-        const pricingOpt = pricingOn
-            ? `<option value="pricing">${long ? 'Pricing' : 'Pricing'}</option>\n`
-            : '';
         const sow = long ? 'SOW (Statement of Work)' : 'SOW';
         const poc = long ? 'POC (Proof of Concept)' : 'POC';
         return `
@@ -65,7 +61,8 @@ const Activities = {
             <option value="sow">${sow}</option>
             <option value="poc">${poc}</option>
             <option value="rfx">RFx</option>
-            ${pricingOpt}<option value="other">Other</option>
+            <option value="pricing">${long ? 'Pricing' : 'Pricing'}</option>
+            <option value="other">Other</option>
         `;
     },
 
@@ -268,7 +265,6 @@ const Activities = {
             const subDl = document.getElementById('submissionDeadline');
             if (subDl && formData.submissionDeadline) subDl.value = formData.submissionDeadline;
         }
-        this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases || []);
         this.syncMultiSelectState('useCase', this.selectedUseCases || []);
     },
 
@@ -559,7 +555,7 @@ const Activities = {
         this.selectedUseCases = [];
         this.selectedProjectProducts = [];
         this.selectedChannels = [];
-        this.updateMultiSelectDisplay('useCaseSelected', []);
+        this.syncMultiSelectState('useCase', []);
         this.updateMultiSelectDisplay('projectProductsSelected', []);
         this.updateMultiSelectDisplay('channelsSelected', []);
     },
@@ -772,14 +768,11 @@ const Activities = {
                             <div class="form-grid">
                                 <div class="form-group" id="projectUseCasesGroup">
                                     <label class="form-label required">Primary Use Case</label>
-                                    <div class="multi-select-container">
-                                        <div class="multi-select-trigger" onclick="Activities.toggleMultiSelect('useCaseDropdown')">
-                                            <span class="multi-select-selected" id="useCaseSelected">Select use cases...</span>
-                                            <span>▼</span>
-                                        </div>
-                                        <div class="multi-select-dropdown" id="useCaseDropdown">
-                                            <!-- Populated by refreshUseCaseOptions() -->
-                                        </div>
+                                    <div class="checkbox-group primary-use-case-cbs">
+                                        <label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Support" onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Support</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Commerce" onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Commerce</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Marketing" onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Marketing</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Other" id="useCaseOtherCheck" onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Other</span></label>
                                     </div>
                                     <input type="text" class="form-control" id="useCaseOtherText" placeholder="Specify other use case..." style="margin-top: 0.5rem; display: none;">
                                 </div>
@@ -973,7 +966,10 @@ const Activities = {
         // Project-level Use Cases and Products Interested: always show for external activities (project-level fields)
         const projectUseCasesGroup = document.getElementById('projectUseCasesGroup');
         const projectProductsGroup = document.getElementById('projectProductsGroup');
-        const isExternal = this.activityType === 'external';
+        const categoryRadio = document.querySelector('#activityForm input[name="activityCategory"]:checked');
+        const isExternal =
+            this.activityType === 'external' ||
+            (categoryRadio && categoryRadio.value === 'external');
         if (projectUseCasesGroup) {
             projectUseCasesGroup.style.display = isExternal ? 'block' : 'none';
         }
@@ -1000,7 +996,13 @@ const Activities = {
         }
 
         container.innerHTML = html;
-        if (this.activityType === 'external' && type === 'pricing') {
+        if (
+            this.activityType === 'external' &&
+            type === 'pricing' &&
+            typeof App !== 'undefined' &&
+            typeof App.isPricingCalculatorSyncEnabled === 'function' &&
+            App.isPricingCalculatorSyncEnabled()
+        ) {
             setTimeout(() => this.loadPricingCalculationsOptions(), 50);
         }
     },
@@ -1013,7 +1015,7 @@ const Activities = {
         const syncOn = typeof App !== 'undefined' && typeof App.isPricingCalculatorSyncEnabled === 'function' && App.isPricingCalculatorSyncEnabled();
         if (!syncOn) {
             return `
-                <p class="text-muted small">Pricing calculator sync is turned off. An admin can enable <strong>Pricing calculator sync</strong> under Configuration → Feature flags to link calculations from the pricing API.</p>
+                <p class="text-muted small">Log a pricing discussion or quote. No extra fields are required. Turn on <strong>Pricing calculator sync</strong> under Configuration → Feature flags if you want to optionally link rows from the pricing API.</p>
             `;
         }
         return `
@@ -1257,6 +1259,36 @@ const Activities = {
         }
     },
 
+    onPrimaryUseCaseCheckboxChange(checkbox) {
+        if (!checkbox) return;
+        const value = checkbox.value;
+        const selectedArray = this.selectedUseCases;
+        const otherTextId = 'useCaseOtherText';
+        const index = selectedArray.indexOf(value);
+        if (checkbox.checked) {
+            if (index === -1) selectedArray.push(value);
+            if (value === 'Other') {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) {
+                    otherText.style.display = 'block';
+                    otherText.required = true;
+                    otherText.focus();
+                }
+            }
+        } else {
+            if (index > -1) selectedArray.splice(index, 1);
+            if (value === 'Other') {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) {
+                    otherText.style.display = 'none';
+                    otherText.value = '';
+                    otherText.required = false;
+                }
+            }
+        }
+        this.syncMultiSelectState('useCase', selectedArray);
+    },
+
     toggleOption(category, value) {
         if (typeof event !== 'undefined' && event && typeof event.stopPropagation === 'function') {
             event.stopPropagation();
@@ -1266,11 +1298,7 @@ const Activities = {
         let displayId;
         let otherTextId = null;
 
-        if (category === 'useCase') {
-            selectedArray = this.selectedUseCases;
-            displayId = 'useCaseSelected';
-            otherTextId = 'useCaseOtherText';
-        } else if (category === 'channels') {
+        if (category === 'channels') {
             selectedArray = this.selectedChannels;
             displayId = 'channelsSelected';
             otherTextId = 'channelsOtherText';
@@ -1278,6 +1306,8 @@ const Activities = {
             selectedArray = this.selectedProjectProducts;
             displayId = 'projectProductsSelected';
             otherTextId = 'projectProductsOtherText';
+        } else {
+            return;
         }
 
         const index = selectedArray.indexOf(value);
@@ -1322,10 +1352,9 @@ const Activities = {
         if (!display) return;
 
         if (selectedArray.length === 0) {
-            display.textContent = displayId.includes('useCase') ? 'Select use cases...' :
-                displayId.includes('products') ? 'Select products...' :
-                    displayId.includes('channels') ? 'Select channels...' :
-                        'Select products...';
+            display.textContent = displayId.includes('products') ? 'Select products...' :
+                displayId.includes('channels') ? 'Select channels...' :
+                    'Select products...';
         } else {
             display.innerHTML = selectedArray.map(item =>
                 `<span class="multi-select-tag">${item}</span>`
@@ -1334,10 +1363,17 @@ const Activities = {
     },
 
     syncMultiSelectState(category, selectedValues = []) {
-        let dropdownId = '';
         if (category === 'useCase') {
-            dropdownId = 'useCaseDropdown';
-        } else if (category === 'projectProducts') {
+            const wrap = document.getElementById('projectUseCasesGroup');
+            if (wrap) {
+                wrap.querySelectorAll('input[name="primaryUseCase"]').forEach((checkbox) => {
+                    checkbox.checked = selectedValues.includes(checkbox.value);
+                });
+            }
+            return;
+        }
+        let dropdownId = '';
+        if (category === 'projectProducts') {
             dropdownId = 'projectProductsDropdown';
         } else if (category === 'channels') {
             dropdownId = 'channelsDropdown';
@@ -1368,28 +1404,15 @@ const Activities = {
         this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => { });
     },
 
-    async refreshUseCaseOptions(industry) {
-        const dropdown = document.getElementById('useCaseDropdown');
-        if (!dropdown) return;
-        const useCases = (typeof DataManager !== 'undefined' && industry)
-            ? await DataManager.getUseCasesForIndustry(industry)
-            : [];
-        const list = useCases.length ? useCases : ['Marketing', 'Commerce', 'Support'];
-        const keepSelected = this.selectedUseCases.filter(uc => uc !== 'Other' && list.includes(uc));
-        this.selectedUseCases = keepSelected;
-        const listWithoutOther = list.filter(uc => uc !== 'Other');
-        const otherRow = `
-            <div class="multi-select-option" onclick="Activities.toggleOption('useCase', 'Other')">
-                <input type="checkbox" value="Other" id="useCaseOtherCheck"> Other
-            </div>`;
-        dropdown.innerHTML = listWithoutOther.map(uc => {
-            const attrVal = (uc || '').replace(/"/g, '&quot;');
-            return `<div class="multi-select-option" data-value="${attrVal}" onclick="Activities.toggleOption('useCase', this.getAttribute('data-value'))">
-                <input type="checkbox" value="${attrVal}"> ${uc}
-            </div>`;
-        }).join('') + otherRow;
+    async refreshUseCaseOptions(_industry) {
+        const wrap = document.getElementById('projectUseCasesGroup');
+        if (!wrap) return;
+        const norm = (uc) =>
+            typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function'
+                ? DataManager.normalizePrimaryUseCaseLabel(uc)
+                : uc;
+        this.selectedUseCases = (this.selectedUseCases || []).map(norm);
         this.syncMultiSelectState('useCase', this.selectedUseCases);
-        this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
     },
 
     // Load account dropdown (with inline search)
@@ -1954,19 +1977,23 @@ const Activities = {
         if (project.useCases && project.useCases.length > 0) {
             this.selectedUseCases = [];
             project.useCases.forEach(uc => {
-                if (uc.startsWith('Other: ')) {
+                const ucStr = typeof uc === 'string' ? uc : String(uc || '');
+                if (ucStr.startsWith('Other: ')) {
                     this.selectedUseCases.push('Other');
                     const otherText = document.getElementById('useCaseOtherText');
                     if (otherText) {
-                        otherText.value = uc.replace('Other: ', '');
+                        otherText.value = ucStr.replace('Other: ', '');
                         otherText.style.display = 'block';
                         otherText.required = true;
                     }
                 } else {
-                    this.selectedUseCases.push(uc);
+                    const normalized =
+                        typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function'
+                            ? DataManager.normalizePrimaryUseCaseLabel(uc)
+                            : uc;
+                    this.selectedUseCases.push(normalized);
                 }
             });
-            this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
             this.syncMultiSelectState('useCase', this.selectedUseCases);
         }
 
@@ -2034,7 +2061,6 @@ const Activities = {
             useCaseOtherText.style.display = 'none';
             useCaseOtherText.required = false;
         }
-        this.updateMultiSelectDisplay('useCaseSelected', []);
         this.syncMultiSelectState('useCase', []);
 
         // Clear Products
@@ -2417,8 +2443,12 @@ const Activities = {
                 }
                 if (this.selectedUseCases && this.selectedUseCases.length > 0) {
                     const useCaseOtherText = document.getElementById('useCaseOtherText')?.value || '';
-                    updates.useCases = this.selectedUseCases.map(uc =>
-                        uc === 'Other' ? `Other: ${useCaseOtherText}` : uc
+                    const norm =
+                        typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function'
+                            ? (u) => DataManager.normalizePrimaryUseCaseLabel(u)
+                            : (u) => u;
+                    updates.useCases = this.selectedUseCases.map((uc) =>
+                        uc === 'Other' ? `Other: ${useCaseOtherText}` : norm(uc)
                     );
                 }
                 if (Object.keys(updates).length > 0) {
@@ -2449,8 +2479,12 @@ const Activities = {
                 }
                 if (this.selectedUseCases && this.selectedUseCases.length > 0) {
                     const useCaseOtherText = document.getElementById('useCaseOtherText')?.value || '';
-                    project.useCases = this.selectedUseCases.map(uc =>
-                        uc === 'Other' ? `Other: ${useCaseOtherText}` : uc
+                    const norm =
+                        typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function'
+                            ? (u) => DataManager.normalizePrimaryUseCaseLabel(u)
+                            : (u) => u;
+                    project.useCases = this.selectedUseCases.map((uc) =>
+                        uc === 'Other' ? `Other: ${useCaseOtherText}` : norm(uc)
                     );
                 }
                 pendingAccountsSave = accounts;
@@ -3022,9 +3056,10 @@ const Activities = {
             }
         }
 
-        // Clear activity fields when category changes
-        const activityFields = document.getElementById('activityFields');
-        if (activityFields) activityFields.innerHTML = '';
+        // Reconcile activity detail fields and project-level controls (use cases, products) with the
+        // selected category. Without this, form.reset() or activity-type onchange can leave Primary
+        // Use Case / Products hidden (display:none) on new logs until the user changes activity type.
+        this.showActivityFields();
     },
 
     // Toggle SFDC link field
@@ -3038,27 +3073,6 @@ const Activities = {
             } else {
                 sfdcInput.style.display = 'block';
             }
-        }
-    },
-
-    // Toggle Use Case Other text field
-    toggleUseCaseOther() {
-        const checkbox = document.getElementById('useCaseOtherCheck');
-        const textInput = document.getElementById('useCaseOtherText');
-        if (checkbox && textInput) {
-            if (checkbox.checked) {
-                textInput.style.display = 'block';
-                textInput.required = true;
-                if (!this.selectedUseCases.includes('Other')) {
-                    this.selectedUseCases.push('Other');
-                }
-            } else {
-                textInput.style.display = 'none';
-                textInput.value = '';
-                textInput.required = false;
-                this.selectedUseCases = this.selectedUseCases.filter(uc => uc !== 'Other');
-            }
-            this.updateMultiSelectDisplay('useCaseSelected', this.selectedUseCases);
         }
     },
 

@@ -1,16 +1,15 @@
 const logger = require('../logger');
 const { getSession } = require('../services/session');
 const { getPool } = require('../db');
-
-const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'pams_sid';
+const { getSessionIdFromRequest } = require('../utils/sessionToken');
 
 /**
- * Cookie-first auth: if session cookie is present and valid, set req.user and req.headers['x-admin-user']
- * so requireStorageAuth passes. If no cookie or invalid, next(); requireStorageAuth still allows X-Admin-User or API key.
+ * Session auth: Authorization Bearer (preferred) or session cookie. Sets req.user and x-admin-user when valid.
+ * If no session or invalid, next(); requireStorageAuth still allows X-Admin-User or API key.
  */
 const sessionMiddleware = async (req, res, next) => {
   try {
-    const sessionId = req.cookies && req.cookies[SESSION_COOKIE_NAME];
+    const sessionId = getSessionIdFromRequest(req);
     if (!sessionId) return next();
     const { getDevSession } = require('../services/devSession');
     const devSession = getDevSession(sessionId);
