@@ -22,6 +22,14 @@ jest.mock('../db', () => {
           archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          email TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT true
+        );
+      `);
     };
     state.pool = pool;
     state.ensureSchema = ensureSchema;
@@ -49,6 +57,7 @@ jest.mock('../db', () => {
       ensurePool();
       await state.pool.query('TRUNCATE storage;');
       await state.pool.query('TRUNCATE storage_history;');
+      await state.pool.query('TRUNCATE users;');
     }
   };
 });
@@ -140,6 +149,31 @@ describe('Super Agent import API', () => {
     expect(res.body.ok).toBe(true);
     expect(res.body.summary.errorCount).toBe(1);
     expect(res.body.errors.length).toBeGreaterThan(0);
+  });
+
+  test('dry-run resolves presales user by email from DB roster', async () => {
+    const pool = db.getPool();
+    await pool.query(`UPDATE storage SET value = $1 WHERE key = 'users'`, [JSON.stringify([])]);
+    await pool.query(
+      `INSERT INTO users (id, username, email, is_active) VALUES ($1, $2, $3, $4)`,
+      ['db-u1', 'real.username', 'match.by.email@example.com', true]
+    );
+    const res = await request(app).post('/api/integrations/super-agent/import/dry-run').send({
+      rows: [
+        {
+          category: 'external',
+          date: '2024-06-01',
+          user: 'match.by.email@example.com',
+          activityType: 'Customer Call',
+          account: 'Acme',
+          project: 'P1',
+          description: 'x'
+        }
+      ]
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.summary.readyCount).toBe(1);
+    expect(res.body.rowResults[0].status).toBe('ready');
   });
 
   test('dry-run marks valid external row as ready', async () => {

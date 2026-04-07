@@ -334,6 +334,53 @@ function normalizeMultiValues(values, otherText) {
   return Array.from(new Set(items));
 }
 
+/**
+ * Match presales identity for import: case-insensitive username first, then email.
+ * (Super Agent often sends corporate email; DB-backed auth stores real username separately.)
+ */
+function findPresalesUser(users, identifier) {
+  const raw = (identifier || '').trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  for (const u of users) {
+    if (!u || typeof u !== 'object') continue;
+    const un = (u.username || '').toLowerCase();
+    if (un && un === lower) return u;
+  }
+  for (const u of users) {
+    if (!u || typeof u !== 'object') continue;
+    const em = (u.email || '').toLowerCase();
+    if (em && em === lower) return u;
+  }
+  return null;
+}
+
+/**
+ * Prefer PostgreSQL `users` table when it has active rows (production / DB auth).
+ * Fall back to storage key `users` when the table is missing or empty (legacy / tests).
+ */
+async function loadImportUsers(pool, storageUsers) {
+  if (!pool) return storageUsers;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, COALESCE(email::text, '') AS email
+       FROM users
+       WHERE is_active = true
+       ORDER BY username ASC`
+    );
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        id: r.id,
+        username: r.username,
+        email: r.email || ''
+      }));
+    }
+  } catch (e) {
+    logger.warn('super_agent_import_users_db_unavailable', { message: e.message, code: e.code });
+  }
+  return storageUsers;
+}
+
 function evaluateRow(row, displayRowNumber, users, accounts, existingActivities, duplicateHash, categoryHint, apiMode) {
   const r = expandRowAliases(row);
   const errors = [];
@@ -356,8 +403,10 @@ function evaluateRow(row, displayRowNumber, users, accounts, existingActivities,
   if (!date) errors.push('Date is required.');
 
   const userIdentifier = r.user;
-  const user = users.find((u) => u.username.toLowerCase() === (userIdentifier || '').toLowerCase());
-  if (!user) errors.push('Presales Username not found.');
+  const user = findPresalesUser(users, userIdentifier);
+  if (!user) {
+    errors.push('Presales user not found (no matching username or email in the active user roster).');
+  }
 
   if (category === 'internal') {
     return evaluateInternalRow(r, { errors, warnings, messages, user, date, displayRowNumber });
@@ -631,7 +680,8 @@ async function loadContext(pool) {
   const { rows: uRows } = await pool.query('SELECT value FROM storage WHERE key = $1;', ['users']);
   const { rows: aRows } = await pool.query('SELECT value FROM storage WHERE key = $1;', ['accounts']);
   const { rows: actRows } = await pool.query('SELECT value FROM storage WHERE key = $1;', ['activities']);
-  const users = parseJsonArray(uRows.length ? uRows[0].value : null);
+  const storageUsers = parseJsonArray(uRows.length ? uRows[0].value : null);
+  const users = await loadImportUsers(pool, storageUsers);
   const accounts = parseJsonArray(aRows.length ? aRows[0].value : null);
   const activities = parseJsonArray(actRows.length ? actRows[0].value : null);
   const { rows: intRows } = await pool.query('SELECT value FROM storage WHERE key = $1;', ['internalActivities']);

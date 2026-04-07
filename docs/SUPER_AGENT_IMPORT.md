@@ -6,7 +6,7 @@ Third-party systems (**Super Agent**) can submit activity rows as **JSON** or **
 
 1. **Admin → Configuration → Feature flags** — turn on **Super Agent import API** (`superAgentImport`).  
 2. Optional ops override (staging only): set `SUPER_AGENT_API_FORCE_ENABLED=true`.  
-3. **API key (recommended in production):** set `SUPER_AGENT_API_KEY` (or reuse `STORAGE_API_KEY`). Send it on every request as header **`X-Api-Key`** (or query `api_key`).
+3. **API key (recommended in production):** set `SUPER_AGENT_API_KEY` (or reuse `STORAGE_API_KEY` only if `SUPER_AGENT_API_KEY` is unset). The server compares the header **exactly** to that value (after trim). Send header **`X-Api-Key`** with the key as the value; avoid query-string `api_key` if the key contains `#`. `Authorization: Bearer` is **not** used for this route.
 
 ## Base URL
 
@@ -36,7 +36,7 @@ Use camelCase or the same names as CSV headers. Typical external row:
 |--------|------------|--------|
 | `category` | Yes | `internal` or `external` |
 | `date` | Yes | Parsed as ISO/date string (2020–2050 for stored activities) |
-| `user` / `presalesUsername` | Yes | Must match an existing **Presales Username** in `users` |
+| `user` / `presalesUsername` | Yes | Must match an **active** presales user: **username** or **email** (case-insensitive). Roster comes from the PostgreSQL **`users`** table when it has active rows; otherwise from storage key `users` (legacy). |
 | `activityType` | Yes | e.g. `Customer Call`, `SOW`, `POC`, `RFx`, `Pricing` |
 | `account` / `accountName` | Yes (API) | Both account and project required; no “map after upload” in API |
 | `project` / `projectName` | Yes (API) | |
