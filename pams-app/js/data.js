@@ -863,9 +863,61 @@ const DataManager = {
             if (parsed && typeof parsed === 'object' && Array.isArray(parsed.users)) return parsed.users;
             return [];
         };
-        // Try async (remote storage) first if available
+        const fetchWithTimeout = (url, ms) => {
+            const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const id = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+            const p = fetch(url, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
+            if (id) p.finally(() => clearTimeout(id));
+            return p;
+        };
+        const ADMIN_USERS_TIMEOUT_MS = 12000;
+        const adminUsersUrl = () => {
+            const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+            const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+            const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+            return root ? (root.replace(/\/$/, '') + '/api/admin/users') : '/api/admin/users';
+        };
+        const rosterUsersUrl = () => {
+            const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+            const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
+            const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
+            return root ? (root.replace(/\/$/, '') + '/api/users') : '/api/users';
+        };
+        // Remote: prefer DB-backed /api/admin/users when it returns rows (fixes edit user vs stale storage `users`).
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
+                let adminOk = false;
+                let adminList = [];
+                let lastErr;
+                for (let attempt = 0; attempt <= 1; attempt++) {
+                    try {
+                        const res = await fetchWithTimeout(adminUsersUrl(), ADMIN_USERS_TIMEOUT_MS);
+                        if (res.ok) {
+                            const fromDb = await res.json();
+                            adminList = Array.isArray(fromDb) ? fromDb : [];
+                            adminOk = true;
+                            break;
+                        }
+                        if (res.status === 401 || res.status === 403) {
+                            if (attempt === 0) console.warn('[DataManager] GET /api/admin/users: admin auth required (', res.status, ')');
+                            lastErr = new Error('Admin access required');
+                            break;
+                        }
+                    } catch (apiErr) {
+                        lastErr = apiErr;
+                        if (attempt === 0) console.warn('[DataManager] GET /api/admin/users failed (will retry once):', apiErr);
+                    }
+                }
+                if (lastErr && !adminOk) console.warn('[DataManager] GET /api/admin/users failed after retry:', lastErr);
+
+                if (adminOk && adminList.length > 0) {
+                    const normalized = adminList.map(normalizeUser).filter(Boolean);
+                    this.cache.users = normalized;
+                    return normalized;
+                }
+
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('users');
                 const parsed = stored ? (typeof stored === 'string' ? (() => { try { return JSON.parse(stored); } catch (_) { return []; } })() : stored) : [];
                 const rawUsers = toRawUsers(parsed);
@@ -874,50 +926,15 @@ const DataManager = {
                     this.cache.users = normalized;
                     return normalized;
                 }
-                // Storage returned empty: fallback to DB users (e.g. after auth migration) so admin list is visible
-                const fetchWithTimeout = (url, ms) => {
-                    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                    const id = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
-                    const p = fetch(url, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, signal: ctrl ? ctrl.signal : undefined });
-                    if (id) p.finally(() => clearTimeout(id));
-                    return p;
-                };
-                const ADMIN_USERS_TIMEOUT_MS = 12000;
-                let lastErr;
-                for (let attempt = 0; attempt <= 1; attempt++) {
-                    try {
-                        const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
-                        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-                        const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
-                        const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
-                        const url = root ? (root.replace(/\/$/, '') + '/api/admin/users') : '/api/admin/users';
-                        const res = await fetchWithTimeout(url, ADMIN_USERS_TIMEOUT_MS);
-                        if (res.ok) {
-                            const fromDb = await res.json();
-                            const list = Array.isArray(fromDb) ? fromDb : [];
-                            const normalized = list.map(normalizeUser).filter(Boolean);
-                            this.cache.users = normalized;
-                            return normalized;
-                        }
-                        // 401/403: don't cache empty so Retry can work after re-login or when session is ready
-                        if (res.status === 401 || res.status === 403) {
-                            if (attempt === 0) console.warn('[DataManager] Fallback GET /api/admin/users: admin auth required (', res.status, ')');
-                            lastErr = new Error('Admin access required');
-                        }
-                    } catch (apiErr) {
-                        lastErr = apiErr;
-                        if (attempt === 0) console.warn('[DataManager] Fallback GET /api/admin/users failed (will retry once):', apiErr);
-                    }
+
+                if (adminOk) {
+                    const normalized = adminList.map(normalizeUser).filter(Boolean);
+                    this.cache.users = normalized;
+                    return normalized;
                 }
-                if (lastErr) console.warn('[DataManager] Fallback GET /api/admin/users failed after retry:', lastErr);
-                // Second fallback: GET /api/users (roster) - returns active users from DB; works for any logged-in user (session). Shows Nikhil, Puru, etc. when admin API is unavailable.
+
                 try {
-                    const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
-                    const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-                    const apiRoot = (base && base.replace) ? base.replace(/\/api\/storage\/?$/, '') : '';
-                    const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
-                    const rosterUrl = root ? (root.replace(/\/$/, '') + '/api/users') : '/api/users';
-                    const rosterRes = await fetch(rosterUrl, { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
+                    const rosterRes = await fetch(rosterUsersUrl(), { method: 'GET', credentials: 'include', headers: { Accept: 'application/json' } });
                     if (rosterRes.ok) {
                         const fromRoster = await rosterRes.json();
                         const list = Array.isArray(fromRoster) ? fromRoster : [];
@@ -928,11 +945,9 @@ const DataManager = {
                 } catch (rosterErr) {
                     console.warn('[DataManager] Fallback GET /api/users failed:', rosterErr);
                 }
-                // Do not cache empty when fallback failed so Retry / next load can try again
                 return [];
             } catch (err) {
                 console.warn('[DataManager] Async getUsers failed:', err);
-                // Do not cache empty on error so next getUsers() can retry (e.g. transient network failure)
                 if (isEntityKey('users')) return [];
             }
         }
@@ -1183,9 +1198,15 @@ const DataManager = {
         this.invalidateCache('users', 'allActivities');
     },
 
+    /** DB numeric ids vs DOM dataset string ids — compare loosely. */
+    userIdsMatch(a, b) {
+        if (a == null || b == null) return false;
+        return String(a) === String(b);
+    },
+
     async getUserById(id) {
         const users = await this.getUsers();
-        return users.find(u => u.id === id);
+        return users.find(u => this.userIdsMatch(u.id, id));
     },
 
     async getUserByUsername(username) {
@@ -1214,7 +1235,7 @@ const DataManager = {
 
     async updateUser(userId, updates) {
         const users = await this.getUsers();
-        const index = users.findIndex(u => u.id === userId);
+        const index = users.findIndex(u => this.userIdsMatch(u.id, userId));
         if (index !== -1) {
             const merged = { ...users[index], ...updates };
             if (updates.forcePasswordChange !== undefined) {
@@ -1244,7 +1265,7 @@ const DataManager = {
     },
 
     async deleteUser(userId) {
-        const users = (await this.getUsers()).filter(u => u.id !== userId);
+        const users = (await this.getUsers()).filter(u => !this.userIdsMatch(u.id, userId));
         await this.saveUsers(users);
     },
 

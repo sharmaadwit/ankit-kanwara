@@ -1509,7 +1509,16 @@ const Admin = {
             ? buttonOrUserId.dataset.userId
             : buttonOrUserId;
         if (!userId) return;
-        const user = await DataManager.getUserById(userId);
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+            DataManager.invalidateCache('users');
+        }
+        let user = await DataManager.getUserById(userId);
+        if (!user) {
+            const list = await this.fetchUsersForAdminPanel();
+            user = (Array.isArray(list) ? list : []).find((u) =>
+                u && DataManager.userIdsMatch ? DataManager.userIdsMatch(u.id, userId) : String(u.id) === String(userId));
+            if (user) user = this.normalizeUserForDisplay(user);
+        }
         if (!user) {
             UI.showNotification('User not found', 'error');
             return;
