@@ -19,6 +19,42 @@ const ReportsV2 = {
         return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
     },
 
+    /** Stable string id for monthly report checkboxes / filters (avoids number vs string mismatches). */
+    normalizeProjectIdForReport(id) {
+        if (id == null || id === '') return '';
+        return String(id).trim();
+    },
+
+    /**
+     * CRM wins for monthly PDF: `includedWinIds` null/undefined = show all; `[]` = show none;
+     * otherwise only listed IDs (compared as strings, so number/string mismatch does not break).
+     */
+    filterCrmWinsForReport(winsForPeriod, includedWinIds) {
+        if (includedWinIds == null) return winsForPeriod;
+        const idSet = new Set(
+            includedWinIds.map((x) => this.normalizeProjectIdForReport(x)).filter((s) => s !== '')
+        );
+        return winsForPeriod.filter((w) => {
+            const pid = this.normalizeProjectIdForReport(w.projectId);
+            return pid !== '' && idSet.has(pid);
+        });
+    },
+
+    /**
+     * Seeded PDF cards: only gate seeds when the same normalized client name exists as a CRM win row
+     * and was excluded from `displayWins` (exact name match after normalize — seed text is source of truth).
+     */
+    filterSeededManualWinsForReport(seedRows, winsForPeriod, displayWins) {
+        if (!seedRows || !seedRows.length) return [];
+        const crmNames = new Set(winsForPeriod.map((w) => this.normalizeAccountNameForReportMatch(w.accountName)));
+        const includedNames = new Set(displayWins.map((w) => this.normalizeAccountNameForReportMatch(w.accountName)));
+        return seedRows.filter((seed) => {
+            const sn = this.normalizeAccountNameForReportMatch(seed.clientName);
+            if (!crmNames.has(sn)) return true;
+            return includedNames.has(sn);
+        });
+    },
+
     /** March 2026 report: omit these accounts from Missing SFDC (email/PDF and charts). */
     isMarch2026MissingSfdcExcludedAccount(accountName) {
         const n = this.normalizeAccountNameForReportMatch(accountName);
@@ -52,6 +88,51 @@ const ReportsV2 = {
         if (fromStored != null && String(fromStored).trim()) return String(fromStored).trim();
         return '—';
     },
+
+    /** Presales user who won: name saved on win/loss, else resolve from users list by wonByUserId. */
+    resolveWonByUserNameForReport(wl, users) {
+        if (!wl) return null;
+        if (wl.wonByUserName != null && String(wl.wonByUserName).trim()) return String(wl.wonByUserName).trim();
+        const uid = wl.wonByUserId;
+        if (uid == null || uid === '' || !users || !users.length) return null;
+        const u = users.find((x) =>
+            typeof DataManager !== 'undefined' && DataManager.userIdsMatch
+                ? DataManager.userIdsMatch(x.id, uid)
+                : String(x.id) === String(uid)
+        );
+        return u ? String(u.username || u.name || '').trim() || null : null;
+    },
+
+    /**
+     * Monthly PDF line for a CRM win: logged winner first; if missing, fall back to account/project presales tag map.
+     */
+    presalesRepLineForCrmWin(accountName, projectTitle, wl, users) {
+        const wonBy = this.resolveWonByUserNameForReport(wl, users);
+        if (wonBy) return wonBy;
+        const presalesTag =
+            typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
+                ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
+                : null;
+        return this.applyWinPresalesTagForDisplay(accountName, presalesTag, null, projectTitle);
+    },
+
+    /**
+     * Manual/seed PDF rows: when a logged CRM win exists for the same account name (normalized), use its account name and winner line.
+     * Not applied to March 2026 in renderMonthlyReportPdf (that month uses hardcoded seed / Edit-report copy only).
+     */
+    enrichManualWinWithLoggedCrm(mw, winsForPeriod) {
+        if (!mw || !winsForPeriod || !winsForPeriod.length) return mw;
+        const sn = this.normalizeAccountNameForReportMatch(mw.clientName);
+        if (!sn) return mw;
+        const match = winsForPeriod.find((w) => this.normalizeAccountNameForReportMatch(w.accountName) === sn);
+        if (!match) return mw;
+        const out = { ...mw, clientName: match.accountName };
+        if (match.presalesRep != null && String(match.presalesRep).trim() && match.presalesRep !== '—') {
+            out.presalesRep = match.presalesRep;
+        }
+        return out;
+    },
+
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
@@ -72,21 +153,21 @@ const ReportsV2 = {
         ]
     },
 
-    // Pre-built March 2026 Cube Analysis – same format as Feb; use with March period + seeded wins
+    // Pre-built March 2026 Cube Analysis – same format as Feb; use with March period + seeded wins (seed cards respect CRM include/exclude)
     MARCH_2026_ANALYSIS: {
         period: '2026-03',
         highlights:
-            'March 2026 – Q1 execution snapshot. External-led mix; strongest regions include India North, MENA, and LATAM. Win themes: Prabhudas Liladhar Capital (E-KYC on WhatsApp, Financial Services) and YouTube Shopping (creator engagement in India; expansion roadmap SEA / ME / LATAM). Aligns with logged March activity in PreSight.',
+            'March 2026 – Q1 execution snapshot. External-led activity mix with continued strength in India North, MENA, and LATAM. Key win narratives: Prabhudas Liladhar Capital (E-KYC on WhatsApp, Financial Services) and YouTube Shopping (creator engagement in India; roadmap into SEA, ME, and LATAM). Figures below follow activity tagged in PreSight for the month.',
         useCases: [
-            '1. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail, Telco\nLead capture, onboarding and qualification — consistent activity across accounts; KYC and regulated-industry motions (incl. E-KYC conversations).',
-            '2. Customer engagement & campaigns\nIndustries: Automobile, Banking, Entertainment, Events, F&B, HR, Manufacturing, Media & Entertainment, Retail, Travel & Hospitality\nCampaigns, notifications, loyalty and creator / audience programmes — including YouTube Shopping–style engagement on WhatsApp.',
-            '3. Support & FAQ\nIndustries: Automotive, Banking, F&B, Government, Manufacturing, Professional Services, Retail, Telco\nService, helpdesk and FAQ coverage across priority accounts.',
-            '4. Sales discovery & AI recommendation\nIndustries: Banking, Education, Real Estate & Construction, Retail, Telco, Travel & Hospitality\nDiscovery, AI-led recommendations and commerce-led conversations.',
-            '5. Operational automation\nIndustries: Banking, CPG & FMCG, Logistics & Supply Chain\nBack-office efficiency, workflows and operational automation.'
+            '1. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail, Telco\nLead capture, onboarding, and qualification — including KYC and regulated-industry motions (E-KYC and compliance-led conversations).',
+            '2. Customer engagement & campaigns\nIndustries: Automobile, Banking, Entertainment, Events, F&B, HR, Manufacturing, Media & Entertainment, Retail, Travel & Hospitality\nCampaigns, notifications, loyalty, and creator/audience programmes — including large-scale creator engagement on WhatsApp.',
+            '3. Support & FAQ\nIndustries: Automotive, Banking, F&B, Government, Manufacturing, Professional Services, Retail, Telco\nService, helpdesk, and FAQ coverage across priority accounts.',
+            '4. Sales discovery & AI recommendation\nIndustries: Banking, Education, Real Estate & Construction, Retail, Telco, Travel & Hospitality\nDiscovery, AI-led recommendations, and commerce-led conversations.',
+            '5. Operational automation\nIndustries: Banking, CPG & FMCG, Logistics & Supply Chain\nBack-office efficiency, workflows, and operational automation.'
         ]
     },
 
-    // Seeded manual wins for PDF report (merged into manual wins for the given period)
+    // Seeded manual wins for PDF (merged after CRM wins). March 2026 entries are the agreed locked list for the critical March report.
     SEED_MANUAL_WINS_BY_PERIOD: {
         '2026-02': [
             { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
@@ -162,16 +243,18 @@ const ReportsV2 = {
             let winsHtml = '';
             if (this.monthlyReportData && this.monthlyReportData.winsForPeriod) {
                 this.monthlyReportData.winsForPeriod.forEach(w => {
-                    const checked = includedWinIds === null || includedWinIds.includes(w.projectId);
+                    const checked =
+                        includedWinIds === null ||
+                        (Array.isArray(includedWinIds) &&
+                            includedWinIds
+                                .map((x) => ReportsV2.normalizeProjectIdForReport(x))
+                                .includes(ReportsV2.normalizeProjectIdForReport(w.projectId)));
                     const presalesPart = (w.presalesRep && w.presalesRep !== '—') ? ' | Won by: ' + String(w.presalesRep).replace(/</g, '&lt;') : '';
                     const wCurr = w.currency || 'INR';
                     const wMrrStr = (w.mrr != null && w.mrr !== '' && w.mrr !== '—') ? ReportsV2.formatReportCurrency(Number(w.mrr), true, wCurr) : '—';
                     winsHtml += `<label class="monthly-report-edit-win-row"><input type="checkbox" data-project-id="${(w.projectId || '').replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''}> ${(w.accountName || 'Unknown').replace(/</g, '&lt;')} – MRR: ${String(wMrrStr).replace(/</g, '&lt;')}${presalesPart}</label>`;
                 });
             }
-            manualWins.forEach((mw, i) => {
-                winsHtml += `<div class="monthly-report-manual-win" data-index="${i}"><input type="text" placeholder="Client" value="${(mw.clientName || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="MRR" value="${(mw.mrr || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Use case" value="${(mw.useCase || '').replace(/"/g, '&quot;')}"><input type="text" placeholder="Presales rep" value="${(mw.presalesRep || '').replace(/"/g, '&quot;')}"><button type="button" class="btn btn-sm btn-danger" onclick="ReportsV2.removeManualWin(this)">Remove</button></div>`;
-            });
 
             const modal = document.getElementById('monthlyReportEditModal');
             if (modal) {
@@ -239,12 +322,15 @@ const ReportsV2 = {
         const highlights = (document.getElementById('monthlyReportEditHighlights') && document.getElementById('monthlyReportEditHighlights').value) || '';
         const useCases = [0, 1, 2, 3, 4].map(i => (document.getElementById('monthlyReportUseCase' + i) && document.getElementById('monthlyReportUseCase' + i).value) || '');
         const winsWrap = document.getElementById('monthlyReportEditWinsWrap');
-        const includedWinIds = [];
-        if (winsWrap) {
+        let includedWinIds;
+        if (winsWrap && winsWrap.querySelectorAll('.monthly-report-edit-win-row').length > 0) {
+            includedWinIds = [];
             winsWrap.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
-                const id = cb.getAttribute('data-project-id');
+                const id = ReportsV2.normalizeProjectIdForReport(cb.getAttribute('data-project-id'));
                 if (id) includedWinIds.push(id);
             });
+        } else {
+            includedWinIds = null;
         }
         const manualWins = [];
         const manualWrap = document.getElementById('monthlyReportManualWinsWrap');
@@ -257,7 +343,7 @@ const ReportsV2 = {
             });
         }
         const overrides = await DataManager.getReportOverrides();
-        overrides[period] = { highlights, useCases, includedWinIds: includedWinIds.length ? includedWinIds : null, manualWins };
+        overrides[period] = { highlights, useCases, includedWinIds, manualWins };
         await DataManager.saveReportOverrides(overrides);
         this.closeEditReportModal();
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Report overrides saved.', 'success');
@@ -268,11 +354,12 @@ const ReportsV2 = {
         const feb = this.FEB_2026_ANALYSIS;
         if (!feb || feb.period !== '2026-02') return;
         const overrides = await DataManager.getReportOverrides();
+        const prev = overrides['2026-02'] || {};
         overrides['2026-02'] = {
             highlights: feb.highlights,
             useCases: feb.useCases.slice(0, 5),
-            includedWinIds: (overrides['2026-02'] && overrides['2026-02'].includedWinIds) || null,
-            manualWins: (overrides['2026-02'] && overrides['2026-02'].manualWins) || []
+            includedWinIds: prev.includedWinIds !== undefined ? prev.includedWinIds : null,
+            manualWins: Array.isArray(prev.manualWins) ? prev.manualWins : []
         };
         await DataManager.saveReportOverrides(overrides);
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Feb 2026 analysis loaded into report.', 'success');
@@ -283,11 +370,12 @@ const ReportsV2 = {
         const mar = this.MARCH_2026_ANALYSIS;
         if (!mar || mar.period !== '2026-03') return;
         const overrides = await DataManager.getReportOverrides();
+        const prev = overrides['2026-03'] || {};
         overrides['2026-03'] = {
             highlights: mar.highlights,
             useCases: mar.useCases.slice(0, 5),
-            includedWinIds: (overrides['2026-03'] && overrides['2026-03'].includedWinIds) || null,
-            manualWins: (overrides['2026-03'] && overrides['2026-03'].manualWins) || []
+            includedWinIds: prev.includedWinIds !== undefined ? prev.includedWinIds : null,
+            manualWins: Array.isArray(prev.manualWins) ? prev.manualWins : []
         };
         await DataManager.saveReportOverrides(overrides);
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('March 2026 analysis loaded into report.', 'success');
@@ -681,15 +769,6 @@ const ReportsV2 = {
         const externalCount = activities.filter(a => !a.isInternal).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
         const users = typeof DataManager !== 'undefined' && DataManager.getUsers ? await DataManager.getUsers() : [];
-        const resolveUserDisplayName = (userId) => {
-            if (userId == null || userId === '') return null;
-            const u = (users || []).find((x) =>
-                typeof DataManager !== 'undefined' && DataManager.userIdsMatch
-                    ? DataManager.userIdsMatch(x.id, userId)
-                    : String(x.id) === String(userId)
-            );
-            return u ? (u.username || u.name) : null;
-        };
         const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
         const o = period ? (overrides[period] || {}) : {};
         let winsPeriod = 0;
@@ -709,16 +788,10 @@ const ReportsV2 = {
                                 const uc = (project.useCases && project.useCases[0]);
                                 const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
-                                const accountName = account.name || 'Unknown';
+                                const accountName = String(account.name || '').trim() || 'Unknown';
                                 const wl = project.winLossData || {};
-                                const fromStored =
-                                    wl.wonByUserName || resolveUserDisplayName(wl.wonByUserId) || null;
                                 const projectTitle = (project.name || '').trim();
-                                const presalesTag =
-                                    typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
-                                        ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
-                                        : null;
-                                const presalesRep = this.applyWinPresalesTagForDisplay(accountName, presalesTag, fromStored, projectTitle);
+                                const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users);
                                 const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
                                 let currency = wl.currency || 'INR';
                                 let mrrVal = wl.mrr ?? project.mrr;
@@ -731,7 +804,7 @@ const ReportsV2 = {
                                 }
                                 const mrrInInr = wl.mrrInInr != null && Number.isFinite(Number(wl.mrrInInr)) ? Number(wl.mrrInInr) : (currency === 'INR' && mrrVal != null ? Number(mrrVal) : null);
                                 winsForPeriod.push({
-                                    projectId: project.id,
+                                    projectId: this.normalizeProjectIdForReport(project.id),
                                     accountId: account.id,
                                     accountName: accountName,
                                     mrr: mrrVal ?? '—',
@@ -748,7 +821,7 @@ const ReportsV2 = {
                                 const uc0 = project.useCases && project.useCases[0];
                                 const reason = (wl.reason || '').trim() || (uc0 ? (typeof uc0 === 'string' ? uc0 : (uc0.name || '')) : '') || '—';
                                 lossesForPeriod.push({
-                                    accountName: account.name || 'Unknown',
+                                    accountName: String(account.name || '').trim() || 'Unknown',
                                     reason: reason || '—',
                                     lostTo: wl.lostTo || '—'
                                 });
@@ -913,6 +986,16 @@ const ReportsV2 = {
             ? `<div class="monthly-report-page-1-insights"><h4 class="monthly-report-insights-title">Insights</h4><p class="monthly-report-highlights-text">${safeHlLine(highlightsForPage1)}</p></div>`
             : '';
 
+        const displayWinsForPdf = ReportsV2.filterCrmWinsForReport(winsForPeriod, o.includedWinIds);
+        const seedRowsPdf = (ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD[period]) || [];
+        const seedFilteredPdf = ReportsV2.filterSeededManualWinsForReport(seedRowsPdf, winsForPeriod, displayWinsForPdf);
+        const manualRawForPdf = (o.manualWins || []).concat(seedFilteredPdf);
+        // March 2026: use hardcoded seed / Edit-report copy as-is (names + presales) for go-live; other months overlay logged CRM account/winner when names match.
+        const manualWinsForPdf =
+            period === '2026-03'
+                ? manualRawForPdf
+                : manualRawForPdf.map((mw) => ReportsV2.enrichManualWinWithLoggedCrm(mw, winsForPeriod));
+
         this.monthlyReportData = {
             breakdown,
             callTypeData,
@@ -983,9 +1066,11 @@ const ReportsV2 = {
                         <div class="monthly-report-wins-grid">
                             ${(() => {
                                 const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                let displayWins = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
-                                const seedForPeriod = (ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD[period]) || [];
-                                const manual = (o.manualWins || []).concat(seedForPeriod);
+                                const manualPresalesLine = (mw) => {
+                                    const p = mw.presalesRep;
+                                    if (p != null && String(p).trim() && p !== '—') return String(p).trim();
+                                    return ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                };
                                 const renderManualWinCard = (mw) => {
                                     const hasRich = mw.product || mw.channel || mw.industry || mw.buyerCentre || mw.stakeholders || mw.commercials || mw.expansionPlan;
                                     const mrrCurr = mw.currency || 'INR';
@@ -1002,14 +1087,14 @@ const ReportsV2 = {
                                         if (mw.commercials) lines.push('Commercials: ' + safe(mw.commercials));
                                         if (mw.expansionPlan) lines.push('Expansion plan: ' + safe(mw.expansionPlan));
                                         if (mrrStr !== '—') lines.push('MRR: ' + mrrStr);
-                                        const mwPresales = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                        const mwPresales = manualPresalesLine(mw);
                                         if (mwPresales && mwPresales !== '—') lines.push('Presales rep: ' + safe(mwPresales));
                                         return '<div class="monthly-report-win-card monthly-report-win-card--detailed">' + lines.join('<br/>') + '</div>';
                                     }
-                                    const mwPresalesSimple = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                    const mwPresalesSimple = manualPresalesLine(mw);
                                     return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mwPresalesSimple && mwPresalesSimple !== '—' ? '<br/>Presales rep: ' + safe(mwPresalesSimple) : '') + '</div>';
                                 };
-                                const cards = displayWins.slice(0, 12).map(w => {
+                                const cards = displayWinsForPdf.slice(0, 12).map(w => {
                                     const curr = w.currency || 'INR';
                                     const mrrNum = (curr === 'INR' && (w.mrrInInr != null && Number.isFinite(w.mrrInInr))) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
                                     const mrrStr = mrrNum != null ? ReportsV2.formatReportCurrency(mrrNum, true, curr) : '—';
@@ -1018,7 +1103,7 @@ const ReportsV2 = {
                                     const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
                                     return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
                                 });
-                                manual.forEach(mw => cards.push(renderManualWinCard(mw)));
+                                manualWinsForPdf.forEach(mw => cards.push(renderManualWinCard(mw)));
                                 return cards.length ? cards.join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report or log win/loss on projects.</p>';
                             })()}
                         </div>
@@ -1033,18 +1118,20 @@ const ReportsV2 = {
                                 <tbody>
                                     ${(() => {
                                         const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                                        const disp = o.includedWinIds && o.includedWinIds.length ? winsForPeriod.filter(w => o.includedWinIds.includes(w.projectId)) : winsForPeriod;
-                                        const seed = (ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD[period]) || [];
-                                        const manual = (o.manualWins || []).concat(seed);
-                                        let rows = disp.slice(0, 20).map(w => {
+                                        const manualPresalesLine = (mw) => {
+                                            const p = mw.presalesRep;
+                                            if (p != null && String(p).trim() && p !== '—') return String(p).trim();
+                                            return ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                        };
+                                        let rows = displayWinsForPdf.slice(0, 20).map(w => {
                                             const c = w.currency || 'INR';
                                             const mrrN = (c === 'INR' && w.mrrInInr != null) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
                                             const mrrStr = mrrN != null ? ReportsV2.formatReportCurrency(mrrN, true, c) : '—';
                                             return `<tr><td>${safe(w.accountName)}</td><td>${mrrStr}</td><td>${safe(w.useCase)}</td><td>${safe(w.presalesRep)}</td></tr>`;
                                         });
-                                        manual.forEach(mw => {
+                                        manualWinsForPdf.forEach(mw => {
                                             const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR') : '—';
-                                            const mwPresales = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                            const mwPresales = manualPresalesLine(mw);
                                             rows.push(`<tr><td>${safe(mw.clientName)}</td><td>${mrrStr}</td><td>${safe(mw.useCase)}</td><td>${safe(mwPresales)}</td></tr>`);
                                         });
                                         return rows.length ? rows.join('') : '<tr><td colspan="4">No wins in this period.</td></tr>';

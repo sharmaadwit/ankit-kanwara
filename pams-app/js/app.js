@@ -194,11 +194,6 @@ const App = {
             console.log('[PreSight init] loadBootstrap:', bootstrapMs + 'ms');
 
             this.setAppConfiguration(bootstrap.config || {});
-            if (bootstrap.config && bootstrap.config.maintenanceMode) {
-                this.showAppMaintenanceScreen();
-                this.setLoading(false);
-                return;
-            }
             this.loadAnalyticsTablePresetsDeferred();
 
             let hasSession = false;
@@ -692,6 +687,7 @@ const App = {
         const hide = () => el.classList.add('hidden');
         window.addEventListener('remotestorage:reconcile-start', show);
         window.addEventListener('remotestorage:reconcile-end', hide);
+        // Only true 401 from storage APIs (session invalid/expired). Do not conflate with network errors.
         window.addEventListener('remotestorage:unauthorized', () => {
             this.capturePendingSubmissionsToDrafts();
             if (typeof Auth !== 'undefined' && typeof Auth.clearSession === 'function') Auth.clearSession();
@@ -739,17 +735,6 @@ const App = {
         } else {
             this.loadingOverlay.classList.add('hidden');
         }
-    },
-
-    showAppMaintenanceScreen() {
-        const overlay = document.getElementById('appLoadingOverlay');
-        const login = document.getElementById('loginScreen');
-        const main = document.getElementById('mainApp');
-        const maintenance = document.getElementById('appMaintenanceScreen');
-        if (overlay) overlay.classList.add('hidden');
-        if (login) login.classList.add('hidden');
-        if (main) main.classList.add('hidden');
-        if (maintenance) maintenance.classList.remove('hidden');
     },
 
     setLoadingProgress(pct, message, tip) {
@@ -879,7 +864,7 @@ const App = {
             : 'last';
         if (typeof window !== 'undefined') {
             window.__USE_COOKIE_AUTH__ = config.cookieAuth === true;
-            window.__APP_MAINTENANCE_MODE__ = config.maintenanceMode === true;
+            window.__APP_MAINTENANCE_MODE__ = false;
         }
         this._configFetchedAt = Date.now();
         this.applyAppConfiguration();
@@ -2935,7 +2920,7 @@ const App = {
     async promptProjectSfdcLink(accountId, projectId) {
         const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
-        const project = account?.projects?.find(p => p.id === projectId);
+        const project = account?.projects?.find(p => String(p.id) === String(projectId));
 
         if (!project) {
             UI.showNotification('Project not found', 'error');
@@ -3905,11 +3890,20 @@ const App = {
             this.getProjectOwnerMap(),
             DataManager.getUsers()
         ]);
-        const userLookup = new Map(users.map(user => [user.id, user]));
+        const userById = (id) => {
+            if (id == null || id === '') return null;
+            return users.find((u) => typeof DataManager.userIdsMatch === 'function'
+                ? DataManager.userIdsMatch(u.id, id)
+                : String(u.id) === String(id));
+        };
 
         const projects = [];
         accounts.forEach(account => {
             (account.projects || []).forEach(project => {
+                const presalesTag =
+                    project.status === 'won' && typeof DataManager.getWinLossPresalesTagForWin === 'function'
+                        ? DataManager.getWinLossPresalesTagForWin(account.name, project.name)
+                        : null;
                 const ownerIdsSet = new Set(ownerMap.get(project.id) || []);
                 if (project.createdBy) {
                     ownerIdsSet.add(project.createdBy);
@@ -3920,11 +3914,20 @@ const App = {
                 if (project.winLossData?.wonByUserId) {
                     ownerIdsSet.add(project.winLossData.wonByUserId);
                 }
+                if (presalesTag && typeof DataManager.findPresalesUserIdForTagNameSync === 'function') {
+                    const tagUid = DataManager.findPresalesUserIdForTagNameSync(users, presalesTag);
+                    if (tagUid != null) ownerIdsSet.add(tagUid);
+                }
                 const ownerIds = Array.from(ownerIdsSet);
                 const ownerNames = ownerIds
-                    .map(id => userLookup.get(id)?.username)
+                    .map(id => userById(id)?.username)
                     .filter(Boolean);
-                const winnerName = (project.status === 'won' && (project.winLossData?.wonByUserName || (project.winLossData?.wonByUserId && userLookup.get(project.winLossData.wonByUserId)?.username)));
+                const wonId = project.winLossData?.wonByUserId;
+                const winnerName =
+                    project.status === 'won' &&
+                    (presalesTag ||
+                        project.winLossData?.wonByUserName ||
+                        (wonId && (userById(wonId)?.username || userById(wonId)?.name)));
                 const primaryOwnerName = winnerName || ownerNames[0] || account.salesRep || 'Unassigned';
                 projects.push({
                     ...project,
@@ -8789,7 +8792,7 @@ const App = {
 
         const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
-        const project = account?.projects?.find(p => p.id === projectId);
+        const project = account?.projects?.find(p => String(p.id) === String(projectId));
 
         if (!project) {
             UI.showNotification('Project not found', 'error');
@@ -8823,18 +8826,23 @@ const App = {
         }
         const wonBySelect = document.getElementById('winLossWonBy');
         if (wonBySelect) {
-            let allUsers = [];
-            if (typeof DataManager !== 'undefined' && typeof DataManager.getActiveRosterUsers === 'function') {
-                allUsers = await DataManager.getActiveRosterUsers();
+            let presalesUsers = [];
+            if (typeof DataManager !== 'undefined' && typeof DataManager.getPresalesUsersForWinLoss === 'function') {
+                presalesUsers = await DataManager.getPresalesUsersForWinLoss();
+            } else {
+                let allUsers = [];
+                if (typeof DataManager.getActiveRosterUsers === 'function') {
+                    allUsers = await DataManager.getActiveRosterUsers();
+                }
+                if (!allUsers.length && typeof DataManager.getUsers === 'function') {
+                    allUsers = await DataManager.getUsers();
+                }
+                presalesUsers = allUsers.filter((u) =>
+                    typeof DataManager.userIsPresalesUser === 'function'
+                        ? DataManager.userIsPresalesUser(u)
+                        : u && Array.isArray(u.roles) && u.roles.includes('Presales User')
+                );
             }
-            if (!allUsers.length && typeof DataManager !== 'undefined' && typeof DataManager.getUsers === 'function') {
-                allUsers = await DataManager.getUsers();
-            }
-            const presalesUsers = allUsers.filter((u) =>
-                typeof DataManager !== 'undefined' && typeof DataManager.userIsPresalesUser === 'function'
-                    ? DataManager.userIsPresalesUser(u)
-                    : u && Array.isArray(u.roles) && u.roles.includes('Presales User')
-            );
             const escOpt = (v) =>
                 String(v == null ? '' : v)
                     .replace(/&/g, '&amp;')
@@ -8881,6 +8889,25 @@ const App = {
             if (otdInput) otdInput.value = '';
             if (wonBySelect) wonBySelect.value = '';
             if (sfdcInput) sfdcInput.value = project.sfdcLink || '';
+        }
+
+        if (
+            wonBySelect &&
+            account &&
+            (project.status || '') === 'won' &&
+            typeof DataManager.getWinLossPresalesTagForWin === 'function' &&
+            typeof DataManager.findPresalesUserIdForTagName === 'function'
+        ) {
+            const tagName = DataManager.getWinLossPresalesTagForWin(account.name || '', project.name || '');
+            if (tagName) {
+                const tagUid = await DataManager.findPresalesUserIdForTagName(tagName);
+                if (tagUid != null) {
+                    const sid = String(tagUid);
+                    if ([...wonBySelect.options].some((o) => o.value === sid)) {
+                        wonBySelect.value = sid;
+                    }
+                }
+            }
         }
 
         const DEFAULT_FX_TO_INR = { AED: 22, USD: 83, EUR: 90, GBP: 105, BRL: 16 };
@@ -9055,7 +9082,7 @@ const App = {
 
         const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === accountId);
-        const project = account?.projects?.find(p => p.id === projectId);
+        const project = account?.projects?.find(p => String(p.id) === String(projectId));
 
         if (!project) {
             UI.showNotification('Project not found', 'error');
@@ -9115,11 +9142,18 @@ const App = {
                 return;
             }
             let wonByUserName = null;
-            if (wonByUserId && typeof DataManager !== 'undefined') {
-                let roster = typeof DataManager.getActiveRosterUsers === 'function' ? await DataManager.getActiveRosterUsers() : [];
-                if (!roster.length && typeof DataManager.getUsers === 'function') roster = await DataManager.getUsers();
-                const match = roster.find((u) => String(u.id) === String(wonByUserId));
+            if (wonByUserId && typeof DataManager !== 'undefined' && typeof DataManager.getUserById === 'function') {
+                const match = await DataManager.getUserById(wonByUserId);
                 wonByUserName = match ? (match.username || match.name || null) : null;
+            }
+            if (
+                status === 'won' &&
+                !wonByUserName &&
+                account &&
+                typeof DataManager.getWinLossPresalesTagForWin === 'function'
+            ) {
+                const tagNm = DataManager.getWinLossPresalesTagForWin(account.name || '', project.name || '');
+                if (tagNm) wonByUserName = tagNm;
             }
             project.winLossData = {
                 reason: document.getElementById('winLossReason').value,
@@ -9162,7 +9196,7 @@ const App = {
                     if (Array.isArray(serverAccounts)) {
                         const merged = JSON.parse(JSON.stringify(serverAccounts));
                         const acc = merged.find(a => a && a.id === accountId);
-                        const proj = acc?.projects?.find(p => p && p.id === projectId);
+                        const proj = acc?.projects?.find(p => p && String(p.id) === String(projectId));
                         if (acc && proj) {
                             proj.status = project.status;
                             proj.sfdcLink = project.sfdcLink;
@@ -9210,7 +9244,7 @@ const App = {
         if (!payload || payload._winlossForm !== true || !payload.accountId || !payload.projectId) return;
         const accounts = await DataManager.getAccounts();
         const account = accounts.find(a => a.id === payload.accountId);
-        const project = account?.projects?.find(p => p.id === payload.projectId);
+        const project = account?.projects?.find(p => String(p.id) === String(payload.projectId));
         if (!project) {
             if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Account or project no longer found. Discard the draft.', 'error');
             return;
@@ -9225,10 +9259,8 @@ const App = {
                 if (Number.isFinite(otdN) && otdN >= 0) draftOtd = Number(otdN.toFixed(2));
             }
             let draftWonByName = null;
-            if (payload.wonByUserId && typeof DataManager !== 'undefined') {
-                let roster = typeof DataManager.getActiveRosterUsers === 'function' ? await DataManager.getActiveRosterUsers() : [];
-                if (!roster.length && typeof DataManager.getUsers === 'function') roster = await DataManager.getUsers();
-                const matchUser = roster.find((u) => String(u.id) === String(payload.wonByUserId));
+            if (payload.wonByUserId && typeof DataManager !== 'undefined' && typeof DataManager.getUserById === 'function') {
+                const matchUser = await DataManager.getUserById(payload.wonByUserId);
                 draftWonByName = matchUser ? (matchUser.username || matchUser.name || null) : null;
             }
             project.winLossData = {

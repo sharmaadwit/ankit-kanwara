@@ -999,6 +999,107 @@ const DataManager = {
         }
     },
 
+    /**
+     * Presales roster for Win/Loss dropdown: merge DB roster (/api/users) with cached getUsers()
+     * so roles and ids stay in sync when one source omits "Presales User" or returns partial rows.
+     */
+    async getPresalesUsersForWinLoss() {
+        const [roster, users] = await Promise.all([
+            this.getActiveRosterUsers().catch(() => []),
+            this.getUsers().catch(() => [])
+        ]);
+        const byId = new Map();
+        for (const u of users) {
+            if (!u || u.id == null) continue;
+            byId.set(String(u.id), { ...u, roles: coerceUserRoles(u.roles) });
+        }
+        for (const u of roster) {
+            if (!u || u.id == null) continue;
+            const k = String(u.id);
+            const existing = byId.get(k);
+            const rRoles = coerceUserRoles(u.roles);
+            if (!existing) {
+                byId.set(k, { ...u, roles: rRoles });
+            } else {
+                const mergedRoles = [...new Set([...existing.roles, ...rRoles])];
+                byId.set(k, { ...existing, ...u, roles: mergedRoles });
+            }
+        }
+        return Array.from(byId.values())
+            .filter((u) => this.userIsPresalesUser(u))
+            .sort((a, b) => {
+                const an = String(a.username || a.name || a.id || '').toLowerCase();
+                const bn = String(b.username || b.name || b.id || '').toLowerCase();
+                return an.localeCompare(bn);
+            });
+    },
+
+    /**
+     * Fixed presales attribution for known accounts (Win/Loss list, modal preselect, monthly report wins).
+     * First matching rule wins; match is on normalized account name (lowercase).
+     */
+    getWinLossPresalesTagRules() {
+        return [
+            { presalesName: 'Mridul Kumawat', match: (n) => (n.includes('mibl') && n.includes('mk')) || /\bmibl\b/.test(n) },
+            { presalesName: 'Yashas Reddy', match: (n) => n.includes('nissin') },
+            { presalesName: 'Mridul Kumawat', match: (n) => /\btrent\b/.test(n) },
+            { presalesName: 'Gargi Upadhyay', match: (n) => n.includes('azizi') }
+        ];
+    },
+
+    normalizeAccountNameForWinLossTag(name) {
+        return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    },
+
+    getWinLossPresalesTagForAccountName(accountName) {
+        const n = this.normalizeAccountNameForWinLossTag(accountName);
+        if (!n) return null;
+        for (const rule of this.getWinLossPresalesTagRules()) {
+            if (rule.match(n)) return rule.presalesName;
+        }
+        return null;
+    },
+
+    /** Tag lookup on account name, then optional project/opportunity name (labels often differ). */
+    getWinLossPresalesTagForWin(accountName, projectName) {
+        const fromAccount = this.getWinLossPresalesTagForAccountName(accountName);
+        if (fromAccount) return fromAccount;
+        if (projectName && String(projectName).trim()) {
+            const fromProject = this.getWinLossPresalesTagForAccountName(projectName);
+            if (fromProject) return fromProject;
+        }
+        return null;
+    },
+
+    /** Resolve roster user id for a display name (exact, then all tokens contained in username/name). */
+    findPresalesUserIdForTagNameSync(users, displayName) {
+        if (!displayName || !String(displayName).trim() || !users || !users.length) return null;
+        const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const wanted = norm(displayName);
+        let u = users.find((x) => norm(x.username) === wanted || norm(x.name) === wanted);
+        if (u && u.id != null) return u.id;
+        const parts = wanted.split(' ').filter((p) => p.length > 1);
+        if (parts.length) {
+            u = users.find((x) => {
+                const un = norm(x.username);
+                const nm = norm(x.name);
+                return parts.every((p) => un.includes(p) || nm.includes(p));
+            });
+        }
+        return u && u.id != null ? u.id : null;
+    },
+
+    async findPresalesUserIdForTagName(displayName) {
+        if (!displayName || !String(displayName).trim()) return null;
+        let users;
+        try {
+            users = await this.getUsers();
+        } catch (e) {
+            return null;
+        }
+        return this.findPresalesUserIdForTagNameSync(users, displayName);
+    },
+
     // Ensure default users exist (call this if needed)
     async ensureDefaultUsers() {
         const users = await this.getUsers();
@@ -2296,7 +2397,7 @@ const DataManager = {
         const account = accounts.find(a => a.id === accountId);
         if (account) {
             if (!account.projects) account.projects = [];
-            project.id = this.generateId();
+            project.id = String(this.generateId());
             project.activities = project.activities || [];
             project.status = project.status || 'active';
             project.createdAt = new Date().toISOString();
@@ -2319,7 +2420,7 @@ const DataManager = {
         const accounts = await this.getAccounts();
         const account = accounts.find(a => a.id === accountId);
         if (account && account.projects) {
-            const project = account.projects.find(p => p.id === projectId);
+            const project = account.projects.find(p => String(p.id) === String(projectId));
             if (project) {
                 Object.assign(project, updates, { updatedAt: new Date().toISOString() });
                 await this.saveAccounts(accounts);
