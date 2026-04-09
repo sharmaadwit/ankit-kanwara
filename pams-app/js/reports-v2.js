@@ -34,6 +34,20 @@ const ReportsV2 = {
         ]
     },
 
+    // Pre-built March 2026 Cube Analysis – same format as Feb; use with March period + seeded wins
+    MARCH_2026_ANALYSIS: {
+        period: '2026-03',
+        highlights:
+            'March 2026 – Q1 execution snapshot. External-led mix; strongest regions include India North, MENA, and LATAM. Win themes: Prabhudas Liladhar Capital (E-KYC on WhatsApp, Financial Services) and YouTube Shopping (creator engagement in India; expansion roadmap SEA / ME / LATAM). Aligns with logged March activity in PreSight.',
+        useCases: [
+            '1. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail, Telco\nLead capture, onboarding and qualification — consistent activity across accounts; KYC and regulated-industry motions (incl. E-KYC conversations).',
+            '2. Customer engagement & campaigns\nIndustries: Automobile, Banking, Entertainment, Events, F&B, HR, Manufacturing, Media & Entertainment, Retail, Travel & Hospitality\nCampaigns, notifications, loyalty and creator / audience programmes — including YouTube Shopping–style engagement on WhatsApp.',
+            '3. Support & FAQ\nIndustries: Automotive, Banking, F&B, Government, Manufacturing, Professional Services, Retail, Telco\nService, helpdesk and FAQ coverage across priority accounts.',
+            '4. Sales discovery & AI recommendation\nIndustries: Banking, Education, Real Estate & Construction, Retail, Telco, Travel & Hospitality\nDiscovery, AI-led recommendations and commerce-led conversations.',
+            '5. Operational automation\nIndustries: Banking, CPG & FMCG, Logistics & Supply Chain\nBack-office efficiency, workflows and operational automation.'
+        ]
+    },
+
     // Seeded manual wins for PDF report (merged into manual wins for the given period)
     SEED_MANUAL_WINS_BY_PERIOD: {
         '2026-02': [
@@ -224,6 +238,21 @@ const ReportsV2 = {
         };
         await DataManager.saveReportOverrides(overrides);
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Feb 2026 analysis loaded into report.', 'success');
+        this.render();
+    },
+
+    async loadMarch2026Analysis() {
+        const mar = this.MARCH_2026_ANALYSIS;
+        if (!mar || mar.period !== '2026-03') return;
+        const overrides = await DataManager.getReportOverrides();
+        overrides['2026-03'] = {
+            highlights: mar.highlights,
+            useCases: mar.useCases.slice(0, 5),
+            includedWinIds: (overrides['2026-03'] && overrides['2026-03'].includedWinIds) || null,
+            manualWins: (overrides['2026-03'] && overrides['2026-03'].manualWins) || []
+        };
+        await DataManager.saveReportOverrides(overrides);
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('March 2026 analysis loaded into report.', 'success');
         this.render();
     },
 
@@ -822,6 +851,12 @@ const ReportsV2 = {
             ? `Total activities: ${total} (${externalCount} external). Wins this period: ${winsPeriod}. Top regions: ${regionsOrdered.slice(0, 3).join(', ') || '—'}.`
             : '';
 
+        const highlightsForPage1 = (o.highlights && o.highlights.trim()) ? o.highlights.trim() : defaultHighlights;
+        const safeHlLine = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const page1InsightsHtml = highlightsForPage1
+            ? `<div class="monthly-report-page-1-insights"><h4 class="monthly-report-insights-title">Insights</h4><p class="monthly-report-highlights-text">${safeHlLine(highlightsForPage1)}</p></div>`
+            : '';
+
         this.monthlyReportData = {
             breakdown,
             callTypeData,
@@ -844,6 +879,7 @@ const ReportsV2 = {
                     <div class="reports-v2-monthly-actions-btns">
                         <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
                         ${period === '2026-02' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadFeb2026Analysis()">Load Feb 2026 analysis</button>` : ''}
+                        ${period === '2026-03' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadMarch2026Analysis()">Load March 2026 analysis</button>` : ''}
                         <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
                         <button type="button" class="btn btn-outline" onclick="ReportsV2.downloadChartsAsImages()">Download charts as images</button>
                         <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
@@ -863,6 +899,7 @@ const ReportsV2 = {
                                 <span>Wins ${winsPeriod}</span>
                             </div>
                         </div>
+                        ${page1InsightsHtml}
                         <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing.</p>
                     </div>
                     <!-- Page 2 – Cube Analysis (5 use cases only; no highlights line, no description, no Edit) -->

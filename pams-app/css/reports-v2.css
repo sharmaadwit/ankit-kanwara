@@ -399,8 +399,17 @@
     width: 100%;
 }
 .reports-v2-monthly-pdf-actions .reports-v2-section-title { margin-top: 0; }
+.monthly-report-page-1-insights {
+    margin: 1.25rem 0;
+}
+.monthly-report-insights-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--gray-800, #1f2937);
+}
 .monthly-report-highlights-text {
-    margin-top: 0.75rem;
+    margin-top: 0;
     padding: 1rem;
     background: #fff;
     border-radius: 0.5rem;
