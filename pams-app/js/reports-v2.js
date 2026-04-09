@@ -6,11 +6,19 @@ const ReportsV2 = {
     charts: {},
     INR_TO_AED: 0.044, // 1 INR ≈ 0.044 AED (for Alhamra.ae and other AED wins stored as INR by mistake)
     formatReportCurrency(value, defaultZero = false, currency = 'INR') {
-        if (value === null || value === undefined || value === '') return defaultZero ? (currency === 'AED' ? 'AED 0' : '₹0') : '—';
+        if (value === null || value === undefined || value === '') {
+            if (!defaultZero) return '—';
+            if (currency === 'AED') return 'AED 0';
+            if (currency === 'USD') return '$0';
+            return '₹0';
+        }
         const n = Number(value);
         if (!Number.isFinite(n)) return String(value);
         if (currency === 'AED') {
             return 'AED ' + n.toLocaleString('en-AE', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+        }
+        if (currency === 'USD') {
+            return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
         }
         return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0, minimumFractionDigits: 0 }) + ' (INR)';
     },
@@ -106,21 +114,28 @@ const ReportsV2 = {
     },
 
     /**
-     * Locked March rows store login-style presales keys (e.g. user, admin). Map to display name from users list.
+     * Locked March rows may store login keys (user, admin). Prefer users[].name; never show raw system logins on PDF.
      */
+    PDF_PRESALES_LABEL_FOR_LOGIN: { user: 'Presales representative', admin: 'Presales lead' },
+
     displayNameForPresalesRepLabel(raw, users) {
         const s = raw == null ? '' : String(raw).trim();
         if (!s) return '—';
-        if (!users || !users.length) return s;
-        const lower = s.toLowerCase();
-        const u = users.find(
-            (x) =>
-                (x.username && String(x.username).toLowerCase() === lower) ||
-                (x.name && String(x.name).toLowerCase() === lower)
-        );
-        if (!u) return s;
-        const nm = u.name != null && String(u.name).trim();
-        return nm ? String(u.name).trim() : String(u.username || s).trim();
+        const key = s.toLowerCase();
+        if (users && users.length) {
+            const u = users.find(
+                (x) =>
+                    (x.username && String(x.username).toLowerCase() === key) ||
+                    (x.name && String(x.name).toLowerCase() === key)
+            );
+            if (u) {
+                const nm = u.name != null && String(u.name).trim();
+                if (nm) return String(u.name).trim();
+            }
+        }
+        const fallback = this.PDF_PRESALES_LABEL_FOR_LOGIN[key];
+        if (fallback) return fallback;
+        return s;
     },
 
     /**
@@ -132,10 +147,11 @@ const ReportsV2 = {
             typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
                 ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
                 : null;
-        if (presalesTag) return presalesTag;
+        if (presalesTag) return this.displayNameForPresalesRepLabel(presalesTag, users);
         const wonBy = this.resolveWonByUserNameForReport(wl, users);
-        if (wonBy) return wonBy;
-        return this.applyWinPresalesTagForDisplay(accountName, null, null, projectTitle);
+        if (wonBy) return this.displayNameForPresalesRepLabel(wonBy, users);
+        const rest = this.applyWinPresalesTagForDisplay(accountName, null, null, projectTitle);
+        return this.displayNameForPresalesRepLabel(rest, users);
     },
 
     /**
@@ -179,7 +195,7 @@ const ReportsV2 = {
     MARCH_2026_ANALYSIS: {
         period: '2026-03',
         highlights:
-            'March 2026 – Q1 execution snapshot. External-led activity mix with continued strength in India North, MENA, and LATAM. Key win narratives: Prabhudas Liladhar Capital (E-KYC on WhatsApp, Financial Services) and YouTube Shopping (creator engagement in India; roadmap into SEA, ME, and LATAM). Figures below follow activity tagged in PreSight for the month.',
+            'March 2026 – Q1 execution snapshot. External-led activity mix with continued strength in India North, MENA, and LATAM. Key win narratives: Prabhudas Liladhar Capital (E-KYC), Reckitt Benckiser (London) (Campaign Manager / retailer engagement), and Google Maps Local Guides India (community engagement on WhatsApp). Figures below follow activity tagged in PreSight for the month.',
         useCases: [
             '1. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail, Telco\nLead capture, onboarding, and qualification — including KYC and regulated-industry motions (E-KYC and compliance-led conversations).',
             '2. Customer engagement & campaigns\nIndustries: Automobile, Banking, Entertainment, Events, F&B, HR, Manufacturing, Media & Entertainment, Retail, Travel & Hospitality\nCampaigns, notifications, loyalty, and creator/audience programmes — including large-scale creator engagement on WhatsApp.',
@@ -190,57 +206,81 @@ const ReportsV2 = {
     },
 
     /**
-     * March 2026 — locked wins for PDF (Wins page + Wins table). Source of truth for go-live; not read from CRM.
-     * Presales rep column matches signed-off sheet (e.g. user / admin usernames).
+     * March 2026 — locked PDF rows (sign-off). Rich optional fields render like manual seeds. Reckitt / Prabhudas / Google Maps are hardcoded seeds below (March only).
      */
     MARCH_2026_PDF_WINS_LOCKED: [
+        { clientName: 'MIBL mk', mrrInr: 250000, useCase: 'existing bot upgrade', presalesRep: 'Mridul Kumawat' },
+        { clientName: 'nissin', mrrInr: 190400, useCase: 'NA', presalesRep: 'Yashas Reddy' },
         {
-            clientName: 'reckitt mk',
-            mrrInr: 3300,
-            useCase:
-                'Proven track record of innovation across channels. Case studies across industries. Roadmap created for adopting WA campaigns, bots, agent assist, whatsapp voice, voice ai in the next 2 years',
-            presalesRep: 'user'
-        },
-        {
-            clientName: 'sbilife mk',
-            mrrInr: 25000,
-            useCase:
-                'Existing bot in solutions mode where a new journey is added in English in phase 1 and Hindi in phase 2',
-            presalesRep: 'user'
-        },
-        { clientName: 'MIBL mk', mrrInr: 250000, useCase: 'existing bot upgrade', presalesRep: 'user' },
-        { clientName: 'nissin', mrrInr: 190400, useCase: 'NA', presalesRep: 'user' },
-        {
-            clientName: 'Trent',
-            mrrInr: 200000,
-            useCase:
-                'Existing vendor with proven experience of bot with a micro journey deployed for a different use case in previous quarter. Confidence on phased delivery and ongoing discussions for subsequent phases',
-            presalesRep: 'user'
+            clientName: 'Trents Limited (Westside)',
+            mrrInr: 205000,
+            useCase: 'Order purchase',
+            channel: 'WhatsApp',
+            industry: 'Retail',
+            buyerCentre: 'CIO',
+            stakeholders:
+                'Sales: Brendon | CSM: Mohit/Nidhi | Pre-sales: Mridul | Sales Leadership: Sandeep / Sujal | CS Leadership: Chris D\'mello | Potential of Upsell: Acquisition of customers, upsell and crosssell',
+            commercials:
+                'Monthly Recurring Revenue: ₹2,05,000/month | One time: ₹20k/man day (15 days efforts) | Inclusions: 50k free Advance messages | Overage: 0.5p',
+            presalesRep: 'Mridul Kumawat'
         },
         {
             clientName: 'Azizi',
             mrrInr: 125200,
             useCase:
                 'Azizi selected Gupshup primarily due to our strong platform capabilities, scalability, and seamless integration support with LeadSquared CRM. Since the client was looking to enable WhatsApp communication within their newly implemented LeadSquared system, our proven integration framework and ability to support scalable messaging workflows aligned well with their requirements, making us the preferred partner.',
-            presalesRep: 'admin'
-        },
-        { clientName: 'Credfix', mrrInr: 38000, useCase: 'NA', presalesRep: 'user' },
-        {
-            clientName: 'Kinan Properties',
-            mrrInr: 1500,
-            useCase:
-                'Our solution stands out due to the exceptional platform capability and advanced AI implementation powered by Gupshup, enabling highly intelligent, natural, and scalable customer interactions. With generative AI, multilingual understanding (Arabic & English), and contextual conversation handling, the platform goes beyond rule-based automation to deliver a truly personalized experience. Combined with seamless integration, automation, and enterprise-grade scalability, this positions us strongly as the preferred choice for delivering a future-ready WhatsApp engagement solution for Kinan.',
-            presalesRep: 'user'
+            presalesRep: 'Gargi'
         }
     ],
 
-    // Seeded manual wins for PDF (merged after CRM wins). March 2026 uses MARCH_2026_PDF_WINS_LOCKED instead — keep Feb seeds here.
+    // Seeded manual wins for PDF. March: Prabhudas + Reckitt + Google Maps (rich cards; gated by filterSeededManualWinsForReport when CRM name matches).
     SEED_MANUAL_WINS_BY_PERIOD: {
         '2026-02': [
             { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
             { clientName: 'YouTube Shopping', useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement', channel: 'WhatsApp', industry: 'Entertainment', expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.', stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya', commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002', mrr: '', presalesRep: 'Adwit Sharma' }
         ],
-        '2026-03': []
+        '2026-03': [
+            {
+                clientName: 'Prabhudas Liladhar Capital',
+                useCase: 'Electronic Know Your Customer bot (E-KYC)',
+                product: 'Converse (Bot Studio)',
+                channel: 'WhatsApp',
+                industry: 'Financial Services',
+                buyerCentre: 'Chairperson & Managing Director',
+                stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah',
+                commercials:
+                    'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)',
+                mrr: '100000',
+                currency: 'INR',
+                presalesRep: 'Purusottam Singh'
+            },
+            {
+                clientName: 'Reckitt Benckiser (London)',
+                useCase: 'Retailer Engagement (Integration with Accenture - Newspage)',
+                product: 'Campaign Manager',
+                channel: 'WhatsApp',
+                industry: 'Consumer Goods',
+                buyerCentre: 'Product Lead',
+                stakeholders: 'Sales: Meet Nandu | Pre-sales: Mridul Kumawat | Sales Leadership: Sujal Shah & Neerav Singh Chib',
+                commercials: 'One time dev fee: $400 per man-day | Monthly platform fee: $3,300',
+                mrr: '3300',
+                currency: 'USD',
+                presalesRep: 'Mridul Kumawat'
+            },
+            {
+                clientName: 'Google Maps (Local Guides India)',
+                useCase:
+                    '1. Brand Refresh Stickers: A high-priority campaign targeting 100k local guides where the WA bot converts user selfies into AI-generated caricatures using the new Google Maps brand logo to drive engagement.\n2. IPL Engagement Stickers: A viral campaign allowing Local Guides to generate team-themed caricature stickers from selfies. Includes a "share with friend" feature to drive organic bot growth.',
+                channel: 'WhatsApp',
+                industry: 'Community Engagement / Hyper-local Crowdsourcing',
+                stakeholders: 'Sales: Amrita Rath | CSM: Sonali Sinha | Presales: Ankit Kanwara / Yashas Reddy',
+                commercials:
+                    'One-Time Charges (OTC): $8,000 | Platform fee per month: $6,000 (Inclusion: 10k Stickers) | Additional per sticker cost: $0.2 USD | Messaging fees: WhatsApp base cost + $0.001 surcharge per message',
+                mrr: '6000',
+                currency: 'USD',
+                presalesRep: 'Ankit Kanwara / Yashas Reddy'
+            }
+        ]
     },
 
     chartValueLabelsPlugin: {
@@ -1060,6 +1100,10 @@ const ReportsV2 = {
                 ? manualRawForPdf
                 : manualRawForPdf.map((mw) => ReportsV2.enrichManualWinWithLoggedCrm(mw, winsForPeriod));
         const marchLockedWins = period === '2026-03' ? ReportsV2.MARCH_2026_PDF_WINS_LOCKED : null;
+        const marchPdfSeedRows =
+            period === '2026-03' && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD && ReportsV2.SEED_MANUAL_WINS_BY_PERIOD['2026-03']
+                ? ReportsV2.SEED_MANUAL_WINS_BY_PERIOD['2026-03']
+                : [];
 
         this.monthlyReportData = {
             breakdown,
@@ -1100,7 +1144,7 @@ const ReportsV2 = {
                             <div class="monthly-report-summary-pills">
                                 <span>Internal ${internalCount}</span>
                                 <span>External ${externalCount}</span>
-                                <span>Wins ${marchLockedWins && marchLockedWins.length ? marchLockedWins.length : winsPeriod}</span>
+                                <span>Wins ${marchLockedWins && marchLockedWins.length ? marchLockedWins.length + marchPdfSeedRows.length : winsPeriod}</span>
                             </div>
                         </div>
                         ${page1InsightsHtml}
@@ -1131,29 +1175,19 @@ const ReportsV2 = {
                         <div class="monthly-report-wins-grid">
                             ${(() => {
                                 const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                if (marchLockedWins && marchLockedWins.length) {
-                                    return marchLockedWins
-                                        .map((row) => {
-                                            const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
-                                            return (
-                                                '<div class="monthly-report-win-card"><strong>' +
-                                                safe(row.clientName) +
-                                                '</strong><br/>MRR: ' +
-                                                mrrStr +
-                                                '<br/>Use case: ' +
-                                                safe(row.useCase) +
-                                                '<br/>Presales rep: ' +
-                                                safe(ReportsV2.displayNameForPresalesRepLabel(row.presalesRep, users)) +
-                                                '</div>'
-                                            );
-                                        })
-                                        .join('');
-                                }
                                 const manualPresalesLine = (mw) => {
                                     const p = mw.presalesRep;
-                                    if (p != null && String(p).trim() && p !== '—') return String(p).trim();
-                                    return ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                    const raw =
+                                        p != null && String(p).trim() && p !== '—'
+                                            ? String(p).trim()
+                                            : ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                    return ReportsV2.displayNameForPresalesRepLabel(raw, users);
                                 };
+                                const useCaseHtml = (text) =>
+                                    (text == null ? '' : String(text))
+                                        .split('\n')
+                                        .map((line) => safe(line))
+                                        .join('<br/>');
                                 const renderManualWinCard = (mw) => {
                                     const hasRich = mw.product || mw.channel || mw.industry || mw.buyerCentre || mw.stakeholders || mw.commercials || mw.expansionPlan;
                                     const mrrCurr = mw.currency || 'INR';
@@ -1161,7 +1195,7 @@ const ReportsV2 = {
                                     if (hasRich) {
                                         const lines = [];
                                         lines.push('<strong>' + safe(mw.clientName || '') + '</strong>');
-                                        lines.push('Use case: ' + safe(mw.useCase || ''));
+                                        lines.push('Use case: ' + useCaseHtml(mw.useCase || ''));
                                         if (mw.product) lines.push('GS Product: ' + safe(mw.product));
                                         if (mw.channel) lines.push('Channel: ' + safe(mw.channel));
                                         if (mw.industry) lines.push('Industry: ' + safe(mw.industry));
@@ -1175,8 +1209,57 @@ const ReportsV2 = {
                                         return '<div class="monthly-report-win-card monthly-report-win-card--detailed">' + lines.join('<br/>') + '</div>';
                                     }
                                     const mwPresalesSimple = manualPresalesLine(mw);
-                                    return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mwPresalesSimple && mwPresalesSimple !== '—' ? '<br/>Presales rep: ' + safe(mwPresalesSimple) : '') + '</div>';
+                                    return (
+                                        '<div class="monthly-report-win-card"><strong>' +
+                                        safe(mw.clientName || '') +
+                                        '</strong><br/>MRR: ' +
+                                        mrrStr +
+                                        '<br/>Use case: ' +
+                                        useCaseHtml(mw.useCase || '') +
+                                        (mwPresalesSimple && mwPresalesSimple !== '—' ? '<br/>Presales rep: ' + safe(mwPresalesSimple) : '') +
+                                        '</div>'
+                                    );
                                 };
+                                const renderLockedMarchCard = (row) => {
+                                    const hasRich =
+                                        row.product ||
+                                        row.channel ||
+                                        row.industry ||
+                                        row.buyerCentre ||
+                                        row.stakeholders ||
+                                        row.commercials;
+                                    const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
+                                    if (hasRich) {
+                                        const lines = [];
+                                        lines.push('<strong>' + safe(row.clientName) + '</strong>');
+                                        lines.push('Use case: ' + useCaseHtml(row.useCase));
+                                        if (row.product) lines.push('GS Product: ' + safe(row.product));
+                                        if (row.channel) lines.push('Channel: ' + safe(row.channel));
+                                        if (row.industry) lines.push('Industry: ' + safe(row.industry));
+                                        if (row.buyerCentre) lines.push('Buyer centre sold to: ' + safe(row.buyerCentre));
+                                        if (row.stakeholders) lines.push('Key stakeholders: ' + safe(row.stakeholders));
+                                        if (row.commercials) lines.push('Commercials: ' + safe(row.commercials));
+                                        lines.push('MRR: ' + mrrStr);
+                                        lines.push('Presales rep: ' + safe(row.presalesRep));
+                                        return '<div class="monthly-report-win-card monthly-report-win-card--detailed">' + lines.join('<br/>') + '</div>';
+                                    }
+                                    return (
+                                        '<div class="monthly-report-win-card"><strong>' +
+                                        safe(row.clientName) +
+                                        '</strong><br/>MRR: ' +
+                                        mrrStr +
+                                        '<br/>Use case: ' +
+                                        useCaseHtml(row.useCase) +
+                                        '<br/>Presales rep: ' +
+                                        safe(row.presalesRep) +
+                                        '</div>'
+                                    );
+                                };
+                                if (marchLockedWins && marchLockedWins.length) {
+                                    const lockedHtml = marchLockedWins.map((row) => renderLockedMarchCard(row)).join('');
+                                    const seedHtml = (marchPdfSeedRows || []).map((mw) => renderManualWinCard(mw)).join('');
+                                    return lockedHtml + seedHtml;
+                                }
                                 const cards = displayWinsForPdf.slice(0, 12).map(w => {
                                     const curr = w.currency || 'INR';
                                     const mrrNum = (curr === 'INR' && (w.mrrInInr != null && Number.isFinite(w.mrrInInr))) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
@@ -1184,7 +1267,10 @@ const ReportsV2 = {
                                     const otdNum = w.otdInInr != null && Number.isFinite(w.otdInInr) ? w.otdInInr : (w.otd != null && w.otd !== '' ? Number(w.otd) : null);
                                     const otdStr = (otdNum != null ? ReportsV2.formatReportCurrency(otdNum, true, curr) : '');
                                     const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
-                                    return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${w.presalesRep && w.presalesRep !== '—' ? '<br/>Presales rep: ' + safe(w.presalesRep) : ''}</div>`;
+                                    const pr = w.presalesRep && w.presalesRep !== '—'
+                                        ? ReportsV2.displayNameForPresalesRepLabel(w.presalesRep, users)
+                                        : '';
+                                    return `<div class="monthly-report-win-card"><strong>${safe(w.accountName)}</strong><br/>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${pr ? '<br/>Presales rep: ' + safe(pr) : ''}</div>`;
                                 });
                                 manualWinsForPdf.forEach(mw => cards.push(renderManualWinCard(mw)));
                                 return cards.length ? cards.join('') : '<p class="text-muted">No wins in this period. Add wins via Edit report or log win/loss on projects.</p>';
@@ -1201,24 +1287,44 @@ const ReportsV2 = {
                                 <tbody>
                                     ${(() => {
                                         const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                                        if (marchLockedWins && marchLockedWins.length) {
-                                            return marchLockedWins
-                                                .map((row) => {
-                                                    const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
-                                                    return `<tr><td>${safe(row.clientName)}</td><td>${mrrStr}</td><td>${safe(row.useCase)}</td><td>${safe(ReportsV2.displayNameForPresalesRepLabel(row.presalesRep, users))}</td></tr>`;
-                                                })
-                                                .join('');
-                                        }
                                         const manualPresalesLine = (mw) => {
                                             const p = mw.presalesRep;
-                                            if (p != null && String(p).trim() && p !== '—') return String(p).trim();
-                                            return ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                            const raw =
+                                                p != null && String(p).trim() && p !== '—'
+                                                    ? String(p).trim()
+                                                    : ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, null, '');
+                                            return ReportsV2.displayNameForPresalesRepLabel(raw, users);
                                         };
+                                        if (marchLockedWins && marchLockedWins.length) {
+                                            const lockedRows = marchLockedWins
+                                                .map((row) => {
+                                                    const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
+                                                    return `<tr><td>${safe(row.clientName)}</td><td>${mrrStr}</td><td>${safe(row.useCase)}</td><td>${safe(row.presalesRep)}</td></tr>`;
+                                                })
+                                                .join('');
+                                            const useCaseForTableCell = (uc) => {
+                                                const s = uc == null ? '' : String(uc);
+                                                if (s.includes('\n')) return s.split('\n')[0].trim() + ' …';
+                                                return s;
+                                            };
+                                            const seedRows = (marchPdfSeedRows || [])
+                                                .map((mw) => {
+                                                    const mrrStr =
+                                                        mw.mrr != null && mw.mrr !== ''
+                                                            ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR')
+                                                            : '—';
+                                                    const mwPresales = manualPresalesLine(mw);
+                                                    return `<tr><td>${safe(mw.clientName)}</td><td>${mrrStr}</td><td>${safe(useCaseForTableCell(mw.useCase))}</td><td>${safe(mwPresales)}</td></tr>`;
+                                                })
+                                                .join('');
+                                            return lockedRows + seedRows;
+                                        }
                                         let rows = displayWinsForPdf.slice(0, 20).map(w => {
                                             const c = w.currency || 'INR';
                                             const mrrN = (c === 'INR' && w.mrrInInr != null) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
                                             const mrrStr = mrrN != null ? ReportsV2.formatReportCurrency(mrrN, true, c) : '—';
-                                            return `<tr><td>${safe(w.accountName)}</td><td>${mrrStr}</td><td>${safe(w.useCase)}</td><td>${safe(w.presalesRep)}</td></tr>`;
+                                            const pr = ReportsV2.displayNameForPresalesRepLabel(w.presalesRep, users);
+                                            return `<tr><td>${safe(w.accountName)}</td><td>${mrrStr}</td><td>${safe(w.useCase)}</td><td>${safe(pr)}</td></tr>`;
                                         });
                                         manualWinsForPdf.forEach(mw => {
                                             const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR') : '—';
