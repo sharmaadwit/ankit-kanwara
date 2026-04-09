@@ -100,7 +100,27 @@ const ReportsV2 = {
                 ? DataManager.userIdsMatch(x.id, uid)
                 : String(x.id) === String(uid)
         );
-        return u ? String(u.username || u.name || '').trim() || null : null;
+        if (!u) return null;
+        const nm = u.name != null && String(u.name).trim();
+        return nm ? String(u.name).trim() : String(u.username || '').trim() || null;
+    },
+
+    /**
+     * Locked March rows store login-style presales keys (e.g. user, admin). Map to display name from users list.
+     */
+    displayNameForPresalesRepLabel(raw, users) {
+        const s = raw == null ? '' : String(raw).trim();
+        if (!s) return '—';
+        if (!users || !users.length) return s;
+        const lower = s.toLowerCase();
+        const u = users.find(
+            (x) =>
+                (x.username && String(x.username).toLowerCase() === lower) ||
+                (x.name && String(x.name).toLowerCase() === lower)
+        );
+        if (!u) return s;
+        const nm = u.name != null && String(u.name).trim();
+        return nm ? String(u.name).trim() : String(u.username || s).trim();
     },
 
     /**
@@ -1123,7 +1143,7 @@ const ReportsV2 = {
                                                 '<br/>Use case: ' +
                                                 safe(row.useCase) +
                                                 '<br/>Presales rep: ' +
-                                                safe(row.presalesRep) +
+                                                safe(ReportsV2.displayNameForPresalesRepLabel(row.presalesRep, users)) +
                                                 '</div>'
                                             );
                                         })
@@ -1185,7 +1205,7 @@ const ReportsV2 = {
                                             return marchLockedWins
                                                 .map((row) => {
                                                     const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
-                                                    return `<tr><td>${safe(row.clientName)}</td><td>${mrrStr}</td><td>${safe(row.useCase)}</td><td>${safe(row.presalesRep)}</td></tr>`;
+                                                    return `<tr><td>${safe(row.clientName)}</td><td>${mrrStr}</td><td>${safe(row.useCase)}</td><td>${safe(ReportsV2.displayNameForPresalesRepLabel(row.presalesRep, users))}</td></tr>`;
                                                 })
                                                 .join('');
                                         }
