@@ -1039,8 +1039,12 @@ const DataManager = {
      * First matching rule wins; match is on normalized account name (lowercase).
      */
     getWinLossPresalesTagRules() {
+        const hasMk = (n) => n.includes('mk');
+        const sbilifeLike = (n) => n.includes('sbilife') || (n.includes('sbi') && n.includes('life'));
         return [
-            { presalesName: 'Mridul Kumawat', match: (n) => (n.includes('mibl') && n.includes('mk')) || /\bmibl\b/.test(n) },
+            { presalesName: 'Mridul Kumawat', match: (n) => hasMk(n) && n.includes('reckitt') },
+            { presalesName: 'Mridul Kumawat', match: (n) => hasMk(n) && sbilifeLike(n) },
+            { presalesName: 'Mridul Kumawat', match: (n) => (n.includes('mibl') && hasMk(n)) || /\bmibl\b/.test(n) },
             { presalesName: 'Yashas Reddy', match: (n) => n.includes('nissin') },
             { presalesName: 'Mridul Kumawat', match: (n) => /\btrent\b/.test(n) },
             { presalesName: 'Gargi Upadhyay', match: (n) => n.includes('azizi') }

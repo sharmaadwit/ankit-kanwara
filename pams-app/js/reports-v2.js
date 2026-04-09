@@ -104,16 +104,18 @@ const ReportsV2 = {
     },
 
     /**
-     * Monthly PDF line for a CRM win: logged winner first; if missing, fall back to account/project presales tag map.
+     * Monthly PDF line for a CRM win: account/project presales tags override logged winner when present
+     * (otherwise wrong roster rows like username "user" / "admin" block the tag map).
      */
     presalesRepLineForCrmWin(accountName, projectTitle, wl, users) {
-        const wonBy = this.resolveWonByUserNameForReport(wl, users);
-        if (wonBy) return wonBy;
         const presalesTag =
             typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
                 ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
                 : null;
-        return this.applyWinPresalesTagForDisplay(accountName, presalesTag, null, projectTitle);
+        if (presalesTag) return presalesTag;
+        const wonBy = this.resolveWonByUserNameForReport(wl, users);
+        if (wonBy) return wonBy;
+        return this.applyWinPresalesTagForDisplay(accountName, null, null, projectTitle);
     },
 
     /**
@@ -167,16 +169,58 @@ const ReportsV2 = {
         ]
     },
 
-    // Seeded manual wins for PDF (merged after CRM wins). March 2026 entries are the agreed locked list for the critical March report.
+    /**
+     * March 2026 — locked wins for PDF (Wins page + Wins table). Source of truth for go-live; not read from CRM.
+     * Presales rep column matches signed-off sheet (e.g. user / admin usernames).
+     */
+    MARCH_2026_PDF_WINS_LOCKED: [
+        {
+            clientName: 'reckitt mk',
+            mrrInr: 3300,
+            useCase:
+                'Proven track record of innovation across channels. Case studies across industries. Roadmap created for adopting WA campaigns, bots, agent assist, whatsapp voice, voice ai in the next 2 years',
+            presalesRep: 'user'
+        },
+        {
+            clientName: 'sbilife mk',
+            mrrInr: 25000,
+            useCase:
+                'Existing bot in solutions mode where a new journey is added in English in phase 1 and Hindi in phase 2',
+            presalesRep: 'user'
+        },
+        { clientName: 'MIBL mk', mrrInr: 250000, useCase: 'existing bot upgrade', presalesRep: 'user' },
+        { clientName: 'nissin', mrrInr: 190400, useCase: 'NA', presalesRep: 'user' },
+        {
+            clientName: 'Trent',
+            mrrInr: 200000,
+            useCase:
+                'Existing vendor with proven experience of bot with a micro journey deployed for a different use case in previous quarter. Confidence on phased delivery and ongoing discussions for subsequent phases',
+            presalesRep: 'user'
+        },
+        {
+            clientName: 'Azizi',
+            mrrInr: 125200,
+            useCase:
+                'Azizi selected Gupshup primarily due to our strong platform capabilities, scalability, and seamless integration support with LeadSquared CRM. Since the client was looking to enable WhatsApp communication within their newly implemented LeadSquared system, our proven integration framework and ability to support scalable messaging workflows aligned well with their requirements, making us the preferred partner.',
+            presalesRep: 'admin'
+        },
+        { clientName: 'Credfix', mrrInr: 38000, useCase: 'NA', presalesRep: 'user' },
+        {
+            clientName: 'Kinan Properties',
+            mrrInr: 1500,
+            useCase:
+                'Our solution stands out due to the exceptional platform capability and advanced AI implementation powered by Gupshup, enabling highly intelligent, natural, and scalable customer interactions. With generative AI, multilingual understanding (Arabic & English), and contextual conversation handling, the platform goes beyond rule-based automation to deliver a truly personalized experience. Combined with seamless integration, automation, and enterprise-grade scalability, this positions us strongly as the preferred choice for delivering a future-ready WhatsApp engagement solution for Kinan.',
+            presalesRep: 'user'
+        }
+    ],
+
+    // Seeded manual wins for PDF (merged after CRM wins). March 2026 uses MARCH_2026_PDF_WINS_LOCKED instead — keep Feb seeds here.
     SEED_MANUAL_WINS_BY_PERIOD: {
         '2026-02': [
             { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
             { clientName: 'YouTube Shopping', useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement', channel: 'WhatsApp', industry: 'Entertainment', expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.', stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya', commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002', mrr: '', presalesRep: 'Adwit Sharma' }
         ],
-        '2026-03': [
-            { clientName: 'Prabhudas Liladhar Capital', useCase: 'Electronic Know Your Customer bot (E-KYC)', product: 'Converse (Bot Studio)', channel: 'WhatsApp', industry: 'Financial Services', buyerCentre: 'Chairperson & Managing Director', stakeholders: 'Sales: Premsagar Chourasia | Pre-sales: Purusottam Singh | Sales Leadership: Neerav Singh Chib & Sujal Shah', commercials: 'One time dev fee: INR 3 L (INR 20k / man-day) | Monthly platform fee: INR 1 L (no inclusions) | Overage: INR 0.30 / advanced message | Billing: Quarterly advance (Platform fee)', mrr: '100000', presalesRep: 'Purusottam Singh' },
-            { clientName: 'YouTube Shopping', useCase: 'YouTube Shopping Creator engagement in India. BIC: 1. Product activation 2. Creator Engagement', channel: 'WhatsApp', industry: 'Entertainment', expansionPlan: 'Based on success in India they plan to expand to SEA, ME and LATAM.', stakeholders: 'Sales: Amrita Rath | Presales: Adwit Sharma | CSM: Ankita Acharya', commercials: 'One Time Charges: $4,000 | Annual Recurring Charges: $60,000 | Advance Message Cost: $0.006 | WA Messaging markup: $0.002', mrr: '', presalesRep: 'Adwit Sharma' }
-        ]
+        '2026-03': []
     },
 
     chartValueLabelsPlugin: {
@@ -995,6 +1039,7 @@ const ReportsV2 = {
             period === '2026-03'
                 ? manualRawForPdf
                 : manualRawForPdf.map((mw) => ReportsV2.enrichManualWinWithLoggedCrm(mw, winsForPeriod));
+        const marchLockedWins = period === '2026-03' ? ReportsV2.MARCH_2026_PDF_WINS_LOCKED : null;
 
         this.monthlyReportData = {
             breakdown,
@@ -1035,7 +1080,7 @@ const ReportsV2 = {
                             <div class="monthly-report-summary-pills">
                                 <span>Internal ${internalCount}</span>
                                 <span>External ${externalCount}</span>
-                                <span>Wins ${winsPeriod}</span>
+                                <span>Wins ${marchLockedWins && marchLockedWins.length ? marchLockedWins.length : winsPeriod}</span>
                             </div>
                         </div>
                         ${page1InsightsHtml}
@@ -1062,10 +1107,28 @@ const ReportsV2 = {
                     <!-- Page 3 – Wins (edit via actions bar only; no Edit in PDF content) -->
                     <div class="monthly-report-page">
                         <h3>Wins – ${periodLabel}</h3>
-                        <p class="text-muted monthly-report-edit-hint">Use Edit report (above) to include/exclude wins or add manual wins.</p>
+                        <p class="text-muted monthly-report-edit-hint">${period === '2026-03' ? 'March 2026 wins below match the locked sign-off list in code (not CRM). Use Edit report for highlights and use cases.' : 'Use Edit report (above) to include/exclude wins or add manual wins.'}</p>
                         <div class="monthly-report-wins-grid">
                             ${(() => {
                                 const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                                if (marchLockedWins && marchLockedWins.length) {
+                                    return marchLockedWins
+                                        .map((row) => {
+                                            const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
+                                            return (
+                                                '<div class="monthly-report-win-card"><strong>' +
+                                                safe(row.clientName) +
+                                                '</strong><br/>MRR: ' +
+                                                mrrStr +
+                                                '<br/>Use case: ' +
+                                                safe(row.useCase) +
+                                                '<br/>Presales rep: ' +
+                                                safe(row.presalesRep) +
+                                                '</div>'
+                                            );
+                                        })
+                                        .join('');
+                                }
                                 const manualPresalesLine = (mw) => {
                                     const p = mw.presalesRep;
                                     if (p != null && String(p).trim() && p !== '—') return String(p).trim();
@@ -1118,6 +1181,14 @@ const ReportsV2 = {
                                 <tbody>
                                     ${(() => {
                                         const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                        if (marchLockedWins && marchLockedWins.length) {
+                                            return marchLockedWins
+                                                .map((row) => {
+                                                    const mrrStr = ReportsV2.formatReportCurrency(row.mrrInr, true, 'INR');
+                                                    return `<tr><td>${safe(row.clientName)}</td><td>${mrrStr}</td><td>${safe(row.useCase)}</td><td>${safe(row.presalesRep)}</td></tr>`;
+                                                })
+                                                .join('');
+                                        }
                                         const manualPresalesLine = (mw) => {
                                             const p = mw.presalesRep;
                                             if (p != null && String(p).trim() && p !== '—') return String(p).trim();
