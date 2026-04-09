@@ -35,6 +35,23 @@ const ReportsV2 = {
         if (period !== '2026-03') return true;
         return !this.isMarch2026MissingSfdcExcludedAccount(accountName);
     },
+
+    /**
+     * Monthly PDF / tables: prefer fixed account→presales tags, then stored win/loss name/id resolution.
+     * `presalesTag` may be null; accountName is always re-checked via DataManager when needed.
+     */
+    applyWinPresalesTagForDisplay(accountName, presalesTag, fromStored, projectName) {
+        const tag =
+            presalesTag ||
+            (typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
+                ? DataManager.getWinLossPresalesTagForWin(accountName, projectName)
+                : typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForAccountName
+                  ? DataManager.getWinLossPresalesTagForAccountName(accountName)
+                  : null);
+        if (tag) return tag;
+        if (fromStored != null && String(fromStored).trim()) return String(fromStored).trim();
+        return '—';
+    },
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
@@ -692,17 +709,16 @@ const ReportsV2 = {
                                 const uc = (project.useCases && project.useCases[0]);
                                 const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
-                                const presalesTag =
-                                    typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForAccountName
-                                        ? DataManager.getWinLossPresalesTagForAccountName(accountName)
-                                        : null;
-                                const presalesRep =
-                                    presalesTag ||
-                                    project.winLossData?.wonByUserName ||
-                                    resolveUserDisplayName(project.winLossData?.wonByUserId) ||
-                                    '—';
-                                const wl = project.winLossData || {};
                                 const accountName = account.name || 'Unknown';
+                                const wl = project.winLossData || {};
+                                const fromStored =
+                                    wl.wonByUserName || resolveUserDisplayName(wl.wonByUserId) || null;
+                                const projectTitle = (project.name || '').trim();
+                                const presalesTag =
+                                    typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
+                                        ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
+                                        : null;
+                                const presalesRep = this.applyWinPresalesTagForDisplay(accountName, presalesTag, fromStored, projectTitle);
                                 const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
                                 let currency = wl.currency || 'INR';
                                 let mrrVal = wl.mrr ?? project.mrr;
@@ -986,10 +1002,12 @@ const ReportsV2 = {
                                         if (mw.commercials) lines.push('Commercials: ' + safe(mw.commercials));
                                         if (mw.expansionPlan) lines.push('Expansion plan: ' + safe(mw.expansionPlan));
                                         if (mrrStr !== '—') lines.push('MRR: ' + mrrStr);
-                                        if (mw.presalesRep) lines.push('Presales rep: ' + safe(mw.presalesRep));
+                                        const mwPresales = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                        if (mwPresales && mwPresales !== '—') lines.push('Presales rep: ' + safe(mwPresales));
                                         return '<div class="monthly-report-win-card monthly-report-win-card--detailed">' + lines.join('<br/>') + '</div>';
                                     }
-                                    return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : '') + '</div>';
+                                    const mwPresalesSimple = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                    return '<div class="monthly-report-win-card"><strong>' + safe(mw.clientName || '') + '</strong><br/>MRR: ' + mrrStr + '<br/>Use case: ' + safe(mw.useCase || '') + (mwPresalesSimple && mwPresalesSimple !== '—' ? '<br/>Presales rep: ' + safe(mwPresalesSimple) : '') + '</div>';
                                 };
                                 const cards = displayWins.slice(0, 12).map(w => {
                                     const curr = w.currency || 'INR';
@@ -1026,7 +1044,8 @@ const ReportsV2 = {
                                         });
                                         manual.forEach(mw => {
                                             const mrrStr = (mw.mrr != null && mw.mrr !== '') ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR') : '—';
-                                            rows.push(`<tr><td>${safe(mw.clientName)}</td><td>${mrrStr}</td><td>${safe(mw.useCase)}</td><td>${safe(mw.presalesRep)}</td></tr>`);
+                                            const mwPresales = ReportsV2.applyWinPresalesTagForDisplay(mw.clientName || '', null, mw.presalesRep || '');
+                                            rows.push(`<tr><td>${safe(mw.clientName)}</td><td>${mrrStr}</td><td>${safe(mw.useCase)}</td><td>${safe(mwPresales)}</td></tr>`);
                                         });
                                         return rows.length ? rows.join('') : '<tr><td colspan="4">No wins in this period.</td></tr>';
                                     })()}
