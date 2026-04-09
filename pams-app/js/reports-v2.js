@@ -14,6 +14,27 @@ const ReportsV2 = {
         }
         return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0, minimumFractionDigits: 0 }) + ' (INR)';
     },
+
+    normalizeAccountNameForReportMatch(name) {
+        return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    },
+
+    /** March 2026 report: omit these accounts from Missing SFDC (email/PDF and charts). */
+    isMarch2026MissingSfdcExcludedAccount(accountName) {
+        const n = this.normalizeAccountNameForReportMatch(accountName);
+        if (!n) return false;
+        if (n.includes('credfix')) return true;
+        if (n.includes('kinan') && n.includes('propert')) return true;
+        const mk = n.includes('mk');
+        if (mk && (n.includes('treckitt') || n.includes('reckitt'))) return true;
+        if (mk && (n.includes('sbilife') || (n.includes('sbi') && n.includes('life')))) return true;
+        return false;
+    },
+
+    shouldCountActivityTowardMissingSfdc(period, accountName) {
+        if (period !== '2026-03') return true;
+        return !this.isMarch2026MissingSfdcExcludedAccount(accountName);
+    },
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
@@ -643,7 +664,15 @@ const ReportsV2 = {
         const externalCount = activities.filter(a => !a.isInternal).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
         const users = typeof DataManager !== 'undefined' && DataManager.getUsers ? await DataManager.getUsers() : [];
-        const userLookup = new Map((users || []).map(u => [u.id, u.username || u.name]));
+        const resolveUserDisplayName = (userId) => {
+            if (userId == null || userId === '') return null;
+            const u = (users || []).find((x) =>
+                typeof DataManager !== 'undefined' && DataManager.userIdsMatch
+                    ? DataManager.userIdsMatch(x.id, userId)
+                    : String(x.id) === String(userId)
+            );
+            return u ? (u.username || u.name) : null;
+        };
         const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
         const o = period ? (overrides[period] || {}) : {};
         let winsPeriod = 0;
@@ -663,7 +692,15 @@ const ReportsV2 = {
                                 const uc = (project.useCases && project.useCases[0]);
                                 const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
-                                const presalesRep = project.winLossData?.wonByUserName || userLookup.get(project.winLossData?.wonByUserId) || '—';
+                                const presalesTag =
+                                    typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForAccountName
+                                        ? DataManager.getWinLossPresalesTagForAccountName(accountName)
+                                        : null;
+                                const presalesRep =
+                                    presalesTag ||
+                                    project.winLossData?.wonByUserName ||
+                                    resolveUserDisplayName(project.winLossData?.wonByUserId) ||
+                                    '—';
                                 const wl = project.winLossData || {};
                                 const accountName = account.name || 'Unknown';
                                 const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
@@ -721,11 +758,14 @@ const ReportsV2 = {
             regionCounts[region] = (regionCounts[region] || 0) + 1;
         });
         const missingSfdcByRegion = {};
+        const missingSfdcPeriod = period;
         activities.filter(a => !a.isInternal).forEach(a => {
             const account = accounts.find(ac => ac.id === a.accountId);
             const project = account && account.projects ? account.projects.find(p => p.id === a.projectId) : null;
             const hasSfdc = (account && account.sfdcLink) || (project && project.sfdcLink);
             if (!hasSfdc) {
+                const accName = account ? (account.name || '') : (a.accountName || '');
+                if (!this.shouldCountActivityTowardMissingSfdc(missingSfdcPeriod, accName)) return;
                 const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
                 missingSfdcByRegion[region] = (missingSfdcByRegion[region] || 0) + 1;
             }
@@ -1157,6 +1197,8 @@ const ReportsV2 = {
         data.missingSfdcAccounts = Array.from(accountActivityMap.values())
             .filter(item => {
                 const account = accounts.find(a => a.id === item.accountId);
+                const accName = item.accountName || (account && account.name) || '';
+                if (!this.shouldCountActivityTowardMissingSfdc(this.currentPeriod, accName)) return false;
                 return account && (!account.sfdcLink || !account.sfdcLink.trim());
             })
             .sort((a, b) => a.activityCount - b.activityCount);
@@ -1752,6 +1794,8 @@ const ReportsV2 = {
                         if (!activity.isInternal && activity.accountId) {
                             const account = accounts.find(a => a.id === activity.accountId);
                             if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                                const accName = account.name || activity.accountName || '';
+                                if (!ReportsV2.shouldCountActivityTowardMissingSfdc(ReportsV2.currentPeriod, accName)) return;
                                 const region = activity.salesRepRegion || activity.region || account.region || 'Unknown';
                                 regionMissingMap.set(region, (regionMissingMap.get(region) || 0) + 1);
                             }
@@ -1861,6 +1905,8 @@ const ReportsV2 = {
                         if (!activity.isInternal && activity.salesRep && activity.accountId) {
                             const account = accounts.find(a => a.id === activity.accountId);
                             if (account && (!account.sfdcLink || !account.sfdcLink.trim())) {
+                                const accName = account.name || activity.accountName || '';
+                                if (!ReportsV2.shouldCountActivityTowardMissingSfdc(ReportsV2.currentPeriod, accName)) return;
                                 const repName = activity.salesRep;
                                 salesRepSfdcMap.set(repName, (salesRepSfdcMap.get(repName) || 0) + 1);
                             }
