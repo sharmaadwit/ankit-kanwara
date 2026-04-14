@@ -34,6 +34,44 @@ const ReportsV2 = {
     },
 
     /**
+     * Activity breakdown donut: partition so segment sum equals total activities (no double count).
+     * Internal → Internal only. External-only buckets: Customer Calls, Pricing, POC, SOW, RFx (exact type match).
+     * External with missing/other type → Other. Used for Presales + Monthly PDF donuts (Jan 2026+ report scope).
+     */
+    computeActivityBreakdownPartition(activities) {
+        const list = activities && Array.isArray(activities) ? activities : [];
+        let customerCalls = 0;
+        let internal = 0;
+        let pricing = 0;
+        let poc = 0;
+        let sow = 0;
+        let rfx = 0;
+        let other = 0;
+        for (const a of list) {
+            if (a.isInternal === true) {
+                internal++;
+                continue;
+            }
+            const t = a.type;
+            if (t === 'customerCall') customerCalls++;
+            else if (t === 'pricing') pricing++;
+            else if (t === 'poc') poc++;
+            else if (t === 'sow') sow++;
+            else if (t === 'rfx') rfx++;
+            else other++;
+        }
+        return {
+            'Customer Calls': customerCalls,
+            Internal: internal,
+            Pricing: pricing,
+            POC: poc,
+            SOW: sow,
+            RFx: rfx,
+            Other: other
+        };
+    },
+
+    /**
      * CRM wins for monthly PDF: `includedWinIds` null/undefined = show all; `[]` = show none;
      * otherwise only listed IDs (compared as strings, so number/string mismatch does not break).
      */
@@ -175,7 +213,7 @@ const ReportsV2 = {
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
     activeTab: 'presales', // 'presales', 'sales', 'regional', 'monthly', 'ai'
-    activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall'
+    activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall', 'internal', 'other'
 
     // Plugin to show value on pie/doughnut segments and bar tops (matches dashboard)
     // Pre-built February 2026 Cube Analysis (from snapshot run) – used by "Load Feb 2026 analysis" button
@@ -762,8 +800,8 @@ const ReportsV2 = {
     async renderReportsTotalActivityRow(activities, periodLabel) {
         const safe = activities && Array.isArray(activities) ? activities : [];
         const total = safe.length;
-        const internal = safe.filter(a => a.isInternal === true).length;
-        const external = safe.filter(a => !a.isInternal).length;
+        const internal = safe.filter((a) => a.isInternal === true).length;
+        const external = safe.filter((a) => a.isInternal !== true).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
         const regionCounts = {};
         safe.filter(a => !a.isInternal).forEach(a => {
@@ -869,8 +907,8 @@ const ReportsV2 = {
         const periodLabel = this.formatPeriod(this.currentPeriod);
         const period = this.currentPeriod;
         const total = activities.length;
-        const internalCount = activities.filter(a => a.isInternal).length;
-        const externalCount = activities.filter(a => !a.isInternal).length;
+        const internalCount = activities.filter((a) => a.isInternal === true).length;
+        const externalCount = activities.filter((a) => a.isInternal !== true).length;
         const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
         const users = typeof DataManager !== 'undefined' && DataManager.getUsers ? await DataManager.getUsers() : [];
         const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
@@ -935,14 +973,7 @@ const ReportsV2 = {
                 });
             });
         }
-        const breakdown = {
-            'Customer Calls': activities.filter(a => a.type === 'customerCall').length,
-            'Internal': internalCount,
-            'Pricing': activities.filter(a => a.type === 'pricing').length,
-            'POC': activities.filter(a => a.type === 'poc').length,
-            'SOW': activities.filter(a => a.type === 'sow').length,
-            'RFx': activities.filter(a => a.type === 'rfx').length
-        };
+        const breakdown = ReportsV2.computeActivityBreakdownPartition(activities);
         const callTypeData = (this.cachedData && this.cachedData.callTypeData) || {};
         const regionCounts = {};
         activities.filter(a => !a.isInternal).forEach(a => {
@@ -1413,16 +1444,10 @@ const ReportsV2 = {
     async computeReportData(activities) {
         const data = {
             totalActivities: activities.length,
-            internalCount: activities.filter(a => a.isInternal).length,
-            externalCount: activities.filter(a => !a.isInternal).length,
+            internalCount: activities.filter((a) => a.isInternal === true).length,
+            externalCount: activities.filter((a) => a.isInternal !== true).length,
             userActivity: {},
-            activityBreakdown: {
-                'SOW': 0,
-                'POC': 0,
-                'RFx': 0,
-                'Pricing': 0,
-                'Customer Calls': 0
-            },
+            activityBreakdown: this.computeActivityBreakdownPartition(activities),
             salesRepRequests: {},
             missingSfdcAccounts: [],
             industryData: {}
@@ -1436,15 +1461,6 @@ const ReportsV2 = {
                 data.userActivity[userId] = { userName, count: 0 };
             }
             data.userActivity[userId].count++;
-        });
-
-        // Activity breakdown
-        activities.forEach(activity => {
-            if (activity.type === 'sow') data.activityBreakdown['SOW']++;
-            else if (activity.type === 'poc') data.activityBreakdown['POC']++;
-            else if (activity.type === 'rfx') data.activityBreakdown['RFx']++;
-            else if (activity.type === 'pricing') data.activityBreakdown['Pricing']++;
-            else if (activity.type === 'customerCall') data.activityBreakdown['Customer Calls']++;
         });
 
         // Sales rep requests
@@ -1583,8 +1599,8 @@ const ReportsV2 = {
     // Render Presales Reports Section
     async renderPresalesReports(activities) {
         const totalActivities = activities.length;
-        const internalCount = activities.filter(a => a.isInternal).length;
-        const externalCount = activities.filter(a => !a.isInternal).length;
+        const internalCount = activities.filter((a) => a.isInternal === true).length;
+        const externalCount = activities.filter((a) => a.isInternal !== true).length;
         const internalPercent = totalActivities > 0 ? Math.round((internalCount / totalActivities) * 100) : 0;
         const externalPercent = totalActivities > 0 ? Math.round((externalCount / totalActivities) * 100) : 0;
 
@@ -1600,15 +1616,6 @@ const ReportsV2 = {
         });
         const userActivityData = Array.from(userActivityMap.values())
             .sort((a, b) => b.count - a.count);
-
-        // Activity Breakdown
-        const activityBreakdown = {
-            'SOW': activities.filter(a => a.type === 'sow').length,
-            'POC': activities.filter(a => a.type === 'poc').length,
-            'RFx': activities.filter(a => a.type === 'rfx').length,
-            'Pricing': activities.filter(a => a.type === 'pricing').length,
-            'Customer Calls': activities.filter(a => a.type === 'customerCall').length
-        };
 
         return `
             <div class="reports-v2-section">
@@ -1628,6 +1635,8 @@ const ReportsV2 = {
                                 <option value="rfx" ${this.activityBreakdownFilter === 'rfx' ? 'selected' : ''}>RFx</option>
                                 <option value="pricing" ${this.activityBreakdownFilter === 'pricing' ? 'selected' : ''}>Pricing</option>
                                 <option value="customerCall" ${this.activityBreakdownFilter === 'customerCall' ? 'selected' : ''}>Customer Calls</option>
+                                <option value="internal" ${this.activityBreakdownFilter === 'internal' ? 'selected' : ''}>Internal</option>
+                                <option value="other" ${this.activityBreakdownFilter === 'other' ? 'selected' : ''}>Other</option>
                             </select>
                         </div>
                         <div class="reports-v2-card-body">
@@ -2370,10 +2379,11 @@ const ReportsV2 = {
             // Monthly report (PDF) tab – same charts as spec: donut, call type, region, missing SFDC, presales by user
             if (this.activeTab === 'monthly' && this.monthlyReportData) {
                 const md = this.monthlyReportData;
-                const donutColors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#38B2AC', '#ED64A6'];
+                const donutColors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#38B2AC', '#ED64A6', '#718096'];
                 if (document.getElementById('monthlyReportDonut') && md.breakdown) {
-                    const labels = Object.keys(md.breakdown);
-                    const data = Object.values(md.breakdown);
+                    const entries = Object.entries(md.breakdown).filter(([, v]) => v > 0);
+                    const labels = entries.map(([k]) => k);
+                    const data = entries.map(([, v]) => v);
                     if (data.some(v => v > 0)) {
                         this.renderDonutChart('monthlyReportDonut', {
                             labels,
@@ -2583,31 +2593,32 @@ const ReportsV2 = {
 
     // Initialize Activity Breakdown chart separately (for filter changes)
     initActivityBreakdownChart(activities) {
-        const breakdown = {
-            'SOW': activities.filter(a => a.type === 'sow').length,
-            'POC': activities.filter(a => a.type === 'poc').length,
-            'RFx': activities.filter(a => a.type === 'rfx').length,
-            'Pricing': activities.filter(a => a.type === 'pricing').length,
-            'Customer Calls': activities.filter(a => a.type === 'customerCall').length
-        };
-
-        let filteredBreakdown = breakdown;
+        const breakdown = ReportsV2.computeActivityBreakdownPartition(activities);
+        let chartBreakdown = breakdown;
         if (this.activityBreakdownFilter !== 'all') {
             const filterMap = {
-                'sow': 'SOW',
-                'poc': 'POC',
-                'rfx': 'RFx',
-                'pricing': 'Pricing',
-                'customerCall': 'Customer Calls'
+                sow: 'SOW',
+                poc: 'POC',
+                rfx: 'RFx',
+                pricing: 'Pricing',
+                customerCall: 'Customer Calls',
+                internal: 'Internal',
+                other: 'Other'
             };
             const selectedType = filterMap[this.activityBreakdownFilter];
-            filteredBreakdown = { [selectedType]: breakdown[selectedType] || 0 };
+            if (selectedType) {
+                chartBreakdown = { [selectedType]: breakdown[selectedType] || 0 };
+            }
         }
+        const entries = Object.entries(chartBreakdown).filter(([, v]) => v > 0);
+        const labels = entries.map(([k]) => k);
+        const data = entries.map(([, v]) => v);
+        if (!data.length || !data.some((v) => v > 0)) return;
 
         this.renderDonutChart('activityBreakdownChart', {
-            labels: Object.keys(filteredBreakdown),
-            data: Object.values(filteredBreakdown),
-            colors: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C']
+            labels,
+            data,
+            colors: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#805AD5', '#718096']
         });
     },
 
