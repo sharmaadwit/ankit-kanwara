@@ -8,7 +8,7 @@
  *
  * Tunables (env):
  *   STORAGE_HISTORY_CLEANUP_ENABLED  default "true". Set to "false" to disable.
- *   STORAGE_HISTORY_RETENTION_DAYS   default 30.
+ *   STORAGE_HISTORY_RETENTION_DAYS   default 15.
  *   STORAGE_HISTORY_CLEANUP_INTERVAL_HOURS  default 24 (run once per day).
  *   STORAGE_HISTORY_CLEANUP_INITIAL_DELAY_MS  default 60000 (1 min after startup).
  *
@@ -35,7 +35,7 @@ const parseInt0 = (value, fallback) => {
 
 const config = () => ({
   enabled: parseBool(process.env.STORAGE_HISTORY_CLEANUP_ENABLED, true),
-  retentionDays: parseInt0(process.env.STORAGE_HISTORY_RETENTION_DAYS, 30),
+  retentionDays: parseInt0(process.env.STORAGE_HISTORY_RETENTION_DAYS, 15),
   intervalHours: parseInt0(process.env.STORAGE_HISTORY_CLEANUP_INTERVAL_HOURS, 24),
   initialDelayMs: parseInt0(process.env.STORAGE_HISTORY_CLEANUP_INITIAL_DELAY_MS, 60_000)
 });
