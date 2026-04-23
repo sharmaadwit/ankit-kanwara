@@ -1,9 +1,11 @@
-# After each push to main: export storage snapshot as a GitHub Actions artifact only (not committed to Git).
-name: Snapshot on deploy
+# Manual-only: export storage snapshot as a GitHub Actions artifact (not committed to Git).
+# Previously ran on every push to main, which caused ~12 MB of egress from the live Railway
+# app per push. Now manual only to reduce Railway bandwidth cost.
+# The daily-backup workflow still runs once per day at 03:30 UTC and is sufficient.
+name: Snapshot on deploy (manual)
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   snapshot:
