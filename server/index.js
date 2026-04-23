@@ -4,6 +4,7 @@ const { createApp } = require('./app');
 const { initDb, closePool } = require('./db');
 const logger = require('./logger');
 const { runPreload } = require('./services/preloadMigration');
+const storageHistoryCleanup = require('./services/storageHistoryCleanup');
 
 const PORT = parseInt(process.env.PORT, 10) || 8080;
 let server;
@@ -47,6 +48,11 @@ const ensureDbInitialized = async () => {
     runtimeStatus.dbLastErrorMessage = null;
     logger.info('db_init_succeeded');
     runPreload().catch((err) => logger.error('preload_after_init_failed', { message: err.message }));
+    try {
+      storageHistoryCleanup.start();
+    } catch (err) {
+      logger.error('storage_history_cleanup_start_failed', { message: err.message });
+    }
   } catch (error) {
     runtimeStatus.dbInitialized = false;
     runtimeStatus.dbInitRetryCount += 1;
