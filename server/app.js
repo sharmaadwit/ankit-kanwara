@@ -119,25 +119,6 @@ const createApp = (options = {}) => {
   app.use(express.json({ limit: jsonBodyLimit }));
   app.use(cookieParser());
 
-  const isAppMaintenance = () =>
-    String(process.env.APP_MAINTENANCE_MODE || '').toLowerCase() === 'true';
-  app.use((req, res, next) => {
-    if (!isAppMaintenance()) return next();
-    const p = req.path || '';
-    if (p === '/api/health' || p.startsWith('/api/health?')) return next();
-    if (p === '/api/healthz' || p.startsWith('/api/healthz?')) return next();
-    if (p === '/api/bootstrap' || p.startsWith('/api/bootstrap?')) return next();
-    if (p === '/api/config' || p.startsWith('/api/config?')) return next();
-    if (p === '/api/version' || p.startsWith('/api/version?')) return next();
-    if (p.startsWith('/api/')) {
-      return res.status(503).json({
-        message: 'PreSight is temporarily unavailable for maintenance.',
-        maintenance: true
-      });
-    }
-    return next();
-  });
-
   app.use((req, res, next) => {
     const start = process.hrtime.bigint();
     const pathName = req.originalUrl || req.url;
@@ -244,20 +225,19 @@ const createApp = (options = {}) => {
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
     const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'false').toLowerCase() === 'true';
-    const maintenanceMode = isAppMaintenance();
     try {
       const config = await getAppConfig();
       const configPayload = {
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
-        maintenanceMode,
+        maintenanceMode: false,
         featureFlags: config.featureFlags,
         dashboardVisibility: config.dashboardVisibility,
         dashboardMonth: config.dashboardMonth
       };
       let user = null;
-      if (!maintenanceMode && req.user) {
+      if (req.user) {
         user = {
           userId: req.user.id,
           username: req.user.username,
@@ -278,7 +258,7 @@ const createApp = (options = {}) => {
         config: {
           remoteStorage: forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
           cookieAuth,
-          maintenanceMode,
+          maintenanceMode: false,
           featureFlags: {},
           dashboardVisibility: {},
           dashboardMonth: 'last'
@@ -312,14 +292,13 @@ const createApp = (options = {}) => {
       hostname.startsWith('127.') ||
       hostname.endsWith('.local');
     const cookieAuth = String(process.env.FORCE_COOKIE_AUTH || 'false').toLowerCase() === 'true';
-    const maintenanceMode = isAppMaintenance();
     try {
       const config = await getAppConfig();
       res.json({
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
-        maintenanceMode,
+        maintenanceMode: false,
         featureFlags: config.featureFlags,
         dashboardVisibility: config.dashboardVisibility,
         dashboardMonth: config.dashboardMonth
@@ -330,7 +309,7 @@ const createApp = (options = {}) => {
         remoteStorage:
           forceRemoteStorage || (!isLocalHost && hostname.trim().length > 0),
         cookieAuth,
-        maintenanceMode,
+        maintenanceMode: false,
         featureFlags: {},
         dashboardVisibility: {},
         dashboardMonth: 'last'

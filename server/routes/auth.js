@@ -165,12 +165,6 @@ const migrateLegacyUserToDb = async (pool, legacyUser) => {
  */
 router.post('/login', async (req, res) => {
   try {
-    if (String(process.env.APP_MAINTENANCE_MODE || '').toLowerCase() === 'true') {
-      return res.status(503).json({
-        message: 'PreSight is temporarily unavailable for maintenance.',
-        maintenance: true
-      });
-    }
     const { username, password } = req.body || {};
     const trimmedUsername = (username || '').trim().toLowerCase();
     if (!trimmedUsername || typeof password !== 'string') {

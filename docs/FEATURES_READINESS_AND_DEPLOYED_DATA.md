@@ -1,7 +1,7 @@
 # Deployed data, feature inventory, and readiness
 
 This document supports release planning: what the hosted stack **persists**, what the **UI exposes**, and **confidence** in each area (architecture fit, bug/unknown-error risk).  
-**Note:** **App-wide maintenance** is controlled with `APP_MAINTENANCE_MODE=true` on the server (Railway). When enabled, the bootstrap payload sets `maintenanceMode`, the client shows a maintenance screen, and non-read-only API routes return **503** (except `/api/health`, `/api/healthz`, `/api/bootstrap`, `/api/config`, `/api/version`).
+**Note:** App-wide maintenance mode (`APP_MAINTENANCE_MODE`) was **removed** from the codebase. The API field `maintenanceMode` in bootstrap/config is always `false`. (Earlier behaviour: 503 on most APIs while bootstrap stayed available, so existing sessions could still load the app and failed saves created **Drafts**—confusing for users.)
 
 ---
 
@@ -30,7 +30,7 @@ This document supports release planning: what the hosted stack **persists**, wha
 
 ### Not “data” but deployed **behaviour**
 
-- **`/api/bootstrap`** — `remoteStorage`, `cookieAuth`, `maintenanceMode`, `featureFlags`, `dashboardVisibility`, `dashboardMonth`.
+- **`/api/bootstrap`** — `remoteStorage`, `cookieAuth`, `maintenanceMode` (always `false`), `featureFlags`, `dashboardVisibility`, `dashboardMonth`.
 - **`/api/config`** — subset of public config.
 - **Feature flags** in DB (`feature_flags` key) — e.g. `pricingCalculatorSync`, `winLoss`, import/export toggles.
 
@@ -62,9 +62,8 @@ Scale: **High** = production-safe and aligned with architecture; **Medium** = wo
 
 ## 3. Suggested order for your next push
 
-1. Set **`APP_MAINTENANCE_MODE=false`** on Railway when you want users to use the app again; leave **`true`** for full lockdown (no login, no API except allowed read-only endpoints).  
-2. Run **`npm run syntax-check`** and deploy.  
-3. Smoke-test login (Bearer session persists across refresh) and Reports when maintenance is off.
+1. Run **`npm run syntax-check`** and deploy.  
+2. Smoke-test login (Bearer session persists across refresh) and Reports.
 
 ---
 

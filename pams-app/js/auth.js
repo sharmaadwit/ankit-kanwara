@@ -314,9 +314,6 @@ const Auth = {
                     body: JSON.stringify({ username: trimmedUsername, password: trimmedPassword })
                 });
                 const data = await res.json().catch(() => ({}));
-                if (res.status === 503 && data.maintenance) {
-                    return { success: false, message: data.message || 'PreSight is temporarily unavailable for maintenance.' };
-                }
                 if (res.ok && data.user) {
                     const user = data.user;
                     if (data.authSessionId) {
