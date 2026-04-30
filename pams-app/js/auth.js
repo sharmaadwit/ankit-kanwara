@@ -462,6 +462,16 @@ const Auth = {
     // Show main app
     showMainApp() {
         try {
+            // Admins need DB-backed GET /api/admin/users; early DataManager init may have cached storage-only `users` before login.
+            if (
+                this.currentUser &&
+                this.isAdmin() &&
+                typeof DataManager !== 'undefined' &&
+                typeof DataManager.invalidateCache === 'function'
+            ) {
+                DataManager.invalidateCache('users');
+            }
+
             const loginScreen = document.getElementById('loginScreen');
             const mainApp = document.getElementById('mainApp');
 

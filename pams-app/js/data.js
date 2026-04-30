@@ -902,32 +902,40 @@ const DataManager = {
             const root = (apiRoot && apiRoot.length > 0) ? apiRoot : origin;
             return root ? (root.replace(/\/$/, '') + '/api/users') : '/api/users';
         };
-        // Remote: prefer DB-backed /api/admin/users when it returns rows (fixes edit user vs stale storage `users`).
+        // Remote: DB-backed /api/admin/users is admin-only. Presales users always get 401 here — skip unless Admin to avoid
+        // noisy failures during DataManager.initialize() (runs at script load) and Auth.init getUserById (before currentUser is set).
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 let adminOk = false;
                 let adminList = [];
                 let lastErr;
-                for (let attempt = 0; attempt <= 1; attempt++) {
-                    try {
-                        const res = await fetchWithTimeout(adminUsersUrl(), ADMIN_USERS_TIMEOUT_MS);
-                        if (res.ok) {
-                            const fromDb = await res.json();
-                            adminList = Array.isArray(fromDb) ? fromDb : [];
-                            adminOk = true;
-                            break;
+                const shouldFetchAdminUsers =
+                    typeof Auth !== 'undefined' &&
+                    Auth.currentUser != null &&
+                    typeof Auth.isAdmin === 'function' &&
+                    Auth.isAdmin();
+                if (shouldFetchAdminUsers) {
+                    for (let attempt = 0; attempt <= 1; attempt++) {
+                        try {
+                            const res = await fetchWithTimeout(adminUsersUrl(), ADMIN_USERS_TIMEOUT_MS);
+                            if (res.ok) {
+                                const fromDb = await res.json();
+                                adminList = Array.isArray(fromDb) ? fromDb : [];
+                                adminOk = true;
+                                break;
+                            }
+                            if (res.status === 401 || res.status === 403) {
+                                if (attempt === 0) console.warn('[DataManager] GET /api/admin/users: admin auth required (', res.status, ')');
+                                lastErr = new Error('Admin access required');
+                                break;
+                            }
+                        } catch (apiErr) {
+                            lastErr = apiErr;
+                            if (attempt === 0) console.warn('[DataManager] GET /api/admin/users failed (will retry once):', apiErr);
                         }
-                        if (res.status === 401 || res.status === 403) {
-                            if (attempt === 0) console.warn('[DataManager] GET /api/admin/users: admin auth required (', res.status, ')');
-                            lastErr = new Error('Admin access required');
-                            break;
-                        }
-                    } catch (apiErr) {
-                        lastErr = apiErr;
-                        if (attempt === 0) console.warn('[DataManager] GET /api/admin/users failed (will retry once):', apiErr);
                     }
+                    if (lastErr && !adminOk) console.warn('[DataManager] GET /api/admin/users failed after retry:', lastErr);
                 }
-                if (lastErr && !adminOk) console.warn('[DataManager] GET /api/admin/users failed after retry:', lastErr);
 
                 if (adminOk && adminList.length > 0) {
                     const normalized = adminList.map(normalizeUser).filter(Boolean);
@@ -2286,14 +2294,23 @@ const DataManager = {
 
     // Account Management
     async getAccounts() {
-        if (this.cache.accounts) {
+        // Use null/undefined as "uncached" only. ([] is truthy in JS — the old `if (this.cache.accounts)` skipped
+        // refetch forever after a failed remote read cached [].)
+        if (this.cache.accounts != null) {
             return this.cache.accounts;
         }
         // Try async first if available, fallback to sync for initial load
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('accounts');
-                const accounts = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                // Remote getItemAsync returns null on 401, 404, or transport errors — do not cache as [] or list stays empty.
+                if (stored == null) {
+                    console.warn(
+                        '[DataManager] getAccounts: remote storage returned no payload (auth, missing key, or network). Retry later.'
+                    );
+                    return [];
+                }
+                const accounts = typeof stored === 'string' ? JSON.parse(stored) : stored;
                 const list = Array.isArray(accounts) ? accounts : [];
                 this.cache.accounts = list;
                 return list;

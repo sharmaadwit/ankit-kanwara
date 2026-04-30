@@ -1431,6 +1431,9 @@ const Activities = {
         const dropdown = document.getElementById('accountDropdown');
         if (!dropdown) return;
 
+        if (typeof DataManager !== 'undefined' && typeof DataManager.invalidateCache === 'function') {
+            DataManager.invalidateCache('accounts');
+        }
         try {
             this.allAccounts = await DataManager.getAccounts();
         } catch (e) {
