@@ -270,6 +270,23 @@ function migrateCustomerSupportInIndustryUseCaseMap(map) {
     return { map: out, changed };
 }
 
+/** Same signals as remoteStorage.buildHeaders: X-Admin-User + Accept for /api/storage/.../append when STORAGE_API_KEY is set. */
+function pamsStorageAppendHeaders() {
+    const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+    };
+    if (typeof window !== 'undefined') {
+        const fromRs = window.__REMOTE_STORAGE_USER__;
+        if (fromRs) {
+            headers['X-Admin-User'] = fromRs;
+        } else if (typeof Auth !== 'undefined' && Auth.currentUser && Auth.currentUser.username) {
+            headers['X-Admin-User'] = Auth.currentUser.username;
+        }
+    }
+    return headers;
+}
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -2708,7 +2725,7 @@ const DataManager = {
             try {
                 var res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: pamsStorageAppendHeaders(),
                     credentials: 'include',
                     body: bodyStr
                 });
@@ -2816,7 +2833,7 @@ const DataManager = {
             try {
                 var resInt = await fetch(urlInt, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: pamsStorageAppendHeaders(),
                     credentials: 'include',
                     body: bodyStrInt
                 });
@@ -2900,7 +2917,7 @@ const DataManager = {
         for (var att = 0; att < 3; att++) {
             if (att > 0) await new Promise(function (r) { setTimeout(r, 1000 * att); });
             try {
-                var resI = await fetch(urlI, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: bodyI });
+                var resI = await fetch(urlI, { method: 'POST', headers: pamsStorageAppendHeaders(), credentials: 'include', body: bodyI });
                 var dataI = await resI.json().catch(function () { return {}; });
                 if (resI.ok && dataI && dataI.ok) {
                     this.invalidateCache('internalActivities', 'allActivities');
@@ -2959,7 +2976,7 @@ const DataManager = {
         for (var attempt = 0; attempt < 3; attempt++) {
             if (attempt > 0) await new Promise(function (r) { setTimeout(r, 1000 * attempt); });
             try {
-                var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: bodyStr });
+                var res = await fetch(url, { method: 'POST', headers: pamsStorageAppendHeaders(), credentials: 'include', body: bodyStr });
                 if (res.ok) {
                     this.invalidateCache('activities', 'allActivities');
                     this.cache.activities = null;

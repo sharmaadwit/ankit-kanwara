@@ -56,6 +56,12 @@ const isAdminRequest = (req) => {
 const extractApiKey = () => (process.env.STORAGE_API_KEY || '').trim();
 
 const requireStorageAuth = (req, res, next) => {
+  // Valid session (Bearer or cookie) sets req.user in sessionMiddleware; rely on it even if
+  // injecting x-admin-user onto req.headers is unreliable in some Node/Express paths.
+  if (req.user != null && req.user.id != null) {
+    return next();
+  }
+
   const sessionHeader = extractHeaderToken(req, 'x-admin-user');
   if (sessionHeader) {
     return next();
