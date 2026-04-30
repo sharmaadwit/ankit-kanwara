@@ -969,6 +969,45 @@ router.put('/:key', async (req, res) => {
       return res.status(400).json({ message: validation.error || 'Validation failed' });
     }
 
+    // Empty-overwrite guard for critical keys.
+    // On 2026-04-15 storage.accounts was overwritten with [], silently emptying
+    // the dropdown for two weeks. For these keys we refuse to replace a
+    // non-empty array with an empty one unless ?allowEmpty=true is explicit.
+    // No UI flow should ever need to clear these wholesale.
+    const PROTECTED_FROM_EMPTY_OVERWRITE = new Set([
+      'accounts',
+      'users',
+      'internalActivities'
+    ]);
+    if (PROTECTED_FROM_EMPTY_OVERWRITE.has(req.params.key)) {
+      const allowEmpty = String(req.query.allowEmpty || '').toLowerCase() === 'true';
+      let incomingIsEmptyArray = false;
+      try {
+        const parsedIncoming = JSON.parse(serializedValue);
+        incomingIsEmptyArray = Array.isArray(parsedIncoming) && parsedIncoming.length === 0;
+      } catch (_) { /* non-array payload; do not block */ }
+      if (!allowEmpty && incomingIsEmptyArray) {
+        const cur = await getValueWithVersion(req.params.key);
+        let currentHadData = false;
+        try {
+          const parsedCurrent = cur && cur.value != null ? JSON.parse(cur.value) : null;
+          currentHadData = Array.isArray(parsedCurrent) && parsedCurrent.length > 0;
+        } catch (_) { /* unparseable current; treat as had-data to be safe */ currentHadData = true; }
+        if (currentHadData) {
+          logger.warn('storage_empty_overwrite_blocked', {
+            key: req.params.key,
+            transactionId: req.transactionId,
+            username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
+            remoteAddress: req.ip
+          });
+          return res.status(409).json({
+            message: `Refusing to overwrite non-empty ${req.params.key} with []. Pass ?allowEmpty=true if this is intentional.`,
+            code: 'EMPTY_OVERWRITE_BLOCKED'
+          });
+        }
+      }
+    }
+
     const ifMatch = req.get('If-Match') || req.get('if-match');
     if (isActivityStorageKey(req.params.key) && (ifMatch === undefined || ifMatch === null || ifMatch === '')) {
       const payload = parseActivityPayloadForLog(serializedValue);
