@@ -3,6 +3,8 @@
 Single source of truth for roadmap, backlog, and deployment priorities.
 Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Feature, Optimising, Ops & reliability, AI / Smart features, Testing & validation, Optional.
 
+**Open work only (renumbered R-001…, completed items removed):** see **`docs/BACKLOG_OPEN_REPORT_R01.md`**.
+
 ---
 
 ## 1) Current Status Snapshot
