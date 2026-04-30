@@ -34,9 +34,9 @@ const ReportsV2 = {
     },
 
     /**
-     * Activity breakdown donut: partition so segment sum equals total activities (no double count).
-     * Internal → Internal only. External-only buckets: Customer Calls, Pricing, POC, SOW, RFx (exact type match).
-     * External with missing/other type → Other. Used for Presales + Monthly PDF donuts (Jan 2026+ report scope).
+     * Activity breakdown donut: partition so segment sum equals `activities.length` (no double count).
+     * Internal → `isInternal === true` only (type ignored). External buckets match normalized type; else Other.
+     * Indexed over `length` so holes/null slots are counted; null-safe (avoids throw on bad rows).
      */
     computeActivityBreakdownPartition(activities) {
         const list = activities && Array.isArray(activities) ? activities : [];
@@ -47,20 +47,30 @@ const ReportsV2 = {
         let sow = 0;
         let rfx = 0;
         let other = 0;
-        for (const a of list) {
-            if (a.isInternal === true) {
-                internal++;
-                continue;
-            }
-            const t = a.type;
-            if (t === 'customerCall') customerCalls++;
-            else if (t === 'pricing') pricing++;
-            else if (t === 'poc') poc++;
-            else if (t === 'sow') sow++;
-            else if (t === 'rfx') rfx++;
+        const normExternalType = (a) => {
+            if (a == null || typeof a !== 'object') return 'other';
+            if (a.isInternal === true) return 'internal';
+            const raw = a.type != null && a.type !== '' ? String(a.type).trim().toLowerCase().replace(/\s+/g, ' ') : '';
+            if (!raw) return 'other';
+            if (raw === 'customercall' || raw === 'customer_call' || raw === 'customer-call' || raw === 'customer call') return 'customerCall';
+            if (raw === 'pricing') return 'pricing';
+            if (raw === 'poc') return 'poc';
+            if (raw === 'sow') return 'sow';
+            if (raw === 'rfx') return 'rfx';
+            return 'other';
+        };
+        for (let i = 0; i < list.length; i++) {
+            const a = list[i];
+            const bucket = normExternalType(a);
+            if (bucket === 'internal') internal++;
+            else if (bucket === 'customerCall') customerCalls++;
+            else if (bucket === 'pricing') pricing++;
+            else if (bucket === 'poc') poc++;
+            else if (bucket === 'sow') sow++;
+            else if (bucket === 'rfx') rfx++;
             else other++;
         }
-        return {
+        const out = {
             'Customer Calls': customerCalls,
             Internal: internal,
             Pricing: pricing,
@@ -69,6 +79,11 @@ const ReportsV2 = {
             RFx: rfx,
             Other: other
         };
+        const sum = customerCalls + internal + pricing + poc + sow + rfx + other;
+        if (sum !== list.length && typeof console !== 'undefined' && console.warn) {
+            console.warn('ReportsV2: activity breakdown sum !== length', { sum, length: list.length, out });
+        }
+        return out;
     },
 
     /**
@@ -557,11 +572,13 @@ const ReportsV2 = {
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Charts downloaded (white background).', 'success');
     },
 
-    // Change activity breakdown filter
+    // Change activity breakdown filter (getPeriodActivities is async — must await or chart gets a Promise, not rows)
     changeActivityBreakdownFilter(filter) {
         this.activityBreakdownFilter = filter;
-        const activities = this.getPeriodActivities();
-        this.initActivityBreakdownChart(activities);
+        void (async () => {
+            const activities = await this.getPeriodActivities();
+            this.initActivityBreakdownChart(activities);
+        })();
     },
 
     // Cutoff: only show activities from Jan 2026 onwards (pre-Dec/Jan cleanup)
@@ -1138,6 +1155,7 @@ const ReportsV2 = {
 
         this.monthlyReportData = {
             breakdown,
+            totalActivities: total,
             callTypeData,
             regionCounts,
             missingSfdcByRegion,
@@ -2384,11 +2402,12 @@ const ReportsV2 = {
                     const entries = Object.entries(md.breakdown).filter(([, v]) => v > 0);
                     const labels = entries.map(([k]) => k);
                     const data = entries.map(([, v]) => v);
-                    if (data.some(v => v > 0)) {
+                    if (data.some((v) => v > 0)) {
                         this.renderDonutChart('monthlyReportDonut', {
                             labels,
                             data,
-                            colors: donutColors
+                            colors: donutColors,
+                            centerTotal: md.totalActivities != null ? md.totalActivities : safeActivities.length
                         });
                     }
                 }
@@ -2615,15 +2634,21 @@ const ReportsV2 = {
         const data = entries.map(([, v]) => v);
         if (!data.length || !data.some((v) => v > 0)) return;
 
+        const centerTotal =
+            this.activityBreakdownFilter === 'all' && Array.isArray(activities)
+                ? activities.length
+                : data.reduce((a, b) => a + (Number(b) || 0), 0);
+
         this.renderDonutChart('activityBreakdownChart', {
             labels,
             data,
-            colors: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#805AD5', '#718096']
+            colors: ['#6B46C1', '#3182CE', '#38A169', '#DD6B20', '#D53F8C', '#805AD5', '#718096'],
+            centerTotal
         });
     },
 
     // Render Donut Chart
-    renderDonutChart(canvasId, { labels, data, colors }) {
+    renderDonutChart(canvasId, { labels, data, colors, centerTotal: centerTotalOpt }) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || typeof Chart === 'undefined') return;
 
@@ -2631,7 +2656,8 @@ const ReportsV2 = {
             this.charts[canvasId].destroy();
         }
 
-        const total = data.reduce((a, b) => a + b, 0);
+        const sumSegments = data.reduce((a, b) => a + (Number(b) || 0), 0);
+        const total = centerTotalOpt != null && Number.isFinite(Number(centerTotalOpt)) ? Number(centerTotalOpt) : sumSegments;
 
         this.charts[canvasId] = new Chart(canvas, {
             type: 'doughnut',
@@ -2658,7 +2684,8 @@ const ReportsV2 = {
                             label: function (context) {
                                 const label = context.label || '';
                                 const value = context.parsed || 0;
-                                const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                const pctBase = total > 0 ? total : 1;
+                                const percentage = pctBase > 0 ? Math.round((value / pctBase) * 100) : 0;
                                 return `${label}: ${value} (${percentage}%)`;
                             }
                         }

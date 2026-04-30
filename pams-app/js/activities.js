@@ -684,7 +684,7 @@ const Activities = {
                                 <div class="form-group">
                                     <label class="form-label required">Account Name</label>
                                     <div class="search-select-container" style="position: relative;">
-                                        <div class="form-control" style="display: flex; align-items: center; cursor: pointer; position: relative;" onclick="event.stopPropagation(); Activities.toggleAccountDropdown()">
+                                        <div class="form-control" id="accountDisplayContainer" style="display: flex; align-items: center; cursor: pointer; position: relative;" onclick="event.stopPropagation(); Activities.toggleAccountDropdown()">
                                             <span id="accountDisplay" style="flex: 1;">Select account...</span>
                                             <span style="margin-left: 0.5rem;">▼</span>
                                         </div>
@@ -1415,12 +1415,28 @@ const Activities = {
         this.syncMultiSelectState('useCase', this.selectedUseCases);
     },
 
+    resetAccountDropdownLayout() {
+        const dropdown = document.getElementById('accountDropdown');
+        if (!dropdown) return;
+        dropdown.style.position = '';
+        dropdown.style.top = '';
+        dropdown.style.left = '';
+        dropdown.style.width = '';
+        dropdown.style.right = '';
+        dropdown.style.zIndex = '';
+    },
+
     // Load account dropdown (with inline search)
     async loadAccountDropdown() {
         const dropdown = document.getElementById('accountDropdown');
         if (!dropdown) return;
 
-        this.allAccounts = await DataManager.getAccounts();
+        try {
+            this.allAccounts = await DataManager.getAccounts();
+        } catch (e) {
+            console.warn('[Activities] loadAccountDropdown getAccounts failed:', e);
+            this.allAccounts = [];
+        }
         const optionsHtml = this.renderAccountOptions(this.allAccounts);
 
         dropdown.innerHTML = `
@@ -1456,8 +1472,9 @@ const Activities = {
 
         return accounts.map(account => {
             const safeId = this.escapeAttr(account.id);
-            const safeName = this.escapeAttr(account.name);
-            return `<div class="search-select-item" data-id="${safeId}" data-name="${safeName}" onclick="Activities.selectAccountFromItem(this)">${this.escapeAttr(account.name) || ''}</div>`;
+            const label = account.name != null && String(account.name).trim() ? String(account.name) : '(Unnamed account)';
+            const safeName = this.escapeAttr(label);
+            return `<div class="search-select-item" data-id="${safeId}" data-name="${safeName}" onclick="Activities.selectAccountFromItem(this)">${this.escapeAttr(label)}</div>`;
         }).join('');
     },
 
@@ -1473,9 +1490,9 @@ const Activities = {
         if (!list) return;
 
         const normalized = query.trim().toLowerCase();
-        const accounts = this.allAccounts || await DataManager.getAccounts();
+        const accounts = this.allAccounts || (await DataManager.getAccounts().catch(() => [])) || [];
         const filtered = normalized
-            ? accounts.filter(acc => acc.name.toLowerCase().includes(normalized))
+            ? accounts.filter((acc) => String(acc.name || '').toLowerCase().includes(normalized))
             : accounts;
 
         list.innerHTML = `
@@ -1484,18 +1501,38 @@ const Activities = {
         `;
     },
 
-    // Toggle account dropdown
-    toggleAccountDropdown() {
+    // Toggle account dropdown (fixed positioning below trigger — same pattern as project dropdown;
+    // avoids clipping inside .modal-content { overflow-y: auto } and ensures list loads before open.)
+    async toggleAccountDropdown() {
         const dropdown = document.getElementById('accountDropdown');
         if (!dropdown) return;
 
         const isVisible = dropdown.style.display !== 'none';
         if (isVisible) {
             dropdown.style.display = 'none';
+            dropdown.classList.remove('active');
+            this.resetAccountDropdownLayout();
         } else {
-            this.loadAccountDropdown();
+            await this.loadAccountDropdown();
             dropdown.style.display = 'block';
             dropdown.classList.add('active');
+
+            const trigger =
+                document.getElementById('accountDisplayContainer') ||
+                document.querySelector('#accountSection .search-select-container > .form-control');
+            if (trigger) {
+                const rect = trigger.getBoundingClientRect();
+                dropdown.style.position = 'fixed';
+                dropdown.style.top = rect.bottom + 4 + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.width = Math.max(rect.width, 280) + 'px';
+                dropdown.style.right = 'auto';
+                dropdown.style.zIndex = '10000';
+            }
+
+            dropdown.onclick = function (e) {
+                e.stopPropagation();
+            };
 
             const searchInput = document.getElementById('accountDropdownSearch');
             if (searchInput) {
@@ -1508,7 +1545,11 @@ const Activities = {
     // Show new account fields
     showNewAccountFields() {
         const dropdown = document.getElementById('accountDropdown');
-        if (dropdown) dropdown.style.display = 'none';
+        if (dropdown) {
+            dropdown.style.display = 'none';
+            dropdown.classList.remove('active');
+            this.resetAccountDropdownLayout();
+        }
 
         const selectedAccountId = document.getElementById('selectedAccountId');
         const accountDisplay = document.getElementById('accountDisplay');
@@ -1568,7 +1609,11 @@ const Activities = {
 
         if (selectedAccountId) selectedAccountId.value = id;
         if (accountDisplay) accountDisplay.textContent = name;
-        if (accountDropdown) accountDropdown.style.display = 'none';
+        if (accountDropdown) {
+            accountDropdown.style.display = 'none';
+            accountDropdown.classList.remove('active');
+            this.resetAccountDropdownLayout();
+        }
         if (newAccountFields) newAccountFields.style.display = 'none';
         if (newAccountName) {
             newAccountName.required = false;

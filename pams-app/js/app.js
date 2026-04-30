@@ -643,7 +643,7 @@ const App = {
                     d.classList.remove('active');
                 });
             }
-            if (!e.target.closest('.search-select-container') && !e.target.closest('#projectDropdown')) {
+            if (!e.target.closest('.search-select-container') && !e.target.closest('#projectDropdown') && !e.target.closest('#accountDropdown')) {
                 document.querySelectorAll('.search-select-dropdown').forEach(d => {
                     d.classList.remove('active');
                     d.style.display = 'none';
