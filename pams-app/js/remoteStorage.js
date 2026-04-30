@@ -736,10 +736,23 @@
                 })
                 .catch(() => null);
         }
-        return performRequestAsync('GET', `/${encodeURIComponent(key)}`).then((result) => {
-            if (!result || typeof result.value !== 'string') return null;
-            return maybeDecompressValue(result.value);
-        }).catch(() => null);
+        /** Storage JSON uses value TEXT; if a proxy/runtime ever parses it, `value` can be an object — old code returned null and empty account lists. */
+        const normalizeEntityStorageValue = (result) => {
+            if (!result || result.value == null) return null;
+            const v = result.value;
+            if (typeof v === 'string') return maybeDecompressValue(v);
+            if (typeof v === 'object') {
+                try {
+                    return JSON.stringify(v);
+                } catch (_) {
+                    return null;
+                }
+            }
+            return typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
+        };
+        return performRequestAsync('GET', `/${encodeURIComponent(key)}`)
+            .then((result) => normalizeEntityStorageValue(result))
+            .catch(() => null);
     };
 
     /** Async set (S2.1). For accounts/internalActivities only; activities need shard path. */

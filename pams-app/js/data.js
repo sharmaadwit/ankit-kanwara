@@ -287,6 +287,32 @@ function pamsStorageAppendHeaders() {
     return headers;
 }
 
+/** Same storage auth as GET /api/storage/:key but returns a parsed JSON array (no envelope). */
+async function fetchAccountsListFromEntitiesApi() {
+    if (typeof window === 'undefined') return null;
+    const base = typeof window.__REMOTE_STORAGE_BASE__ !== 'undefined' ? window.__REMOTE_STORAGE_BASE__ : '';
+    const origin = window.location && window.location.origin ? window.location.origin : '';
+    const apiRoot = base && base.replace ? base.replace(/\/api\/storage\/?$/, '') : '';
+    const root = apiRoot && apiRoot.length > 0 ? apiRoot : origin;
+    const url = root ? `${root.replace(/\/$/, '')}/api/entities/accounts` : '/api/entities/accounts';
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            credentials: 'include',
+            headers: pamsStorageAppendHeaders()
+        });
+        if (!res.ok) {
+            console.warn('[DataManager] GET /api/entities/accounts failed:', res.status);
+            return null;
+        }
+        const data = await res.json().catch(() => null);
+        return Array.isArray(data) ? data : null;
+    } catch (e) {
+        console.warn('[DataManager] fetchAccountsListFromEntitiesApi error:', e);
+        return null;
+    }
+}
+
 const DataManager = {
     cache: {
         accounts: null,
@@ -2303,19 +2329,40 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('accounts');
-                // Remote getItemAsync returns null on 401, 404, or transport errors — do not cache as [] or list stays empty.
+                if (stored != null) {
+                    let list;
+                    try {
+                        const accounts = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                        list = Array.isArray(accounts) ? accounts : [];
+                    } catch (parseErr) {
+                        console.warn('[DataManager] getAccounts: JSON parse failed:', parseErr);
+                        list = null;
+                    }
+                    if (list != null) {
+                        this.cache.accounts = list;
+                        return list;
+                    }
+                }
+                const fromEntities = await fetchAccountsListFromEntitiesApi();
+                if (fromEntities != null) {
+                    this.cache.accounts = fromEntities;
+                    return fromEntities;
+                }
                 if (stored == null) {
                     console.warn(
-                        '[DataManager] getAccounts: remote storage returned no payload (auth, missing key, or network). Retry later.'
+                        '[DataManager] getAccounts: storage and /api/entities/accounts both returned no data (check auth or Network tab for /api/storage/accounts).'
                     );
-                    return [];
                 }
-                const accounts = typeof stored === 'string' ? JSON.parse(stored) : stored;
-                const list = Array.isArray(accounts) ? accounts : [];
-                this.cache.accounts = list;
-                return list;
+                return [];
             } catch (err) {
                 console.warn('[DataManager] Async getAccounts failed:', err);
+                try {
+                    const fromEntities = await fetchAccountsListFromEntitiesApi();
+                    if (fromEntities != null) {
+                        this.cache.accounts = fromEntities;
+                        return fromEntities;
+                    }
+                } catch (_) { /* ignore */ }
                 if (isEntityKey('accounts')) return [];
             }
         }
