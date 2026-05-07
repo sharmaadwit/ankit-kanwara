@@ -1049,14 +1049,24 @@ router.put('/:key', async (req, res) => {
         String(req.query.allowEmpty || '').toLowerCase() === 'true';
       let incomingArr = null;
       try {
-        const parsedIncoming = JSON.parse(serializedValue);
+        // Browser remoteStorage compresses with __lz__/__gz__ before PUT — without decompression
+        // here, JSON.parse on an "__lz__..." string throws and the guard silently bypasses.
+        // Root cause of 2026-05-07 09:27:59 wipe: incoming was [] (parsed fine) but current was lz
+        // and the OLD code's JSON.parse on lz threw, leaving currentArr=null → guard skipped.
+        const incomingForParse =
+          typeof serializedValue === 'string' ? maybeDecompressValue(serializedValue) : serializedValue;
+        const parsedIncoming = JSON.parse(incomingForParse);
         if (Array.isArray(parsedIncoming)) incomingArr = parsedIncoming;
       } catch (_) { /* non-array payload; do not block */ }
       if (incomingArr != null && !overrideShrink) {
         const cur = await getValueWithVersion(req.params.key);
         let currentArr = null;
         try {
-          const parsedCurrent = cur && cur.value != null ? JSON.parse(cur.value) : null;
+          const currentDecoded =
+            cur && cur.value != null
+              ? (typeof cur.value === 'string' ? maybeDecompressValue(cur.value) : cur.value)
+              : null;
+          const parsedCurrent = currentDecoded != null ? JSON.parse(currentDecoded) : null;
           if (Array.isArray(parsedCurrent)) currentArr = parsedCurrent;
         } catch (_) { /* unparseable current; skip the guard rather than over-block */ }
         if (currentArr != null) {
