@@ -9,6 +9,7 @@ const { requireAdminAuth } = require('../middleware/auth');
 const { validateStoragePayload, validateActivities, validateInternalActivities } = require('../lib/storageValidation');
 const { dualWriteAfterStorageWrite } = require('../lib/normalizedDualWrite');
 const { logActivitySubmissionSafe } = require('../lib/activitySubmissionLog');
+const { loadAccountsFromNormalizedTables } = require('../lib/loadAccountsFromNormalizedTables');
 
 const GZIP_PREFIX = '__gz__';
 /** Browser client uses LZString.compressToBase64 with this prefix (see pams-app/js/remoteStorage.js). */
@@ -196,6 +197,42 @@ const setValue = async (key, value, externalClient) => {
       client.release();
     }
   }
+};
+
+const parseAccountsArrayForHeal = (raw) => {
+  if (raw == null || raw === '') return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_e) {
+    return [];
+  }
+};
+
+/**
+ * When storage.accounts is missing or parses to [], rebuild from normalized tables and persist.
+ * Remote storage clients only call GET /api/storage/accounts, not entities — without this they stay "empty".
+ */
+const maybeSelfHealAccountsStorageRow = async (row, transactionId) => {
+  const tryHeal = async (reason) => {
+    const recovered = await loadAccountsFromNormalizedTables(getPool());
+    if (!recovered.length) return null;
+    const serialized = JSON.stringify(recovered);
+    const { updated_at } = await setValue('accounts', serialized);
+    logger.info('storage_accounts_self_heal', {
+      reason,
+      count: recovered.length,
+      transactionId
+    });
+    return { value: serialized, updated_at };
+  };
+
+  if (!row) {
+    return tryHeal('missing_row');
+  }
+  const list = parseAccountsArrayForHeal(maybeDecompressValue(row.value));
+  if (list.length > 0) return null;
+  return tryHeal('empty_storage');
 };
 
 /** Conditional update: only if current updated_at matches ifMatch. Returns { updated_at } or null on conflict. */
@@ -520,7 +557,18 @@ router.get('/batch', async (req, res) => {
       return res.status(400).json({ message: 'Provide 1–20 keys in ?keys=key1,key2' });
     }
     const rows = await getValuesWithVersionBatch(keys);
-    const items = (rows || []).map((r) => ({
+    let rowsForResponse = [...rows];
+    if (keys.includes('accounts')) {
+      const accRow = rowsForResponse.find((r) => r.key === 'accounts');
+      const healed = await maybeSelfHealAccountsStorageRow(accRow || null, req.transactionId);
+      if (healed) {
+        const idx = rowsForResponse.findIndex((r) => r.key === 'accounts');
+        const replacement = { key: 'accounts', value: healed.value, updated_at: healed.updated_at };
+        if (idx >= 0) rowsForResponse[idx] = replacement;
+        else rowsForResponse.push(replacement);
+      }
+    }
+    const items = (rowsForResponse || []).map((r) => ({
       key: r.key,
       value: maybeDecompressValue(r.value),
       updated_at: r.updated_at
@@ -904,15 +952,27 @@ router.post('/activities/remove', async (req, res) => {
 
 router.get('/:key', async (req, res) => {
   try {
-    const row = await getValueWithVersion(req.params.key);
+    const storageKey = req.params.key;
+    let row = await getValueWithVersion(storageKey);
+    if (storageKey === 'accounts') {
+      const healed = await maybeSelfHealAccountsStorageRow(row, req.transactionId);
+      if (healed) {
+        res.json({
+          key: storageKey,
+          value: healed.value,
+          updated_at: healed.updated_at
+        });
+        return;
+      }
+    }
     if (!row) {
-      if (OPTIONAL_STORAGE_KEYS.has(req.params.key)) {
-        res.status(200).json({ key: req.params.key, value: null, updated_at: null });
+      if (OPTIONAL_STORAGE_KEYS.has(storageKey)) {
+        res.status(200).json({ key: storageKey, value: null, updated_at: null });
         return;
       }
       const username = req.get('X-Admin-User') || req.get('x-admin-user') || null;
       logger.warn('storage_get_404', {
-        key: req.params.key,
+        key: storageKey,
         transactionId: req.transactionId,
         username: username || 'unknown'
       });
@@ -921,7 +981,7 @@ router.get('/:key', async (req, res) => {
     }
     const value = maybeDecompressValue(row.value);
     res.json({
-      key: req.params.key,
+      key: storageKey,
       value,
       updated_at: row.updated_at
     });

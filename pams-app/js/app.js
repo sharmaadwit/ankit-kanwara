@@ -2804,14 +2804,13 @@ const App = {
 
         let projects = await this.getWinLossProjectsDataset();
         projects = projects.filter(project => {
-            const ownerIds = project.ownerIds || [];
-            if (ownerFilterValue !== 'all') {
-                return ownerIds.includes(ownerFilterValue);
+            if (isAdmin) {
+                if (ownerFilterValue !== 'all') {
+                    return this.ownerIdSetMatchesUser(project.ownerIds || [], ownerFilterValue);
+                }
+                return true;
             }
-            if (!isAdmin && currentUser?.id) {
-                return ownerIds.includes(currentUser.id);
-            }
-            return true;
+            return this.nonAdminProjectMatchesOwnerFilter(project, currentUser, ownerFilterValue);
         });
         const monthFilter = (this.winLossFilters.month || '').trim();
         if (monthFilter) {
@@ -2875,7 +2874,12 @@ const App = {
                 const statusColor = project.status === 'won' ? '#48BB78' : project.status === 'lost' ? '#F56565' : '#4299E1';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
                 const ownerLabelText = project.status === 'won' ? 'Won by:' : 'Owner:';
-                const canManage = isAdmin || (currentUserId && (project.ownerIds || []).includes(currentUserId));
+                const canManage =
+                    isAdmin ||
+                    (currentUserId &&
+                        (this.ownerIdSetMatchesUser(project.ownerIds || [], currentUserId) ||
+                            this.projectInvolvesUser(project, currentUser) ||
+                            this.projectInUserRegions(project, currentUser)));
                 html += `
                     <div class="content-card">
                         <div class="content-card-header">
@@ -3897,7 +3901,7 @@ const App = {
                 : String(u.id) === String(id));
         };
 
-        const projects = [];
+                const projects = [];
         accounts.forEach(account => {
             (account.projects || []).forEach(project => {
                 const presalesTag =
@@ -3933,6 +3937,10 @@ const App = {
                     ...project,
                     accountId: account.id,
                     accountName: account.name,
+                    accountSalesRep: account.salesRep || '',
+                    accountSalesRepEmail: account.salesRepEmail || '',
+                    accountAssignedUserEmail: account.assignedUserEmail || '',
+                    accountSalesRepRegion: account.salesRepRegion || account.region || '',
                     ownerIds,
                     ownerNames,
                     primaryOwnerName
@@ -4066,14 +4074,13 @@ const App = {
 
             let visibleProjects = await this.getWinLossProjectsDataset();
             visibleProjects = visibleProjects.filter(project => {
-                const ownerIds = project.ownerIds || [];
-                if (ownerFilterValue !== 'all') {
-                    return ownerIds.includes(ownerFilterValue);
+                if (isAdmin) {
+                    if (ownerFilterValue !== 'all') {
+                        return this.ownerIdSetMatchesUser(project.ownerIds || [], ownerFilterValue);
+                    }
+                    return true;
                 }
-                if (!isAdmin && currentUser?.id) {
-                    return ownerIds.includes(currentUser.id);
-                }
-                return true;
+                return this.nonAdminProjectMatchesOwnerFilter(project, currentUser, ownerFilterValue);
             });
             const monthFilter = (this.winLossFilters.month || '').trim();
             if (monthFilter) {
@@ -4122,7 +4129,12 @@ const App = {
                                 </div>
                 ` : '';
                 const ownerLabel = project.primaryOwnerName || (project.ownerNames && project.ownerNames.length ? project.ownerNames.join(', ') : 'Unassigned');
-                const canManage = isAdmin || (currentUser?.id && (project.ownerIds || []).includes(currentUser.id));
+                const canManage =
+                    isAdmin ||
+                    (currentUser?.id &&
+                        (this.ownerIdSetMatchesUser(project.ownerIds || [], currentUser.id) ||
+                            this.projectInvolvesUser(project, currentUser) ||
+                            this.projectInUserRegions(project, currentUser)));
                 const ownerLabelText = project.status === 'won' ? 'Won by:' : 'Owner:';
 
                 html += `
@@ -5288,6 +5300,71 @@ const App = {
         return filterValue;
     },
 
+    /** Owner sets mix string/numeric user ids from DB + activities — strict.includes fails for many users. */
+    ownerIdSetMatchesUser(ownerIds, userId) {
+        if (userId == null || userId === '') return false;
+        const ids = ownerIds || [];
+        if (!ids.length) return false;
+        if (typeof DataManager !== 'undefined' && typeof DataManager.userIdsMatch === 'function') {
+            return ids.some((oid) => DataManager.userIdsMatch(oid, userId));
+        }
+        const uid = String(userId);
+        return ids.some((oid) => oid != null && String(oid) === uid);
+    },
+
+    accountInvolvesUser(accountLike, user) {
+        if (!accountLike || !user) return false;
+        const un = (user.username || '').trim().toLowerCase();
+        const em = (user.email || '').trim().toLowerCase();
+        if (!un && !em) return false;
+        const sr = (accountLike.salesRep || '').trim().toLowerCase();
+        const sre = (accountLike.salesRepEmail || '').trim().toLowerCase();
+        const assigned = (accountLike.assignedUserEmail || '').trim().toLowerCase();
+        if (em && (sre === em || assigned === em)) return true;
+        if (un && sr && (sr === un || sr.includes(un))) return true;
+        if (em && sr && sr.includes(em)) return true;
+        return false;
+    },
+
+    projectInUserRegions(project, user) {
+        if (!user || !Array.isArray(user.regions) || !user.regions.length) return false;
+        const ar = (project.accountSalesRepRegion != null ? project.accountSalesRepRegion : project.salesRepRegion || '').trim();
+        if (!ar) return false;
+        return user.regions.some((reg) => String(reg).trim() === ar);
+    },
+
+    /** Non-admin project lists: not only ownerIds (often empty) but sales rep + region assignment. */
+    nonAdminProjectMatchesOwnerFilter(project, currentUser, ownerFilterValue) {
+        const ownerIds = project.ownerIds || [];
+        if (ownerFilterValue !== 'all') {
+            if (this.ownerIdSetMatchesUser(ownerIds, ownerFilterValue)) return true;
+            if (currentUser?.id && this.ownerIdSetMatchesUser([ownerFilterValue], currentUser.id)) {
+                return (
+                    this.projectInvolvesUser(project, currentUser) ||
+                    this.projectInUserRegions(project, currentUser)
+                );
+            }
+            return false;
+        }
+        if (!currentUser?.id) return false;
+        return (
+            this.ownerIdSetMatchesUser(ownerIds, currentUser.id) ||
+            this.projectInvolvesUser(project, currentUser) ||
+            this.projectInUserRegions(project, currentUser)
+        );
+    },
+
+    projectInvolvesUser(project, user) {
+        return this.accountInvolvesUser(
+            {
+                salesRep: project.accountSalesRep != null ? project.accountSalesRep : project.salesRep,
+                salesRepEmail: project.accountSalesRepEmail != null ? project.accountSalesRepEmail : '',
+                assignedUserEmail: project.accountAssignedUserEmail != null ? project.accountAssignedUserEmail : ''
+            },
+            user
+        );
+    },
+
     async getProjectOwnerMap() {
         const ownerMap = new Map();
         try {
@@ -6028,6 +6105,8 @@ const App = {
                     projectName: project.name,
                     industry: account.industry || 'Unspecified',
                     salesRep: account.salesRep || '',
+                    salesRepRegion: account.salesRepRegion || account.region || '',
+                    region: account.region || '',
                     status: project.status || 'active',
                     activityCount: stats.count,
                     lastActivityDate: lastDateString,
@@ -6366,9 +6445,19 @@ const App = {
             if (accountFilter && (project.accountName || '').toLowerCase() !== accountFilter) return false;
             const ownerIds = project.ownerIds || [];
             if (ownerFilterValue !== 'all') {
-                if (!ownerIds.includes(ownerFilterValue)) return false;
+                if (!this.ownerIdSetMatchesUser(ownerIds, ownerFilterValue)) return false;
             } else if (!isAdmin && currentUser?.id) {
-                if (!ownerIds.includes(currentUser.id)) return false;
+                const ok =
+                    this.ownerIdSetMatchesUser(ownerIds, currentUser.id) ||
+                    this.accountInvolvesUser(
+                        { salesRep: project.salesRep, salesRepEmail: '', assignedUserEmail: '' },
+                        currentUser
+                    ) ||
+                    this.projectInUserRegions(
+                        { accountSalesRepRegion: project.salesRepRegion || project.region },
+                        currentUser
+                    );
+                if (!ok) return false;
             }
             return true;
         });
@@ -8734,12 +8823,21 @@ const App = {
 
         let projects = await this.getWinLossProjectsDataset();
         projects = projects.filter(project => {
-            const ownerIds = project.ownerIds || [];
-            if (ownerFilterValue !== 'all') return ownerIds.includes(ownerFilterValue);
-            if (!isAdmin && currentUser?.id) return ownerIds.includes(currentUser.id);
-            return true;
+            if (isAdmin) {
+                if (ownerFilterValue !== 'all') {
+                    return this.ownerIdSetMatchesUser(project.ownerIds || [], ownerFilterValue);
+                }
+                return true;
+            }
+            return this.nonAdminProjectMatchesOwnerFilter(project, currentUser, ownerFilterValue);
         });
-        const manageable = projects.filter(p => isAdmin || (currentUser?.id && (p.ownerIds || []).includes(currentUser.id)));
+        const manageable = projects.filter(
+            (p) =>
+                isAdmin ||
+                this.ownerIdSetMatchesUser(p.ownerIds || [], currentUser.id) ||
+                this.projectInvolvesUser(p, currentUser) ||
+                this.projectInUserRegions(p, currentUser)
+        );
         if (manageable.length === 0) {
             UI.showNotification('No projects you can update. Change the owner filter or ask an admin.', 'info');
             return;
