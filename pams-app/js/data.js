@@ -2329,19 +2329,21 @@ const DataManager = {
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('accounts');
+                let list = [];
                 if (stored != null) {
-                    let list;
                     try {
                         const accounts = typeof stored === 'string' ? JSON.parse(stored) : stored;
                         list = Array.isArray(accounts) ? accounts : [];
                     } catch (parseErr) {
                         console.warn('[DataManager] getAccounts: JSON parse failed:', parseErr);
-                        list = null;
+                        list = [];
                     }
-                    if (list != null) {
-                        this.cache.accounts = list;
-                        return list;
-                    }
+                }
+                // Non-empty storage wins. Empty [] may be a bad overwrite (see server EMPTY_OVERWRITE guard notes);
+                // /api/entities/accounts can rebuild from normalized SQL `accounts` + `projects`.
+                if (list.length > 0) {
+                    this.cache.accounts = list;
+                    return list;
                 }
                 const fromEntities = await fetchAccountsListFromEntitiesApi();
                 if (fromEntities != null) {
@@ -2350,10 +2352,11 @@ const DataManager = {
                 }
                 if (stored == null) {
                     console.warn(
-                        '[DataManager] getAccounts: storage and /api/entities/accounts both returned no data (check auth or Network tab for /api/storage/accounts).'
+                        '[DataManager] getAccounts: no storage payload and /api/entities/accounts failed (check Network tab).'
                     );
                 }
-                return [];
+                this.cache.accounts = list;
+                return list;
             } catch (err) {
                 console.warn('[DataManager] Async getAccounts failed:', err);
                 try {
