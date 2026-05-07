@@ -9,21 +9,42 @@
 
 const express = require('express');
 const zlib = require('zlib');
+const LZString = require('lz-string');
 const router = express.Router();
 const { getPool } = require('../db');
 const logger = require('../logger');
 
 const GZIP_PREFIX = '__gz__';
+/** Browser client compresses storage values with LZString.compressToBase64 + this prefix.
+    See pams-app/js/remoteStorage.js and server/routes/storage.js (LZ_PREFIX). */
+const LZ_PREFIX = '__lz__';
 
+/**
+ * Decompress storage values written by either the gzipped path (legacy/server) or the
+ * client-side lz-string path. Without this, entities endpoints saw raw "__lz__..." text,
+ * which made parseJsonArray return [] and triggered the spurious empty-accounts fallback.
+ */
 const maybeDecompress = (value) => {
   if (typeof value !== 'string') return value;
-  if (!value.startsWith(GZIP_PREFIX)) return value;
-  try {
-    const compressed = Buffer.from(value.slice(GZIP_PREFIX.length), 'base64');
-    return zlib.gunzipSync(compressed).toString('utf8');
-  } catch (e) {
+  if (value.startsWith(LZ_PREFIX)) {
+    try {
+      const restored = LZString.decompressFromBase64(value.slice(LZ_PREFIX.length));
+      if (restored != null) return restored;
+    } catch (e) {
+      logger.warn('entities_lz_decompress_failed', { message: e.message });
+    }
     return value;
   }
+  if (value.startsWith(GZIP_PREFIX)) {
+    try {
+      const compressed = Buffer.from(value.slice(GZIP_PREFIX.length), 'base64');
+      return zlib.gunzipSync(compressed).toString('utf8');
+    } catch (e) {
+      logger.warn('entities_gz_decompress_failed', { message: e.message });
+    }
+    return value;
+  }
+  return value;
 };
 
 const getStorageValue = async (key) => {
