@@ -969,41 +969,60 @@ router.put('/:key', async (req, res) => {
       return res.status(400).json({ message: validation.error || 'Validation failed' });
     }
 
-    // Empty-overwrite guard for critical keys.
-    // On 2026-04-15 storage.accounts was overwritten with [], silently emptying
-    // the dropdown for two weeks. For these keys we refuse to replace a
-    // non-empty array with an empty one unless ?allowEmpty=true is explicit.
-    // No UI flow should ever need to clear these wholesale.
-    const PROTECTED_FROM_EMPTY_OVERWRITE = new Set([
+    // Catastrophic-shrink guard for critical keys.
+    // - 2026-04-15: storage.accounts overwritten with [] (full wipe)
+    // - 2026-05-06: storage.accounts overwritten with 9 entries vs 1789 prior (>99% drop)
+    // Both should never happen via normal app flows; both did. For these keys we now
+    // refuse:
+    //   (a) replacing a non-empty array with an empty one, OR
+    //   (b) shrinking an array of >= 50 entries down to less than 10% of its length.
+    // Pass ?allowShrink=true (or ?allowEmpty=true for the legacy name) to override
+    // when the wipe/shrink is genuinely intentional.
+    const PROTECTED_FROM_CATASTROPHIC_SHRINK = new Set([
       'accounts',
       'users',
       'internalActivities'
     ]);
-    if (PROTECTED_FROM_EMPTY_OVERWRITE.has(req.params.key)) {
-      const allowEmpty = String(req.query.allowEmpty || '').toLowerCase() === 'true';
-      let incomingIsEmptyArray = false;
+    if (PROTECTED_FROM_CATASTROPHIC_SHRINK.has(req.params.key)) {
+      const overrideShrink =
+        String(req.query.allowShrink || '').toLowerCase() === 'true' ||
+        String(req.query.allowEmpty || '').toLowerCase() === 'true';
+      let incomingArr = null;
       try {
         const parsedIncoming = JSON.parse(serializedValue);
-        incomingIsEmptyArray = Array.isArray(parsedIncoming) && parsedIncoming.length === 0;
+        if (Array.isArray(parsedIncoming)) incomingArr = parsedIncoming;
       } catch (_) { /* non-array payload; do not block */ }
-      if (!allowEmpty && incomingIsEmptyArray) {
+      if (incomingArr != null && !overrideShrink) {
         const cur = await getValueWithVersion(req.params.key);
-        let currentHadData = false;
+        let currentArr = null;
         try {
           const parsedCurrent = cur && cur.value != null ? JSON.parse(cur.value) : null;
-          currentHadData = Array.isArray(parsedCurrent) && parsedCurrent.length > 0;
-        } catch (_) { /* unparseable current; treat as had-data to be safe */ currentHadData = true; }
-        if (currentHadData) {
-          logger.warn('storage_empty_overwrite_blocked', {
-            key: req.params.key,
-            transactionId: req.transactionId,
-            username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
-            remoteAddress: req.ip
-          });
-          return res.status(409).json({
-            message: `Refusing to overwrite non-empty ${req.params.key} with []. Pass ?allowEmpty=true if this is intentional.`,
-            code: 'EMPTY_OVERWRITE_BLOCKED'
-          });
+          if (Array.isArray(parsedCurrent)) currentArr = parsedCurrent;
+        } catch (_) { /* unparseable current; skip the guard rather than over-block */ }
+        if (currentArr != null) {
+          const curLen = currentArr.length;
+          const newLen = incomingArr.length;
+          const isEmptyOverwrite = curLen > 0 && newLen === 0;
+          // Only trip the proportional rule when the existing list is non-trivial.
+          // Below 50 entries the noise floor is too high (legit re-saves can land here).
+          const isCatastrophicShrink = curLen >= 50 && newLen < Math.ceil(curLen * 0.1);
+          if (isEmptyOverwrite || isCatastrophicShrink) {
+            logger.warn('storage_catastrophic_shrink_blocked', {
+              key: req.params.key,
+              currentLength: curLen,
+              incomingLength: newLen,
+              kind: isEmptyOverwrite ? 'empty_overwrite' : 'shrink_below_10_percent',
+              transactionId: req.transactionId,
+              username: req.get('X-Admin-User') || req.get('x-admin-user') || null,
+              remoteAddress: req.ip
+            });
+            return res.status(409).json({
+              message: `Refusing to shrink ${req.params.key} from ${curLen} to ${newLen} entries (>=90% drop). Pass ?allowShrink=true if intentional.`,
+              code: isEmptyOverwrite ? 'EMPTY_OVERWRITE_BLOCKED' : 'CATASTROPHIC_SHRINK_BLOCKED',
+              currentLength: curLen,
+              incomingLength: newLen
+            });
+          }
         }
       }
     }
