@@ -134,6 +134,57 @@ const ReportsV2 = {
     },
 
     /**
+     * Fixed presales roster for bar charts: always show these names (count may be 0).
+     * Order = display order (top-to-bottom when reverseLabels is used on horizontal bars).
+     * `test(part)` matches a single name fragment (e.g. after splitting "A / B" on slash or comma).
+     */
+    FIXED_PRESALES_ROSTER: [
+        { label: 'Ankit Kanwara', test: (s) => /ankit/i.test(s) && /kanwara/i.test(s) },
+        { label: 'Yashah', test: (s) => /yashas|yashah/i.test(s) },
+        { label: 'Mridul', test: (s) => /mridul/i.test(s) },
+        { label: 'Samruddha', test: (s) => /samruddha/i.test(s) },
+        { label: 'Puru Chauhan', test: (s) => /purusottam/i.test(s) || /puru\s*chauhan/i.test(s) || (/puru/i.test(s) && /chauhan/i.test(s)) },
+        { label: 'Nidhi', test: (s) => /\bnidhi\b/i.test(s) },
+        { label: 'Nikhil', test: (s) => /\bnikhil\b/i.test(s) },
+        { label: 'Gargi', test: (s) => /\bgargi\b/i.test(s) },
+        { label: 'Sidharth', test: (s) => /sid(?:d)?harth/i.test(s) },
+        { label: 'Mauricio', test: (s) => /mauricio/i.test(s) },
+        { label: 'Maria', test: (s) => /\bmaria\b/i.test(s) }
+    ],
+
+    /**
+     * Aggregate activities into fixed presales roster counts (unmatched activity users are ignored).
+     */
+    buildFixedPresalesActivitySeries(activities) {
+        const roster = ReportsV2.FIXED_PRESALES_ROSTER;
+        const counts = {};
+        roster.forEach((r) => {
+            counts[r.label] = 0;
+        });
+        const tryMatchPart = (part) => {
+            const p = String(part || '').trim();
+            if (!p) return;
+            for (let i = 0; i < roster.length; i++) {
+                if (roster[i].test(p)) {
+                    counts[roster[i].label]++;
+                    return;
+                }
+            }
+        };
+        const list = activities && Array.isArray(activities) ? activities : [];
+        list.forEach((activity) => {
+            const raw = activity.userName || activity.assignedUserEmail || '';
+            const parts = String(raw)
+                .split(/[/|,]+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (parts.length === 0) tryMatchPart(raw);
+            else parts.forEach(tryMatchPart);
+        });
+        return roster.map((r) => ({ id: r.label, name: r.label, count: counts[r.label] }));
+    },
+
+    /**
      * Monthly PDF / tables: prefer fixed account→presales tags, then stored win/loss name/id resolution.
      * `presalesTag` may be null; accountName is always re-checked via DataManager when needed.
      */
@@ -344,24 +395,56 @@ const ReportsV2 = {
             chart.data.datasets.forEach((dataset, i) => {
                 const meta = chart.getDatasetMeta(i);
                 if (!meta.data || meta.data.length === 0) return;
-                const total = dataset.data.reduce((a, b) => a + b, 0);
+                const total = dataset.data.reduce((a, b) => a + (Number(b) || 0), 0);
                 meta.data.forEach((element, index) => {
                     const value = dataset.data[index];
-                    if (value == null || value === 0) return;
-                    const label = chart.data.labels && chart.data.labels[index] ? String(chart.data.labels[index]).slice(0, 12) : '';
+                    if (value == null) return;
+                    const num = Number(value);
+                    if ((chart.config.type === 'pie' || chart.config.type === 'doughnut') && num === 0) return;
                     ctx.save();
-                    ctx.font = '12px sans-serif';
-                    ctx.fillStyle = '#1a202c';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     if (chart.config.type === 'pie' || chart.config.type === 'doughnut') {
+                        ctx.font = '12px sans-serif';
+                        ctx.fillStyle = '#1a202c';
                         const { x, y } = element.tooltipPosition();
-                        const pct = total > 0 ? ((value / total) * 100).toFixed(0) : '';
-                        ctx.fillText(value, x, y - 6);
+                        const pct = total > 0 ? ((num / total) * 100).toFixed(0) : '';
+                        ctx.fillText(String(num), x, y - 6);
                         if (pct) ctx.fillText(pct + '%', x, y + 8);
                     } else if (chart.config.type === 'bar') {
-                        const { x, y } = element.tooltipPosition();
-                        ctx.fillText(value, x, y - 8);
+                        const horizontal = chart.options.indexAxis === 'y';
+                        ctx.font = '600 12px sans-serif';
+                        ctx.fillStyle = '#ffffff';
+                        let cx;
+                        let cy;
+                        if (element && typeof element.getCenterPoint === 'function') {
+                            const pt = element.getCenterPoint();
+                            cx = pt.x;
+                            cy = pt.y;
+                        } else {
+                            const props = element.getProps(['x', 'y', 'base'], true);
+                            const base = props.base;
+                            if (horizontal) {
+                                cx = (props.x + base) / 2;
+                                cy = props.y;
+                            } else {
+                                cx = props.x;
+                                cy = (props.y + base) / 2;
+                            }
+                        }
+                        if (horizontal && chart.scales && chart.scales.x) {
+                            const xScale = chart.scales.x;
+                            const x0 = xScale.getPixelForValue(0);
+                            if (!Number.isFinite(num) || num === 0) {
+                                cx = Math.min(x0 + 16, xScale.left + 28);
+                                if (element && typeof element.getCenterPoint === 'function') {
+                                    cy = element.getCenterPoint().y;
+                                }
+                            } else if (cx <= x0 + 4) {
+                                cx = x0 + Math.min(18, (xScale.getPixelForValue(num) - x0) / 2);
+                            }
+                        }
+                        ctx.fillText(String(num), cx, cy);
                     }
                     ctx.restore();
                 });
@@ -1011,16 +1094,7 @@ const ReportsV2 = {
                 missingSfdcByRegion[region] = (missingSfdcByRegion[region] || 0) + 1;
             }
         });
-        const userActivityMap = new Map();
-        activities.forEach(activity => {
-            const userId = activity.userId || activity.assignedUserEmail || 'unknown';
-            const userName = activity.userName || 'Unknown';
-            if (!userActivityMap.has(userId)) userActivityMap.set(userId, { userName, count: 0 });
-            userActivityMap.get(userId).count++;
-        });
-        const userActivityData = Array.from(userActivityMap.entries())
-            .map(([id, o]) => ({ id, name: o.userName, count: o.count }))
-            .sort((a, b) => b.count - a.count);
+        const userActivityData = ReportsV2.buildFixedPresalesActivitySeries(activities);
 
         const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
         const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
@@ -1408,7 +1482,7 @@ const ReportsV2 = {
                     <div class="monthly-report-page">
                         <h3>Call types</h3>
                         <div class="monthly-report-chart-wrap" style="height: 280px;">
-                            <canvas id="monthlyReportCallType" height="280"></canvas>
+                            <canvas id="monthlyReportCallType" height="320"></canvas>
                         </div>
                     </div>
                     <!-- Page 6 – Region activity (vertical bar chart) -->
@@ -1416,7 +1490,7 @@ const ReportsV2 = {
                         <h3>Regional intelligence</h3>
                         <p class="text-muted">${periodLabel} (External only)</p>
                         <div class="monthly-report-chart-wrap" style="height: 300px;">
-                            <canvas id="monthlyReportRegion" height="300"></canvas>
+                            <canvas id="monthlyReportRegion" height="320"></canvas>
                         </div>
                     </div>
                     <!-- Page 7 – Missing SFDC (vertical bar chart) -->
@@ -1424,15 +1498,15 @@ const ReportsV2 = {
                         <h3>Missing SFDC opportunities</h3>
                         <p class="text-muted">External activities where project/account has no SFDC link. ${periodLabel}.</p>
                         <div class="monthly-report-chart-wrap" style="height: 300px;">
-                            <canvas id="monthlyReportMissingSfdc" height="300"></canvas>
+                            <canvas id="monthlyReportMissingSfdc" height="320"></canvas>
                         </div>
                     </div>
                     <!-- Page 8 – Presales individual activity (horizontal bar chart) -->
                     <div class="monthly-report-page">
                         <h3>Presales individual activity</h3>
                         <p class="text-muted">Activities by user – ${periodLabel}</p>
-                        <div class="monthly-report-chart-wrap" style="height: 300px;">
-                            <canvas id="monthlyReportPresales" height="300"></canvas>
+                        <div class="monthly-report-chart-wrap" style="height: 440px;">
+                            <canvas id="monthlyReportPresales" height="420"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1622,19 +1696,6 @@ const ReportsV2 = {
         const internalPercent = totalActivities > 0 ? Math.round((internalCount / totalActivities) * 100) : 0;
         const externalPercent = totalActivities > 0 ? Math.round((externalCount / totalActivities) * 100) : 0;
 
-        // Presales Activity Report - Group by user
-        const userActivityMap = new Map();
-        activities.forEach(activity => {
-            const userId = activity.userId || activity.assignedUserEmail || 'unknown';
-            const userName = activity.userName || 'Unknown';
-            if (!userActivityMap.has(userId)) {
-                userActivityMap.set(userId, { userId, userName, count: 0 });
-            }
-            userActivityMap.get(userId).count++;
-        });
-        const userActivityData = Array.from(userActivityMap.values())
-            .sort((a, b) => b.count - a.count);
-
         return `
             <div class="reports-v2-section">
                 <h2 class="reports-v2-section-title">Presales Reports (Team Level)</h2>
@@ -1700,7 +1761,7 @@ const ReportsV2 = {
                             <h3>Presales Activity Report</h3>
                         </div>
                         <div class="reports-v2-card-body">
-                            <canvas id="presalesActivityChart" height="300"></canvas>
+                            <canvas id="presalesActivityChart" height="420"></canvas>
                         </div>
                     </div>
                 </div>
@@ -2047,42 +2108,28 @@ const ReportsV2 = {
             if (this.activeTab === 'presales') {
                 const presalesActivityCanvas = document.getElementById('presalesActivityChart');
                 if (presalesActivityCanvas) {
-                    const userActivityMap = new Map();
-                    safeActivities.forEach(activity => {
-                        const userId = activity.userId || activity.assignedUserEmail || 'unknown';
-                        const userName = activity.userName || 'Unknown';
-                        if (!userActivityMap.has(userId)) {
-                            userActivityMap.set(userId, { userName, count: 0 });
+                    const userActivityData = ReportsV2.buildFixedPresalesActivitySeries(safeActivities);
+                    if (this.charts['presalesActivityChart']) {
+                        try {
+                            this.charts['presalesActivityChart'].destroy();
+                        } catch (e) {
+                            console.warn('Error destroying presalesActivityChart:', e);
                         }
-                        userActivityMap.get(userId).count++;
-                    });
-                    const userActivityData = Array.from(userActivityMap.values())
-                        .sort((a, b) => b.count - a.count);
-
-                    if (userActivityData.length > 0) {
-                        // Destroy existing chart
-                        if (this.charts['presalesActivityChart']) {
-                            try {
-                                this.charts['presalesActivityChart'].destroy();
-                            } catch (e) {
-                                console.warn('Error destroying presalesActivityChart:', e);
-                            }
-                            delete this.charts['presalesActivityChart'];
-                        }
-                        if (Chart.getChart && Chart.getChart(presalesActivityCanvas)) {
-                            try {
-                                Chart.getChart(presalesActivityCanvas).destroy();
-                            } catch (e) {
-                                console.warn('Error destroying Chart.js instance:', e);
-                            }
-                        }
-
-                        this.renderHorizontalBarChart('presalesActivityChart', {
-                            labels: userActivityData.map(u => u.userName),
-                            data: userActivityData.map(u => u.count),
-                            label: 'Activities'
-                        });
+                        delete this.charts['presalesActivityChart'];
                     }
+                    if (Chart.getChart && Chart.getChart(presalesActivityCanvas)) {
+                        try {
+                            Chart.getChart(presalesActivityCanvas).destroy();
+                        } catch (e) {
+                            console.warn('Error destroying Chart.js instance:', e);
+                        }
+                    }
+                    this.renderHorizontalBarChart('presalesActivityChart', {
+                        labels: userActivityData.map((u) => u.name),
+                        data: userActivityData.map((u) => u.count),
+                        label: 'Activities',
+                        reverseCategoryAxis: true
+                    });
                 }
             }
 
@@ -2438,11 +2485,12 @@ const ReportsV2 = {
                         });
                     }
                 }
-                if (document.getElementById('monthlyReportPresales') && md.userActivityData && md.userActivityData.length > 0) {
+                if (document.getElementById('monthlyReportPresales') && Array.isArray(md.userActivityData) && md.userActivityData.length > 0) {
                     this.renderHorizontalBarChart('monthlyReportPresales', {
-                        labels: md.userActivityData.map(u => (u.name || u.id || '—').toString().slice(0, 20)),
-                        data: md.userActivityData.map(u => u.count),
-                        label: 'Activities'
+                        labels: md.userActivityData.map((u) => (u.name || u.id || '—').toString()),
+                        data: md.userActivityData.map((u) => u.count),
+                        label: 'Activities',
+                        reverseCategoryAxis: true
                     });
                 }
                 const emailBtn = document.getElementById('monthlyReportEmailBtn');
@@ -2531,7 +2579,7 @@ const ReportsV2 = {
         }
     },
 
-    renderHorizontalBarChart(canvasId, { labels, data, label }) {
+    renderHorizontalBarChart(canvasId, { labels, data, label, reverseCategoryAxis = false }) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             console.warn(`Chart canvas not found: ${canvasId}`);
@@ -2548,6 +2596,10 @@ const ReportsV2 = {
             console.warn(`Invalid data for chart ${canvasId}:`, data);
             return;
         }
+
+        const numericData = data.map((v) => Number(v) || 0);
+        const maxVal = numericData.reduce((m, v) => Math.max(m, v), 0);
+        const xScaleMax = maxVal === 0 ? 1 : undefined;
 
         // Destroy existing chart if it exists
         if (this.charts[canvasId]) {
@@ -2578,7 +2630,7 @@ const ReportsV2 = {
                     labels: labels,
                     datasets: [{
                         label: label,
-                        data: data,
+                        data: numericData,
                         backgroundColor: '#3182CE',
                         borderColor: '#2B6CB0',
                         borderWidth: 1
@@ -2591,9 +2643,13 @@ const ReportsV2 = {
                     scales: {
                         x: {
                             beginAtZero: true,
+                            ...(xScaleMax != null ? { max: xScaleMax } : {}),
                             ticks: {
                                 stepSize: 1
                             }
+                        },
+                        y: {
+                            reverse: reverseCategoryAxis === true
                         }
                     },
                     plugins: {
