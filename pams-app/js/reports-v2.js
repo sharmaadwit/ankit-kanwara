@@ -147,6 +147,18 @@ const ReportsV2 = {
         return true;
     },
 
+    /** April 2026 monthly PDF: omit Finesta from wins table and win counts (NaN/empty figures, not meaningful). */
+    isApril2026ExcludedWinAccount(accountName) {
+        const n = this.normalizeAccountNameForReportMatch(accountName);
+        if (!n) return false;
+        return n.includes('finesta');
+    },
+
+    shouldIncludeWinInMonthlyReport(period, accountName) {
+        if (period === '2026-04' && this.isApril2026ExcludedWinAccount(accountName)) return false;
+        return true;
+    },
+
     isReportPresalesPlaceholderLabel(label) {
         const s = String(label == null ? '' : label)
             .trim()
@@ -1157,8 +1169,12 @@ const ReportsV2 = {
                         const monthForWinLoss = project.winLossData?.monthOfWin ||
                             (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
                         if (monthForWinLoss && monthForWinLoss === periodMonth) {
-                            if (project.status === 'won') winsPeriod++;
-                            else if (
+                            if (
+                                project.status === 'won' &&
+                                ReportsV2.shouldIncludeWinInMonthlyReport(periodMonth, account.name || '')
+                            ) {
+                                winsPeriod++;
+                            } else if (
                                 project.status === 'lost' &&
                                 ReportsV2.shouldIncludeLossInMonthlyReport(periodMonth, account.name || '')
                             ) {
@@ -1266,11 +1282,15 @@ const ReportsV2 = {
                             (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
                         if (monthForWinLoss === periodMonth) {
                             if (project.status === 'won') {
+                                const accountNameForFilter = String(account.name || '').trim();
+                                if (!ReportsV2.shouldIncludeWinInMonthlyReport(periodMonth, accountNameForFilter)) {
+                                    return;
+                                }
                                 winsPeriod++;
                                 const uc = (project.useCases && project.useCases[0]);
                                 const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
                                 const useCaseText = (project.winLossData && project.winLossData.reason) ? String(project.winLossData.reason) : (useCaseFromProject || '—');
-                                const accountName = String(account.name || '').trim() || 'Unknown';
+                                const accountName = accountNameForFilter || 'Unknown';
                                 const wl = project.winLossData || {};
                                 const projectTitle = (project.name || '').trim();
                                 const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users, {
