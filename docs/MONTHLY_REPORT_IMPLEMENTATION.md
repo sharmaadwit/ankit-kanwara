@@ -55,11 +55,11 @@ All sections use the **current period** (month/year) from the Reports header.
 - Choose “Save as PDF” (or your system’s equivalent) to get a single PDF of the full Monthly report (all 8 sections, including charts).
 - Print CSS hides the rest of the app and shows only `#monthlyReportPdfContent`.
 
-### Download charts as images
+### Download report pages as PNG
 
-- **Download charts as images** saves **one PNG per chart** (activity breakdown, call types, region, missing SFDC, presales by user).
-- Filenames: `activity-breakdown-YYYY-MM.png`, `call-types-YYYY-MM.png`, etc.
-- Use these in slides, Confluence, or email.
+- **Download report pages as PNG** saves **one PNG per report page** (same blocks as the print/PDF view): Presales summary, Cube Analysis, Wins, **Wins & Losses summary** tables, and **each chart page** with its **title and subtitle** above the chart.
+- Uses **html2canvas** (loaded from CDN with Chart.js). Filenames look like `01-presales-update-march-2026-2026-03.png`, `08-presales-individual-activity-2026-03.png`, etc. (ordered + slug from the section `h3` + period).
+- The per-page hint *“Use Edit report…”* is omitted from captures (same as print CSS) for a cleaner share image.
 
 ### Email report
 
@@ -80,7 +80,7 @@ All sections use the **current period** (month/year) from the Reports header.
 | **See all graphs** | Open **Reports** → **Monthly report (PDF)**. All 5 chart sections use real Chart.js charts. |
 | **Edit narrative / wins** | **Edit report** → set Highlights, Use cases, and Wins (include/exclude + manual) → **Save**. |
 | **Download same as PDF** | **Download PDF** → in the print dialog choose “Save as PDF”. |
-| **Download as images** | **Download charts as images** → 5 PNGs (one per chart). |
+| **Download as images** | **Download report pages as PNG** → one PNG per section (summary through charts), including titles and win/loss tables. |
 | **Send to organisation** | **Email report** (opens mailto) → attach the saved PDF and/or chart images → send. |
 
 ---

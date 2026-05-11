@@ -637,22 +637,97 @@ const ReportsV2 = {
         return off.toDataURL('image/png');
     },
 
-    downloadChartsAsImages() {
-        const ids = ['monthlyReportDonut', 'monthlyReportCallType', 'monthlyReportRegion', 'monthlyReportMissingSfdc', 'monthlyReportPresales'];
-        const names = ['activity-breakdown', 'call-types', 'region-activity', 'missing-sfdc', 'presales-by-user'];
-        ids.forEach((id, i) => {
-            const canvas = document.getElementById(id);
-            if (canvas && canvas.width > 0) {
-                const dataUrl = this.canvasToPngWithWhiteBackground(canvas);
-                if (dataUrl) {
-                    const link = document.createElement('a');
-                    link.download = names[i] + '-' + (this.currentPeriod || 'report') + '.png';
-                    link.href = dataUrl;
-                    link.click();
-                }
+    /**
+     * Export each monthly report page (summary, cube analysis, wins, win/loss tables, charts) as a PNG.
+     * Includes section titles and all visible content on that page. Requires html2canvas (see index.html).
+     */
+    async downloadChartsAsImages() {
+        const captureLib = typeof html2canvas !== 'undefined'
+            ? html2canvas
+            : (typeof window !== 'undefined' && typeof window.html2canvas === 'function' ? window.html2canvas : null);
+        const period = this.currentPeriod || 'report';
+
+        if (!captureLib) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Image export is unavailable (html2canvas not loaded). Refresh the page.', 'error');
             }
-        });
-        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Charts downloaded (white background).', 'success');
+            return;
+        }
+
+        const root = document.getElementById('monthlyReportPdfContent');
+        if (!root) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Open Reports → Monthly report (PDF) first.', 'warning');
+            }
+            return;
+        }
+
+        const pages = Array.from(root.querySelectorAll('.monthly-report-page'));
+        if (!pages.length) {
+            if (typeof UI !== 'undefined' && UI.showNotification) {
+                UI.showNotification('Nothing to export. Generate the monthly report first.', 'warning');
+            }
+            return;
+        }
+
+        if (typeof UI !== 'undefined' && UI.showNotification) {
+            UI.showNotification(`Capturing ${pages.length} page(s)…`, 'info');
+        }
+
+        const slugFromTitle = (text, index) => {
+            let slug = (text || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '');
+            if (!slug) slug = 'page';
+            if (slug.length > 56) slug = slug.slice(0, 56).replace(/-$/, '');
+            return `${String(index + 1).padStart(2, '0')}-${slug}`;
+        };
+
+        let ok = 0;
+        for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+            const titleEl = page.querySelector('h3');
+            const filenameBase = slugFromTitle(titleEl ? titleEl.textContent : '', i);
+
+            try {
+                page.scrollIntoView({ block: 'start', behavior: 'auto' });
+                await new Promise((r) => setTimeout(r, 200));
+                await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+                const canvas = await captureLib(page, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    imageTimeout: 20000,
+                    ignoreElements: (el) => el.classList && el.classList.contains('monthly-report-edit-hint')
+                });
+
+                const dataUrl = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `${filenameBase}-${period}.png`;
+                link.href = dataUrl;
+                link.click();
+                ok += 1;
+            } catch (err) {
+                console.warn('[ReportsV2] downloadChartsAsImages failed for page', i + 1, err);
+            }
+
+            await new Promise((r) => setTimeout(r, 350));
+        }
+
+        if (typeof UI !== 'undefined' && UI.showNotification) {
+            if (ok === pages.length) {
+                UI.showNotification(`Downloaded ${ok} PNG(s) with titles and full page content.`, 'success');
+            } else if (ok > 0) {
+                UI.showNotification(`Downloaded ${ok} of ${pages.length} PNG(s). Some pages failed — check console.`, 'warning');
+            } else {
+                UI.showNotification('Could not export report images. Try again or use Download PDF.', 'error');
+            }
+        }
     },
 
     // Change activity breakdown filter (getPeriodActivities is async — must await or chart gets a Promise, not rows)
@@ -1252,7 +1327,7 @@ const ReportsV2 = {
                         ${period === '2026-02' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadFeb2026Analysis()">Load Feb 2026 analysis</button>` : ''}
                         ${period === '2026-03' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadMarch2026Analysis()">Load March 2026 analysis</button>` : ''}
                         <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
-                        <button type="button" class="btn btn-outline" onclick="ReportsV2.downloadChartsAsImages()">Download charts as images</button>
+                        <button type="button" class="btn btn-outline" onclick="void ReportsV2.downloadChartsAsImages()">Download report pages as PNG</button>
                         <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
                     </div>
                 </div>
