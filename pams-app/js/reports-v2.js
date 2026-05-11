@@ -133,6 +133,61 @@ const ReportsV2 = {
         return !this.isMarch2026MissingSfdcExcludedAccount(accountName);
     },
 
+    /** April 2026 monthly PDF: omit BigCaring from losses table and loss counts. */
+    isApril2026ExcludedLossAccount(accountName) {
+        const n = this.normalizeAccountNameForReportMatch(accountName);
+        if (!n) return false;
+        if (n.includes('bigcaring')) return true;
+        if (n.includes('big caring')) return true;
+        return n.includes('big') && n.includes('caring');
+    },
+
+    shouldIncludeLossInMonthlyReport(period, accountName) {
+        if (period === '2026-04' && this.isApril2026ExcludedLossAccount(accountName)) return false;
+        return true;
+    },
+
+    isReportPresalesPlaceholderLabel(label) {
+        const s = String(label == null ? '' : label)
+            .trim()
+            .toLowerCase();
+        if (!s || s === '—') return true;
+        if (s === 'user' || s === 'admin') return true;
+        if (s === 'presales user' || s === 'presales representative' || s === 'presales lead') return true;
+        return false;
+    },
+
+    /** When win/loss winner is a placeholder, infer presales from external activities on the account in-period. */
+    inferPresalesRepFromAccountActivities(accountId, accountName, activities) {
+        const list = activities && Array.isArray(activities) ? activities : [];
+        const want = this.normalizeAccountNameForReportMatch(accountName);
+        const counts = new Map();
+        list.forEach((activity) => {
+            if (!activity || activity.isInternal === true) return;
+            if (accountId != null && accountId !== '' && activity.accountId != null) {
+                if (String(activity.accountId) !== String(accountId)) return;
+            } else if (want) {
+                const an = this.normalizeAccountNameForReportMatch(activity.accountName || '');
+                if (an !== want) return;
+            } else {
+                return;
+            }
+            const raw = activity.userName || activity.assignedUserEmail || '';
+            const key = String(raw).trim();
+            if (!key) return;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        let bestKey = '';
+        let bestCount = 0;
+        counts.forEach((count, key) => {
+            if (count > bestCount) {
+                bestCount = count;
+                bestKey = key;
+            }
+        });
+        return bestKey || null;
+    },
+
     /**
      * Fixed presales roster for bar charts: always show these names (count may be 0).
      * Order = display order (top-to-bottom when reverseLabels is used on horizontal bars).
@@ -154,25 +209,29 @@ const ReportsV2 = {
 
     /**
      * Aggregate activities into fixed presales roster counts (unmatched activity users are ignored).
+     * Each agent gets one bar total: internal + external (no separate bars per type).
      */
     buildFixedPresalesActivitySeries(activities) {
         const roster = ReportsV2.FIXED_PRESALES_ROSTER;
         const counts = {};
         roster.forEach((r) => {
-            counts[r.label] = 0;
+            counts[r.label] = { internal: 0, external: 0 };
         });
-        const tryMatchPart = (part) => {
-            const p = String(part || '').trim();
-            if (!p) return;
-            for (let i = 0; i < roster.length; i++) {
-                if (roster[i].test(p)) {
-                    counts[roster[i].label]++;
-                    return;
-                }
-            }
-        };
         const list = activities && Array.isArray(activities) ? activities : [];
         list.forEach((activity) => {
+            const isInternal = activity && activity.isInternal === true;
+            const tryMatchPart = (part) => {
+                const p = String(part || '').trim();
+                if (!p) return;
+                for (let i = 0; i < roster.length; i++) {
+                    if (roster[i].test(p)) {
+                        const bucket = counts[roster[i].label];
+                        if (isInternal) bucket.internal++;
+                        else bucket.external++;
+                        return;
+                    }
+                }
+            };
             const raw = activity.userName || activity.assignedUserEmail || '';
             const parts = String(raw)
                 .split(/[/|,]+/)
@@ -181,7 +240,32 @@ const ReportsV2 = {
             if (parts.length === 0) tryMatchPart(raw);
             else parts.forEach(tryMatchPart);
         });
-        return roster.map((r) => ({ id: r.label, name: r.label, count: counts[r.label] }));
+        return roster.map((r) => {
+            const internal = counts[r.label].internal;
+            const external = counts[r.label].external;
+            return { id: r.label, name: r.label, internal, external, count: internal + external };
+        });
+    },
+
+    /** Stacked horizontal bar: Internal + External per presales agent (one bar per label). */
+    buildPresalesActivitySplitChartDatasets(series) {
+        const rows = Array.isArray(series) ? series : [];
+        return [
+            {
+                label: 'Internal',
+                data: rows.map((u) => Number(u.internal) || 0),
+                backgroundColor: '#805AD5',
+                borderColor: '#6B46C1',
+                borderWidth: 1
+            },
+            {
+                label: 'External',
+                data: rows.map((u) => Number(u.external) || 0),
+                backgroundColor: '#4299E1',
+                borderColor: '#3182CE',
+                borderWidth: 1
+            }
+        ];
     },
 
     /**
@@ -204,17 +288,24 @@ const ReportsV2 = {
     /** Presales user who won: name saved on win/loss, else resolve from users list by wonByUserId. */
     resolveWonByUserNameForReport(wl, users) {
         if (!wl) return null;
-        if (wl.wonByUserName != null && String(wl.wonByUserName).trim()) return String(wl.wonByUserName).trim();
+        const stored =
+            wl.wonByUserName != null && String(wl.wonByUserName).trim() ? String(wl.wonByUserName).trim() : null;
         const uid = wl.wonByUserId;
-        if (uid == null || uid === '' || !users || !users.length) return null;
-        const u = users.find((x) =>
-            typeof DataManager !== 'undefined' && DataManager.userIdsMatch
-                ? DataManager.userIdsMatch(x.id, uid)
-                : String(x.id) === String(uid)
-        );
-        if (!u) return null;
-        const nm = u.name != null && String(u.name).trim();
-        return nm ? String(u.name).trim() : String(u.username || '').trim() || null;
+        if (uid != null && uid !== '' && users && users.length) {
+            const u = users.find((x) =>
+                typeof DataManager !== 'undefined' && DataManager.userIdsMatch
+                    ? DataManager.userIdsMatch(x.id, uid)
+                    : String(x.id) === String(uid)
+            );
+            if (u) {
+                const nm = u.name != null && String(u.name).trim();
+                if (nm) return String(u.name).trim();
+                const un = u.username != null && String(u.username).trim();
+                if (un && !this.isReportPresalesPlaceholderLabel(un)) return un;
+            }
+        }
+        if (stored && !this.isReportPresalesPlaceholderLabel(stored)) return stored;
+        return null;
     },
 
     /**
@@ -246,7 +337,8 @@ const ReportsV2 = {
      * Monthly PDF line for a CRM win: account/project presales tags override logged winner when present
      * (otherwise wrong roster rows like username "user" / "admin" block the tag map).
      */
-    presalesRepLineForCrmWin(accountName, projectTitle, wl, users) {
+    presalesRepLineForCrmWin(accountName, projectTitle, wl, users, context) {
+        const ctx = context && typeof context === 'object' ? context : {};
         const presalesTag =
             typeof DataManager !== 'undefined' && DataManager.getWinLossPresalesTagForWin
                 ? DataManager.getWinLossPresalesTagForWin(accountName, projectTitle)
@@ -255,7 +347,15 @@ const ReportsV2 = {
         const wonBy = this.resolveWonByUserNameForReport(wl, users);
         if (wonBy) return this.displayNameForPresalesRepLabel(wonBy, users);
         const rest = this.applyWinPresalesTagForDisplay(accountName, null, null, projectTitle);
-        return this.displayNameForPresalesRepLabel(rest, users);
+        let line = this.displayNameForPresalesRepLabel(rest, users);
+        if (this.isReportPresalesPlaceholderLabel(line) && ctx.activities && ctx.activities.length) {
+            const inferred = this.inferPresalesRepFromAccountActivities(ctx.accountId, accountName, ctx.activities);
+            if (inferred) {
+                const resolved = this.displayNameForPresalesRepLabel(inferred, users);
+                if (!this.isReportPresalesPlaceholderLabel(resolved)) line = resolved;
+            }
+        }
+        return line;
     },
 
     /**
@@ -307,6 +407,50 @@ const ReportsV2 = {
             '4. Sales discovery & AI recommendation\nIndustries: Banking, Education, Real Estate & Construction, Retail, Telco, Travel & Hospitality\nDiscovery, AI-led recommendations, and commerce-led conversations.',
             '5. Operational automation\nIndustries: Banking, CPG & FMCG, Logistics & Supply Chain\nBack-office efficiency, workflows, and operational automation.'
         ]
+    },
+
+    // Pre-built April 2026 Cube Analysis — points 4 & 5 not in scope for this month’s narrative
+    APRIL_2026_ANALYSIS: {
+        period: '2026-04',
+        highlights:
+            'April 2026 — Cube analysis centres on lead generation & onboarding, customer engagement & campaigns, and support/FAQ motions across tagged external activity. Sales discovery & AI recommendation (point 4) and operational automation (point 5) are not in scope for this month’s highlights. Regional mix continues across India North, MENA, and LATAM where accounts are tagged in PreSight.',
+        useCases: [
+            '1. Lead gen & onboarding\nIndustries: Banking, Healthcare, Retail, Telco\nLead capture, onboarding, and qualification — including KYC and regulated-industry conversations on WhatsApp.',
+            '2. Customer engagement & campaigns\nIndustries: Automobile, Banking, Entertainment, Events, F&B, HR, Manufacturing, Media & Entertainment, Retail, Travel & Hospitality\nCampaigns, notifications, loyalty, and audience programmes on WhatsApp.',
+            '3. Support & FAQ\nIndustries: Automotive, Banking, F&B, Government, Manufacturing, Professional Services, Retail, Telco\nService, helpdesk, and FAQ coverage across priority accounts.',
+            '4. Sales discovery & AI recommendation\nNot relevant for April 2026 — excluded from this month’s cube analysis narrative.',
+            '5. Operational automation\nNot relevant for April 2026 — excluded from this month’s cube analysis narrative.'
+        ]
+    },
+
+    /** Monthly PDF Insights (page 1): saved overrides, then April preset, then auto-generated line. */
+    monthlyReportInsightsText(period, overrides, defaultHighlights) {
+        const o = overrides || {};
+        const saved = o.highlights != null && String(o.highlights).trim() ? String(o.highlights).trim() : '';
+        if (saved) return saved;
+        if (period === '2026-04' && this.APRIL_2026_ANALYSIS && this.APRIL_2026_ANALYSIS.highlights) {
+            return String(this.APRIL_2026_ANALYSIS.highlights).trim();
+        }
+        return defaultHighlights || '';
+    },
+
+    /** Cube Analysis card copy: saved override, then April preset for 2026-04, else empty (activity-derived fallback). */
+    monthlyReportCubeUseCaseOverrideText(period, overrides, canonicalIdx) {
+        const o = overrides || {};
+        const saved =
+            o.useCases && o.useCases[canonicalIdx] != null && String(o.useCases[canonicalIdx]).trim()
+                ? String(o.useCases[canonicalIdx]).trim()
+                : '';
+        if (saved) return saved;
+        if (
+            period === '2026-04' &&
+            this.APRIL_2026_ANALYSIS &&
+            Array.isArray(this.APRIL_2026_ANALYSIS.useCases) &&
+            this.APRIL_2026_ANALYSIS.useCases[canonicalIdx]
+        ) {
+            return String(this.APRIL_2026_ANALYSIS.useCases[canonicalIdx]).trim();
+        }
+        return '';
     },
 
     /**
@@ -619,6 +763,22 @@ const ReportsV2 = {
         };
         await DataManager.saveReportOverrides(overrides);
         if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('March 2026 analysis loaded into report.', 'success');
+        this.render();
+    },
+
+    async loadApril2026Analysis() {
+        const apr = this.APRIL_2026_ANALYSIS;
+        if (!apr || apr.period !== '2026-04') return;
+        const overrides = await DataManager.getReportOverrides();
+        const prev = overrides['2026-04'] || {};
+        overrides['2026-04'] = {
+            highlights: apr.highlights,
+            useCases: apr.useCases.slice(0, 5),
+            includedWinIds: prev.includedWinIds !== undefined ? prev.includedWinIds : null,
+            manualWins: Array.isArray(prev.manualWins) ? prev.manualWins : []
+        };
+        await DataManager.saveReportOverrides(overrides);
+        if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('April 2026 analysis loaded into report.', 'success');
         this.render();
     },
 
@@ -998,7 +1158,12 @@ const ReportsV2 = {
                             (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
                         if (monthForWinLoss && monthForWinLoss === periodMonth) {
                             if (project.status === 'won') winsPeriod++;
-                            else if (project.status === 'lost') lossesPeriod++;
+                            else if (
+                                project.status === 'lost' &&
+                                ReportsV2.shouldIncludeLossInMonthlyReport(periodMonth, account.name || '')
+                            ) {
+                                lossesPeriod++;
+                            }
                         }
                     }
                 });
@@ -1108,7 +1273,11 @@ const ReportsV2 = {
                                 const accountName = String(account.name || '').trim() || 'Unknown';
                                 const wl = project.winLossData || {};
                                 const projectTitle = (project.name || '').trim();
-                                const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users);
+                                const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users, {
+                                    activities,
+                                    accountId: account.id,
+                                    period: periodMonth
+                                });
                                 const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
                                 let currency = wl.currency || 'INR';
                                 let mrrVal = wl.mrr ?? project.mrr;
@@ -1133,12 +1302,16 @@ const ReportsV2 = {
                                     presalesRep
                                 });
                             } else if (project.status === 'lost') {
+                                const lossAccountName = String(account.name || '').trim() || 'Unknown';
+                                if (!ReportsV2.shouldIncludeLossInMonthlyReport(periodMonth, lossAccountName)) {
+                                    return;
+                                }
                                 lossesPeriod++;
                                 const wl = project.winLossData || {};
                                 const uc0 = project.useCases && project.useCases[0];
                                 const reason = (wl.reason || '').trim() || (uc0 ? (typeof uc0 === 'string' ? uc0 : (uc0.name || '')) : '') || '—';
                                 lossesForPeriod.push({
-                                    accountName: String(account.name || '').trim() || 'Unknown',
+                                    accountName: lossAccountName,
                                     reason: reason || '—',
                                     lostTo: wl.lostTo || '—'
                                 });
@@ -1281,7 +1454,7 @@ const ReportsV2 = {
             ? `Total activities: ${total} (${externalCount} external). Wins this period: ${winsPeriod}. Top regions: ${regionsOrdered.slice(0, 3).join(', ') || '—'}.`
             : '';
 
-        const highlightsForPage1 = (o.highlights && o.highlights.trim()) ? o.highlights.trim() : defaultHighlights;
+        const highlightsForPage1 = ReportsV2.monthlyReportInsightsText(period, o, defaultHighlights);
         const safeHlLine = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const page1InsightsHtml = highlightsForPage1
             ? `<div class="monthly-report-page-1-insights"><h4 class="monthly-report-insights-title">Insights</h4><p class="monthly-report-highlights-text">${safeHlLine(highlightsForPage1)}</p></div>`
@@ -1326,6 +1499,7 @@ const ReportsV2 = {
                         <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
                         ${period === '2026-02' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadFeb2026Analysis()">Load Feb 2026 analysis</button>` : ''}
                         ${period === '2026-03' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadMarch2026Analysis()">Load March 2026 analysis</button>` : ''}
+                        ${period === '2026-04' ? `<button type="button" class="btn btn-outline" onclick="ReportsV2.loadApril2026Analysis()">Load April 2026 analysis</button>` : ''}
                         <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
                         <button type="button" class="btn btn-outline" onclick="void ReportsV2.downloadChartsAsImages()">Download report pages as PNG</button>
                         <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
@@ -1351,14 +1525,20 @@ const ReportsV2 = {
                     <!-- Page 2 – Cube Analysis (5 use cases only; no highlights line, no description, no Edit) -->
                     <div class="monthly-report-page">
                         <h3>Cube Analysis Top Highlights – Global</h3>
-                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES (ACTIVITIES ONLY)</h4>
+                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES (ACTIVITIES ONLY)${period === '2026-04' ? ' — points 4 &amp; 5 not in scope for April' : ''}</h4>
                         <div class="monthly-report-use-cases">
                             ${(() => {
                                 const safe = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                                const sorted = [...useCaseCardsFromData].sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0));
-                                return sorted.map((fromData, displayIdx) => {
+                                const cubeCards =
+                                    period === '2026-04'
+                                        ? useCaseCardsFromData
+                                        : [...useCaseCardsFromData].sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0));
+                                return cubeCards.map((fromData, displayIdx) => {
                                     const canonicalIdx = CANONICAL_USE_CASES.indexOf(fromData.name);
-                                    const override = (o.useCases && canonicalIdx >= 0 && o.useCases[canonicalIdx]) ? o.useCases[canonicalIdx].trim() : '';
+                                    const override =
+                                        canonicalIdx >= 0
+                                            ? ReportsV2.monthlyReportCubeUseCaseOverrideText(period, o, canonicalIdx)
+                                            : '';
                                     if (override) return `<div class="monthly-report-use-case-card">${safe(override).replace(/\n/g, '<br>')}</div>`;
                                     if (!fromData) return `<div class="monthly-report-use-case-card"><strong>${displayIdx + 1}. ${CANONICAL_USE_CASES[displayIdx] || '—'}</strong><br/>No activity in this period.</div>`;
                                     return `<div class="monthly-report-use-case-card"><strong>${displayIdx + 1}. ${safe(fromData.name)}</strong><br/>Industries: ${safe(fromData.industriesPhrase)}<br/>${safe(fromData.takeaway)}</div>`;
@@ -2199,10 +2379,9 @@ const ReportsV2 = {
                             console.warn('Error destroying Chart.js instance:', e);
                         }
                     }
-                    this.renderHorizontalBarChart('presalesActivityChart', {
+                    this.renderHorizontalStackedBarChart('presalesActivityChart', {
                         labels: userActivityData.map((u) => u.name),
-                        data: userActivityData.map((u) => u.count),
-                        label: 'Activities',
+                        datasets: ReportsV2.buildPresalesActivitySplitChartDatasets(userActivityData),
                         reverseCategoryAxis: true
                     });
                 }
@@ -2561,10 +2740,9 @@ const ReportsV2 = {
                     }
                 }
                 if (document.getElementById('monthlyReportPresales') && Array.isArray(md.userActivityData) && md.userActivityData.length > 0) {
-                    this.renderHorizontalBarChart('monthlyReportPresales', {
+                    this.renderHorizontalStackedBarChart('monthlyReportPresales', {
                         labels: md.userActivityData.map((u) => (u.name || u.id || '—').toString()),
-                        data: md.userActivityData.map((u) => u.count),
-                        label: 'Activities',
+                        datasets: ReportsV2.buildPresalesActivitySplitChartDatasets(md.userActivityData),
                         reverseCategoryAxis: true
                     });
                 }
@@ -2847,7 +3025,7 @@ const ReportsV2 = {
     },
 
     // Render horizontal stacked bar chart (regions/industries on Y, count on X)
-    renderHorizontalStackedBarChart(canvasId, { labels, datasets }) {
+    renderHorizontalStackedBarChart(canvasId, { labels, datasets, reverseCategoryAxis = false }) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || typeof Chart === 'undefined') {
             console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
@@ -2864,6 +3042,11 @@ const ReportsV2 = {
         if (Chart.getChart && Chart.getChart(canvas)) {
             try { Chart.getChart(canvas).destroy(); } catch (e) { /* ignore */ }
         }
+        const rowTotals = (labels || []).map((_, rowIdx) =>
+            datasets.reduce((sum, ds) => sum + (Number(ds.data && ds.data[rowIdx]) || 0), 0)
+        );
+        const maxRowTotal = rowTotals.reduce((m, v) => Math.max(m, v), 0);
+        const xScaleMax = maxRowTotal === 0 ? 1 : undefined;
         try {
             this.charts[canvasId] = new Chart(canvas, {
                 type: 'bar',
@@ -2876,11 +3059,12 @@ const ReportsV2 = {
                         x: {
                             stacked: true,
                             beginAtZero: true,
+                            ...(xScaleMax != null ? { max: xScaleMax } : {}),
                             ticks: { stepSize: 1 }
                         },
                         y: {
                             stacked: true,
-                            beginAtZero: true
+                            reverse: reverseCategoryAxis === true
                         }
                     },
                     plugins: {
