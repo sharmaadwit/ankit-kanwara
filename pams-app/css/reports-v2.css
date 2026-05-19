@@ -513,6 +513,22 @@
     max-width: 100%;
     line-height: 1.5;
 }
+.monthly-report-win-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+.monthly-report-win-month-chip {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    background: #15803d;
+    color: #ffffff;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
 .monthly-report-summary-tables { margin-top: 0.5rem; }
 .monthly-report-summary-tables h4 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--gray-700, #374151); }
 .monthly-report-table {

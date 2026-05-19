@@ -420,6 +420,137 @@ const ReportsV2 = {
         `;
     },
 
+    MONTHLY_TREND_MONTH_LABELS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+
+    /**
+     * Annual report: bucket external/internal activities by month index 0–11 for the given calendar year.
+     * Returns `{ labels, internal, external, totals, monthKeys }` ready for a stacked bar dataset.
+     */
+    buildAnnualMonthlyActivitySeries(activities, year) {
+        const yearStr = String(year);
+        const labels = this.MONTHLY_TREND_MONTH_LABELS.slice();
+        const monthKeys = labels.map((_, i) => `${yearStr}-${String(i + 1).padStart(2, '0')}`);
+        const internal = new Array(12).fill(0);
+        const external = new Array(12).fill(0);
+        const list = Array.isArray(activities) ? activities : [];
+        const resolveMonth = (typeof DataManager !== 'undefined' && DataManager.resolveActivityMonth)
+            ? DataManager.resolveActivityMonth
+            : (a) => {
+                const d = a && (a.date || a.createdAt);
+                if (!d) return null;
+                const s = typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '';
+                return s.length >= 7 ? s.substring(0, 7) : null;
+            };
+        list.forEach((a) => {
+            const ym = resolveMonth(a);
+            if (!ym || ym.substring(0, 4) !== yearStr) return;
+            const month = parseInt(ym.substring(5, 7), 10);
+            if (!Number.isFinite(month) || month < 1 || month > 12) return;
+            const idx = month - 1;
+            if (a && a.isInternal === true) internal[idx] += 1;
+            else external[idx] += 1;
+        });
+        const totals = internal.map((n, i) => n + external[i]);
+        return { labels, monthKeys, internal, external, totals };
+    },
+
+    /**
+     * Annual report: collect all wins and losses across the calendar year, attaching a `monthKey` to each row.
+     * Mirrors the monthly PDF win/loss extraction but does not apply month-specific exclusion rules.
+     */
+    computeAnnualWinLossSummary(accounts, users, year, activities) {
+        const yearStr = String(year);
+        const winsForYear = [];
+        const lossesForYear = [];
+        const winsByMonth = new Array(12).fill(0);
+        const lossesByMonth = new Array(12).fill(0);
+        const safeAccounts = Array.isArray(accounts) ? accounts : [];
+        const safeActivities = Array.isArray(activities) ? activities : [];
+
+        safeAccounts.forEach((account) => {
+            const projects = account && Array.isArray(account.projects) ? account.projects : [];
+            projects.forEach((project) => {
+                if (!project || (project.status !== 'won' && project.status !== 'lost')) return;
+                const winLossUpdated = project.winLossData && project.winLossData.monthOfWin;
+                const fallbackUpdated = (project.winLossData && project.winLossData.updatedAt)
+                    || project.updatedAt
+                    || project.createdAt
+                    || '';
+                const monthForWinLoss = winLossUpdated || (fallbackUpdated || '').toString().substring(0, 7);
+                if (!monthForWinLoss || monthForWinLoss.substring(0, 4) !== yearStr) return;
+                const monthIdx = parseInt(monthForWinLoss.substring(5, 7), 10) - 1;
+                if (!Number.isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11) return;
+
+                const accountName = String(account && account.name || '').trim() || 'Unknown';
+                const wl = (project && project.winLossData) || {};
+                if (project.status === 'won') {
+                    winsByMonth[monthIdx] += 1;
+                    const uc = (project.useCases && project.useCases[0]);
+                    const useCaseFromProject = typeof uc === 'string' ? uc : (uc && typeof uc === 'object' && uc.name) ? uc.name : '';
+                    const useCaseText = wl.reason ? String(wl.reason) : (useCaseFromProject || '—');
+                    const projectTitle = (project.name || '').trim();
+                    const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users, {
+                        activities: safeActivities,
+                        accountId: account.id,
+                        period: monthForWinLoss
+                    });
+                    const isAlhamra = accountName.toLowerCase().includes('alhamra');
+                    let currency = wl.currency || 'INR';
+                    let mrrVal = wl.mrr != null ? wl.mrr : project.mrr;
+                    if (isAlhamra) {
+                        currency = 'AED';
+                        if (wl.currency === 'INR' && mrrVal != null && mrrVal !== '' && mrrVal !== '—') {
+                            const num = Number(mrrVal);
+                            if (Number.isFinite(num)) mrrVal = Math.round(num * ReportsV2.INR_TO_AED);
+                        }
+                    }
+                    const mrrInInr = wl.mrrInInr != null && Number.isFinite(Number(wl.mrrInInr))
+                        ? Number(wl.mrrInInr)
+                        : (currency === 'INR' && mrrVal != null ? Number(mrrVal) : null);
+                    winsForYear.push({
+                        projectId: this.normalizeProjectIdForReport(project.id),
+                        accountId: account.id,
+                        accountName,
+                        monthKey: monthForWinLoss,
+                        monthLabel: this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
+                        mrr: mrrVal != null ? mrrVal : '—',
+                        currency,
+                        mrrInInr,
+                        otd: wl.otd != null && wl.otd !== '' ? wl.otd : null,
+                        otdInInr: wl.otdInInr != null && Number.isFinite(Number(wl.otdInInr)) ? Number(wl.otdInInr) : null,
+                        useCase: useCaseText,
+                        presalesRep
+                    });
+                } else {
+                    lossesByMonth[monthIdx] += 1;
+                    const uc0 = project.useCases && project.useCases[0];
+                    const reason = (wl.reason || '').trim()
+                        || (uc0 ? (typeof uc0 === 'string' ? uc0 : (uc0.name || '')) : '')
+                        || '—';
+                    lossesForYear.push({
+                        accountName,
+                        monthKey: monthForWinLoss,
+                        monthLabel: this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
+                        reason: reason || '—',
+                        lostTo: wl.lostTo || '—'
+                    });
+                }
+            });
+        });
+
+        winsForYear.sort((a, b) => (a.monthKey > b.monthKey ? 1 : a.monthKey < b.monthKey ? -1 : 0));
+        lossesForYear.sort((a, b) => (a.monthKey > b.monthKey ? 1 : a.monthKey < b.monthKey ? -1 : 0));
+
+        return {
+            winsForYear,
+            lossesForYear,
+            winsByMonth,
+            lossesByMonth,
+            totalWins: winsForYear.length,
+            totalLosses: lossesForYear.length
+        };
+    },
+
     /**
      * Monthly PDF / tables: prefer fixed account→presales tags, then stored win/loss name/id resolution.
      * `presalesTag` may be null; accountName is always re-checked via DataManager when needed.
@@ -530,7 +661,7 @@ const ReportsV2 = {
     currentPeriod: null,
     currentPeriodType: 'month', // 'month' or 'year'
     cachedData: null, // Store computed data for charts
-    activeTab: 'presales', // 'presales', 'sales', 'regional', 'monthly', 'ai'
+    activeTab: 'presales', // 'presales', 'sales', 'regional', 'monthly', 'annual', 'ai'
     activityBreakdownFilter: 'all', // 'all', 'sow', 'poc', 'rfx', 'pricing', 'customerCall', 'internal', 'other'
 
     // Plugin to show value on pie/doughnut segments and bar tops (matches dashboard)
@@ -768,6 +899,15 @@ const ReportsV2 = {
     // Switch active tab
     switchTab(tab) {
         this.activeTab = tab;
+        if (tab === 'annual' && this.currentPeriodType !== 'year') {
+            const today = new Date();
+            this.currentPeriodType = 'year';
+            this.currentPeriod = String(today.getFullYear());
+        } else if (tab === 'monthly' && this.currentPeriodType !== 'month') {
+            const today = new Date();
+            this.currentPeriodType = 'month';
+            this.currentPeriod = today.toISOString().substring(0, 7);
+        }
         this.render();
     },
 
@@ -1236,7 +1376,9 @@ const ReportsV2 = {
                     'monthlyReportDashboardRegion',
                     'monthlyReportDashboardFunnel',
                     'monthlyReportMissingSfdc',
-                    'monthlyReportPresales'
+                    'monthlyReportPresales',
+                    'annualReportMonthlyTrend',
+                    'annualReportWinLossTrend'
                 ];
 
                 chartCanvases.forEach(canvasId => {
@@ -1354,7 +1496,7 @@ const ReportsV2 = {
 
     // Render tab navigation
     renderTabNavigation() {
-        const isMonthly = this.activeTab === 'monthly';
+        const isReportTab = this.activeTab === 'monthly' || this.activeTab === 'annual';
         return `
             <div class="reports-v2-tabs reports-v2-tabs-with-edit">
                 <div class="reports-v2-tabs-inner">
@@ -1374,12 +1516,16 @@ const ReportsV2 = {
                             onclick="ReportsV2.switchTab('monthly')">
                         Monthly report (PDF)
                     </button>
+                    <button class="reports-v2-tab ${this.activeTab === 'annual' ? 'active' : ''}" 
+                            onclick="ReportsV2.switchTab('annual')">
+                        Annual report (PDF)
+                    </button>
                     <button class="reports-v2-tab ${this.activeTab === 'ai' ? 'active' : ''}" 
                             onclick="ReportsV2.switchTab('ai')">
                         AI Intelligence
                     </button>
                 </div>
-                ${isMonthly ? `<button type="button" id="reportsEditReportBtn" class="btn btn-primary reports-v2-edit-in-tabs" onclick="ReportsV2.openEditReportModal()">Edit report</button>` : ''}
+                ${isReportTab ? `<button type="button" id="reportsEditReportBtn" class="btn btn-primary reports-v2-edit-in-tabs" onclick="ReportsV2.openEditReportModal()">Edit report</button>` : ''}
             </div>
         `;
     },
@@ -1398,6 +1544,8 @@ const ReportsV2 = {
                 return await this.renderRegionalData(activities);
             case 'monthly':
                 return await this.renderMonthlyReportPdf(activities);
+            case 'annual':
+                return await this.renderAnnualReportPdf(activities);
             case 'ai':
                 return this.renderAIIntelligencePlaceholder();
             default:
@@ -1914,6 +2062,316 @@ const ReportsV2 = {
                     <div class="monthly-report-page">
                         <h3>Presales individual activity</h3>
                         <p class="text-muted">Activities by user – ${periodLabel}</p>
+                        <div class="monthly-report-chart-wrap" style="height: 440px;">
+                            <canvas id="monthlyReportPresales" height="420"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    /**
+     * Annual report (PDF-style): mirrors the monthly PDF structure but aggregates across the full calendar year.
+     * Adds two annual-only trend pages (activity by month, win/loss by month). Reuses the same
+     * `monthly-report-pages` / `monthly-report-page` markup so the existing PNG and print exports
+     * work without changes.
+     */
+    async renderAnnualReportPdf(activities) {
+        if (this.currentPeriodType !== 'year') {
+            const today = new Date();
+            this.currentPeriodType = 'year';
+            this.currentPeriod = String(today.getFullYear());
+        }
+        const yearStr = String(this.currentPeriod || new Date().getFullYear());
+        const periodLabel = this.formatPeriod(yearStr);
+        const total = activities.length;
+        const internalCount = activities.filter((a) => a.isInternal === true).length;
+        const externalCount = activities.filter((a) => a.isInternal !== true).length;
+        const accounts = typeof DataManager !== 'undefined' ? await DataManager.getAccounts() : [];
+        const users = typeof DataManager !== 'undefined' && DataManager.getUsers ? await DataManager.getUsers() : [];
+        const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
+        const o = overrides[yearStr] || {};
+
+        const winLoss = ReportsV2.computeAnnualWinLossSummary(accounts, users, yearStr, activities);
+        const winsForPeriod = winLoss.winsForYear;
+        const lossesForPeriod = winLoss.lossesForYear;
+        const winsCount = winLoss.totalWins;
+        const lossesCount = winLoss.totalLosses;
+
+        const breakdown = ReportsV2.computeActivityBreakdownPartition(activities);
+        const callTypeData = {};
+        activities.forEach((a) => {
+            if (a && !a.isInternal && a.type === 'customerCall') {
+                const callType = (a.details && a.details.callType) ? a.details.callType : 'Not specified';
+                callTypeData[callType] = (callTypeData[callType] || 0) + 1;
+            }
+        });
+        const regionCounts = {};
+        activities.filter((a) => !a.isInternal).forEach((a) => {
+            const account = accounts.find((ac) => ac.id === a.accountId);
+            const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
+            regionCounts[region] = (regionCounts[region] || 0) + 1;
+        });
+        const missingSfdcByRegion = {};
+        activities.filter((a) => !a.isInternal).forEach((a) => {
+            const account = accounts.find((ac) => ac.id === a.accountId);
+            const project = account && account.projects ? account.projects.find((p) => p.id === a.projectId) : null;
+            const hasSfdc = (account && account.sfdcLink) || (project && project.sfdcLink);
+            if (!hasSfdc) {
+                const region = a.salesRepRegion || a.region || (account && (account.salesRepRegion || account.region)) || 'Unassigned';
+                missingSfdcByRegion[region] = (missingSfdcByRegion[region] || 0) + 1;
+            }
+        });
+        const userActivityData = ReportsV2.buildFixedPresalesActivitySeries(activities);
+        const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
+        const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
+        const activityDashboard = ReportsV2.computeMonthlyActivityDashboardSnapshot(
+            activities,
+            breakdown,
+            callTypeData,
+            regionCounts,
+            regionsOrdered,
+            callTypeOrder
+        );
+        const monthlyTrend = ReportsV2.buildAnnualMonthlyActivitySeries(activities, yearStr);
+
+        // Cube Analysis aggregated across the year (same canonical buckets as monthly).
+        const CANONICAL_USE_CASES = [
+            'Lead gen & onboarding',
+            'Customer engagement & campaigns',
+            'Support & FAQ',
+            'Sales discovery & AI recommendation',
+            'Operational automation'
+        ];
+        const USE_CASE_KEYWORDS = [
+            ['lead gen', 'onboarding', 'lead capture', 'kyc', 'recruitment', 'property', 'inquiry', 'qualification'],
+            ['engagement', 'campaign', 'notification', 'alert', 'marketing', 'broadcast', 'promotion', 'voucher', 'coupon', 'loyalty', 'retention', 're-engagement', 'incentive', 'fan engagement', 'o2o'],
+            ['support', 'faq', 'service', 'helpdesk', 'complaint', 'enquir'],
+            ['sales', 'discovery', 'ai recommendation', 'virtual shopper', 'advisor', 'catalog', 'commerce', 'conversion', 'checkout', 'beauty', 'fashion'],
+            ['operational', 'automation', 'back-office', 'efficiency', 'reporting', 'logistics', 'workflow', 'collection', 'document validation', 'tracking']
+        ];
+        const matchUseCaseToBucket = (text) => {
+            if (!text || typeof text !== 'string') return -1;
+            const t = text.toLowerCase();
+            for (let i = 0; i < USE_CASE_KEYWORDS.length; i++) {
+                if (USE_CASE_KEYWORDS[i].some((kw) => t.includes(kw))) return i;
+            }
+            return -1;
+        };
+        const bucketStats = CANONICAL_USE_CASES.map(() => ({
+            industries: new Set(),
+            activityCount: 0,
+            accountIds: new Set()
+        }));
+        activities.filter((a) => !a.isInternal && a.accountId).forEach((activity) => {
+            const account = accounts.find((ac) => ac.id === activity.accountId);
+            const project = account && account.projects && account.projects.find((p) => p.id === activity.projectId);
+            const industry = account && account.industry ? String(account.industry).trim() : null;
+            const useCases = project && project.useCases ? (Array.isArray(project.useCases) ? project.useCases : [project.useCases]) : [];
+            useCases.forEach((uc) => {
+                const label = typeof uc === 'string' ? uc.trim() : (uc && typeof uc === 'object' && uc.name) ? String(uc.name).trim() : null;
+                if (!label) return;
+                const bucketIdx = matchUseCaseToBucket(label);
+                if (bucketIdx < 0) return;
+                const b = bucketStats[bucketIdx];
+                b.activityCount += 1;
+                if (industry) b.industries.add(industry);
+                if (activity.accountId) b.accountIds.add(activity.accountId);
+            });
+        });
+        const useCaseCardsFromData = CANONICAL_USE_CASES.map((title, i) => {
+            const b = bucketStats[i];
+            const indList = Array.from(b.industries).sort();
+            const industriesPhrase = indList.length ? indList.join(', ') : '—';
+            const takeaway = b.activityCount > 0
+                ? `${b.activityCount} activities in ${yearStr}` + (b.accountIds.size > 0 ? `, ${b.accountIds.size} separate accounts.` : '.')
+                : `No activity in ${yearStr}.`;
+            return { name: title, industries: indList, industriesPhrase, activityCount: b.activityCount, accountCount: b.accountIds.size, takeaway };
+        });
+
+        const defaultHighlights = !(o.highlights && String(o.highlights).trim())
+            ? `Annual ${yearStr}: ${total} total activities (${externalCount} external). Wins: ${winsCount} | Losses: ${lossesCount}. Top regions: ${regionsOrdered.slice(0, 3).join(', ') || '—'}.`
+            : '';
+        const highlightsForPage1 = (o.highlights && String(o.highlights).trim())
+            ? String(o.highlights).trim()
+            : defaultHighlights;
+        const safeHlLine = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const page1InsightsHtml = highlightsForPage1
+            ? `<div class="monthly-report-page-1-insights"><h4 class="monthly-report-insights-title">Insights</h4><p class="monthly-report-highlights-text">${safeHlLine(highlightsForPage1)}</p></div>`
+            : '';
+
+        const displayWinsForPdf = ReportsV2.filterCrmWinsForReport(winsForPeriod, o.includedWinIds);
+        const manualWinsForPdf = Array.isArray(o.manualWins) ? o.manualWins : [];
+
+        this.monthlyReportData = {
+            breakdown,
+            totalActivities: total,
+            callTypeData,
+            regionCounts,
+            missingSfdcByRegion,
+            userActivityData,
+            regionsOrdered,
+            callTypeOrder,
+            activityDashboard,
+            winsForPeriod,
+            useCaseCardsFromData,
+            regionTopUseCase: [],
+            defaultHighlights
+        };
+        this.annualReportData = {
+            year: yearStr,
+            monthlyTrend,
+            winsByMonth: winLoss.winsByMonth,
+            lossesByMonth: winLoss.lossesByMonth
+        };
+
+        const safe = (s) => (s == null || s === '') ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        return `
+            <div class="reports-v2-section monthly-report-pdf-section" id="monthlyReportPdfContent">
+                <div class="reports-v2-monthly-pdf-actions">
+                    <h2 class="reports-v2-section-title">Annual report (PDF)</h2>
+                    <p class="text-muted">Annual view of the monthly report. Use <strong>Edit report</strong> to change highlights and include/exclude wins; then download or email.</p>
+                    <div class="reports-v2-monthly-actions-btns">
+                        <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
+                        <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
+                        <button type="button" class="btn btn-outline" onclick="void ReportsV2.downloadChartsAsImages()">Download report pages as PNG</button>
+                        <a class="btn btn-outline" id="monthlyReportEmailBtn" href="#">Email report</a>
+                    </div>
+                </div>
+                <div class="monthly-report-pages">
+                    <!-- Page 1 – Summary -->
+                    <div class="monthly-report-page">
+                        <h3>Presales Update – Annual ${safe(periodLabel)}</h3>
+                        <div class="monthly-report-summary-box">
+                            <div class="monthly-report-summary-total">${total}</div>
+                            <div class="monthly-report-summary-label">Total Activity</div>
+                            <div class="monthly-report-summary-period">${safe(periodLabel)}</div>
+                            <div class="monthly-report-summary-pills">
+                                <span>Internal ${internalCount}</span>
+                                <span>External ${externalCount}</span>
+                                <span>Wins ${winsCount}</span>
+                                <span>Losses ${lossesCount}</span>
+                            </div>
+                        </div>
+                        ${page1InsightsHtml}
+                        <p class="text-muted small">Internal activities are presales-led, non-customer activities. External are customer-facing. Annual figures cover calendar year ${safe(yearStr)} only.</p>
+                    </div>
+                    <!-- Page 2 – Cube Analysis (annual) -->
+                    <div class="monthly-report-page">
+                        <h3>Cube Analysis Top Highlights – Global (${safe(yearStr)})</h3>
+                        <h4 class="monthly-report-use-cases-subtitle">USE CASES FIRST: 5 USE CASES ACROSS INDUSTRIES (ACTIVITIES ONLY)</h4>
+                        <div class="monthly-report-use-cases">
+                            ${(() => {
+                                const ordered = [...useCaseCardsFromData].sort((a, b) => (b.activityCount || 0) - (a.activityCount || 0));
+                                return ordered.map((card, idx) => {
+                                    if (!card || !card.activityCount) {
+                                        return `<div class="monthly-report-use-case-card"><strong>${idx + 1}. ${safe(card ? card.name : CANONICAL_USE_CASES[idx])}</strong><br/>No activity in ${safe(yearStr)}.</div>`;
+                                    }
+                                    return `<div class="monthly-report-use-case-card"><strong>${idx + 1}. ${safe(card.name)}</strong><br/>Industries: ${safe(card.industriesPhrase)}<br/>${safe(card.takeaway)}</div>`;
+                                }).join('');
+                            })()}
+                        </div>
+                    </div>
+                    <!-- Page 3 – Wins (annual; each card shows month chip) -->
+                    <div class="monthly-report-page">
+                        <h3>Wins – Annual ${safe(periodLabel)}</h3>
+                        <p class="text-muted monthly-report-edit-hint">Use Edit report (above) to include/exclude wins or add manual wins. Wins are sorted oldest → newest by month of win.</p>
+                        <div class="monthly-report-wins-grid">
+                            ${(() => {
+                                if (!displayWinsForPdf.length && !manualWinsForPdf.length) {
+                                    return '<p class="text-muted">No wins logged for this year. Add wins via Edit report or log win/loss on projects.</p>';
+                                }
+                                const cards = displayWinsForPdf.map((w) => {
+                                    const curr = w.currency || 'INR';
+                                    const mrrNum = (curr === 'INR' && (w.mrrInInr != null && Number.isFinite(w.mrrInInr)))
+                                        ? w.mrrInInr
+                                        : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
+                                    const mrrStr = mrrNum != null ? ReportsV2.formatReportCurrency(mrrNum, true, curr) : '—';
+                                    const otdNum = w.otdInInr != null && Number.isFinite(w.otdInInr)
+                                        ? w.otdInInr
+                                        : (w.otd != null && w.otd !== '' ? Number(w.otd) : null);
+                                    const otdStr = otdNum != null ? ReportsV2.formatReportCurrency(otdNum, true, curr) : '';
+                                    const mrrOtdLine = otdStr ? `MRR: ${mrrStr} | OTD: ${otdStr}` : `MRR: ${mrrStr}`;
+                                    const pr = w.presalesRep && w.presalesRep !== '—'
+                                        ? ReportsV2.displayNameForPresalesRepLabel(w.presalesRep, users)
+                                        : '';
+                                    const monthChip = w.monthLabel ? `<span class="monthly-report-win-month-chip">${safe(w.monthLabel)}</span>` : '';
+                                    return `<div class="monthly-report-win-card"><div class="monthly-report-win-card-head">${monthChip}<strong>${safe(w.accountName)}</strong></div>${mrrOtdLine}<br/>Use case: ${safe(w.useCase)}${pr ? '<br/>Presales rep: ' + safe(pr) : ''}</div>`;
+                                });
+                                manualWinsForPdf.forEach((mw) => {
+                                    const mrrStr = (mw.mrr != null && mw.mrr !== '')
+                                        ? ReportsV2.formatReportCurrency(mw.mrr, true, mw.currency || 'INR')
+                                        : '—';
+                                    cards.push(`<div class="monthly-report-win-card"><strong>${safe(mw.clientName || '')}</strong><br/>MRR: ${mrrStr}<br/>Use case: ${safe(mw.useCase || '')}${mw.presalesRep ? '<br/>Presales rep: ' + safe(mw.presalesRep) : ''}</div>`);
+                                });
+                                return cards.join('');
+                            })()}
+                        </div>
+                    </div>
+                    <!-- Page 3b – Wins & Losses summary table (annual, with Month column) -->
+                    <div class="monthly-report-page">
+                        <h3>Wins & Losses summary – Annual ${safe(periodLabel)}</h3>
+                        <div class="monthly-report-summary-tables">
+                            <h4>Wins (${winsCount})</h4>
+                            <table class="monthly-report-table">
+                                <thead><tr><th>Month</th><th>Client</th><th>MRR</th><th>Use case</th><th>Presales rep</th></tr></thead>
+                                <tbody>
+                                    ${(() => {
+                                        if (!displayWinsForPdf.length) {
+                                            return '<tr><td colspan="5">No wins for this year.</td></tr>';
+                                        }
+                                        return displayWinsForPdf.map((w) => {
+                                            const c = w.currency || 'INR';
+                                            const mrrN = (c === 'INR' && w.mrrInInr != null) ? w.mrrInInr : (w.mrr != null && w.mrr !== '' && w.mrr !== '—' ? Number(w.mrr) : null);
+                                            const mrrStr = mrrN != null ? ReportsV2.formatReportCurrency(mrrN, true, c) : '—';
+                                            const pr = ReportsV2.displayNameForPresalesRepLabel(w.presalesRep, users);
+                                            return `<tr><td>${safe(w.monthLabel || '')}</td><td>${safe(w.accountName)}</td><td>${mrrStr}</td><td>${safe(w.useCase)}</td><td>${safe(pr)}</td></tr>`;
+                                        }).join('');
+                                    })()}
+                                </tbody>
+                            </table>
+                            <h4 style="margin-top: 1.5rem;">Losses (${lossesCount})</h4>
+                            <table class="monthly-report-table">
+                                <thead><tr><th>Month</th><th>Client</th><th>Reason / use case</th><th>Lost to</th></tr></thead>
+                                <tbody>
+                                    ${lossesForPeriod.length
+                                        ? lossesForPeriod.map((l) => `<tr><td>${safe(l.monthLabel || '')}</td><td>${safe(l.accountName)}</td><td>${safe(l.reason)}</td><td>${safe(l.lostTo)}</td></tr>`).join('')
+                                        : '<tr><td colspan="4">No losses for this year.</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    ${ReportsV2.buildMonthlyActivityDashboardPageHtml(`Annual ${periodLabel}`, activityDashboard, breakdown)}
+                    <!-- Page 5 – Monthly activity trend across the year -->
+                    <div class="monthly-report-page">
+                        <h3>Monthly activity trend – ${safe(periodLabel)}</h3>
+                        <p class="text-muted">Internal (purple) and External (blue) activities logged per month in ${safe(yearStr)}.</p>
+                        <div class="monthly-report-chart-wrap" style="height: 320px;">
+                            <canvas id="annualReportMonthlyTrend" height="320"></canvas>
+                        </div>
+                    </div>
+                    <!-- Page 6 – Win/loss trend across the year -->
+                    <div class="monthly-report-page">
+                        <h3>Win / Loss trend – ${safe(periodLabel)}</h3>
+                        <p class="text-muted">Closed wins (green) and losses (red) per month in ${safe(yearStr)}. Total wins ${winsCount} · losses ${lossesCount}.</p>
+                        <div class="monthly-report-chart-wrap" style="height: 320px;">
+                            <canvas id="annualReportWinLossTrend" height="320"></canvas>
+                        </div>
+                    </div>
+                    <!-- Page 7 – Missing SFDC (annual) -->
+                    <div class="monthly-report-page">
+                        <h3>Missing SFDC opportunities</h3>
+                        <p class="text-muted">External activities where project/account has no SFDC link – ${safe(periodLabel)}.</p>
+                        <div class="monthly-report-chart-wrap" style="height: 300px;">
+                            <canvas id="monthlyReportMissingSfdc" height="320"></canvas>
+                        </div>
+                    </div>
+                    <!-- Page 8 – Presales individual activity (annual) -->
+                    <div class="monthly-report-page">
+                        <h3>Presales individual activity</h3>
+                        <p class="text-muted">Activities by user – ${safe(periodLabel)}</p>
                         <div class="monthly-report-chart-wrap" style="height: 440px;">
                             <canvas id="monthlyReportPresales" height="420"></canvas>
                         </div>
@@ -2849,8 +3307,8 @@ const ReportsV2 = {
                 }
             }
 
-            // Monthly report (PDF) tab – same charts as spec: donut, call type, region, missing SFDC, presales by user
-            if (this.activeTab === 'monthly' && this.monthlyReportData) {
+            // Monthly + Annual report (PDF) tabs – same dashboard charts (donut, call types funnel, region, missing SFDC, presales by user)
+            if ((this.activeTab === 'monthly' || this.activeTab === 'annual') && this.monthlyReportData) {
                 const md = this.monthlyReportData;
                 const breakdownPalette = ReportsV2.MONTHLY_ACTIVITY_BREAKDOWN_COLORS;
                 if (document.getElementById('monthlyReportDonut') && md.breakdown) {
@@ -2911,7 +3369,42 @@ const ReportsV2 = {
                     });
                 }
                 const emailBtn = document.getElementById('monthlyReportEmailBtn');
-                if (emailBtn) emailBtn.href = 'mailto:?subject=' + encodeURIComponent('Presales Update ' + this.formatPeriod(this.currentPeriod));
+                if (emailBtn) {
+                    const subjectPrefix = this.activeTab === 'annual' ? 'Annual Presales Update ' : 'Presales Update ';
+                    emailBtn.href = 'mailto:?subject=' + encodeURIComponent(subjectPrefix + this.formatPeriod(this.currentPeriod));
+                }
+            }
+
+            // Annual report (PDF) tab – additional trend charts: activity-by-month and win/loss-by-month
+            if (this.activeTab === 'annual' && this.annualReportData) {
+                const ad = this.annualReportData;
+                const trend = ad.monthlyTrend || { labels: [], internal: [], external: [] };
+                if (document.getElementById('annualReportMonthlyTrend') && Array.isArray(trend.labels) && trend.labels.length) {
+                    const datasets = [
+                        { label: 'External', data: trend.external, backgroundColor: '#4299E1', stack: 'activities' },
+                        { label: 'Internal', data: trend.internal, backgroundColor: '#9F7AEA', stack: 'activities' }
+                    ];
+                    this.renderVerticalStackedBarChart('annualReportMonthlyTrend', {
+                        labels: trend.labels,
+                        datasets
+                    });
+                }
+                if (document.getElementById('annualReportWinLossTrend')) {
+                    const labels = (trend.labels && trend.labels.length) ? trend.labels : ReportsV2.MONTHLY_TREND_MONTH_LABELS;
+                    const winData = Array.isArray(ad.winsByMonth) ? ad.winsByMonth : [];
+                    const lossData = Array.isArray(ad.lossesByMonth) ? ad.lossesByMonth : [];
+                    if (winData.some((n) => n > 0) || lossData.some((n) => n > 0)) {
+                        const datasets = [
+                            { label: 'Wins', data: winData, backgroundColor: '#48BB78', stack: 'winloss' },
+                            { label: 'Losses', data: lossData, backgroundColor: '#F56565', stack: 'winloss' }
+                        ];
+                        this.renderVerticalStackedBarChart('annualReportWinLossTrend', {
+                            labels,
+                            datasets,
+                            groupedBars: true
+                        });
+                    }
+                }
             }
         } catch (error) {
             console.error('ReportsV2: Error in initCharts():', error);
@@ -3248,6 +3741,61 @@ const ReportsV2 = {
             });
         } catch (error) {
             console.error(`Error creating horizontal stacked bar chart ${canvasId}:`, error);
+        }
+    },
+
+    /**
+     * Vertical stacked bar (annual trend charts). When `groupedBars` is true, render bars side-by-side
+     * within each category (used for the win/loss trend so wins and losses sit next to each other,
+     * not stacked on top of each other).
+     */
+    renderVerticalStackedBarChart(canvasId, { labels, datasets, groupedBars = false }) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || typeof Chart === 'undefined') {
+            console.warn(`Chart canvas not found or Chart.js not loaded: ${canvasId}`);
+            return;
+        }
+        if (!datasets || !Array.isArray(datasets) || datasets.length === 0) {
+            console.warn(`Invalid datasets for chart ${canvasId}`);
+            return;
+        }
+        if (this.charts[canvasId]) {
+            try { this.charts[canvasId].destroy(); } catch (_) { /* ignore */ }
+            delete this.charts[canvasId];
+        }
+        if (Chart.getChart && Chart.getChart(canvas)) {
+            try { Chart.getChart(canvas).destroy(); } catch (_) { /* ignore */ }
+        }
+        const colTotals = (labels || []).map((_, colIdx) =>
+            datasets.reduce((sum, ds) => sum + (Number(ds.data && ds.data[colIdx]) || 0), 0)
+        );
+        const maxColTotal = colTotals.reduce((m, v) => Math.max(m, v), 0);
+        const yScaleMax = maxColTotal === 0 ? 1 : undefined;
+        try {
+            this.charts[canvasId] = new Chart(canvas, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: !groupedBars
+                        },
+                        y: {
+                            stacked: !groupedBars,
+                            beginAtZero: true,
+                            ...(yScaleMax != null ? { max: yScaleMax } : {}),
+                            ticks: { stepSize: 1 }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: true, position: 'bottom' }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error(`Error creating vertical bar chart ${canvasId}:`, error);
         }
     }
 };
