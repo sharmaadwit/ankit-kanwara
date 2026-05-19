@@ -10,6 +10,7 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 ## 1) Current Status Snapshot
 
 - **Deployed:** Backup retention, activity date refresh, remember last date, bootstrap init, batch reconcile, dashboard-first load, conflict-safe draft flow.
+- **May 2026:** **P-026** — Remote storage **entity GET cache** (batch primes cache; dedupes in-flight GETs) so `accounts` / `users` / `internalActivities` are not downloaded twice after login reconcile; **sales region defaults** fixed (`await getDefaultSalesRepRegion` in App init/login; `DataManager.resolveDefaultRegionFallback` for neutral fallbacks vs `regions[0]` / India South bias). See `pams-app/js/remoteStorage.js`, `data.js`, `app.js`, `activities.js`.
 - **Recently shipped (product):** **PreSight** branding (UI); **pricing calculator integration** — server API (`POST` ingest, `GET` list, `GET /my-unlinked`, `PATCH /link`, `DELETE` unlinked); dashboard **Pricing** card **above charts** with **Sync** (fetch user’s unlinked calcs), **Delete**, **Log activity**; admin feature flag **`pricingFullActivityForm`** (full Log Activity vs account+project-only modal); Log Activity type **Pricing** with optional **multi-select** of synced calculations → **one pricing activity per selection** (same account/project).
 - **Platform direction:** Fast first paint, no data loss/conflicts, minimal DB load on Railway free tier.
 - **Reference:** `docs/DEPLOYED.md`.
@@ -50,6 +51,7 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 | P-008 | Async/Data Safety | Draft-first conflict UX | Improve conflict messaging and retry from Drafts for full-list saves. | Planned | High |
 | P-009 | Performance | Activities at scale API | Month-scoped/batched activity reads for large datasets. | Planned | High |
 | P-010 | Performance | View-level prefetch tuning | Tune prefetch cadence/scope from production telemetry. | Planned | Medium |
+| **P-026** | **Performance / Data** | **Entity GET cache + region fallbacks** | **In-memory cache + in-flight coalescing for non-activities storage GETs after batch reconcile; `await` async default region in App init/login; `resolveDefaultRegionFallback()` (user profile + locale-sorted regions) replaces `getRegions()[0]` bias.** | **Done** | **High** |
 
 ---
 
@@ -119,6 +121,7 @@ Numbering is global (`P-001` … `P-026`). Items are grouped by **category**: Fe
 | P-008 | Optimising | Draft-first conflict UX | Better conflict/retry from Drafts. | Planned | High |
 | P-009 | Optimising | Activities at scale API | Month-scoped/batched reads. | Planned | High |
 | P-010 | Optimising | View-level prefetch tuning | Prefetch scope/timing from telemetry. | Planned | Medium |
+| P-026 | Optimising | Entity GET cache + region fallbacks | Remote storage dedupe; neutral sales-region defaults. | **Done** | High |
 | P-011 | Ops | Migration cleanup plan | Finalize migration tab, merge, overwrite. | Planned | High |
 | P-012 | Ops | Migration runbook | Validated migration checklist. | Planned | High |
 | P-013 | Feature | Reports enhancements | Reports UI and presets. | Planned | Medium |

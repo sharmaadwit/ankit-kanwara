@@ -57,6 +57,9 @@ backups/pre-deploy-*.json
 backups/archive/*.json
 backups/backup-before-*.json
 
+# CLI annual export output (may contain production activity data)
+exports/
+
 # Local scratch
 pams-app/archive/
 pams-app/diff_output.txt

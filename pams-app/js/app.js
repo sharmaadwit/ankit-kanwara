@@ -243,7 +243,7 @@ const App = {
             t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
             InterfaceManager.init();
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
-                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+                Activities.currentSalesRepRegion = await Activities.getDefaultSalesRepRegion();
             }
             const preferredView = this.getInitialView();
             const targetView = this.getAccessibleView(preferredView);
@@ -792,7 +792,7 @@ const App = {
                 console.warn('Configuration refresh after login failed.', error);
             }
             if (typeof Activities !== 'undefined' && typeof Activities.getDefaultSalesRepRegion === 'function') {
-                Activities.currentSalesRepRegion = Activities.getDefaultSalesRepRegion();
+                Activities.currentSalesRepRegion = await Activities.getDefaultSalesRepRegion();
             }
             this.setLoadingProgress(70, 'Almost there…', this.getRandomLoadingTip());
             const preferredView = this.getInitialView();
@@ -7923,7 +7923,10 @@ const App = {
             accounts[accountIndex].industry = industry.trim();
             accounts[accountIndex].salesRep = salesRepName;
             accounts[accountIndex].salesRepEmail = selectedSalesRep?.email || '';
-            const newRegion = selectedSalesRep?.region || accounts[accountIndex].salesRepRegion || ((await DataManager.getRegions())[0] || '');
+            const newRegion = selectedSalesRep?.region || accounts[accountIndex].salesRepRegion
+                || (typeof DataManager.resolveDefaultRegionFallback === 'function'
+                    ? await DataManager.resolveDefaultRegionFallback()
+                    : '');
             accounts[accountIndex].salesRepRegion = newRegion;
             accounts[accountIndex].updatedAt = new Date().toISOString();
             if (typeof console !== 'undefined' && console.log) {
@@ -8170,7 +8173,11 @@ const App = {
             const salesRepsList = typeof DataManager.getGlobalSalesReps === 'function' ? await DataManager.getGlobalSalesReps() : [];
             const finalRepRecord = salesRepsList.find(rep => rep.name === finalSalesRep) || null;
             accounts[targetIndex].salesRepEmail = finalRepRecord?.email || accounts[targetIndex].salesRepEmail || '';
-            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion || (typeof DataManager !== 'undefined' && DataManager.getRegions && (await DataManager.getRegions())[0]) || '';
+            accounts[targetIndex].salesRepRegion = finalRepRecord?.region || accounts[targetIndex].salesRepRegion
+                || (typeof DataManager.resolveDefaultRegionFallback === 'function'
+                    ? await DataManager.resolveDefaultRegionFallback()
+                    : '')
+                || '';
             accounts[targetIndex].industry = finalIndustry;
             accounts[targetIndex].projects = mergedProjects;
             accounts[targetIndex].updatedAt = new Date().toISOString();

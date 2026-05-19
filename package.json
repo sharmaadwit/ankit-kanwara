@@ -11,6 +11,7 @@
     "test": "jest",
     "uptime": "node server/scripts/uptime.js",
     "backup": "node server/scripts/export-storage-snapshot.js",
+    "export:annual-users": "node server/scripts/export-annual-user-activity.js",
     "purge-and-archive-backups": "node server/scripts/purge-and-archive-backups.js",
     "download-january": "node scripts/download-and-refresh-january.js",
     "backup-before-deploy": "node scripts/snapshot-before-deploy.js",

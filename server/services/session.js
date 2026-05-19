@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 const { getPool } = require('../db');
+const logger = require('../logger');
 
 const SESSION_TTL_SEC = parseInt(process.env.SESSION_TTL_SEC || '86400', 10); // 24h default
 
@@ -19,10 +20,15 @@ const generateSessionId = () => crypto.randomBytes(32).toString('hex');
 const createSession = async (userId) => {
   const sessionId = generateSessionId();
   const expiresAt = new Date(Date.now() + SESSION_TTL_SEC * 1000);
-  await getPool().query(
-    `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3);`,
-    [sessionId, userId, expiresAt]
-  );
+  try {
+    await getPool().query(
+      `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3);`,
+      [sessionId, userId, expiresAt]
+    );
+  } catch (err) {
+    logger.error('session_create_failed', { message: err.message, code: err.code });
+    throw err;
+  }
   return { sessionId, expiresAt };
 };
 
@@ -33,13 +39,20 @@ const createSession = async (userId) => {
  */
 const getSession = async (sessionId) => {
   if (!sessionId || typeof sessionId !== 'string') return null;
-  const { rows } = await getPool().query(
-    `SELECT s.user_id, s.expires_at, u.username, u.email, u.roles, u.regions, u.sales_reps, u.default_region
-     FROM sessions s
-     JOIN users u ON u.id = s.user_id AND u.is_active = true
-     WHERE s.id = $1 AND s.expires_at > NOW();`,
-    [sessionId.trim()]
-  );
+  let rows;
+  try {
+    const result = await getPool().query(
+      `SELECT s.user_id, s.expires_at, u.username, u.email, u.roles, u.regions, u.sales_reps, u.default_region
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id AND u.is_active = true
+       WHERE s.id = $1 AND s.expires_at > NOW();`,
+      [sessionId.trim()]
+    );
+    rows = result.rows;
+  } catch (err) {
+    logger.warn('session_lookup_failed', { message: err.message, code: err.code });
+    return null;
+  }
   if (!rows.length) return null;
   const r = rows[0];
   return {
@@ -59,7 +72,11 @@ const getSession = async (sessionId) => {
  */
 const destroySession = async (sessionId) => {
   if (!sessionId) return;
-  await getPool().query('DELETE FROM sessions WHERE id = $1;', [sessionId.trim()]);
+  try {
+    await getPool().query('DELETE FROM sessions WHERE id = $1;', [sessionId.trim()]);
+  } catch (err) {
+    logger.warn('session_destroy_failed', { message: err.message, code: err.code });
+  }
 };
 
 /**

@@ -186,6 +186,14 @@ const createApp = (options = {}) => {
     skip: (req) => req.method === 'GET' || req.method === 'HEAD'
   });
 
+  const exportLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_EXPORT_MAX) || 20,
+    message: { message: 'Too many export requests; try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+  });
+
   const storageRequestLogger = (req, res, next) => {
     req._storageStart = Date.now();
     res.on('finish', () => {
@@ -216,6 +224,13 @@ const createApp = (options = {}) => {
   app.use('/api/admin', adminLimiter, requireAdminAuth, require('./routes/adminForcePassword'));
   app.use('/api/pricing-calculations', sessionMiddleware, pricingCalculationsRouter);
   app.use('/api/integrations/super-agent/import', superAgentImportRouter);
+  app.use(
+    '/api/export',
+    exportLimiter,
+    sessionMiddleware,
+    requireStorageAuth,
+    require('./routes/annualExport')
+  );
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const bootstrapStart = Date.now();

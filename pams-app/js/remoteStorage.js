@@ -718,6 +718,30 @@
         });
     };
 
+    /** In-memory cache so login batch + DataManager.get* do not re-download huge entity blobs. */
+    const entityAsyncGetCache = new Map();
+    const entityAsyncGetInFlight = new Map();
+
+    const normalizeEntityStorageValue = (result) => {
+        if (!result || result.value == null) return null;
+        const v = result.value;
+        if (typeof v === 'string') return maybeDecompressValue(v);
+        if (typeof v === 'object') {
+            try {
+                return JSON.stringify(v);
+            } catch (_) {
+                return null;
+            }
+        }
+        return typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
+    };
+
+    const primeEntityAsyncGetCacheFromBatchItem = (item) => {
+        if (!item || !item.key || item.key === ACTIVITIES_KEY) return;
+        const normalized = normalizeEntityStorageValue({ value: item.value });
+        if (normalized != null) entityAsyncGetCache.set(item.key, normalized);
+    };
+
     /** Async get (S2.1). For 'activities' key, use only the async GET result. Never fall back to loadActivitiesValue() on error so we never show a stale cached 82. */
     const getItemAsync = (key) => {
         if (!key) return Promise.resolve(null);
@@ -736,23 +760,24 @@
                 })
                 .catch(() => null);
         }
-        /** Storage JSON uses value TEXT; if a proxy/runtime ever parses it, `value` can be an object — old code returned null and empty account lists. */
-        const normalizeEntityStorageValue = (result) => {
-            if (!result || result.value == null) return null;
-            const v = result.value;
-            if (typeof v === 'string') return maybeDecompressValue(v);
-            if (typeof v === 'object') {
-                try {
-                    return JSON.stringify(v);
-                } catch (_) {
-                    return null;
-                }
-            }
-            return typeof v === 'number' || typeof v === 'boolean' ? String(v) : null;
-        };
-        return performRequestAsync('GET', `/${encodeURIComponent(key)}`)
-            .then((result) => normalizeEntityStorageValue(result))
-            .catch(() => null);
+        if (entityAsyncGetCache.has(key)) {
+            return Promise.resolve(entityAsyncGetCache.get(key));
+        }
+        if (entityAsyncGetInFlight.has(key)) {
+            return entityAsyncGetInFlight.get(key);
+        }
+        const pending = performRequestAsync('GET', `/${encodeURIComponent(key)}`)
+            .then((result) => {
+                const normalized = normalizeEntityStorageValue(result);
+                if (normalized != null) entityAsyncGetCache.set(key, normalized);
+                return normalized;
+            })
+            .catch(() => null)
+            .finally(() => {
+                entityAsyncGetInFlight.delete(key);
+            });
+        entityAsyncGetInFlight.set(key, pending);
+        return pending;
     };
 
     /** Async set (S2.1). For accounts/internalActivities only; activities need shard path. */
@@ -764,7 +789,9 @@
             `/${encodeURIComponent(key)}`,
             { value: maybeCompressValue(payload) },
             opts
-        ).then(() => { });
+        ).then(() => {
+            entityAsyncGetCache.delete(key);
+        });
     };
 
     const scheduleOutboxFlush = (delayMs) => {
@@ -1279,6 +1306,7 @@
             return res.json();
         }).then((data) => {
             const items = (data && data.items) || [];
+            items.forEach((item) => primeEntityAsyncGetCacheFromBatchItem(item));
             items.forEach((item) => {
                 if (item && item.key != null && item.updated_at != null) {
                     lastVersion[item.key] = item.updated_at;
@@ -1306,6 +1334,10 @@
         }
     };
     const reconcileOnLoginImpl = async () => {
+        BATCH_RECONCILE_KEYS.forEach((k) => {
+            entityAsyncGetCache.delete(k);
+            entityAsyncGetInFlight.delete(k);
+        });
         const refetchOne = async (key) => {
             try {
                 if (typeof getItemAsync === 'function') {

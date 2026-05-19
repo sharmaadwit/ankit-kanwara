@@ -896,7 +896,8 @@ const Activities = {
         if (hasDefault) {
             regionSelect.value = defaultRegion;
         } else if (uniqueRegions.length) {
-            regionSelect.value = uniqueRegions[0];
+            const auto = await this.getDefaultSalesRepRegion();
+            regionSelect.value = auto && uniqueRegions.includes(auto) ? auto : '';
         } else {
             regionSelect.value = '';
         }

@@ -2041,6 +2041,30 @@ const DataManager = {
         return { success: true, projectsUpdated };
     },
 
+    /** Logged-in user's profile default (browser only). */
+    _getPreferredRegionFromAuth() {
+        try {
+            const u = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
+            const p = u && typeof u.defaultRegion === 'string' ? u.defaultRegion.trim() : '';
+            return p || '';
+        } catch (_) {
+            return '';
+        }
+    },
+
+    /**
+     * Neutral default region: user profile first if allowed, else first locale-sorted configured region
+     * (avoids biasing to storage array order — DEFAULT_SALES_REGIONS lists India South first).
+     */
+    async resolveDefaultRegionFallback() {
+        const preferred = this._getPreferredRegionFromAuth();
+        const regions = await this.getRegions();
+        if (preferred && regions.includes(preferred)) return preferred;
+        const sorted = [...(regions || [])].filter(Boolean).sort((a, b) => a.localeCompare(b));
+        if (sorted.length) return sorted[0];
+        return [...DEFAULT_SALES_REGIONS].sort((a, b) => a.localeCompare(b))[0] || '';
+    },
+
     // Region Management
     async getRegions() {
         if (this.cache.regions) return this.cache.regions;
@@ -2271,8 +2295,8 @@ const DataManager = {
         salesRep.createdAt = new Date().toISOString();
         salesRep.isActive = salesRep.isActive !== undefined ? salesRep.isActive : true;
         const regionTrimmed = (salesRep.region != null && String(salesRep.region).trim()) ? String(salesRep.region).trim() : '';
-        const currentRegions = await this.getRegions();
-        salesRep.region = regionTrimmed || (currentRegions[0] || '');
+        const neutralRegion = await this.resolveDefaultRegionFallback();
+        salesRep.region = regionTrimmed || neutralRegion || '';
         salesReps.push(salesRep);
         await this.saveGlobalSalesReps(salesReps);
         this.recordAudit('salesRep.create', 'salesRep', salesRep.id, {
@@ -2299,8 +2323,8 @@ const DataManager = {
             const fxValue = Number(merged.fxToInr);
             merged.fxToInr = Number.isFinite(fxValue) && fxValue > 0 ? fxValue : null;
             const regionTrimmed = (merged.region != null && String(merged.region).trim()) ? String(merged.region).trim() : '';
-            const currentRegions = await this.getRegions();
-            merged.region = regionTrimmed || (current.region || currentRegions[0] || '');
+            const neutralRegion = await this.resolveDefaultRegionFallback();
+            merged.region = regionTrimmed || (current.region || '') || neutralRegion || '';
             salesReps[index] = merged;
             await this.saveGlobalSalesReps(salesReps);
             this.recordAudit('salesRep.update', 'salesRep', salesRepId, updates);
@@ -4644,7 +4668,13 @@ const DataManager = {
         // Use admin-configured regions (includes "Inside Sales" and any custom regions), not just DEFAULT_SALES_REGIONS
         const configuredRegions = await this.getRegions();
         const allowed = new Set(configuredRegions.length ? configuredRegions : DEFAULT_SALES_REGIONS);
-        const fallbackRegion = configuredRegions[0] || DEFAULT_SALES_REGIONS[0] || 'India West';
+        const sortedAllowed = [...allowed].sort((a, b) => a.localeCompare(b));
+        const preferred = this._getPreferredRegionFromAuth();
+        const fallbackRegion =
+            (preferred && allowed.has(preferred) ? preferred : '') ||
+            sortedAllowed[0] ||
+            [...DEFAULT_SALES_REGIONS].sort((a, b) => a.localeCompare(b))[0] ||
+            'India West';
         let mutated = false;
 
         const normalized = salesReps.map(rep => {
@@ -4686,8 +4716,7 @@ const DataManager = {
             }
         });
 
-        const currentRegions = await this.getRegions();
-        const fallbackRegion = currentRegions[0] || 'India West';
+        const fallbackRegion = await this.resolveDefaultRegionFallback();
         let mutated = false;
         const normalized = accounts.map(account => {
             if (!account || !account.salesRep) {
@@ -4739,8 +4768,7 @@ const DataManager = {
             }
         });
 
-        const currentRegions = await this.getRegions();
-        const fallbackRegion = currentRegions[0] || 'India West';
+        const fallbackRegion = await this.resolveDefaultRegionFallback();
         let mutated = false;
         const normalized = activities.map(activity => {
             if (!activity || !activity.salesRep) {
@@ -4789,8 +4817,8 @@ const DataManager = {
 
         const resolvedName = rep?.name || name || '';
         const resolvedEmail = rep?.email || email || '';
-        const currentRegions = await this.getRegions();
-        const resolvedRegion = rep?.region || fallbackRegion || currentRegions[0] || 'India West';
+        const neutralFallback = await this.resolveDefaultRegionFallback();
+        const resolvedRegion = rep?.region || fallbackRegion || neutralFallback || '';
 
         return {
             name: resolvedName,

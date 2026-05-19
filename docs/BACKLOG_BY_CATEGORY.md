@@ -22,6 +22,8 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 
 **Note:** Migration mode is implemented but not yet fully tested in production; see **Testing & validation** below.
 
+**May 2026:** **Optimising #12 (done):** In-memory **entity GET cache** and **in-flight dedupe** for `accounts` / `users` / `internalActivities` after login batch reconcile (`remoteStorage.js`); **sales region** init uses `await getDefaultSalesRepRegion` (`app.js`); neutral **`resolveDefaultRegionFallback`** in `data.js` / activity region dropdown (`activities.js`). Legacy id **P-026** in `PLANNED_AND_BACKLOG.md`.
+
 **Bug review (Mar 2026):** Admin System Users: Force Password Change moved to per-user row action (removed top-level button). Edit/Delete user row buttons hardened (data-user-id). Delete user now calls `DELETE /api/admin/users/:id` (soft-delete: sets `is_active = false`) so DB-backed users are deactivated and no longer show when filter is "Active only". In-app **Suggestions and Bugs** (sidebar) is where user-reported bugs/feedback live; no separate "open bugs" list in docs.
 
 ---
@@ -79,6 +81,7 @@ Backlog items grouped by category. **Numbering is sequential per section (1, 2, 
 | 11 | Async/Data Safety | Restore from backup UI | Add "Restore from backup" in My Drafts when backup exists; confirm warning that it can create duplicates if some drafts were already submitted. See DATA_LOSS_AND_CONFLICT_BLINDSPOTS.md. | Backlog | Low |
 | 3 | Performance | Activities at scale API | Month-scoped/batched activity reads for large datasets. | Planned | High |
 | 4 | Performance | View-level prefetch tuning | Tune prefetch cadence/scope from production telemetry. | Planned | Medium |
+| 12 | Performance / UX | Entity GET cache + region defaults | After batch reconcile, cache entity payloads and coalesce duplicate GETs; fix async default region (`await`); `resolveDefaultRegionFallback` vs storage-order bias (P-026). | **Done** | High |
 
 ---
 

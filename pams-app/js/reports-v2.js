@@ -280,6 +280,146 @@ const ReportsV2 = {
         ];
     },
 
+    MONTHLY_ACTIVITY_BREAKDOWN_COLORS: {
+        'Customer Calls': '#4299E1',
+        Internal: '#48BB78',
+        POC: '#9F7AEA',
+        SOW: '#38B2AC',
+        Pricing: '#ED8936',
+        RFx: '#ED64A6',
+        Other: '#718096'
+    },
+
+    MONTHLY_REGION_BAR_COLORS: ['#4299E1', '#48BB78', '#9F7AEA', '#38B2AC', '#ED8936', '#C05621', '#ED64A6', '#718096', '#A0AEC0'],
+
+    computeMonthlyActivityDashboardSnapshot(activities, breakdown, callTypeData, regionCounts, regionsOrdered, callTypeOrder) {
+        const list = activities && Array.isArray(activities) ? activities : [];
+        const total = list.length;
+        const external = list.filter((a) => a.isInternal !== true).length;
+        const calls = callTypeData && typeof callTypeData === 'object' ? callTypeData : {};
+        const totalCallsLogged = Object.values(calls).reduce((sum, c) => sum + (Number(c) || 0), 0);
+        const topRegion = regionsOrdered && regionsOrdered.length ? regionsOrdered[0] : '—';
+        const topRegionCount = topRegion && topRegion !== '—' ? Number(regionCounts[topRegion]) || 0 : 0;
+        const topRegionSharePct = external > 0 ? Math.round((topRegionCount / external) * 100) : 0;
+        const order =
+            callTypeOrder && callTypeOrder.length
+                ? callTypeOrder
+                : ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
+        let demoCount = 0;
+        let kickoffCount = 0;
+        order.forEach((label) => {
+            const c = Number(calls[label]) || 0;
+            if (/^demo$/i.test(String(label).trim())) demoCount = c;
+            if (/customer\s*kickoff/i.test(String(label))) kickoffCount = c;
+        });
+        if (!demoCount) demoCount = Number(calls.Demo) || 0;
+        if (!kickoffCount) kickoffCount = Number(calls['Customer Kickoff']) || 0;
+        const funnelConversionPct = demoCount > 0 ? Math.round((kickoffCount / demoCount) * 100) : 0;
+        return {
+            total,
+            external,
+            totalCallsLogged,
+            topRegion,
+            topRegionCount,
+            topRegionSharePct,
+            funnelConversionPct,
+            callTypeOrder: order
+        };
+    },
+
+    buildMonthlyActivityDashboardLegendHtml(breakdown, total) {
+        const safe = (s) =>
+            String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        const colors = this.MONTHLY_ACTIVITY_BREAKDOWN_COLORS;
+        const keyOrder = ['Customer Calls', 'Internal', 'POC', 'SOW', 'Pricing', 'RFx', 'Other'];
+        const smallerKeys = ['Pricing', 'RFx', 'Other'];
+        const row = (key) => {
+            const count = Number(breakdown && breakdown[key]) || 0;
+            const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+            const color = colors[key] || '#718096';
+            return `<li><span class="monthly-report-breakdown-swatch" style="background:${color}"></span><span class="monthly-report-breakdown-label">${safe(key)}</span><span class="monthly-report-breakdown-value">${count} (${pct}%)</span></li>`;
+        };
+        return {
+            smaller: smallerKeys.map(row).join(''),
+            all: keyOrder.map(row).join('')
+        };
+    },
+
+    buildMonthlyActivityDashboardPageHtml(periodLabel, snapshot, breakdown) {
+        const safe = (s) =>
+            String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        const legends = this.buildMonthlyActivityDashboardLegendHtml(breakdown, snapshot.total);
+        return `
+                    <div class="monthly-report-page monthly-report-activity-dashboard">
+                        <h3>Activity dashboard – ${safe(periodLabel)}</h3>
+                        <div class="monthly-report-dashboard-kpis">
+                            <div class="monthly-report-dashboard-kpi">
+                                <div class="monthly-report-dashboard-kpi-value">${snapshot.total.toLocaleString()}</div>
+                                <div class="monthly-report-dashboard-kpi-label">Total activities</div>
+                                <div class="monthly-report-dashboard-kpi-sub">${safe(periodLabel)}</div>
+                            </div>
+                            <div class="monthly-report-dashboard-kpi">
+                                <div class="monthly-report-dashboard-kpi-value">${snapshot.totalCallsLogged.toLocaleString()}</div>
+                                <div class="monthly-report-dashboard-kpi-label">Total calls logged</div>
+                                <div class="monthly-report-dashboard-kpi-sub">Call types combined</div>
+                            </div>
+                            <div class="monthly-report-dashboard-kpi">
+                                <div class="monthly-report-dashboard-kpi-value">${safe(snapshot.topRegion)}</div>
+                                <div class="monthly-report-dashboard-kpi-label">Top region</div>
+                                <div class="monthly-report-dashboard-kpi-sub">${snapshot.topRegionCount.toLocaleString()} activities (${snapshot.topRegionSharePct}%)</div>
+                            </div>
+                            <div class="monthly-report-dashboard-kpi">
+                                <div class="monthly-report-dashboard-kpi-value">${snapshot.funnelConversionPct}%</div>
+                                <div class="monthly-report-dashboard-kpi-label">Funnel conversion</div>
+                                <div class="monthly-report-dashboard-kpi-sub">Demo → Kickoff</div>
+                            </div>
+                        </div>
+                        <div class="monthly-report-dashboard-charts">
+                            <div class="monthly-report-dashboard-chart-card">
+                                <h4>Regional intelligence</h4>
+                                <p class="text-muted small">${safe(periodLabel)} (external only)</p>
+                                <div class="monthly-report-chart-wrap monthly-report-dashboard-chart-wrap">
+                                    <canvas id="monthlyReportDashboardRegion" height="300"></canvas>
+                                </div>
+                            </div>
+                            <div class="monthly-report-dashboard-chart-card">
+                                <h4>Call types funnel</h4>
+                                <p class="text-muted small">Customer call stages in period</p>
+                                <div class="monthly-report-chart-wrap monthly-report-dashboard-chart-wrap">
+                                    <canvas id="monthlyReportDashboardFunnel" height="300"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="monthly-report-dashboard-breakdown">
+                            <h4>Activity breakdown</h4>
+                            <div class="monthly-report-dashboard-breakdown-grid">
+                                <div class="monthly-report-dashboard-donut">
+                                    <div class="monthly-report-chart-wrap monthly-report-dashboard-donut-wrap">
+                                        <canvas id="monthlyReportDonut" height="280"></canvas>
+                                    </div>
+                                </div>
+                                <div class="monthly-report-dashboard-legend">
+                                    <div class="monthly-report-dashboard-legend-block">
+                                        <h5>Smaller categories</h5>
+                                        <ul class="monthly-report-breakdown-list">${legends.smaller}</ul>
+                                    </div>
+                                    <div class="monthly-report-dashboard-legend-block">
+                                        <h5>All categories</h5>
+                                        <ul class="monthly-report-breakdown-list">${legends.all}</ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+        `;
+    },
+
     /**
      * Monthly PDF / tables: prefer fixed account→presales tags, then stored win/loss name/id resolution.
      * `presalesTag` may be null; accountName is always re-checked via DataManager when needed.
@@ -600,7 +740,14 @@ const ReportsV2 = {
                                 cx = x0 + Math.min(18, (xScale.getPixelForValue(num) - x0) / 2);
                             }
                         }
-                        ctx.fillText(String(num), cx, cy);
+                        const percentOfIndex = chart.options.plugins?.chartValueLabels?.percentOfIndex;
+                        let labelText = String(num);
+                        if (percentOfIndex != null && Number.isFinite(Number(percentOfIndex))) {
+                            const baseline = Number(dataset.data[Number(percentOfIndex)]) || 0;
+                            const pct = baseline > 0 ? Math.round((num / baseline) * 100) : 0;
+                            labelText = `${num} (${pct}%)`;
+                        }
+                        ctx.fillText(labelText, cx, cy);
                     }
                     ctx.restore();
                 });
@@ -1086,8 +1233,8 @@ const ReportsV2 = {
                     'industryTotalChart',
                     'industryAverageChart',
                     'monthlyReportDonut',
-                    'monthlyReportCallType',
-                    'monthlyReportRegion',
+                    'monthlyReportDashboardRegion',
+                    'monthlyReportDashboardFunnel',
                     'monthlyReportMissingSfdc',
                     'monthlyReportPresales'
                 ];
@@ -1366,6 +1513,14 @@ const ReportsV2 = {
 
         const regionsOrdered = Object.keys(regionCounts).sort((a, b) => (regionCounts[b] || 0) - (regionCounts[a] || 0));
         const callTypeOrder = ['Demo', 'Discovery', 'Scoping Deep Dive', 'Q&A', 'Follow-up', 'Customer Kickoff', 'Internal Kickoff'];
+        const activityDashboard = ReportsV2.computeMonthlyActivityDashboardSnapshot(
+            activities,
+            breakdown,
+            callTypeData,
+            regionCounts,
+            regionsOrdered,
+            callTypeOrder
+        );
 
         // Five canonical use cases (match reference) – keyword mapping to bucket index 0–4
         const CANONICAL_USE_CASES = [
@@ -1504,6 +1659,7 @@ const ReportsV2 = {
             userActivityData,
             regionsOrdered,
             callTypeOrder,
+            activityDashboard,
             winsForPeriod,
             useCaseCardsFromData,
             regionTopUseCase,
@@ -1745,29 +1901,7 @@ const ReportsV2 = {
                             </table>
                         </div>
                     </div>
-                    <!-- Page 4 – Activity breakdown (donut chart) -->
-                    <div class="monthly-report-page">
-                        <h3>Activity breakdown</h3>
-                        <p class="text-muted">Overall Activity</p>
-                        <div class="monthly-report-chart-wrap" style="height: 280px;">
-                            <canvas id="monthlyReportDonut" height="280"></canvas>
-                        </div>
-                    </div>
-                    <!-- Page 5 – Call types (horizontal bar chart) -->
-                    <div class="monthly-report-page">
-                        <h3>Call types</h3>
-                        <div class="monthly-report-chart-wrap" style="height: 280px;">
-                            <canvas id="monthlyReportCallType" height="320"></canvas>
-                        </div>
-                    </div>
-                    <!-- Page 6 – Region activity (vertical bar chart) -->
-                    <div class="monthly-report-page">
-                        <h3>Regional intelligence</h3>
-                        <p class="text-muted">${periodLabel} (External only)</p>
-                        <div class="monthly-report-chart-wrap" style="height: 300px;">
-                            <canvas id="monthlyReportRegion" height="320"></canvas>
-                        </div>
-                    </div>
+                    ${ReportsV2.buildMonthlyActivityDashboardPageHtml(periodLabel, activityDashboard, breakdown)}
                     <!-- Page 7 – Missing SFDC (vertical bar chart) -->
                     <div class="monthly-report-page">
                         <h3>Missing SFDC opportunities</h3>
@@ -2718,36 +2852,46 @@ const ReportsV2 = {
             // Monthly report (PDF) tab – same charts as spec: donut, call type, region, missing SFDC, presales by user
             if (this.activeTab === 'monthly' && this.monthlyReportData) {
                 const md = this.monthlyReportData;
-                const donutColors = ['#4299E1', '#48BB78', '#ED8936', '#9F7AEA', '#38B2AC', '#ED64A6', '#718096'];
+                const breakdownPalette = ReportsV2.MONTHLY_ACTIVITY_BREAKDOWN_COLORS;
                 if (document.getElementById('monthlyReportDonut') && md.breakdown) {
-                    const entries = Object.entries(md.breakdown).filter(([, v]) => v > 0);
-                    const labels = entries.map(([k]) => k);
-                    const data = entries.map(([, v]) => v);
+                    const keyOrder = ['Customer Calls', 'Internal', 'POC', 'SOW', 'Pricing', 'RFx', 'Other'];
+                    const labels = keyOrder.filter((k) => (md.breakdown[k] || 0) > 0);
+                    const data = labels.map((k) => md.breakdown[k] || 0);
                     if (data.some((v) => v > 0)) {
                         this.renderDonutChart('monthlyReportDonut', {
                             labels,
                             data,
-                            colors: donutColors,
-                            centerTotal: md.totalActivities != null ? md.totalActivities : safeActivities.length
+                            colors: labels.map((k) => breakdownPalette[k] || '#718096'),
+                            centerTotal: md.totalActivities != null ? md.totalActivities : safeActivities.length,
+                            hideLegend: true
                         });
                     }
                 }
-                if (document.getElementById('monthlyReportCallType') && md.callTypeData) {
-                    const callEntries = (md.callTypeOrder || Object.keys(md.callTypeData)).map(label => [label, md.callTypeData[label] || 0]).filter(([, c]) => c > 0);
+                if (document.getElementById('monthlyReportDashboardRegion') && md.regionsOrdered && md.regionsOrdered.length > 0) {
+                    const palette = ReportsV2.MONTHLY_REGION_BAR_COLORS;
+                    const regionColors = md.regionsOrdered.map((_, i) => palette[i % palette.length]);
+                    this.renderHorizontalBarChart('monthlyReportDashboardRegion', {
+                        labels: md.regionsOrdered,
+                        data: md.regionsOrdered.map((r) => md.regionCounts[r] || 0),
+                        label: 'Activities',
+                        reverseCategoryAxis: true,
+                        backgroundColors: regionColors
+                    });
+                }
+                if (document.getElementById('monthlyReportDashboardFunnel') && md.callTypeData) {
+                    const funnelOrder = (md.activityDashboard && md.activityDashboard.callTypeOrder) || md.callTypeOrder || Object.keys(md.callTypeData);
+                    const callEntries = funnelOrder
+                        .map((label) => [label, md.callTypeData[label] || 0])
+                        .filter(([, c]) => c > 0);
                     if (callEntries.length > 0) {
-                        this.renderHorizontalBarChart('monthlyReportCallType', {
+                        this.renderHorizontalBarChart('monthlyReportDashboardFunnel', {
                             labels: callEntries.map(([n]) => n),
                             data: callEntries.map(([, c]) => c),
-                            label: 'Activities'
+                            label: 'Calls',
+                            backgroundColors: callEntries.map((_, i) => ReportsV2.MONTHLY_REGION_BAR_COLORS[i % ReportsV2.MONTHLY_REGION_BAR_COLORS.length]),
+                            percentOfIndex: 0
                         });
                     }
-                }
-                if (document.getElementById('monthlyReportRegion') && md.regionsOrdered && md.regionsOrdered.length > 0) {
-                    this.renderBarChart('monthlyReportRegion', {
-                        labels: md.regionsOrdered,
-                        data: md.regionsOrdered.map(r => md.regionCounts[r] || 0),
-                        label: 'Activities'
-                    });
                 }
                 if (document.getElementById('monthlyReportMissingSfdc')) {
                     const missingEntries = Object.entries(md.missingSfdcByRegion || {}).sort((a, b) => b[1] - a[1]);
@@ -2852,7 +2996,7 @@ const ReportsV2 = {
         }
     },
 
-    renderHorizontalBarChart(canvasId, { labels, data, label, reverseCategoryAxis = false }) {
+    renderHorizontalBarChart(canvasId, { labels, data, label, reverseCategoryAxis = false, backgroundColors, percentOfIndex }) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             console.warn(`Chart canvas not found: ${canvasId}`);
@@ -2896,6 +3040,11 @@ const ReportsV2 = {
             }
         }
 
+        const barColors =
+            backgroundColors && Array.isArray(backgroundColors) && backgroundColors.length
+                ? backgroundColors
+                : '#3182CE';
+
         try {
             this.charts[canvasId] = new Chart(canvas, {
                 type: 'bar',
@@ -2904,8 +3053,10 @@ const ReportsV2 = {
                     datasets: [{
                         label: label,
                         data: numericData,
-                        backgroundColor: '#3182CE',
-                        borderColor: '#2B6CB0',
+                        backgroundColor: barColors,
+                        borderColor: Array.isArray(barColors)
+                            ? barColors.map((c) => c)
+                            : '#2B6CB0',
                         borderWidth: 1
                     }]
                 },
@@ -2928,6 +3079,9 @@ const ReportsV2 = {
                     plugins: {
                         legend: {
                             display: false
+                        },
+                        chartValueLabels: {
+                            percentOfIndex: percentOfIndex != null ? Number(percentOfIndex) : null
                         }
                     }
                 }
@@ -2977,7 +3131,7 @@ const ReportsV2 = {
     },
 
     // Render Donut Chart
-    renderDonutChart(canvasId, { labels, data, colors, centerTotal: centerTotalOpt }) {
+    renderDonutChart(canvasId, { labels, data, colors, centerTotal: centerTotalOpt, hideLegend = false }) {
         const canvas = document.getElementById(canvasId);
         if (!canvas || typeof Chart === 'undefined') return;
 
@@ -3005,7 +3159,7 @@ const ReportsV2 = {
                 cutout: '60%',
                 plugins: {
                     legend: {
-                        display: true,
+                        display: hideLegend !== true,
                         position: 'bottom'
                     },
                     tooltip: {

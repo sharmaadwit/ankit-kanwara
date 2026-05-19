@@ -111,6 +111,7 @@
 | P-005 | Industry / use-case merge (Admin) |
 | B-001–B-006 | Backup, perf, prefetch (historical builds) |
 | B-007 / Feature 15 | PreSight branding, pricing calculator API, dashboard Pricing, feature flag, multi pricing activities |
+| **P-026** | Remote storage entity GET cache + in-flight dedupe after login batch; `await` default sales region; `resolveDefaultRegionFallback` (profile + sorted regions) |
 
 ---
 
