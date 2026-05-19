@@ -4269,22 +4269,53 @@ const DataManager = {
             });
             if (!res.ok) return [];
             const data = await res.json().catch(() => null);
-            const list = data && Array.isArray(data.activities) ? data.activities : [];
-            const users = await this.getUsers();
-            return list.map((activity) => {
-                const user = users.find((u) => u.id === activity.userId);
-                const isInternal = activity.isInternal === true;
-                return {
-                    ...activity,
-                    isInternal,
-                    userName: activity.userName || user?.username || 'Unknown',
-                    user
-                };
-            });
+            return this._mapMigratedActivitiesResponse(data);
         } catch (e) {
             console.warn('[DataManager] getMigratedActivitiesForYear failed:', e);
             return [];
         }
+    },
+
+    /**
+     * Migrated activities for a month range (YYYY-MM), e.g. 2025-07..2025-12 for fiscal annual report.
+     */
+    async getMigratedActivitiesForAnnualRange(fromMonth, toMonth) {
+        const from = String(fromMonth || '').trim();
+        const to = String(toMonth || '').trim();
+        if (!from || !to || from > to || typeof window === 'undefined') return [];
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        const url = `${origin.replace(/\/$/, '')}/api/reports/migrated-activities?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers: pamsStorageAppendHeaders()
+            });
+            if (!res.ok) {
+                console.warn('[DataManager] getMigratedActivitiesForAnnualRange failed:', res.status, from, to);
+                return [];
+            }
+            const data = await res.json().catch(() => null);
+            return this._mapMigratedActivitiesResponse(data);
+        } catch (e) {
+            console.warn('[DataManager] getMigratedActivitiesForAnnualRange failed:', e);
+            return [];
+        }
+    },
+
+    async _mapMigratedActivitiesResponse(data) {
+        const list = data && Array.isArray(data.activities) ? data.activities : [];
+        const users = await this.getUsers();
+        return list.map((activity) => {
+            const user = users.find((u) => u.id === activity.userId);
+            const isInternal = activity.isInternal === true;
+            return {
+                ...activity,
+                isInternal,
+                userName: activity.userName || user?.username || 'Unknown',
+                user
+            };
+        });
     },
 
     async getAvailableActivityYearsForReports() {

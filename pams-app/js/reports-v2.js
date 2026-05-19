@@ -422,6 +422,62 @@ const ReportsV2 = {
 
     MONTHLY_TREND_MONTH_LABELS: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
 
+    enumerateMonths(fromMonth, toMonth) {
+        const from = String(fromMonth || '').trim();
+        const to = String(toMonth || '').trim();
+        if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to) || from > to) return [];
+        const keys = [];
+        let y = parseInt(from.slice(0, 4), 10);
+        let m = parseInt(from.slice(5, 7), 10);
+        const endY = parseInt(to.slice(0, 4), 10);
+        const endM = parseInt(to.slice(5, 7), 10);
+        while (y < endY || (y === endY && m <= endM)) {
+            keys.push(`${y}-${String(m).padStart(2, '0')}`);
+            m += 1;
+            if (m > 12) {
+                m = 1;
+                y += 1;
+            }
+        }
+        return keys;
+    },
+
+    monthTrendLabel(ym) {
+        const mi = parseInt(String(ym).slice(5, 7), 10) - 1;
+        const year = String(ym).slice(0, 4);
+        const names = this.MONTHLY_TREND_MONTH_LABELS;
+        return `${names[mi] || ym} ${year}`;
+    },
+
+    /**
+     * Annual report: bucket activities by month across a fiscal range (e.g. 2025-07..2026-05).
+     */
+    buildAnnualMonthlyActivitySeriesForRange(activities, fromMonth, toMonth) {
+        const monthKeys = this.enumerateMonths(fromMonth, toMonth);
+        const labels = monthKeys.map((ym) => this.monthTrendLabel(ym));
+        const internal = new Array(monthKeys.length).fill(0);
+        const external = new Array(monthKeys.length).fill(0);
+        const indexByKey = new Map(monthKeys.map((k, i) => [k, i]));
+        const list = Array.isArray(activities) ? activities : [];
+        const resolveMonth = (typeof DataManager !== 'undefined' && DataManager.resolveActivityMonth)
+            ? DataManager.resolveActivityMonth
+            : (a) => {
+                const d = a && (a.date || a.createdAt);
+                if (!d) return null;
+                const s = typeof d === 'string' ? d : (d.toISOString && d.toISOString()) || '';
+                return s.length >= 7 ? s.substring(0, 7) : null;
+            };
+        list.forEach((a) => {
+            const ym = resolveMonth(a);
+            const idx = ym != null ? indexByKey.get(ym) : undefined;
+            if (idx == null) return;
+            if (a && a.isInternal === true) internal[idx] += 1;
+            else external[idx] += 1;
+        });
+        const totals = internal.map((n, i) => n + external[i]);
+        return { labels, monthKeys, internal, external, totals };
+    },
+
     /**
      * Annual report: bucket external/internal activities by month index 0–11 for the given calendar year.
      * Returns `{ labels, internal, external, totals, monthKeys }` ready for a stacked bar dataset.
@@ -458,12 +514,24 @@ const ReportsV2 = {
      * Annual report: collect all wins and losses across the calendar year, attaching a `monthKey` to each row.
      * Mirrors the monthly PDF win/loss extraction but does not apply month-specific exclusion rules.
      */
-    computeAnnualWinLossSummary(accounts, users, year, activities) {
+    computeAnnualWinLossSummary(accounts, users, year, activities, monthRange) {
         const yearStr = String(year);
+        const rangeFrom = monthRange && monthRange.fromMonth ? monthRange.fromMonth : null;
+        const rangeTo = monthRange && monthRange.toMonth ? monthRange.toMonth : null;
+        const trendMonthKeys =
+            rangeFrom && rangeTo ? this.enumerateMonths(rangeFrom, rangeTo) : [];
         const winsForYear = [];
         const lossesForYear = [];
-        const winsByMonth = new Array(12).fill(0);
-        const lossesByMonth = new Array(12).fill(0);
+        const winsByMonth = trendMonthKeys.length ? new Array(trendMonthKeys.length).fill(0) : new Array(12).fill(0);
+        const lossesByMonth = trendMonthKeys.length ? new Array(trendMonthKeys.length).fill(0) : new Array(12).fill(0);
+        const monthIndex = (monthKey) => {
+            if (trendMonthKeys.length) {
+                const idx = trendMonthKeys.indexOf(monthKey);
+                return idx >= 0 ? idx : -1;
+            }
+            const monthIdx = parseInt(monthKey.substring(5, 7), 10) - 1;
+            return Number.isFinite(monthIdx) && monthIdx >= 0 && monthIdx <= 11 ? monthIdx : -1;
+        };
         const safeAccounts = Array.isArray(accounts) ? accounts : [];
         const safeActivities = Array.isArray(activities) ? activities : [];
 
@@ -477,9 +545,14 @@ const ReportsV2 = {
                     || project.createdAt
                     || '';
                 const monthForWinLoss = winLossUpdated || (fallbackUpdated || '').toString().substring(0, 7);
-                if (!monthForWinLoss || monthForWinLoss.substring(0, 4) !== yearStr) return;
-                const monthIdx = parseInt(monthForWinLoss.substring(5, 7), 10) - 1;
-                if (!Number.isFinite(monthIdx) || monthIdx < 0 || monthIdx > 11) return;
+                if (!monthForWinLoss) return;
+                if (rangeFrom && rangeTo) {
+                    if (monthForWinLoss < rangeFrom || monthForWinLoss > rangeTo) return;
+                } else if (monthForWinLoss.substring(0, 4) !== yearStr) {
+                    return;
+                }
+                const monthIdx = monthIndex(monthForWinLoss);
+                if (monthIdx < 0) return;
 
                 const accountName = String(account && account.name || '').trim() || 'Unknown';
                 const wl = (project && project.winLossData) || {};
@@ -512,7 +585,9 @@ const ReportsV2 = {
                         accountId: account.id,
                         accountName,
                         monthKey: monthForWinLoss,
-                        monthLabel: this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
+                        monthLabel: trendMonthKeys.length
+                            ? this.monthTrendLabel(monthForWinLoss)
+                            : this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
                         mrr: mrrVal != null ? mrrVal : '—',
                         currency,
                         mrrInInr,
@@ -530,7 +605,9 @@ const ReportsV2 = {
                     lossesForYear.push({
                         accountName,
                         monthKey: monthForWinLoss,
-                        monthLabel: this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
+                        monthLabel: trendMonthKeys.length
+                            ? this.monthTrendLabel(monthForWinLoss)
+                            : this.MONTHLY_TREND_MONTH_LABELS[monthIdx],
                         reason: reason || '—',
                         lostTo: wl.lostTo || '—'
                     });
@@ -546,6 +623,7 @@ const ReportsV2 = {
             lossesForYear,
             winsByMonth,
             lossesByMonth,
+            trendMonthKeys,
             totalWins: winsForYear.length,
             totalLosses: lossesForYear.length
         };
@@ -1201,6 +1279,40 @@ const ReportsV2 = {
     // Cutoff: only show activities from Jan 2026 onwards (pre-Dec/Jan cleanup)
     REPORTS_ACTIVITY_CUTOFF: '2026-01',
 
+    /** Annual report (PDF): Jul (Y-1) through Dec Y, capped at current month when Y is this year. */
+    getAnnualReportMonthRange(periodYear) {
+        const y = parseInt(String(periodYear || ''), 10);
+        if (!Number.isFinite(y)) {
+            const today = new Date();
+            return {
+                fromMonth: `${today.getFullYear() - 1}-07`,
+                toMonth: today.toISOString().slice(0, 7),
+                periodYear: String(today.getFullYear())
+            };
+        }
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.toISOString().slice(0, 7);
+        const fromMonth = `${y - 1}-07`;
+        let toMonth = `${y}-12`;
+        if (y === currentYear && toMonth > currentMonth) {
+            toMonth = currentMonth;
+        }
+        return { fromMonth, toMonth, periodYear: String(y) };
+    },
+
+    formatAnnualReportPeriodLabel(range) {
+        if (!range || !range.fromMonth || !range.toMonth) return '';
+        const fmt = (ym) => {
+            const [year, month] = ym.split('-');
+            const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const mi = parseInt(month, 10) - 1;
+            return `${names[mi] || month} ${year}`;
+        };
+        if (range.fromMonth === range.toMonth) return fmt(range.fromMonth);
+        return `${fmt(range.fromMonth)} – ${fmt(range.toMonth)}`;
+    },
+
     // Get activities for the selected period (only Jan 2026+)
     async getPeriodActivities() {
         if (!this.currentPeriod) {
@@ -1219,6 +1331,8 @@ const ReportsV2 = {
 
         const period = this.currentPeriod;
         const isYear = this.currentPeriodType === 'year';
+        const isAnnualReport = this.activeTab === 'annual' && isYear;
+        const annualRange = isAnnualReport ? this.getAnnualReportMonthRange(period) : null;
         const cutoff = this.REPORTS_ACTIVITY_CUTOFF || '2026-01';
         const resolveMonth = (typeof DataManager !== 'undefined' && DataManager.resolveActivityMonth)
             ? DataManager.resolveActivityMonth
@@ -1232,6 +1346,13 @@ const ReportsV2 = {
         let filtered = allActivities.filter(activity => {
             const activityMonthKey = resolveMonth(activity);
             if (!activityMonthKey) return false;
+
+            if (isAnnualReport && annualRange) {
+                if (activityMonthKey < annualRange.fromMonth || activityMonthKey > annualRange.toMonth) return false;
+                if (activityMonthKey < cutoff) return false;
+                return true;
+            }
+
             if (activityMonthKey < cutoff) return false;
 
             if (isYear) {
@@ -1254,10 +1375,22 @@ const ReportsV2 = {
             });
         }
 
-        // Annual report (PDF) only: merge pre-2026 rows from protected migration_* storage keys.
-        if (this.activeTab === 'annual' && isYear && period < '2026' && typeof DataManager.getMigratedActivitiesForYear === 'function') {
+        // Annual report (PDF) only: merge pre-2026 rows from protected migration_* storage keys (fiscal window).
+        if (isAnnualReport && annualRange && typeof DataManager.getMigratedActivitiesForAnnualRange === 'function') {
             try {
-                const migrated = await DataManager.getMigratedActivitiesForYear(period);
+                const migrationToMonth =
+                    annualRange.toMonth < cutoff ? annualRange.toMonth : (() => {
+                        const prev = cutoff.split('-');
+                        const y = parseInt(prev[0], 10);
+                        const m = parseInt(prev[1], 10) - 1;
+                        if (m >= 1) return `${y}-${String(m).padStart(2, '0')}`;
+                        return `${y - 1}-12`;
+                    })();
+                const migrationFromMonth = annualRange.fromMonth;
+                let migrated = [];
+                if (migrationFromMonth <= migrationToMonth) {
+                    migrated = await DataManager.getMigratedActivitiesForAnnualRange(migrationFromMonth, migrationToMonth);
+                }
                 if (migrated && migrated.length) {
                     const liveIds = new Set(filtered.map((a) => String(a.id)));
                     let added = 0;
@@ -1269,17 +1402,34 @@ const ReportsV2 = {
                         }
                     });
                     if (added > 0) {
-                        console.log(`ReportsV2: Annual report merged ${added} migrated activities for ${period}`);
+                        console.log(
+                            `ReportsV2: Annual report merged ${added} migrated activities (${migrationFromMonth}..${migrationToMonth})`
+                        );
                     }
                     this._annualMigrationMergeMeta = {
                         year: period,
+                        fromMonth: migrationFromMonth,
+                        toMonth: migrationToMonth,
+                        rangeLabel: this.formatAnnualReportPeriodLabel(annualRange),
                         mergedCount: added,
                         migratedTotal: migrated.length
                     };
+                } else {
+                    this._annualMigrationMergeMeta = {
+                        year: period,
+                        fromMonth: migrationFromMonth,
+                        toMonth: migrationToMonth,
+                        rangeLabel: this.formatAnnualReportPeriodLabel(annualRange),
+                        mergedCount: 0,
+                        migratedTotal: 0
+                    };
                 }
+                this._annualReportMonthRange = annualRange;
             } catch (err) {
                 console.warn('ReportsV2: Failed to merge migrated activities for annual report:', err);
             }
+        } else {
+            this._annualReportMonthRange = null;
         }
 
         console.log(`ReportsV2: Found ${filtered.length} activities for period ${period} (${isYear ? 'year' : 'month'})`);
@@ -1428,7 +1578,10 @@ const ReportsV2 = {
             }
 
             const activities = await this.getPeriodActivities();
-            const periodLabel = this.formatPeriod(this.currentPeriod);
+            const periodLabel =
+                this.activeTab === 'annual' && this._annualReportMonthRange
+                    ? this.formatAnnualReportPeriodLabel(this._annualReportMonthRange)
+                    : this.formatPeriod(this.currentPeriod);
 
             console.log(`ReportsV2: Rendering reports for period ${this.currentPeriod} (${this.currentPeriodType}), ${activities.length} activities`);
 
@@ -2115,7 +2268,8 @@ const ReportsV2 = {
             this.currentPeriod = String(today.getFullYear());
         }
         const yearStr = String(this.currentPeriod || new Date().getFullYear());
-        const periodLabel = this.formatPeriod(yearStr);
+        const annualRange = this._annualReportMonthRange || this.getAnnualReportMonthRange(yearStr);
+        const periodLabel = this.formatAnnualReportPeriodLabel(annualRange);
         const total = activities.length;
         const internalCount = activities.filter((a) => a.isInternal === true).length;
         const externalCount = activities.filter((a) => a.isInternal !== true).length;
@@ -2124,7 +2278,7 @@ const ReportsV2 = {
         const overrides = typeof DataManager !== 'undefined' ? await DataManager.getReportOverrides() : {};
         const o = overrides[yearStr] || {};
 
-        const winLoss = ReportsV2.computeAnnualWinLossSummary(accounts, users, yearStr, activities);
+        const winLoss = ReportsV2.computeAnnualWinLossSummary(accounts, users, yearStr, activities, annualRange);
         const winsForPeriod = winLoss.winsForYear;
         const lossesForPeriod = winLoss.lossesForYear;
         const winsCount = winLoss.totalWins;
@@ -2165,7 +2319,11 @@ const ReportsV2 = {
             regionsOrdered,
             callTypeOrder
         );
-        const monthlyTrend = ReportsV2.buildAnnualMonthlyActivitySeries(activities, yearStr);
+        const monthlyTrend = ReportsV2.buildAnnualMonthlyActivitySeriesForRange(
+            activities,
+            annualRange.fromMonth,
+            annualRange.toMonth
+        );
 
         // Cube Analysis aggregated across the year (same canonical buckets as monthly).
         const CANONICAL_USE_CASES = [
@@ -2253,6 +2411,7 @@ const ReportsV2 = {
         this.annualReportData = {
             year: yearStr,
             monthlyTrend,
+            trendMonthKeys: winLoss.trendMonthKeys,
             winsByMonth: winLoss.winsByMonth,
             lossesByMonth: winLoss.lossesByMonth
         };
@@ -2266,11 +2425,13 @@ const ReportsV2 = {
                     <p class="text-muted">Annual view of the monthly report. Use <strong>Edit report</strong> to change highlights and include/exclude wins; then download or email.</p>
                     ${(() => {
                         const migrationMeta = ReportsV2._annualMigrationMergeMeta;
-                        if (yearStr >= '2026') return '';
                         if (migrationMeta && migrationMeta.mergedCount > 0) {
-                            return `<p class="text-muted small reports-annual-migration-note">Includes <strong>${migrationMeta.mergedCount}</strong> activities from migration storage (Dec 2025 and earlier import). Other app views still show Jan 2026+ only.</p>`;
+                            return `<p class="text-muted small reports-annual-migration-note">Includes <strong>${migrationMeta.mergedCount}</strong> activities from migration storage (${safe(migrationMeta.fromMonth)}–${safe(migrationMeta.toMonth)}). Live app views elsewhere remain Jan 2026+.</p>`;
                         }
-                        return `<p class="text-muted small reports-annual-migration-note">No migration activity buckets were found for ${safe(yearStr)}. If you expect historical data, confirm migration_draft_activities:* / migration_confirmed_activities:* exist on the server.</p>`;
+                        if (migrationMeta && migrationMeta.migratedTotal === 0) {
+                            return `<p class="text-muted small reports-annual-migration-note">No rows in migration storage for ${safe(migrationMeta.fromMonth)}–${safe(migrationMeta.toMonth)}. Pre-2026 history may be missing on the server — check <code>migration_draft_activities:*</code> keys.</p>`;
+                        }
+                        return '';
                     })()}
                     <div class="reports-v2-monthly-actions-btns">
                         <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
@@ -3432,7 +3593,12 @@ const ReportsV2 = {
                     });
                 }
                 if (document.getElementById('annualReportWinLossTrend')) {
-                    const labels = (trend.labels && trend.labels.length) ? trend.labels : ReportsV2.MONTHLY_TREND_MONTH_LABELS;
+                    const labels =
+                        (ad.trendMonthKeys && ad.trendMonthKeys.length)
+                            ? ad.trendMonthKeys.map((ym) => ReportsV2.monthTrendLabel(ym))
+                            : (trend.labels && trend.labels.length)
+                                ? trend.labels
+                                : ReportsV2.MONTHLY_TREND_MONTH_LABELS;
                     const winData = Array.isArray(ad.winsByMonth) ? ad.winsByMonth : [];
                     const lossData = Array.isArray(ad.lossesByMonth) ? ad.lossesByMonth : [];
                     if (winData.some((n) => n > 0) || lossData.some((n) => n > 0)) {

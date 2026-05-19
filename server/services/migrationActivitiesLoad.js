@@ -111,6 +111,85 @@ const loadMigratedActivitiesForYear = async (year) => {
 };
 
 /**
+ * Load migrated external + internal activities for months in [fromMonth, toMonth] (YYYY-MM).
+ * Used when the annual report fiscal window spans Jul Y-1 through the selected year.
+ */
+const loadMigratedActivitiesForMonthRange = async (fromMonth, toMonth) => {
+  const from = String(fromMonth || '').trim();
+  const to = String(toMonth || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to) || from > to) {
+    return { fromMonth: from, toMonth: to, months: [], activities: [], externalCount: 0, internalCount: 0 };
+  }
+
+  const pool = getPool();
+  if (!pool) {
+    return { fromMonth: from, toMonth: to, months: [], activities: [], externalCount: 0, internalCount: 0 };
+  }
+
+  const { rows } = await pool.query(
+    `SELECT key, value FROM storage
+     WHERE key LIKE 'migration_confirmed_activities:%'
+        OR key LIKE 'migration_draft_activities:%'
+        OR key IN ('migration_confirmed_internalActivities', 'migration_draft_internalActivities')
+     ORDER BY key ASC;`
+  );
+
+  const draftByMonth = new Map();
+  const confirmedByMonth = new Map();
+  let internalDraft = [];
+  let internalConfirmed = [];
+
+  rows.forEach((row) => {
+    const key = row.key;
+    const list = parseJsonArray(maybeDecompress(row.value));
+    if (key === 'migration_confirmed_internalActivities') {
+      internalConfirmed = list;
+      return;
+    }
+    if (key === 'migration_draft_internalActivities') {
+      internalDraft = list;
+      return;
+    }
+    const month = monthFromActivityKey(key);
+    if (!month || month < from || month > to) return;
+    if (key.startsWith('migration_confirmed_activities:')) {
+      confirmedByMonth.set(month, list);
+    } else if (key.startsWith('migration_draft_activities:')) {
+      draftByMonth.set(month, list);
+    }
+  });
+
+  const months = new Set([...draftByMonth.keys(), ...confirmedByMonth.keys()]);
+  const externalById = new Map();
+  months.forEach((month) => {
+    const list = confirmedByMonth.get(month) || draftByMonth.get(month) || [];
+    list.forEach((row) => {
+      const normalized = normalizeMigratedRow(row, { isInternal: false });
+      if (!normalized) return;
+      externalById.set(String(normalized.id), normalized);
+    });
+  });
+
+  const internalSource = internalConfirmed.length ? internalConfirmed : internalDraft;
+  const internalForRange = internalSource
+    .map((row) => normalizeMigratedRow(row, { isInternal: true }))
+    .filter(Boolean)
+    .filter((row) => {
+      const month = monthFromActivity(row);
+      return month && month >= from && month <= to;
+    });
+
+  return {
+    fromMonth: from,
+    toMonth: to,
+    months: Array.from(months).sort(),
+    activities: [...externalById.values(), ...internalForRange],
+    externalCount: externalById.size,
+    internalCount: internalForRange.length
+  };
+};
+
+/**
  * Years that have at least one migration_* activity month bucket or internal row in-range.
  */
 const listMigratedActivityYears = async () => {
@@ -135,5 +214,6 @@ const listMigratedActivityYears = async () => {
 
 module.exports = {
   loadMigratedActivitiesForYear,
+  loadMigratedActivitiesForMonthRange,
   listMigratedActivityYears
 };

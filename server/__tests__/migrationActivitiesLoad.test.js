@@ -18,7 +18,11 @@ jest.mock('../db', () => {
 });
 
 const { getPool } = require('../db');
-const { loadMigratedActivitiesForYear, listMigratedActivityYears } = require('../services/migrationActivitiesLoad');
+const {
+  loadMigratedActivitiesForYear,
+  loadMigratedActivitiesForMonthRange,
+  listMigratedActivityYears
+} = require('../services/migrationActivitiesLoad');
 
 describe('migrationActivitiesLoad', () => {
   beforeAll(async () => {
@@ -76,6 +80,26 @@ describe('migrationActivitiesLoad', () => {
     const payload = await loadMigratedActivitiesForYear('2025');
     expect(payload.externalCount).toBe(1);
     expect(payload.activities[0].id).toBe('new');
+  });
+
+  it('loads activities for a month range spanning Jul-Dec', async () => {
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO storage (key, value) VALUES ($1, $2), ($3, $4), ($5, $6);`,
+      [
+        'migration_draft_activities:2025-07',
+        JSON.stringify([{ id: 'j1', date: '2025-07-10', type: 'customerCall' }]),
+        'migration_draft_activities:2025-12',
+        JSON.stringify([{ id: 'd1', date: '2025-12-20', type: 'customerCall' }]),
+        'migration_draft_activities:2026-01',
+        JSON.stringify([{ id: 'jan', date: '2026-01-05', type: 'customerCall' }])
+      ]
+    );
+
+    const payload = await loadMigratedActivitiesForMonthRange('2025-07', '2025-12');
+    expect(payload.months).toEqual(['2025-07', '2025-12']);
+    expect(payload.externalCount).toBe(2);
+    expect(payload.activities.map((a) => a.id).sort()).toEqual(['d1', 'j1']);
   });
 
   it('lists years before 2026 from migration activity keys', async () => {
