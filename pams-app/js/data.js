@@ -4231,6 +4231,71 @@ const DataManager = {
     },
 
     /**
+     * Years with migrated activity buckets (pre-2026) for Annual report (PDF) only.
+     */
+    async getMigratedActivityYears() {
+        if (typeof window === 'undefined') return [];
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        const url = `${origin.replace(/\/$/, '')}/api/reports/migrated-activity-years`;
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers: pamsStorageAppendHeaders()
+            });
+            if (!res.ok) return [];
+            const data = await res.json().catch(() => null);
+            return data && Array.isArray(data.years) ? data.years.filter((y) => y && y < '2026') : [];
+        } catch (e) {
+            console.warn('[DataManager] getMigratedActivityYears failed:', e);
+            return [];
+        }
+    },
+
+    /**
+     * Activity rows from migration_* storage for a calendar year before 2026.
+     * Annual report (PDF) merges these with live activities (deduped by id).
+     */
+    async getMigratedActivitiesForYear(year) {
+        const yearStr = String(year || '').trim();
+        if (!yearStr || yearStr >= '2026' || typeof window === 'undefined') return [];
+        const origin = window.location && window.location.origin ? window.location.origin : '';
+        const url = `${origin.replace(/\/$/, '')}/api/reports/migrated-activities?year=${encodeURIComponent(yearStr)}`;
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                headers: pamsStorageAppendHeaders()
+            });
+            if (!res.ok) return [];
+            const data = await res.json().catch(() => null);
+            const list = data && Array.isArray(data.activities) ? data.activities : [];
+            const users = await this.getUsers();
+            return list.map((activity) => {
+                const user = users.find((u) => u.id === activity.userId);
+                const isInternal = activity.isInternal === true;
+                return {
+                    ...activity,
+                    isInternal,
+                    userName: activity.userName || user?.username || 'Unknown',
+                    user
+                };
+            });
+        } catch (e) {
+            console.warn('[DataManager] getMigratedActivitiesForYear failed:', e);
+            return [];
+        }
+    },
+
+    async getAvailableActivityYearsForReports() {
+        const liveYears = await this.getAvailableActivityYears();
+        const migratedYears = await this.getMigratedActivityYears();
+        return Array.from(new Set([...liveYears, ...migratedYears]))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b));
+    },
+
+    /**
      * Resolve the activity's month key (YYYY-MM) for grouping/counting/reports.
      * - New logged data: month is derived only from activity.date (then createdAt); no monthOfActivity.
      * - Migrated activities: use monthOfActivity (migration source of truth), then date.

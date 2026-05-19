@@ -231,6 +231,12 @@ const createApp = (options = {}) => {
     requireStorageAuth,
     require('./routes/annualExport')
   );
+  app.use(
+    '/api/reports',
+    sessionMiddleware,
+    requireStorageAuth,
+    require('./routes/reportsMigration')
+  );
 
   app.get('/api/bootstrap', sessionMiddleware, async (req, res) => {
     const bootstrapStart = Date.now();

@@ -1207,6 +1207,9 @@ const ReportsV2 = {
             console.warn('ReportsV2: currentPeriod is not set');
             return [];
         }
+        if (this.activeTab !== 'annual') {
+            this._annualMigrationMergeMeta = null;
+        }
 
         const allActivities = await DataManager.getAllActivities();
         if (!allActivities || !allActivities.length) {
@@ -1249,6 +1252,34 @@ const ReportsV2 = {
                     '';
                 return activityRegion === region;
             });
+        }
+
+        // Annual report (PDF) only: merge pre-2026 rows from protected migration_* storage keys.
+        if (this.activeTab === 'annual' && isYear && period < '2026' && typeof DataManager.getMigratedActivitiesForYear === 'function') {
+            try {
+                const migrated = await DataManager.getMigratedActivitiesForYear(period);
+                if (migrated && migrated.length) {
+                    const liveIds = new Set(filtered.map((a) => String(a.id)));
+                    let added = 0;
+                    migrated.forEach((activity) => {
+                        if (activity && activity.id != null && !liveIds.has(String(activity.id))) {
+                            filtered.push(activity);
+                            liveIds.add(String(activity.id));
+                            added += 1;
+                        }
+                    });
+                    if (added > 0) {
+                        console.log(`ReportsV2: Annual report merged ${added} migrated activities for ${period}`);
+                    }
+                    this._annualMigrationMergeMeta = {
+                        year: period,
+                        mergedCount: added,
+                        migratedTotal: migrated.length
+                    };
+                }
+            } catch (err) {
+                console.warn('ReportsV2: Failed to merge migrated activities for annual report:', err);
+            }
         }
 
         console.log(`ReportsV2: Found ${filtered.length} activities for period ${period} (${isYear ? 'year' : 'month'})`);
@@ -2233,6 +2264,14 @@ const ReportsV2 = {
                 <div class="reports-v2-monthly-pdf-actions">
                     <h2 class="reports-v2-section-title">Annual report (PDF)</h2>
                     <p class="text-muted">Annual view of the monthly report. Use <strong>Edit report</strong> to change highlights and include/exclude wins; then download or email.</p>
+                    ${(() => {
+                        const migrationMeta = ReportsV2._annualMigrationMergeMeta;
+                        if (yearStr >= '2026') return '';
+                        if (migrationMeta && migrationMeta.mergedCount > 0) {
+                            return `<p class="text-muted small reports-annual-migration-note">Includes <strong>${migrationMeta.mergedCount}</strong> activities from migration storage (Dec 2025 and earlier import). Other app views still show Jan 2026+ only.</p>`;
+                        }
+                        return `<p class="text-muted small reports-annual-migration-note">No migration activity buckets were found for ${safe(yearStr)}. If you expect historical data, confirm migration_draft_activities:* / migration_confirmed_activities:* exist on the server.</p>`;
+                    })()}
                     <div class="reports-v2-monthly-actions-btns">
                         <button type="button" id="reportsEditReportBtnContent" class="btn btn-primary" onclick="ReportsV2.openEditReportModal()">Edit report</button>
                         <button type="button" class="btn btn-outline" onclick="window.print(); return false;">Download PDF</button>
@@ -2487,7 +2526,10 @@ const ReportsV2 = {
     // Render header with period toggle and navigation
     async renderHeader(periodLabel) {
         const availableMonths = await DataManager.getAvailableActivityMonths();
-        const availableYears = await DataManager.getAvailableActivityYears();
+        const availableYears =
+            this.activeTab === 'annual' && typeof DataManager.getAvailableActivityYearsForReports === 'function'
+                ? await DataManager.getAvailableActivityYearsForReports()
+                : await DataManager.getAvailableActivityYears();
         const isYear = this.currentPeriodType === 'year';
         const canGoPrev = isYear
             ? availableYears.includes(String(parseInt(this.currentPeriod) - 1))
