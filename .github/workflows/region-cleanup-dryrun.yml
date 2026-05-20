@@ -20,6 +20,19 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
+      - name: Sync presales users to Postgres (after deploy)
+        continue-on-error: true
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
+        run: |
+          API_ROOT="${REMOTE_STORAGE_BASE%/api/storage}"
+          curl -sfS -X POST "$API_ROOT/api/admin/presales-regions/sync" \
+            -H "Accept: application/json" \
+            -H "X-Admin-User: $REMOTE_STORAGE_USER" \
+            -H "X-Admin-Api-Key: $REMOTE_STORAGE_API_KEY" \
+            -H "X-Api-Key: $REMOTE_STORAGE_API_KEY" || echo "sync skipped (deploy may be pending)"
       - name: Region cleanup dry-run (remote storage)
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}

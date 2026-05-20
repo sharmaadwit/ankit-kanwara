@@ -44,7 +44,28 @@ const NEW_USERS = [
   {
     username: 'yashas.reddy',
     email: 'yashas.reddy@gupshup.io',
-    defaultRegion: 'Africa & Europe'
+    defaultRegion: 'India South'
+  },
+  {
+    username: 'ankit.kanwara',
+    email: 'ankit.kanwara@gupshup.io',
+    defaultRegion: 'India South'
+  },
+  {
+    username: 'saathwik.boregowda',
+    email: 'saathwik.boregowda@gupshup.io',
+    defaultRegion: 'Africa & Europe',
+    regions: ['Africa & Europe', 'SEA']
+  },
+  {
+    username: 'ankit.chaddha',
+    email: 'ankit.chaddha@gupshup.io',
+    defaultRegion: 'India North'
+  },
+  {
+    username: 'mariana.ribeiro',
+    email: 'mariana.ribeiro@gupshup.io',
+    defaultRegion: 'LATAM'
   },
   {
     username: 'mauricio.martins',
@@ -69,7 +90,7 @@ const NEW_USERS = [
   {
     username: 'nidhi',
     email: 'nidhi@gupshup.io',
-    defaultRegion: ''
+    defaultRegion: 'India North'
   },
   {
     username: 'maria',
@@ -104,9 +125,12 @@ const upsertUsers = (existingUsers) => {
       return;
     }
 
-    const regions = template.defaultRegion
-      ? [template.defaultRegion]
-      : [];
+    const regions =
+      Array.isArray(template.regions) && template.regions.length
+        ? template.regions
+        : template.defaultRegion
+          ? [template.defaultRegion]
+          : [];
 
     if (!existingByEmail.has(emailKey)) {
       users.push({

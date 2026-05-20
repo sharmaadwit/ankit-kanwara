@@ -17,6 +17,7 @@ const {
   DEFAULT_REMOTE_BASE
 } = require('../services/storageRemoteFetch');
 const { processBuckets } = require('../services/regionCleanupDryRun');
+const { mergeManualIntoMap } = require('./lib/manualPresalesRegionByEmail');
 
 const resolveFetch = async () => {
   if (typeof fetch === 'function') return fetch;
@@ -153,8 +154,10 @@ async function fetchRosterUsers(apiRoot, fetchImpl, headers) {
     const usersRaw = await fetchKey(base, 'users', fetchImpl, headers);
     userMap = buildUserMapFromList(usersRaw, 'storage.users');
   }
+  mergeManualIntoMap(userMap);
+  console.log(`[users] after manual+field_rep map: ${userMap.count} emails`);
   if (userMap.count === 0) {
-    console.error('[fatal] No presales users with defaultRegion (admin API + storage.users)');
+    console.error('[fatal] No presales users with defaultRegion');
     process.exit(2);
   }
 

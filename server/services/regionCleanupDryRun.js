@@ -104,20 +104,14 @@ async function loadPresalesUserMap(pool) {
     }
   }
 
+  mergeManualIntoMap({ byEmail, byUsername, source, count: byEmail.size });
   return { byEmail, byUsername, source, count: byEmail.size };
 }
 
-function lookupPresalesRegion(rawIdentifier, map) {
-  const id = normEmail(rawIdentifier);
-  if (!id) return { region: null, matchedBy: null, key: '' };
-  if (map.byEmail.has(id)) {
-    return { region: map.byEmail.get(id).region, matchedBy: 'email', key: id };
-  }
-  if (map.byUsername.has(id)) {
-    return { region: map.byUsername.get(id).region, matchedBy: 'username', key: id };
-  }
-  return { region: null, matchedBy: null, key: id };
-}
+const {
+  mergeManualIntoMap,
+  resolveLoggerRegion
+} = require('../scripts/lib/manualPresalesRegionByEmail');
 
 function activityLoggerKey(activity) {
   return (
@@ -136,7 +130,7 @@ function analyzeActivity(activity, map) {
   if (!key) {
     return { activity, changed: false, reason: 'no_logger_id' };
   }
-  const lookup = lookupPresalesRegion(key, map);
+  const lookup = resolveLoggerRegion(key, activity, map);
   if (!lookup.region) {
     return {
       activity,
