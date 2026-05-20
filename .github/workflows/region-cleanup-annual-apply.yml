@@ -11,6 +11,12 @@ on:
         options:
           - 'false'
           - 'true'
+  push:
+    branches: [main]
+    paths:
+      - 'server/scripts/lib/annualReportPresalesRegions.js'
+      - 'server/scripts/region-cleanup-apply-annual-remote.js'
+      - '.github/workflows/region-cleanup-annual-apply.yml'
 
 jobs:
   annual-migration-regions:
@@ -28,7 +34,7 @@ jobs:
           REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
         run: node server/scripts/region-cleanup-apply-annual-remote.js | tee annual-apply.log
       - name: Apply to production migration_* keys
-        if: inputs.apply == 'true'
+        if: github.event_name == 'push' || inputs.apply == 'true'
         env:
           REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
           REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
