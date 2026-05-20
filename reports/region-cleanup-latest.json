@@ -1,6 +1,14 @@
 {
   "source": "https://ankit-kanwara-production.up.railway.app/api/storage",
+  "userMapSource": "storage.users",
   "presalesUsersWithRegion": 5,
+  "summary": {
+    "liveActivityFixes": 0,
+    "migrationActivityFixes": 0,
+    "totalOffIndiaSouth": 0,
+    "unmappedUnique": 71,
+    "unmappedRows": 6181
+  },
   "live": {
     "would_fix": 0,
     "already_ok": 0,
