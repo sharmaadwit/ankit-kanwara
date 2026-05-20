@@ -1,45 +1,29 @@
 {
   "source": "https://ankit-kanwara-production.up.railway.app/api/storage",
-  "userMapSource": "postgres.api/users",
-  "presalesUsersWithRegion": 11,
+  "userMapSource": "postgres.api/users+manual+field_rep",
+  "presalesUsersWithRegion": 80,
   "summary": {
-    "liveActivityFixes": 877,
-    "migrationActivityFixes": 1617,
-    "totalOffIndiaSouth": 1,
-    "unmappedUnique": 64,
-    "unmappedRows": 2989
+    "liveActivityFixes": 1359,
+    "migrationActivityFixes": 2617,
+    "totalOffIndiaSouth": 5,
+    "unmappedUnique": 12,
+    "unmappedRows": 609
   },
   "live": {
-    "would_fix": 877,
-    "already_ok": 698,
+    "would_fix": 1359,
+    "already_ok": 1596,
     "no_logger_id": 0,
-    "off_india_south": 1,
+    "off_india_south": 5,
     "unmapped": {}
   },
   "migration": {
-    "would_fix": 1617,
+    "would_fix": 2617,
     "already_ok": 0,
     "no_logger_id": 0,
     "off_india_south": 0,
     "unmapped": {}
   },
   "unmapped": [
-    {
-      "identifier": "purusottam.singh@gupshup.io",
-      "rowCount": 705
-    },
-    {
-      "identifier": "saathwik.boregowda@gupshup.io",
-      "rowCount": 600
-    },
-    {
-      "identifier": "kathyayani.nayak@gupshup.io",
-      "rowCount": 353
-    },
-    {
-      "identifier": "mariana.ribeiro@gupshup.io",
-      "rowCount": 327
-    },
     {
       "identifier": "gourav.sarkar@gupshup.io",
       "rowCount": 250
@@ -53,195 +37,23 @@
       "rowCount": 140
     },
     {
-      "identifier": "fernando.bueno@gupshup.io",
-      "rowCount": 52
-    },
-    {
-      "identifier": "bittu.george@gupshup.io",
-      "rowCount": 25
-    },
-    {
-      "identifier": "mohd.abbas@gupshup.io",
-      "rowCount": 24
-    },
-    {
-      "identifier": "nitin.bhatia@gupshup.io",
-      "rowCount": 24
-    },
-    {
-      "identifier": "bruno.montoro@gupshup.io",
-      "rowCount": 19
-    },
-    {
-      "identifier": "rahul.verma@gupshup.io",
-      "rowCount": 16
-    },
-    {
-      "identifier": "premsagar.chourasia@gupshup.io",
-      "rowCount": 14
-    },
-    {
-      "identifier": "abhishek.phillips@gupshup.io",
-      "rowCount": 14
-    },
-    {
-      "identifier": "ankit.kohli@gupshup.io",
-      "rowCount": 13
-    },
-    {
-      "identifier": "narender.singh@knowlarity.com",
-      "rowCount": 13
-    },
-    {
-      "identifier": "paulo.pinto@gupshup.io",
-      "rowCount": 13
-    },
-    {
-      "identifier": "amit.malhotra@gupshup.io",
-      "rowCount": 12
-    },
-    {
-      "identifier": "ravindra.kulkarni@gupshup.io",
-      "rowCount": 11
-    },
-    {
       "identifier": "ashish.singh@knowlarity.com",
       "rowCount": 10
-    },
-    {
-      "identifier": "roneeta.basak@gupshup.io",
-      "rowCount": 9
-    },
-    {
-      "identifier": "gaurav.tomar@gupshup.io",
-      "rowCount": 9
-    },
-    {
-      "identifier": "vishal.sharma@gupshup.io",
-      "rowCount": 9
     },
     {
       "identifier": "brendon.castelino@gupshup.io",
       "rowCount": 8
     },
     {
-      "identifier": "esther.khoo@gupshup.io",
-      "rowCount": 7
-    },
-    {
-      "identifier": "nayeem.mohammed@gupshup.io",
-      "rowCount": 7
-    },
-    {
-      "identifier": "vikas.kumar@gupshup.io",
-      "rowCount": 7
-    },
-    {
-      "identifier": "rupam.nandi@gupshup.io",
-      "rowCount": 6
-    },
-    {
-      "identifier": "shashi.bhushan@gupshup.io",
-      "rowCount": 6
-    },
-    {
-      "identifier": "saipranay.maharajan@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "anand.abraham@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "meet.nandu@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "neerav.chib@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "sanchit.aggarwal@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "preety.sharma@gupshup.io",
-      "rowCount": 5
-    },
-    {
-      "identifier": "ankit.chaddha@gupshup.io",
-      "rowCount": 4
-    },
-    {
       "identifier": "adwit.sharma@gupshup.io",
       "rowCount": 4
-    },
-    {
-      "identifier": "sandra.mbachu@gupshup.ai",
-      "rowCount": 4
-    },
-    {
-      "identifier": "punitha.m@gupshup.io",
-      "rowCount": 4
-    },
-    {
-      "identifier": "hemanth.swamy@gupshup.io",
-      "rowCount": 4
-    },
-    {
-      "identifier": "mohyeldein.elbaroudy@gupshup.io",
-      "rowCount": 4
-    },
-    {
-      "identifier": "sandeep.das@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "tanmay.srivastava@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "kiran.kumar@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "chirag.panchal@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "avadhesh.chaturvedi@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "anshul.kumar@gupshup.io",
-      "rowCount": 3
     },
     {
       "identifier": "ranjay.tiwari@gupshup.io",
       "rowCount": 3
     },
     {
-      "identifier": "anand.kumar@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "chandni.shetty@gupshup.io",
-      "rowCount": 2
-    },
-    {
-      "identifier": "shubham.choudhary@gupshup.io",
-      "rowCount": 2
-    },
-    {
-      "identifier": "santosh.jigalmadi@gupshup.io",
-      "rowCount": 2
-    },
-    {
       "identifier": "rahul.panchal@gupshup.ai",
-      "rowCount": 2
-    },
-    {
-      "identifier": "cyrus.carvalho@gupshup.io",
       "rowCount": 2
     },
     {
@@ -249,19 +61,7 @@
       "rowCount": 2
     },
     {
-      "identifier": "lakshya.mundra@gupshup.io",
-      "rowCount": 2
-    },
-    {
-      "identifier": "ratan@gupshup.io",
-      "rowCount": 1
-    },
-    {
       "identifier": "mukul.yadav@knowlarity.com",
-      "rowCount": 1
-    },
-    {
-      "identifier": "rajshri.pandey@gupshup.io",
       "rowCount": 1
     },
     {
@@ -269,15 +69,7 @@
       "rowCount": 1
     },
     {
-      "identifier": "joseph.cobbinah@gupshup.io",
-      "rowCount": 1
-    },
-    {
       "identifier": "sanjeev.kumar@knowlarity.com",
-      "rowCount": 1
-    },
-    {
-      "identifier": "dhananjay.singh@knowlarity.com",
       "rowCount": 1
     }
   ]
