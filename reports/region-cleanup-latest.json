@@ -1,19 +1,19 @@
 {
   "source": "https://ankit-kanwara-production.up.railway.app/api/storage",
-  "userMapSource": "postgres.api/users+manual+field_rep",
-  "presalesUsersWithRegion": 80,
+  "userMapSource": "postgres.api/users+manual_presales",
+  "presalesUsersWithRegion": 17,
   "summary": {
-    "liveActivityFixes": 1359,
+    "liveActivityFixes": 1413,
     "migrationActivityFixes": 2617,
-    "totalOffIndiaSouth": 5,
-    "unmappedUnique": 12,
-    "unmappedRows": 609
+    "totalOffIndiaSouth": 13,
+    "unmappedUnique": 4,
+    "unmappedRows": 581
   },
   "live": {
-    "would_fix": 1359,
-    "already_ok": 1596,
+    "would_fix": 1413,
+    "already_ok": 1570,
     "no_logger_id": 0,
-    "off_india_south": 5,
+    "off_india_south": 13,
     "unmapped": {}
   },
   "migration": {
@@ -37,40 +37,8 @@
       "rowCount": 140
     },
     {
-      "identifier": "ashish.singh@knowlarity.com",
-      "rowCount": 10
-    },
-    {
-      "identifier": "brendon.castelino@gupshup.io",
-      "rowCount": 8
-    },
-    {
       "identifier": "adwit.sharma@gupshup.io",
       "rowCount": 4
-    },
-    {
-      "identifier": "ranjay.tiwari@gupshup.io",
-      "rowCount": 3
-    },
-    {
-      "identifier": "rahul.panchal@gupshup.ai",
-      "rowCount": 2
-    },
-    {
-      "identifier": "vasundhara.tyagi@gupshup.io",
-      "rowCount": 2
-    },
-    {
-      "identifier": "mukul.yadav@knowlarity.com",
-      "rowCount": 1
-    },
-    {
-      "identifier": "rajesh.singh@knowlarity.com",
-      "rowCount": 1
-    },
-    {
-      "identifier": "sanjeev.kumar@knowlarity.com",
-      "rowCount": 1
     }
   ]
 }
