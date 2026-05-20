@@ -1,44 +1,27 @@
 {
   "source": "https://ankit-kanwara-production.up.railway.app/api/storage",
-  "userMapSource": "postgres.api/users+manual_presales",
-  "presalesUsersWithRegion": 17,
+  "userMapSource": "postgres.api/users+manual_presales+annual_report_only",
+  "presalesUsersWithRegion": 21,
   "summary": {
-    "liveActivityFixes": 1413,
-    "migrationActivityFixes": 2617,
-    "totalOffIndiaSouth": 13,
-    "unmappedUnique": 4,
-    "unmappedRows": 581
+    "liveActivityFixes": 1628,
+    "migrationActivityFixes": 2906,
+    "totalOffIndiaSouth": 14,
+    "unmappedUnique": 0,
+    "unmappedRows": 0
   },
   "live": {
-    "would_fix": 1413,
-    "already_ok": 1570,
+    "would_fix": 1628,
+    "already_ok": 1647,
     "no_logger_id": 0,
-    "off_india_south": 13,
+    "off_india_south": 14,
     "unmapped": {}
   },
   "migration": {
-    "would_fix": 2617,
+    "would_fix": 2906,
     "already_ok": 0,
     "no_logger_id": 0,
     "off_india_south": 0,
     "unmapped": {}
   },
-  "unmapped": [
-    {
-      "identifier": "gourav.sarkar@gupshup.io",
-      "rowCount": 250
-    },
-    {
-      "identifier": "matheus.thieme@gupshup.io",
-      "rowCount": 187
-    },
-    {
-      "identifier": "saurabh.tripathi@gupshup.io",
-      "rowCount": 140
-    },
-    {
-      "identifier": "adwit.sharma@gupshup.io",
-      "rowCount": 4
-    }
-  ]
+  "unmapped": []
 }
