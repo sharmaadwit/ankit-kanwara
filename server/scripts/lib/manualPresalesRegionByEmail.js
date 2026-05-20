@@ -1,6 +1,9 @@
 /**
- * Confirmed presales logger email → region (May 2026).
- * Takes precedence over DB users when empty/wrong. Field-rep roster fills gaps.
+ * Presales user (who logged the activity) → region. NOT field sales rep.
+ *
+ * Two email columns in data — do not cross-map:
+ *   - Presales logger: assignedUserEmail / userName (PreSight Users: Ankit, Kathyayani, …)
+ *   - Field sales rep: salesRepEmail / salesRep on account (globalSalesReps) — separate; never used here
  */
 
 const SAATHWIK_EMAIL = 'saathwik.boregowda@gupshup.io';
@@ -106,24 +109,30 @@ function loadDefaultSalesRepRosterByEmail() {
   return byEmail;
 }
 
+/** Presales-only map: manual list + Postgres/storage users. No globalSalesReps. */
 function mergeManualIntoMap(map) {
   for (const [email, cfg] of Object.entries(MANUAL_PRESALES_REGION_BY_EMAIL)) {
     map.byEmail.set(email, {
       email,
       username: '',
       region: cfg.region,
-      source: 'manual'
+      source: 'manual_presales'
     });
   }
-  const roster = loadDefaultSalesRepRosterByEmail();
-  for (const [email, cfg] of roster) {
-    if (!map.byEmail.has(email)) {
-      map.byEmail.set(email, { email, username: '', region: cfg.region, source: 'field_rep' });
-    }
-  }
   map.count = map.byEmail.size;
-  map.source = `${map.source}+manual+field_rep`;
+  map.source = `${map.source}+manual_presales`;
   return map;
+}
+
+/**
+ * Who logged the activity (presales column only). Never salesRepEmail / field rep.
+ */
+function activityPresalesLoggerKey(activity) {
+  if (!activity || typeof activity !== 'object') return '';
+  const email = normEmail(activity.assignedUserEmail);
+  if (email) return email;
+  const name = activity.userName != null ? String(activity.userName).trim().toLowerCase() : '';
+  return name;
 }
 
 /**
@@ -166,5 +175,6 @@ module.exports = {
   mergeManualIntoMap,
   resolveLoggerRegion,
   regionForSaathwikActivity,
+  activityPresalesLoggerKey,
   loadDefaultSalesRepRosterByEmail
 };

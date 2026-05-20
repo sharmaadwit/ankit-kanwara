@@ -110,22 +110,12 @@ async function loadPresalesUserMap(pool) {
 
 const {
   mergeManualIntoMap,
-  resolveLoggerRegion
+  resolveLoggerRegion,
+  activityPresalesLoggerKey
 } = require('../scripts/lib/manualPresalesRegionByEmail');
 
-function activityLoggerKey(activity) {
-  return (
-    normEmail(activity.assignedUserEmail) ||
-    normEmail(activity.salesRepEmail) ||
-    normEmail(activity.userId) ||
-    (activity.userName && typeof activity.userName === 'string'
-      ? activity.userName.trim().toLowerCase()
-      : '')
-  );
-}
-
 function analyzeActivity(activity, map) {
-  const key = activityLoggerKey(activity);
+  const key = activityPresalesLoggerKey(activity);
   const current = normRegion(activity.salesRepRegion);
   if (!key) {
     return { activity, changed: false, reason: 'no_logger_id' };
@@ -144,6 +134,7 @@ function analyzeActivity(activity, map) {
   if (regionsEqual(current, lookup.region)) {
     return { activity, changed: false, reason: 'ok' };
   }
+  // Only salesRepRegion (reporting bucket). Do not change salesRep / salesRepEmail (field rep column).
   return {
     activity: { ...activity, salesRepRegion: lookup.region },
     changed: true,
@@ -291,7 +282,7 @@ module.exports = {
   runRegionCleanupDryRun,
   loadPresalesUserMap,
   analyzeActivity,
-  activityLoggerKey,
+  activityPresalesLoggerKey,
   parseJsonValue,
   processBuckets
 };
