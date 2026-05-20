@@ -1,0 +1,39 @@
+name: Region cleanup dry-run
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/region-cleanup-dryrun.yml'
+      - 'server/scripts/region-cleanup-dryrun-remote.js'
+      - 'server/services/regionCleanupDryRun.js'
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Region cleanup dry-run (remote storage)
+        env:
+          REMOTE_STORAGE_BASE: ${{ secrets.REMOTE_STORAGE_BASE }}
+          REMOTE_STORAGE_USER: ${{ secrets.REMOTE_STORAGE_USER }}
+          REMOTE_STORAGE_API_KEY: ${{ secrets.REMOTE_STORAGE_API_KEY }}
+        run: node server/scripts/region-cleanup-dryrun-remote.js | tee dryrun.log
+      - name: Job summary
+        run: |
+          echo "## Region cleanup dry-run" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 100 dryrun.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-cleanup-dryrun
+          path: server/scripts/region-cleanup-dryrun-remote-*.json
+          if-no-files-found: error
+          retention-days: 14
