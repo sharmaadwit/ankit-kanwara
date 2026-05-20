@@ -18,6 +18,9 @@ const {
 } = require('../services/storageRemoteFetch');
 const { processBuckets } = require('../services/regionCleanupDryRun');
 const { mergeManualIntoMap } = require('./lib/manualPresalesRegionByEmail');
+const { mergeAnnualReportPresalesIntoMap } = require('./lib/annualReportPresalesRegions');
+
+const ANNUAL_REPORT_ONLY = String(process.env.ANNUAL_REPORT_ONLY || '').toLowerCase() === 'true';
 
 const resolveFetch = async () => {
   if (typeof fetch === 'function') return fetch;
@@ -155,7 +158,8 @@ async function fetchRosterUsers(apiRoot, fetchImpl, headers) {
     userMap = buildUserMapFromList(usersRaw, 'storage.users');
   }
   mergeManualIntoMap(userMap);
-  console.log(`[users] after manual+field_rep map: ${userMap.count} emails`);
+  mergeAnnualReportPresalesIntoMap(userMap);
+  console.log(`[users] presales map: ${userMap.count} emails${ANNUAL_REPORT_ONLY ? ' (annual extras included)' : ''}`);
   if (userMap.count === 0) {
     console.error('[fatal] No presales users with defaultRegion');
     process.exit(2);
@@ -164,7 +168,7 @@ async function fetchRosterUsers(apiRoot, fetchImpl, headers) {
   const liveBuckets = new Map();
   const migBuckets = new Map();
   for (const key of keys) {
-    if (/^activities:\d{4}-\d{2}$/.test(key)) {
+    if (!ANNUAL_REPORT_ONLY && /^activities:\d{4}-\d{2}$/.test(key)) {
       const arr = await fetchKey(base, key, fetchImpl, headers);
       liveBuckets.set(key, Array.isArray(arr) ? arr : []);
       process.stdout.write(`  ${key} ${(arr || []).length}\n`);
@@ -175,7 +179,9 @@ async function fetchRosterUsers(apiRoot, fetchImpl, headers) {
     }
   }
 
-  const liveResult = processBuckets(liveBuckets, userMap);
+  const liveResult = ANNUAL_REPORT_ONLY
+    ? { stats: { would_fix: 0, unmapped: new Map() } }
+    : processBuckets(liveBuckets, userMap);
   const migResult = processBuckets(migBuckets, userMap);
 
   const mergeUnmapped = new Map();

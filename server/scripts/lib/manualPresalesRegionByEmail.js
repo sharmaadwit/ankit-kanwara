@@ -172,6 +172,7 @@ module.exports = {
   SAATHWIK_EMAIL,
   MANUAL_PRESALES_REGION_BY_EMAIL,
   MANUAL_PRESALES_USERS,
+  normEmail,
   mergeManualIntoMap,
   resolveLoggerRegion,
   regionForSaathwikActivity,
