@@ -12,6 +12,8 @@ on:
 jobs:
   dry-run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,3 +39,12 @@ jobs:
           path: server/scripts/region-cleanup-dryrun-remote-*.json
           if-no-files-found: error
           retention-days: 14
+      - name: Publish report on main (readable via git pull)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p reports
+          cp server/scripts/region-cleanup-dryrun-remote-*.json reports/region-cleanup-latest.json
+          git add reports/region-cleanup-latest.json
+          git diff --staged --quiet || git commit -m "chore: region cleanup dry-run report [skip ci]"
+          git push
