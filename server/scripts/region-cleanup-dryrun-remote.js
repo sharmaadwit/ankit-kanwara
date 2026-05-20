@@ -103,19 +103,30 @@ function buildUserMapFromList(users, sourceLabel) {
   return { byEmail, byUsername, source: sourceLabel, count: byEmail.size };
 }
 
-async function fetchAdminUsers(apiRoot, fetchImpl, headers) {
-  const adminHeaders = { ...headers };
+async function fetchRosterUsers(apiRoot, fetchImpl, headers) {
+  const root = apiRoot.replace(/\/$/, '');
   const apiKey = (process.env.REMOTE_STORAGE_API_KEY || process.env.STORAGE_API_KEY || '').trim();
-  if (apiKey && !adminHeaders['X-Admin-Api-Key']) {
-    adminHeaders['X-Admin-Api-Key'] = apiKey;
+  const rosterHeaders = { ...headers };
+  if (apiKey) {
+    rosterHeaders['X-Api-Key'] = rosterHeaders['X-Api-Key'] || apiKey;
+    rosterHeaders['X-Admin-Api-Key'] = apiKey;
   }
-  const url = `${apiRoot.replace(/\/$/, '')}/api/admin/users`;
-  const res = await fetchImpl(url, { headers: adminHeaders });
-  if (!res.ok) {
-    throw new Error(`GET /api/admin/users failed: ${res.status}`);
+
+  const tryUrls = [
+    { url: `${root}/api/users`, label: 'api/users' },
+    { url: `${root}/api/admin/users`, label: 'api/admin/users' }
+  ];
+  let lastErr = '';
+  for (const { url, label } of tryUrls) {
+    const res = await fetchImpl(url, { headers: rosterHeaders });
+    if (!res.ok) {
+      lastErr = `${label}: ${res.status}`;
+      continue;
+    }
+    const data = await res.json();
+    return { users: Array.isArray(data) ? data : [], label };
   }
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
+  throw new Error(lastErr || 'roster fetch failed');
 }
 
 (async () => {
@@ -134,11 +145,11 @@ async function fetchAdminUsers(apiRoot, fetchImpl, headers) {
   const apiRoot = base.replace(/\/api\/storage\/?$/i, '') || 'https://ankit-kanwara-production.up.railway.app';
   let userMap;
   try {
-    const adminUsers = await fetchAdminUsers(apiRoot, fetchImpl, headers);
-    userMap = buildUserMapFromList(adminUsers, 'postgres.api/admin/users');
-    console.log(`[users] admin API: ${adminUsers.length} rows, ${userMap.count} with defaultRegion`);
-  } catch (adminErr) {
-    console.warn(`[users] admin API failed (${adminErr.message}); falling back to storage.users`);
+    const { users: rosterUsers, label } = await fetchRosterUsers(apiRoot, fetchImpl, headers);
+    userMap = buildUserMapFromList(rosterUsers, `postgres.${label}`);
+    console.log(`[users] ${label}: ${rosterUsers.length} rows, ${userMap.count} with defaultRegion`);
+  } catch (rosterErr) {
+    console.warn(`[users] roster API failed (${rosterErr.message}); falling back to storage.users`);
     const usersRaw = await fetchKey(base, 'users', fetchImpl, headers);
     userMap = buildUserMapFromList(usersRaw, 'storage.users');
   }
