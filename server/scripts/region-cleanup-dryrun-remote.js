@@ -86,7 +86,7 @@ function regionFromUser(user) {
   return regions.map((r) => String(r).trim()).find(Boolean) || '';
 }
 
-function buildUserMapFromStorage(users) {
+function buildUserMapFromList(users, sourceLabel) {
   const byEmail = new Map();
   const byUsername = new Map();
   const list = Array.isArray(users) ? users : [];
@@ -100,7 +100,22 @@ function buildUserMapFromStorage(users) {
     if (email) byEmail.set(email, entry);
     if (username) byUsername.set(username, entry);
   }
-  return { byEmail, byUsername, source: 'storage.users', count: byEmail.size };
+  return { byEmail, byUsername, source: sourceLabel, count: byEmail.size };
+}
+
+async function fetchAdminUsers(apiRoot, fetchImpl, headers) {
+  const adminHeaders = { ...headers };
+  const apiKey = (process.env.REMOTE_STORAGE_API_KEY || process.env.STORAGE_API_KEY || '').trim();
+  if (apiKey && !adminHeaders['X-Admin-Api-Key']) {
+    adminHeaders['X-Admin-Api-Key'] = apiKey;
+  }
+  const url = `${apiRoot.replace(/\/$/, '')}/api/admin/users`;
+  const res = await fetchImpl(url, { headers: adminHeaders });
+  if (!res.ok) {
+    throw new Error(`GET /api/admin/users failed: ${res.status}`);
+  }
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 (async () => {
@@ -116,11 +131,19 @@ function buildUserMapFromStorage(users) {
   const keys = await fetchKeyList(base, fetchImpl, headers);
   console.log(`[keys] ${keys.length}`);
 
-  const usersRaw = await fetchKey(base, 'users', fetchImpl, headers);
-  const userMap = buildUserMapFromStorage(usersRaw);
-  console.log(`[users] presalesWithRegion=${userMap.count}`);
+  const apiRoot = base.replace(/\/api\/storage\/?$/i, '') || 'https://ankit-kanwara-production.up.railway.app';
+  let userMap;
+  try {
+    const adminUsers = await fetchAdminUsers(apiRoot, fetchImpl, headers);
+    userMap = buildUserMapFromList(adminUsers, 'postgres.api/admin/users');
+    console.log(`[users] admin API: ${adminUsers.length} rows, ${userMap.count} with defaultRegion`);
+  } catch (adminErr) {
+    console.warn(`[users] admin API failed (${adminErr.message}); falling back to storage.users`);
+    const usersRaw = await fetchKey(base, 'users', fetchImpl, headers);
+    userMap = buildUserMapFromList(usersRaw, 'storage.users');
+  }
   if (userMap.count === 0) {
-    console.error('[fatal] No users with defaultRegion in storage.users');
+    console.error('[fatal] No presales users with defaultRegion (admin API + storage.users)');
     process.exit(2);
   }
 
@@ -162,12 +185,21 @@ function buildUserMapFromStorage(users) {
     __dirname,
     `region-cleanup-dryrun-remote-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   );
+  const unmappedRows = unmapped.reduce((s, [, n]) => s + n, 0);
   fs.writeFileSync(
     reportPath,
     JSON.stringify(
       {
         source: base,
+        userMapSource: userMap.source,
         presalesUsersWithRegion: userMap.count,
+        summary: {
+          liveActivityFixes: liveResult.stats.would_fix,
+          migrationActivityFixes: migResult.stats.would_fix,
+          totalOffIndiaSouth: liveResult.stats.off_india_south + migResult.stats.off_india_south,
+          unmappedUnique: unmapped.length,
+          unmappedRows
+        },
         live: liveResult.stats,
         migration: migResult.stats,
         unmapped: unmapped.map(([identifier, rowCount]) => ({ identifier, rowCount }))
