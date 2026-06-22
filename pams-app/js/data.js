@@ -2576,11 +2576,22 @@ const DataManager = {
             try {
                 const activities = [];
 
-                // Get last 3 months in ISO format
+                // Get last 3 + next 3 months in ISO format
                 const now = new Date();
                 const months = [];
-                for (let i = 0; i < 3; i++) {
+
+                // Last 3 months
+                for (let i = 3; i > 0; i--) {
                     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    months.push(d.toISOString().slice(0, 7));
+                }
+
+                // Current month
+                months.push(now.toISOString().slice(0, 7));
+
+                // Next 3 months
+                for (let i = 1; i <= 3; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
                     months.push(d.toISOString().slice(0, 7));
                 }
 

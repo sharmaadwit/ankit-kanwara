@@ -114,14 +114,30 @@ async function migrateActivitiesByUserMonth() {
       client.release();
     }
 
-    // 5. Create recent months view (last 3 months for UI cache)
-    console.log('📅 Creating recent months view for UI...');
-    const sortedMonths = Object.keys(monthCounts).sort().reverse().slice(0, 3);
-    const recentActivities = [];
+    // 5. Create recent months view (last 3 + next 3 months for UI cache)
+    console.log('📅 Creating recent months view (last 3 + next 3 months)...');
+    const now = new Date();
+    const recentMonths = [];
 
+    // Last 3 months
+    for (let i = 3; i > 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      recentMonths.push(d.toISOString().slice(0, 7));
+    }
+
+    // Current month
+    recentMonths.push(now.toISOString().slice(0, 7));
+
+    // Next 3 months
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      recentMonths.push(d.toISOString().slice(0, 7));
+    }
+
+    const recentActivities = [];
     for (const [key, activities] of Object.entries(byUserMonth)) {
       const month = key.split(':')[0];
-      if (sortedMonths.includes(month)) {
+      if (recentMonths.includes(month)) {
         recentActivities.push(...activities);
       }
     }
@@ -140,7 +156,7 @@ async function migrateActivitiesByUserMonth() {
       completed_at: new Date().toISOString(),
       total_activities_migrated: allActivities.length,
       total_buckets: savedCount,
-      recent_months: sortedMonths,
+      recent_months: recentMonths,
       month_distribution: monthCounts
     };
 
