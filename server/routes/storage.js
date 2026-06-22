@@ -305,7 +305,7 @@ const validationKey = (key) =>
 /** D-002: Trigger dual-write to normalized tables after successful storage write. Fire-and-forget. */
 function triggerDualWrite(key, serializedValue) {
   const vkey = key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key) ? 'activities' : key;
-  if (!['accounts', 'activities', 'internalActivities', 'users'].includes(vkey)) return;
+  if (!['accounts', 'activities', 'internalActivities'].includes(vkey)) return;
   let parsed;
   try {
     const raw =

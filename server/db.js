@@ -355,6 +355,10 @@ const initDb = async () => {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+    // Fix any NULL is_active values (set to false)
+    await client.query(`
+      UPDATE users SET is_active = false WHERE is_active IS NULL;
+    `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
     `);

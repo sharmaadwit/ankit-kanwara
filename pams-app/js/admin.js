@@ -1314,7 +1314,7 @@ const Admin = {
         const statusFilter = (statusEl && statusEl.value) || 'active';
         let filtered = users;
         if (statusFilter === 'active') {
-            filtered = users.filter(u => u.isActive !== false);
+            filtered = users.filter(u => u.isActive === true);
         } else if (statusFilter === 'inactive') {
             filtered = users.filter(u => u.isActive === false);
         }
@@ -1328,7 +1328,7 @@ const Admin = {
 
         let html = '';
         filtered.forEach(user => {
-            const statusBadge = user.isActive !== false
+            const statusBadge = user.isActive === true
                 ? '<span class="badge badge-success">Active</span>'
                 : '<span class="badge badge-danger">Inactive</span>';
             const passwordBadge = user.forcePasswordChange
@@ -1583,7 +1583,7 @@ const Admin = {
                         </div>
                         <div class="form-group">
                             <label class="checkbox-label">
-                                <input type="checkbox" id="editUserActive" ${user.isActive !== false ? 'checked' : ''}>
+                                <input type="checkbox" id="editUserActive" ${user.isActive === true ? 'checked' : ''}>
                                 <span>Active</span>
                             </label>
                         </div>

@@ -33,7 +33,7 @@ const toPublicUser = (row) => ({
   regions: Array.isArray(row.regions) ? row.regions : (row.regions || []),
   salesReps: Array.isArray(row.sales_reps) ? row.sales_reps : (row.sales_reps || []),
   defaultRegion: row.default_region || '',
-  isActive: row.is_active === true
+  isActive: row.is_active === true ? true : false
 });
 
 /**

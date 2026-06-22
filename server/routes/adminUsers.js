@@ -25,7 +25,7 @@ function coerceRoles(roles) {
   return [];
 }
 
-/** Shape expected by client (admin list, dropdowns). No password. */
+/** Shape expected by client (admin list, dropdowns). No password. Ensure isActive is never undefined. */
 function toPublicUser(row) {
   return {
     id: row.id,
@@ -35,7 +35,7 @@ function toPublicUser(row) {
     regions: Array.isArray(row.regions) ? row.regions : (row.regions || []),
     salesReps: Array.isArray(row.sales_reps) ? row.sales_reps : (row.sales_reps || []),
     defaultRegion: row.default_region || '',
-    isActive: row.is_active === true,
+    isActive: row.is_active === true ? true : false,
     forcePasswordChange: Boolean(row.force_password_change),
     passwordUpdatedAt: row.password_updated_at || null
   };

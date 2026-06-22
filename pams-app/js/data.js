@@ -545,6 +545,9 @@ const DataManager = {
                 await this.applyMigrationCleanupIfNeeded();
             }
             this.ensureAnalyticsPresetBaseline();
+
+            // Refresh UI cache in background (fire-and-forget)
+            this.refreshUICache();
         } catch (error) {
             console.error('Error initializing data:', error);
         }
@@ -4921,6 +4924,94 @@ const DataManager = {
             email: resolvedEmail,
             region: resolvedRegion
         };
+    },
+
+    /**
+     * UI Cache: Load dashboard/stats immediately from cache, sync data in background
+     * Stores lightweight numbers: activity counts, targets, recent months
+     * Does NOT block page load - old cache shown while fresh data syncs
+     */
+    async getUICache() {
+        if (this.cache.uiCache) {
+            return this.cache.uiCache;
+        }
+        const key = 'uiCache';
+        try {
+            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__?.getItemAsync) {
+                const cached = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                if (cached) {
+                    const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached;
+                    this.cache.uiCache = parsed;
+                    return parsed;
+                }
+            }
+        } catch (_) { }
+        const stored = localStorage.getItem(key);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                this.cache.uiCache = parsed;
+                return parsed;
+            } catch (_) { }
+        }
+        return this.getDefaultUICache();
+    },
+
+    getDefaultUICache() {
+        return {
+            totalActivities: 0,
+            totalPresalesUsers: 0,
+            teamTarget: 0,
+            internalActivities: 0,
+            externalActivities: 0,
+            lastUpdated: null,
+            recentMonths: []
+        };
+    },
+
+    /**
+     * Update UI cache in background (fire-and-forget).
+     * Called after data loads, doesn't block UI. Old cache shown while updating.
+     */
+    async refreshUICache() {
+        setTimeout(async () => {
+            try {
+                const presalesUsers = (await this.getUsers()).filter(u => this.userIsPresalesUser(u) && u.isActive !== false);
+                const activities = await this.getActivities();
+                const internalActivities = await this.getInternalActivities();
+                const externalActivities = activities.length;
+                const internalCount = internalActivities.length;
+                const months = await this.getAvailableActivityMonths(true);
+
+                const cache = {
+                    totalActivities: activities.length,
+                    totalPresalesUsers: presalesUsers.length,
+                    teamTarget: presalesUsers.length * 20,
+                    internalActivities: internalCount,
+                    externalActivities: externalActivities,
+                    lastUpdated: new Date().toISOString(),
+                    recentMonths: months.slice(-3)
+                };
+
+                await this.saveUICache(cache);
+            } catch (err) {
+                console.warn('[DataManager] refreshUICache failed:', err);
+            }
+        }, 0);
+    },
+
+    async saveUICache(cache) {
+        const key = 'uiCache';
+        const payload = JSON.stringify(cache);
+        try {
+            if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__?.setItemAsync) {
+                await window.__REMOTE_STORAGE_ASYNC__.setItemAsync(key, payload);
+            }
+        } catch (_) { }
+        try {
+            localStorage.setItem(key, payload);
+        } catch (_) { }
+        this.cache.uiCache = cache;
     }
 };
 
