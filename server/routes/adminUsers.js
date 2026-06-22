@@ -35,7 +35,7 @@ function toPublicUser(row) {
     regions: Array.isArray(row.regions) ? row.regions : (row.regions || []),
     salesReps: Array.isArray(row.sales_reps) ? row.sales_reps : (row.sales_reps || []),
     defaultRegion: row.default_region || '',
-    isActive: row.is_active,
+    isActive: row.is_active === true,
     forcePasswordChange: Boolean(row.force_password_change),
     passwordUpdatedAt: row.password_updated_at || null
   };

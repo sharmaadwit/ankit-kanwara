@@ -92,6 +92,68 @@ async function syncAccounts(client, arr) {
 
 /**
  * @param {import('pg').PoolClient} client
+ * @param {Array<object>} arr - Parsed users array from storage
+ */
+async function syncUsers(client, arr) {
+  if (!Array.isArray(arr) || !arr.length) return;
+  const now = new Date().toISOString();
+  const bcrypt = require('bcrypt');
+
+  for (const u of arr) {
+    if (!u || !u.id) continue;
+
+    const username = (u.username != null ? String(u.username) : '').trim();
+    if (!username) continue;
+
+    let passwordHash = null;
+    if (u.password) {
+      try {
+        passwordHash = await bcrypt.hash(String(u.password), 10);
+      } catch (err) {
+        logger.warn('user_password_hash_failed', { userId: u.id, message: err.message });
+      }
+    }
+
+    const roles = Array.isArray(u.roles) ? JSON.stringify(u.roles) : null;
+    const regions = Array.isArray(u.regions) ? JSON.stringify(u.regions) : null;
+    const salesReps = Array.isArray(u.salesReps) ? JSON.stringify(u.salesReps) : null;
+
+    await client.query(
+      `INSERT INTO users (id, username, email, password_hash, roles, regions, sales_reps, default_region, is_active, force_password_change, password_updated_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (id) DO UPDATE SET
+         username = EXCLUDED.username,
+         email = EXCLUDED.email,
+         password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
+         roles = EXCLUDED.roles,
+         regions = EXCLUDED.regions,
+         sales_reps = EXCLUDED.sales_reps,
+         default_region = EXCLUDED.default_region,
+         is_active = EXCLUDED.is_active,
+         force_password_change = EXCLUDED.force_password_change,
+         password_updated_at = EXCLUDED.password_updated_at,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        u.id,
+        username,
+        u.email != null ? String(u.email) : null,
+        passwordHash,
+        roles,
+        regions,
+        salesReps,
+        u.defaultRegion != null ? String(u.defaultRegion) : null,
+        u.isActive === false ? false : true,
+        u.forcePasswordChange === true ? true : false,
+        u.passwordUpdatedAt != null ? String(u.passwordUpdatedAt) : null,
+        u.createdAt != null ? String(u.createdAt) : now,
+        now
+      ]
+    );
+  }
+}
+
+/**
+ * @param {import('pg').PoolClient} client
  * @param {Array<object>} arr - Parsed activities array from storage
  */
 async function syncActivities(client, arr) {
@@ -199,13 +261,14 @@ async function dualWriteAfterStorageWrite(pool, key, parsedValue) {
   if (String(process.env.NORMALIZED_TABLES_ENABLED || '').toLowerCase() !== 'true') return;
   if (!pool || !key || parsedValue == null) return;
   const k = key === 'activities' || /^activities:\d{4}-\d{2}$/.test(key) ? 'activities' : key;
-  if (!['accounts', 'activities', 'internalActivities'].includes(k)) return;
+  if (!['accounts', 'activities', 'internalActivities', 'users'].includes(k)) return;
   if (!Array.isArray(parsedValue)) return;
   const client = await pool.connect();
   try {
     if (k === 'accounts') await syncAccounts(client, parsedValue);
     else if (k === 'activities') await syncActivities(client, parsedValue);
     else if (k === 'internalActivities') await syncInternalActivities(client, parsedValue);
+    else if (k === 'users') await syncUsers(client, parsedValue);
   } catch (err) {
     logger.warn('normalized_dual_write_failed', { key: k, message: err.message });
   } finally {
@@ -217,5 +280,6 @@ module.exports = {
   syncAccounts,
   syncActivities,
   syncInternalActivities,
+  syncUsers,
   dualWriteAfterStorageWrite
 };
