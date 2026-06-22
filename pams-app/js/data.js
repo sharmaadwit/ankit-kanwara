@@ -2554,16 +2554,61 @@ const DataManager = {
     },
 
     // Activity Management
+    /**
+     * Get activities for current user, last 3 months.
+     * OPTIMIZED: loads user-specific data instead of all activities.
+     * Falls back to recent months view if no user found.
+     */
     async getActivities() {
-        // Use cache when set (e.g. right after addActivity) so a stale refetch does not hide the new activity
+        // Use cache when set (e.g. right after addActivity)
         if (this.cache.activities) {
             return this.cache.activities;
         }
-        // Try async first if available, fallback to sync for initial load
+
+        // Get current user
+        let currentUserId = null;
+        if (typeof Auth !== 'undefined' && Auth.currentUser?.id) {
+            currentUserId = Auth.currentUser.id;
+        }
+
+        // Load from async storage (remote or local)
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
-                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities');
-                const activities = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                const activities = [];
+
+                // Get last 3 months in ISO format
+                const now = new Date();
+                const months = [];
+                for (let i = 0; i < 3; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    months.push(d.toISOString().slice(0, 7));
+                }
+
+                // Load activities for current user + month (if available)
+                if (currentUserId) {
+                    for (const month of months) {
+                        const key = `activities:${month}:${currentUserId}`;
+                        try {
+                            const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                            if (stored) {
+                                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                                if (Array.isArray(parsed)) {
+                                    activities.push(...parsed);
+                                }
+                            }
+                        } catch (_) { /* month may not exist */ }
+                    }
+                }
+
+                // Fallback: load recent activities view (all users, last 3 months)
+                if (activities.length === 0) {
+                    const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities');
+                    const fallback = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                    if (Array.isArray(fallback)) {
+                        activities.push(...fallback);
+                    }
+                }
+
                 this.cache.activities = activities;
                 return activities;
             } catch (err) {
@@ -2571,11 +2616,50 @@ const DataManager = {
                 if (isEntityKey('activities')) return [];
             }
         }
+
+        // Fallback to sync storage (localStorage)
         if (isEntityKey('activities')) return [];
         const stored = localStorage.getItem('activities');
         const activities = stored ? JSON.parse(stored) : [];
         this.cache.activities = activities;
         return activities;
+    },
+
+    /**
+     * Load activities for a specific month + user.
+     * Use for lazy-loading older months.
+     */
+    async getActivitiesForMonth(monthYYYYMM, userIdOverride = null) {
+        if (!monthYYYYMM || !/^\d{4}-\d{2}$/.test(monthYYYYMM)) {
+            console.warn('[DataManager] Invalid month format:', monthYYYYMM);
+            return [];
+        }
+
+        const userId = userIdOverride || (typeof Auth !== 'undefined' ? Auth.currentUser?.id : null);
+        const key = userId ? `activities:${monthYYYYMM}:${userId}` : null;
+
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                if (key) {
+                    const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                    if (stored) {
+                        const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                        return Array.isArray(parsed) ? parsed : [];
+                    }
+                }
+            } catch (err) {
+                console.warn(`[DataManager] Failed to load activities for ${key}:`, err);
+            }
+        }
+
+        // Fallback to localStorage
+        try {
+            const stored = localStorage.getItem(key || `activities:${monthYYYYMM}`);
+            const parsed = stored ? JSON.parse(stored) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
     },
 
     async getActivitiesByProject(projectId) {

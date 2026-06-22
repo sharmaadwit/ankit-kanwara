@@ -31,7 +31,9 @@
     "backfill-normalized-dry": "node server/scripts/backfill-normalized-from-storage.js --dry-run",
     "syntax-check": "node scripts/syntax-check.js",
     "verify": "npm run syntax-check",
-    "push:safe": "npm run syntax-check && git push"
+    "push:safe": "npm run syntax-check && git push",
+    "backup:all-data": "node scripts/backup-all-data.js",
+    "migrate:activities-by-user-month": "node scripts/migrate-activities-by-user-month.js"
   },
   "engines": {
     "node": ">=18 <22"
