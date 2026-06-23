@@ -1086,6 +1086,10 @@ const Activities = {
                 <label class="form-label required">Description / MOM</label>
                 <textarea class="form-control" id="callDescription${suffix}" rows="4" required placeholder="Enter description or minutes of meeting..."></textarea>
             </div>
+            <div class="form-group">
+                <label class="form-label">Additional Notes</label>
+                <textarea class="form-control" id="callAdditionalNotes${suffix}" rows="3" placeholder="Any additional notes or follow-up items..."></textarea>
+            </div>
         `;
     },
 
@@ -1133,6 +1137,10 @@ const Activities = {
                     </div>
                 </div>
             </div>
+            <div class="form-group">
+                <label class="form-label">Additional Notes</label>
+                <textarea class="form-control" id="pocAdditionalNotes${suffix}" rows="3" placeholder="Any additional notes or observations..."></textarea>
+            </div>
         `;
     },
 
@@ -1163,6 +1171,10 @@ const Activities = {
             <div class="form-group">
                 <label class="form-label required">SOW Document Link</label>
                 <input type="url" class="form-control" id="sowLink${suffix}" placeholder="https://..." required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" id="sowDescription${suffix}" rows="4" placeholder="Describe the SOW, scope, timeline, and key deliverables..."></textarea>
             </div>
         `;
     },
