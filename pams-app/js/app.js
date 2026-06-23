@@ -32,7 +32,7 @@ const App = {
         timeframe: 'all',
         dateFrom: '',
         dateTo: '',
-        owner: 'mine'
+        owner: 'all'
     },
     activitySortBy: 'dateDesc',
     activitiesViewMode: 'cards',
@@ -3248,8 +3248,8 @@ const App = {
             await this.loadCardActivitiesView().catch(e => console.warn('loadCardActivitiesView failed', e));
             return;
         }
-        // Default owner filter to "My activities" when still "all" so list shows current user's activities
-        if (this.activityFilters.owner === 'all') {
+        // Ensure owner filter is properly initialized (default to 'all' for team-level view)
+        if (!this.activityFilters.owner) {
             this.activityFilters.owner = this.getDefaultActivityOwnerFilter();
         }
         // Initialize view mode if not set
@@ -5272,11 +5272,10 @@ const App = {
     },
 
     getDefaultActivityOwnerFilter() {
-        const currentUser = typeof Auth !== 'undefined' && typeof Auth.getCurrentUser === 'function'
-            ? Auth.getCurrentUser()
-            : null;
-        // Default to "myself" for everyone; admins can change to "All" in the filter
-        return currentUser?.id || 'mine';
+        const isAdmin = typeof Auth !== 'undefined' && typeof Auth.isAdmin === 'function' && Auth.isAdmin();
+        // Dashboard and Reports: default to "all" so team activities are visible.
+        // Only apply "mine" filter if user explicitly selects it or is viewing personal activities
+        return isAdmin ? 'all' : 'all';
     },
 
     getDefaultRecordOwnerFilter() {
@@ -5743,11 +5742,9 @@ const App = {
                 if (!isOwnedBy(targetOwnerId)) {
                     return false;
                 }
-            } else if (!isAdmin && currentUser?.id && ownerFilterRaw === 'mine') {
-                if (!isOwnedBy(currentUser.id)) {
-                    return false;
-                }
             }
+            // If owner filter is 'all' (default), show all activities to both admins and non-admins
+            // Users can explicitly select 'mine' if they want to see only their activities
 
             return true;
         });
