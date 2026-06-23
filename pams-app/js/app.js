@@ -1579,6 +1579,11 @@ const App = {
         // Destroy existing charts before reloading
         this.destroyDashboardCharts();
 
+        // Force fresh data load - invalidate cache to get team-level activities
+        if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+            DataManager.invalidateCache('activities', 'allActivities', 'internalActivities');
+        }
+
         const stats = await this.updateStats() || {};
 
         const [activitiesRaw, accounts, users] = await Promise.all([
@@ -4478,6 +4483,11 @@ const App = {
     // Load reports V2
     async loadReports() {
         try {
+            // Force fresh data load - invalidate cache to get team-level activities
+            if (typeof DataManager !== 'undefined' && DataManager.invalidateCache) {
+                DataManager.invalidateCache('activities', 'allActivities', 'internalActivities');
+            }
+
             const isYearMode = this.analyticsPeriodMode === 'year';
             const availablePeriods = isYearMode
                 ? await DataManager.getAvailableActivityYears()
