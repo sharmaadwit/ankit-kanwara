@@ -189,4 +189,10 @@ async function migrateActivitiesByUserMonth() {
   }
 }
 
-migrateActivitiesByUserMonth();
+// Export for use as API endpoint
+module.exports = { migrateActivitiesByUserMonth };
+
+// Run directly if called as script
+if (require.main === module) {
+  migrateActivitiesByUserMonth();
+}
