@@ -2555,9 +2555,8 @@ const DataManager = {
 
     // Activity Management
     /**
-     * Get activities for current user, last 3 months.
-     * OPTIMIZED: loads user-specific data instead of all activities.
-     * Falls back to recent months view if no user found.
+     * Get ALL team activities (dashboard view, last 3+3 months).
+     * This is the main view for dashboards, reports, team analytics.
      */
     async getActivities() {
         // Use cache when set (e.g. right after addActivity)
@@ -2565,18 +2564,51 @@ const DataManager = {
             return this.cache.activities;
         }
 
-        // Get current user
+        // Load from async storage (remote or local)
+        if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
+            try {
+                // Load recent activities view (all users, last 3+3 months)
+                const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities');
+                const activities = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
+                this.cache.activities = Array.isArray(activities) ? activities : [];
+                return this.cache.activities;
+            } catch (err) {
+                console.warn('[DataManager] Async getActivities failed:', err);
+                if (isEntityKey('activities')) return [];
+            }
+        }
+
+        // Fallback to sync storage (localStorage)
+        if (isEntityKey('activities')) return [];
+        const stored = localStorage.getItem('activities');
+        const activities = stored ? JSON.parse(stored) : [];
+        this.cache.activities = activities;
+        return activities;
+    },
+
+    /**
+     * Get ONLY current user's activities (personal view).
+     * Use for user-centric views (my activities, personal dashboard).
+     * Loads last 3+3 months split by user+month buckets.
+     */
+    async getUserActivities() {
+        const cacheKey = 'userActivities';
+        if (this.cache[cacheKey]) {
+            return this.cache[cacheKey];
+        }
+
         let currentUserId = null;
         if (typeof Auth !== 'undefined' && Auth.currentUser?.id) {
             currentUserId = Auth.currentUser.id;
         }
 
-        // Load from async storage (remote or local)
+        if (!currentUserId) {
+            return []; // No user, return empty
+        }
+
         if (typeof window !== 'undefined' && window.__REMOTE_STORAGE_ASYNC__ && window.__REMOTE_STORAGE_ASYNC__.getItemAsync) {
             try {
                 const activities = [];
-
-                // Get last 3 + next 3 months in ISO format
                 const now = new Date();
                 const months = [];
 
@@ -2595,45 +2627,29 @@ const DataManager = {
                     months.push(d.toISOString().slice(0, 7));
                 }
 
-                // Load activities for current user + month (if available)
-                if (currentUserId) {
-                    for (const month of months) {
-                        const key = `activities:${month}:${currentUserId}`;
-                        try {
-                            const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
-                            if (stored) {
-                                const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
-                                if (Array.isArray(parsed)) {
-                                    activities.push(...parsed);
-                                }
+                // Load activities for current user + month
+                for (const month of months) {
+                    const key = `activities:${month}:${currentUserId}`;
+                    try {
+                        const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync(key);
+                        if (stored) {
+                            const parsed = typeof stored === 'string' ? JSON.parse(stored) : stored;
+                            if (Array.isArray(parsed)) {
+                                activities.push(...parsed);
                             }
-                        } catch (_) { /* month may not exist */ }
-                    }
+                        }
+                    } catch (_) { /* month may not exist */ }
                 }
 
-                // Fallback: load recent activities view (all users, last 3 months)
-                if (activities.length === 0) {
-                    const stored = await window.__REMOTE_STORAGE_ASYNC__.getItemAsync('activities');
-                    const fallback = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : [];
-                    if (Array.isArray(fallback)) {
-                        activities.push(...fallback);
-                    }
-                }
-
-                this.cache.activities = activities;
+                this.cache[cacheKey] = activities;
                 return activities;
             } catch (err) {
-                console.warn('[DataManager] Async getActivities failed:', err);
-                if (isEntityKey('activities')) return [];
+                console.warn('[DataManager] getUserActivities failed:', err);
+                return [];
             }
         }
 
-        // Fallback to sync storage (localStorage)
-        if (isEntityKey('activities')) return [];
-        const stored = localStorage.getItem('activities');
-        const activities = stored ? JSON.parse(stored) : [];
-        this.cache.activities = activities;
-        return activities;
+        return [];
     },
 
     /**

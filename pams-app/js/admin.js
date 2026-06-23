@@ -1875,8 +1875,8 @@ const Admin = {
         const filtered = salesReps.filter(rep => {
             if (!rep) return false;
 
-            if (statusFilter === 'active' && rep.isActive === false) return false;
-            if (statusFilter === 'inactive' && rep.isActive !== false) return false;
+            if (statusFilter === 'active' && rep.isActive !== true) return false;
+            if (statusFilter === 'inactive' && rep.isActive === true) return false;
 
             const repRegion = rep.region || '';
             if (region && region !== 'all') {
@@ -1898,7 +1898,7 @@ const Admin = {
 
         const totalCount = salesReps.length;
         const filteredCount = filtered.length;
-        const activeCount = filtered.filter(rep => rep.isActive !== false).length;
+        const activeCount = filtered.filter(rep => rep.isActive === true).length;
 
         if (summaryEl) {
             let summary = `Showing ${filteredCount} of ${totalCount} sales users • Active: ${activeCount}`;
