@@ -1594,13 +1594,12 @@ const App = {
         const activities = activitiesRaw || [];
 
         // DEBUG: Log activity data to help diagnose team-level filtering issue
-        const currentUser = typeof Auth !== 'undefined' && Auth.getCurrentUser ? Auth.getCurrentUser() : null;
         const userActivityCounts = {};
         activities.forEach(a => {
             const uid = a.userId || 'unknown';
             userActivityCounts[uid] = (userActivityCounts[uid] || 0) + 1;
         });
-        console.log('[Dashboard] Activity counts by user:', userActivityCounts, 'Total:', activities.length, 'Current user:', currentUser?.id);
+        console.log('[Dashboard] Activity counts by user:', userActivityCounts, 'Total:', activities.length);
 
         const accountMap = new Map(accounts.map(a => [a.id, a]));
         const userMap = new Map(users.map(u => [u.id, u]));
