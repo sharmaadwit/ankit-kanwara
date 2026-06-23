@@ -211,6 +211,33 @@ const createApp = (options = {}) => {
     });
     next();
   };
+
+  // Temporary migration endpoint (token-based, no auth required)
+  app.post('/api/admin/migrate-activities', async (req, res) => {
+    try {
+      const token = req.get('x-migration-token');
+      const expectedToken = process.env.MIGRATION_TOKEN || 'temp-migration-2026';
+
+      if (token !== expectedToken) {
+        logger.warn('migration_unauthorized', { token: token ? 'present' : 'missing' });
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      logger.info('migration_started', { timestamp: new Date().toISOString() });
+
+      // Import migration script
+      const { migrateActivitiesByUserMonth } = require('../scripts/migrate-activities-by-user-month');
+
+      const result = await migrateActivitiesByUserMonth();
+
+      logger.info('migration_completed', result);
+      res.json({ success: true, message: 'Migration completed', data: result });
+    } catch (error) {
+      logger.error('migration_failed', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.use('/api/auth', authRouter);
   app.use('/api/users', sessionMiddleware, requireStorageAuth, usersRouter);
   app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);
@@ -371,31 +398,6 @@ const createApp = (options = {}) => {
     if (!staticDirExists || !indexExists) {
       logger.warn('static_missing_fallback', { staticDir, indexPath });
     }
-    // Temporary migration endpoint (REMOVE AFTER MIGRATION)
-    app.post('/api/admin/migrate-activities', async (req, res) => {
-      try {
-        const token = req.get('x-migration-token');
-        const expectedToken = process.env.MIGRATION_TOKEN || 'temp-migration-2026';
-
-        if (token !== expectedToken) {
-          return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        logger.info('migration_started', { timestamp: new Date().toISOString() });
-
-        // Import migration script
-        const { migrateActivitiesByUserMonth } = require('./scripts/migrate-activities-by-user-month');
-
-        const result = await migrateActivitiesByUserMonth();
-
-        logger.info('migration_completed', result);
-        res.json({ success: true, message: 'Migration completed', data: result });
-      } catch (error) {
-        logger.error('migration_failed', { message: error.message, stack: error.stack });
-        res.status(500).json({ error: error.message });
-      }
-    });
-
     app.use(express.static(staticDir, { extensions: ['html'] }));
     // Explicit root so GET / always serves the app (catch-all can still 404 if sendFile fails)
     app.get('/', (req, res) => {
