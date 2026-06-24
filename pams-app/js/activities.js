@@ -1456,15 +1456,13 @@ const Activities = {
         this.selectedUseCases = (this.selectedUseCases || []).map(norm);
         const selectedLower = new Set(this.selectedUseCases.map((s) => String(s).toLowerCase()));
 
-        // Gather options: industry-specific + universal (industry may be empty before one is picked).
+        // Gather options for the selected industry (industry may be empty before one is picked).
         let options = [];
         try {
             const ind = (industry || '').trim();
-            const [industryUC, universalUC] = await Promise.all([
-                ind && DataManager.getUseCasesForIndustry ? DataManager.getUseCasesForIndustry(ind) : Promise.resolve([]),
-                DataManager.getUniversalUseCases ? DataManager.getUniversalUseCases() : Promise.resolve([])
-            ]);
-            options = [...(industryUC || []), ...(universalUC || [])];
+            if (ind && DataManager.getUseCasesForIndustry) {
+                options = (await DataManager.getUseCasesForIndustry(ind)) || [];
+            }
         } catch (e) {
             console.warn('[Activities] refreshUseCaseOptions failed to load industry use cases:', e);
         }
@@ -1491,8 +1489,6 @@ const Activities = {
         this.selectedUseCases.forEach(addOption);
 
         cleaned.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-
-        try { console.log('[UseCases] industry="' + (industry || '') + '" → options:', cleaned); } catch (_) {}
 
         const esc = (s) => String(s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

@@ -101,6 +101,77 @@ function registerActivitiesDiagnostic(app) {
     }
   });
 
+  // ADDITIVE remap of industryUseCases: copy a source industry's use cases onto target industries
+  // (union, case-insensitive dedupe). Archives the current map first; never deletes any key.
+  app.post('/api/admin/remap-industry-usecases', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const mapping = (req.body && req.body.mapping) || {
+      'BFSI': ['Banking', 'Fintech', 'Insurance'],
+      'Retail & eCommerce': ['Retail'],
+      'Government': ['Government & Public Sector'],
+      'Media': ['Media & Entertainment']
+    };
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `SELECT value, updated_at FROM storage WHERE key = 'industryUseCases' FOR UPDATE`
+      );
+      if (!rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'industryUseCases not found' });
+      }
+      let raw = rows[0].value;
+      let decoded = raw;
+      if (typeof raw === 'string' && raw.startsWith('__lz__')) {
+        const LZ = require('../../pams-app/js/vendor/lz-string.js');
+        decoded = LZ.decompressFromBase64(raw.slice(6));
+      }
+      const map = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
+
+      const unionInto = (target, additions) => {
+        const cur = map[target] || [];
+        const seen = new Set(cur.map((s) => String(s).toLowerCase()));
+        const out = cur.slice();
+        (additions || []).forEach((uc) => {
+          const k = String(uc || '').trim();
+          if (k && !seen.has(k.toLowerCase())) { seen.add(k.toLowerCase()); out.push(k); }
+        });
+        out.sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
+        map[target] = out;
+      };
+
+      const summary = {};
+      Object.keys(mapping).forEach((src) => {
+        const source = map[src] || [];
+        (mapping[src] || []).forEach((target) => {
+          const before = (map[target] || []).length;
+          unionInto(target, source);
+          summary[target] = { from: src, sourceCount: source.length, before, after: map[target].length };
+        });
+      });
+
+      await client.query(
+        `INSERT INTO storage_history (key, value, updated_at, archived_at)
+         VALUES ('industryUseCases', $1, $2, NOW())`,
+        [rows[0].value, rows[0].updated_at]
+      );
+      await client.query(
+        `UPDATE storage SET value = $1, updated_at = NOW() WHERE key = 'industryUseCases'`,
+        [JSON.stringify(map)]
+      );
+      await client.query('COMMIT');
+      logger.info('remap_industry_usecases', { summary });
+      res.json({ ok: true, summary });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('remap_industry_usecases_failed', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // READ-ONLY: report composition of the team key and the per-user buckets.
   app.get('/api/admin/diagnose-activities', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
