@@ -177,6 +177,8 @@ function registerActivitiesDiagnostic(app) {
   app.post('/api/admin/apply-usecases', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
     const additions = (req.body && req.body.additions) || {};
+    const replace = (req.body && req.body.replace) || {};   // { industry: [exact list] }
+    const removals = (req.body && req.body.removals) || {}; // { industry: [to remove] }
     const universal = req.body && Array.isArray(req.body.universal) ? req.body.universal : null;
     const client = await getPool().connect();
     const LZ = require('../../pams-app/js/vendor/lz-string.js');
@@ -199,7 +201,7 @@ function registerActivitiesDiagnostic(app) {
       await client.query('BEGIN');
       const summary = { industries: {}, universal: null };
 
-      if (Object.keys(additions).length) {
+      if (Object.keys(additions).length || Object.keys(replace).length || Object.keys(removals).length) {
         const { rows } = await client.query(
           `SELECT value, updated_at FROM storage WHERE key = 'industryUseCases' FOR UPDATE`
         );
@@ -210,10 +212,25 @@ function registerActivitiesDiagnostic(app) {
             [rows[0].value, rows[0].updated_at]
           );
         }
+        // replace: set the industry's list exactly.
+        Object.keys(replace).forEach((ind) => {
+          const before = (map[ind] || []).length;
+          map[ind] = dedupSort(replace[ind] || []);
+          summary.industries[ind] = { before, after: map[ind].length, op: 'replace' };
+        });
+        // additions: union in.
         Object.keys(additions).forEach((ind) => {
           const before = (map[ind] || []).length;
           map[ind] = dedupSort([...(map[ind] || []), ...(additions[ind] || [])]);
-          summary.industries[ind] = { before, after: map[ind].length, added: additions[ind] };
+          summary.industries[ind] = { before, after: map[ind].length, op: 'add' };
+        });
+        // removals: drop the named use cases (case-insensitive).
+        Object.keys(removals).forEach((ind) => {
+          const rm = new Set((removals[ind] || []).map((s) => String(s).toLowerCase()));
+          const before = (map[ind] || []).length;
+          map[ind] = (map[ind] || []).filter((u) => !rm.has(String(u).toLowerCase()));
+          summary.industries[ind] = Object.assign(summary.industries[ind] || {}, { afterRemovals: map[ind].length, removed: removals[ind] });
+          if (before === map[ind].length && !summary.industries[ind].op) summary.industries[ind].op = 'remove';
         });
         await client.query(
           `INSERT INTO storage (key, value, updated_at) VALUES ('industryUseCases', $1, NOW())
