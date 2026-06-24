@@ -2159,6 +2159,21 @@ const Activities = {
     async saveActivity(event) {
         event.preventDefault();
 
+        // Guard against double-submit: a second click while the save is in flight would log the
+        // activity twice (the remote append path generates a fresh id each time and bypasses the
+        // local duplicate guard). Ignore re-entrant submits and disable the button + show "Saving…".
+        if (this._activitySaveInFlight) {
+            return;
+        }
+        this._activitySaveInFlight = true;
+        const submitBtn = (event && event.submitter)
+            || document.querySelector('#activityForm button[type="submit"]');
+        const prevBtnLabel = submitBtn ? submitBtn.innerHTML : null;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = 'Saving…';
+        }
+
         try {
             const currentUser = Auth.getCurrentUser();
             if (!currentUser) {
@@ -2253,6 +2268,15 @@ const Activities = {
         } catch (error) {
             console.error('Error in saveActivity:', error);
             UI.showNotification('An error occurred while saving the activity.', 'error');
+        } finally {
+            // Always clear the in-flight guard and restore the button, whether we saved,
+            // hit a validation return, or threw. On success the modal is already hidden so
+            // restoring the (detached/hidden) button is harmless.
+            this._activitySaveInFlight = false;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                if (prevBtnLabel !== null) submitBtn.innerHTML = prevBtnLabel;
+            }
         }
     },
 

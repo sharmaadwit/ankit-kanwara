@@ -3321,9 +3321,12 @@ const DataManager = {
      */
     async removeActivityViaServer(activityId) {
         const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) || '/api/storage';
+        // Use the same auth headers as every other storage write (includes X-Admin-User).
+        // Without this header, delete fails with 401 whenever the session cookie isn't recognized,
+        // even though logging (append) works — append sends these headers and remove previously did not.
         const res = await fetch(apiBase + '/activities/remove', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: pamsStorageAppendHeaders(),
             credentials: 'include',
             body: JSON.stringify({ activityId })
         });
