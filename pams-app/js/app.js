@@ -1593,13 +1593,13 @@ const App = {
         ]);
         const activities = activitiesRaw || [];
 
-        // DEBUG: Log activity data to help diagnose team-level filtering issue
+        // DEBUG: Confirm team-level data reaches the dashboard (remove after verification)
         const userActivityCounts = {};
         activities.forEach(a => {
             const uid = a.userId || 'unknown';
             userActivityCounts[uid] = (userActivityCounts[uid] || 0) + 1;
         });
-        console.log('[Dashboard] Activity counts by user:', userActivityCounts, 'Total:', activities.length);
+        console.log('[Dashboard] Total activities loaded:', activities.length, '| distinct users:', Object.keys(userActivityCounts).length, '| by user:', userActivityCounts);
 
         const accountMap = new Map(accounts.map(a => [a.id, a]));
         const userMap = new Map(users.map(u => [u.id, u]));
@@ -1630,6 +1630,9 @@ const App = {
             const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
             return month === viewMonth;
         });
+        // DEBUG: distinct users contributing to the displayed month count (remove after verification)
+        const monthUsers = new Set(monthActivities.map(a => a.userId || 'unknown'));
+        console.log(`[Dashboard] "${viewMonth}" month count: ${monthActivities.length} across ${monthUsers.size} users (this is the "Activities for month" card value)`);
 
         const weekActivities = isViewingCurrentMonth
             ? activities.filter(a => {
