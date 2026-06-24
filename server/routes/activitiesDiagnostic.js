@@ -172,6 +172,87 @@ function registerActivitiesDiagnostic(app) {
     }
   });
 
+  // Apply use-case changes: additive union into industryUseCases[industry] for each key in `additions`,
+  // and (optionally) REPLACE the universalUseCases list with `universal`. Archives both keys first.
+  app.post('/api/admin/apply-usecases', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const additions = (req.body && req.body.additions) || {};
+    const universal = req.body && Array.isArray(req.body.universal) ? req.body.universal : null;
+    const client = await getPool().connect();
+    const LZ = require('../../pams-app/js/vendor/lz-string.js');
+    const decode = (raw) => {
+      if (raw == null) return null;
+      let s = raw;
+      if (typeof s === 'string' && s.startsWith('__lz__')) s = LZ.decompressFromBase64(s.slice(6));
+      try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (_) { return null; }
+    };
+    const dedupSort = (arr) => {
+      const seen = new Set(); const out = [];
+      (arr || []).forEach((u) => {
+        const k = String(u || '').trim();
+        if (k && !seen.has(k.toLowerCase())) { seen.add(k.toLowerCase()); out.push(k); }
+      });
+      out.sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }));
+      return out;
+    };
+    try {
+      await client.query('BEGIN');
+      const summary = { industries: {}, universal: null };
+
+      if (Object.keys(additions).length) {
+        const { rows } = await client.query(
+          `SELECT value, updated_at FROM storage WHERE key = 'industryUseCases' FOR UPDATE`
+        );
+        const map = (rows.length && decode(rows[0].value)) || {};
+        if (rows.length) {
+          await client.query(
+            `INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ('industryUseCases', $1, $2, NOW())`,
+            [rows[0].value, rows[0].updated_at]
+          );
+        }
+        Object.keys(additions).forEach((ind) => {
+          const before = (map[ind] || []).length;
+          map[ind] = dedupSort([...(map[ind] || []), ...(additions[ind] || [])]);
+          summary.industries[ind] = { before, after: map[ind].length, added: additions[ind] };
+        });
+        await client.query(
+          `INSERT INTO storage (key, value, updated_at) VALUES ('industryUseCases', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()`,
+          [JSON.stringify(map)]
+        );
+      }
+
+      if (universal) {
+        const { rows } = await client.query(
+          `SELECT value, updated_at FROM storage WHERE key = 'universalUseCases' FOR UPDATE`
+        );
+        if (rows.length) {
+          await client.query(
+            `INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ('universalUseCases', $1, $2, NOW())`,
+            [rows[0].value, rows[0].updated_at]
+          );
+        }
+        const list = dedupSort(universal);
+        await client.query(
+          `INSERT INTO storage (key, value, updated_at) VALUES ('universalUseCases', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()`,
+          [JSON.stringify(list)]
+        );
+        summary.universal = { count: list.length };
+      }
+
+      await client.query('COMMIT');
+      logger.info('apply_usecases', { summary });
+      res.json({ ok: true, summary });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('apply_usecases_failed', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // READ-ONLY: report composition of the team key and the per-user buckets.
   app.get('/api/admin/diagnose-activities', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
