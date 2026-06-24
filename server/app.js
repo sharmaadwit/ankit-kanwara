@@ -238,6 +238,11 @@ const createApp = (options = {}) => {
     }
   });
 
+  // Temporary diagnostic + safe rebuild for team activities (token-based, no auth).
+  // GET /api/admin/diagnose-activities (read-only), POST /api/admin/rebuild-team-activities (additive only).
+  const { registerActivitiesDiagnostic } = require('./routes/activitiesDiagnostic');
+  registerActivitiesDiagnostic(app);
+
   app.use('/api/auth', authRouter);
   app.use('/api/users', sessionMiddleware, requireStorageAuth, usersRouter);
   app.use('/api/entities', sessionMiddleware, requireStorageAuth, entitiesRouter);

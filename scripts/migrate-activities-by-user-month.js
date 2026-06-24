@@ -171,7 +171,7 @@ async function migrateActivitiesByUserMonth() {
     console.log('📈 Migration Summary:');
     console.log(`  - Total activities migrated: ${allActivities.length}`);
     console.log(`  - User-month buckets created: ${savedCount}`);
-    console.log(`  - Recent months (in UI): ${sortedMonths.join(', ')}`);
+    console.log(`  - Recent months (in UI): ${recentMonths.join(', ')}`);
     console.log(`  - Month distribution:`, monthCounts);
     console.log('\n🎯 Next steps:');
     console.log('  1. Deploy the updated DataManager.getActivities()');

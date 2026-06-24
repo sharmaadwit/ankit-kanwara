@@ -1,0 +1,219 @@
+/**
+ * Activities diagnostic + safe rebuild (token-protected, temporary).
+ *
+ * Architecture recap:
+ *  - `activities`                      -> TEAM reporting JSON (all users, recent window). Dashboard + Reports read this.
+ *  - `activities:YYYY-MM:<userId>`     -> PER-USER buckets (one-time split snapshot from migration).
+ *
+ * The dashboard/reports read the team `activities` key with NO user filter (verified in data.js:
+ * getActivities / getAllActivities). So if a user only sees their own numbers, the TEAM key itself
+ * is missing other users' rows. These endpoints let us (1) confirm that, and (2) safely restore it.
+ *
+ * GET  /api/admin/diagnose-activities    -> read-only. Reports composition of team key + buckets.
+ * POST /api/admin/rebuild-team-activities -> additive ONLY. Unions team key with recent-window buckets,
+ *                                            archives current value first, and refuses to shrink. No deletes.
+ */
+const { getPool } = require('../db');
+const logger = require('../logger');
+
+const RECENT_BACK = 3; // months back
+const RECENT_FWD = 3;  // months forward
+
+const parseArray = (raw) => {
+  if (raw == null) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+const recentMonths = (now = new Date()) => {
+  const months = [];
+  for (let i = RECENT_BACK; i > 0; i--) {
+    months.push(new Date(now.getFullYear(), now.getMonth() - i, 1).toISOString().slice(0, 7));
+  }
+  months.push(now.toISOString().slice(0, 7));
+  for (let i = 1; i <= RECENT_FWD; i++) {
+    months.push(new Date(now.getFullYear(), now.getMonth() + i, 1).toISOString().slice(0, 7));
+  }
+  return months;
+};
+
+const activityTime = (a) => {
+  const t = new Date(a && (a.updatedAt || a.createdAt || a.date) || 0).getTime();
+  return Number.isFinite(t) ? t : 0;
+};
+
+/** Union by id; newer (updatedAt/createdAt/date) wins. Never drops an id present in either set. */
+const unionById = (base, extra) => {
+  const map = new Map();
+  const put = (a) => {
+    if (!a || a.id == null) return;
+    const key = String(a.id);
+    const existing = map.get(key);
+    if (!existing || activityTime(a) >= activityTime(existing)) {
+      map.set(key, a);
+    }
+  };
+  base.forEach(put);
+  extra.forEach(put);
+  return Array.from(map.values());
+};
+
+const countByUser = (arr) => {
+  const counts = {};
+  arr.forEach((a) => {
+    const uid = (a && (a.userId || a.assignedUserId)) || 'unknown';
+    counts[uid] = (counts[uid] || 0) + 1;
+  });
+  return counts;
+};
+
+const verifyToken = (req) => {
+  const token = req.get('x-migration-token');
+  const expected = process.env.MIGRATION_TOKEN || 'temp-migration-2026';
+  return token === expected;
+};
+
+/**
+ * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
+ */
+function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: report composition of the team key and the per-user buckets.
+  app.get('/api/admin/diagnose-activities', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const pool = getPool();
+
+      const teamRow = await pool.query(`SELECT value, updated_at FROM storage WHERE key = 'activities'`);
+      const teamArr = teamRow.rows.length ? parseArray(teamRow.rows[0].value) : [];
+
+      const bucketRows = await pool.query(
+        `SELECT key, value FROM storage WHERE key ~ '^activities:[0-9]{4}-[0-9]{2}:'`
+      );
+      const months = recentMonths();
+      let bucketTotal = 0;
+      let recentBucketArr = [];
+      const bucketsByMonth = {};
+      bucketRows.rows.forEach((row) => {
+        const arr = parseArray(row.value);
+        bucketTotal += arr.length;
+        const m = (row.key.split(':')[1]) || '';
+        bucketsByMonth[m] = (bucketsByMonth[m] || 0) + arr.length;
+        if (months.includes(m)) recentBucketArr = recentBucketArr.concat(arr);
+      });
+
+      const unionRecent = unionById(teamArr, recentBucketArr);
+
+      res.json({
+        ok: true,
+        now: new Date().toISOString(),
+        recentWindow: months,
+        teamKey: {
+          total: teamArr.length,
+          byUser: countByUser(teamArr),
+          updatedAt: teamRow.rows.length ? teamRow.rows[0].updated_at : null
+        },
+        perUserBuckets: {
+          bucketCount: bucketRows.rows.length,
+          totalRows: bucketTotal,
+          rowsByMonth: bucketsByMonth
+        },
+        rebuildPreview: {
+          recentBucketRows: recentBucketArr.length,
+          unionWithTeam: unionRecent.length,
+          wouldAdd: Math.max(0, unionRecent.length - teamArr.length),
+          unionByUser: countByUser(unionRecent)
+        }
+      });
+    } catch (error) {
+      logger.error('diagnose_activities_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ADDITIVE-ONLY: union team key with recent-window buckets. Archives first. Refuses to shrink.
+  app.post('/api/admin/rebuild-team-activities', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+
+      const teamRow = await client.query(
+        `SELECT value, updated_at FROM storage WHERE key = 'activities' FOR UPDATE`
+      );
+      const teamArr = teamRow.rows.length ? parseArray(teamRow.rows[0].value) : [];
+
+      const bucketRows = await client.query(
+        `SELECT key, value FROM storage WHERE key ~ '^activities:[0-9]{4}-[0-9]{2}:'`
+      );
+      const months = recentMonths();
+      let recentBucketArr = [];
+      bucketRows.rows.forEach((row) => {
+        const m = (row.key.split(':')[1]) || '';
+        if (months.includes(m)) recentBucketArr = recentBucketArr.concat(parseArray(row.value));
+      });
+
+      const union = unionById(teamArr, recentBucketArr);
+
+      // Safety: never write a smaller set than what's already there.
+      if (union.length < teamArr.length) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Refusing to shrink team activities',
+          before: teamArr.length,
+          computed: union.length
+        });
+      }
+
+      // No change needed.
+      if (union.length === teamArr.length) {
+        await client.query('ROLLBACK');
+        return res.json({
+          ok: true,
+          changed: false,
+          before: teamArr.length,
+          after: union.length,
+          message: 'Team key already contains all recent-window activities; nothing to add.'
+        });
+      }
+
+      // Insurance: archive current value before overwrite.
+      if (teamRow.rows.length) {
+        await client.query(
+          `INSERT INTO storage_history (key, value, updated_at, archived_at)
+           VALUES ('activities', $1, $2, NOW())`,
+          [teamRow.rows[0].value, teamRow.rows[0].updated_at]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO storage (key, value, updated_at) VALUES ('activities', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = NOW()`,
+        [JSON.stringify(union)]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info('rebuild_team_activities', { before: teamArr.length, after: union.length });
+      res.json({
+        ok: true,
+        changed: true,
+        before: teamArr.length,
+        after: union.length,
+        added: union.length - teamArr.length,
+        byUser: countByUser(union)
+      });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('rebuild_team_activities_failed', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+}
+
+module.exports = { registerActivitiesDiagnostic };
