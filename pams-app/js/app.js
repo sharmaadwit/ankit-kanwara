@@ -232,6 +232,15 @@ const App = {
                 window.__REMOTE_STORAGE_USER__ = currentUser.username;
                 window.__REMOTE_STORAGE_HEADERS__ = { 'X-Admin-User': currentUser.username };
             }
+            // Instant paint: reveal the app immediately with last session's dashboard (or a skeleton) so the
+            // user sees the Log Activity button + widgets right away instead of a ~10s blank/overlay. Fresh
+            // data then loads in the background with an "Updating…" pill bottom-left.
+            try {
+                if (typeof Auth !== 'undefined' && typeof Auth.showMainApp === 'function') Auth.showMainApp();
+                this.paintDashboardInstant();
+                this.setLoading(false);
+                this.showUpdatingPill('Updating…');
+            } catch (e) { console.warn('instant paint failed', e); }
             this.setLoadingProgress(50, 'Syncing activities & accounts…', this.getRandomLoadingTip());
             if (window.__REMOTE_STORAGE_ENABLED__ && typeof window.__REMOTE_STORAGE_RECONCILE__ === 'function') {
                 t0 = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
@@ -252,16 +261,15 @@ const App = {
             } else {
                 this.switchView(targetView);
             }
-            this.setLoadingProgress(90, 'Loading your view…', this.getRandomLoadingTip());
-            await new Promise(r => setTimeout(r, 500));
             this.setLoadingProgress(100, 'Ready!', '');
-            await new Promise(r => setTimeout(r, 180));
             const totalMs = Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - initStart);
             console.log('[PAMS init] total (prepare workspace):', totalMs + 'ms');
             this.setLoading(false);
+            this.hideUpdatingPill('Up to date');
         } catch (error) {
             console.error('Application initialization failed', error);
             this.setLoading(false);
+            this.hideUpdatingPill();
             if (typeof UI !== 'undefined' && typeof UI.showNotification === 'function') {
                 UI.showNotification('Failed to initialise application', 'error');
             }
@@ -711,6 +719,69 @@ const App = {
                 if (typeof app.loadDraftsView === 'function') app.loadDraftsView();
             }
         });
+    },
+
+    // ---- Instant dashboard paint (cached HTML from last session) + "Updating" pill ----
+    _dashboardCacheKey() {
+        const uid = (typeof Auth !== 'undefined' && Auth.currentUser && Auth.currentUser.id) ? Auth.currentUser.id : 'anon';
+        return '__pams_dashboard_cache_' + uid;
+    },
+    _localStore() {
+        try {
+            if (typeof window !== 'undefined' && window.__BROWSER_LOCAL_STORAGE__) return window.__BROWSER_LOCAL_STORAGE__;
+            if (typeof localStorage !== 'undefined') return localStorage;
+        } catch (_) {}
+        return null;
+    },
+    saveDashboardCache(html) {
+        const store = this._localStore();
+        if (!store || typeof html !== 'string' || html.length > 600000) return;
+        try { store.setItem(this._dashboardCacheKey(), html); } catch (_) {}
+    },
+    getDashboardCache() {
+        const store = this._localStore();
+        if (!store) return null;
+        try { return store.getItem(this._dashboardCacheKey()); } catch (_) { return null; }
+    },
+    /** Paint last session's dashboard (or a skeleton) so the app is visible/usable immediately while fresh data loads. */
+    paintDashboardInstant() {
+        const view = document.getElementById('dashboardView');
+        if (!view) return false;
+        const cached = this.getDashboardCache();
+        if (cached) {
+            view.innerHTML = cached;
+            view.setAttribute('data-cache-painted', '1');
+            return true;
+        }
+        // No cache: lightweight skeleton with a working Log Activity button.
+        view.innerHTML =
+            '<div style="margin-bottom:1.5rem;"><button class="btn btn-primary" onclick="Activities.openActivityModal()" style="padding:0.75rem 1.5rem;font-weight:600;">+ Log Activity</button></div>'
+            + '<div class="dashboard-skeleton" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">'
+            + Array.from({ length: 4 }).map(() => '<div class="skeleton-card" style="height:96px;border-radius:10px;background:linear-gradient(90deg,#eee,#f5f5f5,#eee);background-size:200% 100%;animation:pamsShimmer 1.2s infinite;"></div>').join('')
+            + '</div>'
+            + '<div class="dashboard-skeleton" style="margin-top:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">'
+            + Array.from({ length: 2 }).map(() => '<div class="skeleton-card" style="height:220px;border-radius:10px;background:linear-gradient(90deg,#eee,#f5f5f5,#eee);background-size:200% 100%;animation:pamsShimmer 1.2s infinite;"></div>').join('')
+            + '</div>';
+        view.setAttribute('data-cache-painted', '0');
+        return true;
+    },
+    showUpdatingPill(text) {
+        let pill = document.getElementById('pamsUpdatingPill');
+        if (!pill) {
+            pill = document.createElement('div');
+            pill.id = 'pamsUpdatingPill';
+            pill.className = 'pams-updating-pill';
+            document.body.appendChild(pill);
+        }
+        pill.innerHTML = '<span class="pams-updating-dot"></span>' + (text || 'Updating…');
+        pill.classList.remove('hidden', 'done');
+    },
+    hideUpdatingPill(doneText) {
+        const pill = document.getElementById('pamsUpdatingPill');
+        if (!pill) return;
+        pill.classList.add('done');
+        pill.innerHTML = doneText || 'Up to date';
+        setTimeout(() => { if (pill) pill.classList.add('hidden'); }, 1500);
     },
 
     setLoading(isLoading, message, options = {}) {
@@ -1593,14 +1664,6 @@ const App = {
         ]);
         const activities = activitiesRaw || [];
 
-        // DEBUG: Confirm team-level data reaches the dashboard (remove after verification)
-        const userActivityCounts = {};
-        activities.forEach(a => {
-            const uid = a.userId || 'unknown';
-            userActivityCounts[uid] = (userActivityCounts[uid] || 0) + 1;
-        });
-        console.log('[Dashboard] Total activities loaded:', activities.length, '| distinct users:', Object.keys(userActivityCounts).length, '| by user:', userActivityCounts);
-
         const accountMap = new Map(accounts.map(a => [a.id, a]));
         const userMap = new Map(users.map(u => [u.id, u]));
         const now = new Date();
@@ -1630,9 +1693,6 @@ const App = {
             const month = DataManager.resolveActivityMonth ? DataManager.resolveActivityMonth(a) : (a.date || '').substring(0, 7);
             return month === viewMonth;
         });
-        // DEBUG: distinct users contributing to the displayed month count (remove after verification)
-        const monthUsers = new Set(monthActivities.map(a => a.userId || 'unknown'));
-        console.log(`[Dashboard] "${viewMonth}" month count: ${monthActivities.length} across ${monthUsers.size} users (this is the "Activities for month" card value)`);
 
         const weekActivities = isViewingCurrentMonth
             ? activities.filter(a => {
@@ -1950,6 +2010,9 @@ const App = {
         `;
 
         dashboardView.innerHTML = html;
+        dashboardView.removeAttribute('data-cache-painted');
+        // Cache the freshly rendered dashboard so the next login paints it instantly.
+        try { this.saveDashboardCache(html); } catch (_) {}
         this.applyAppConfiguration();
 
         dashboardView.querySelectorAll('.pricing-log-activity-btn').forEach(btn => {

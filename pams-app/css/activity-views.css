@@ -424,6 +424,49 @@
   }
 }
 
+/* Bottom-left "Updating…" pill (instant-load background refresh) */
+.pams-updating-pill {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--gray-900, #1A202C);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  opacity: 0.96;
+  transition: opacity 0.4s ease, transform 0.3s ease;
+}
+.pams-updating-pill.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+.pams-updating-pill.done {
+  background: var(--success, #48BB78);
+}
+.pams-updating-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: pamsPulse 1s ease-in-out infinite;
+}
+@keyframes pamsPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+@keyframes pamsShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Utility Classes */
 
 .text-muted {

@@ -983,6 +983,14 @@ const Activities = {
             (categoryRadio && categoryRadio.value === 'external');
         if (projectUseCasesGroup) {
             projectUseCasesGroup.style.display = isExternal ? 'block' : 'none';
+            // Robustness: whenever the external fields (re)render, make sure the Primary Use Case
+            // checkboxes reflect the currently selected industry. This covers any path where the
+            // industry was set without firing handleIndustryChange.
+            if (isExternal) {
+                const industrySel = document.getElementById('industry');
+                const indVal = industrySel ? (industrySel.value === 'Other' ? '' : industrySel.value) : '';
+                this.refreshUseCaseOptions(indVal).catch(() => { });
+            }
         }
         if (projectProductsGroup) {
             projectProductsGroup.style.display = isExternal ? 'block' : 'none';
@@ -1483,6 +1491,8 @@ const Activities = {
         this.selectedUseCases.forEach(addOption);
 
         cleaned.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        try { console.log('[UseCases] industry="' + (industry || '') + '" → options:', cleaned); } catch (_) {}
 
         const esc = (s) => String(s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
