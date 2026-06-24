@@ -81,6 +81,26 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: dump a single storage key's value (for inspecting config like industryUseCases).
+  app.get('/api/admin/diagnose-storage', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const key = String(req.query.key || '').trim();
+      if (!key) return res.status(400).json({ error: 'Missing ?key=' });
+      const { rows } = await getPool().query(
+        'SELECT value, updated_at FROM storage WHERE key = $1',
+        [key]
+      );
+      if (!rows.length) return res.json({ ok: true, key, exists: false, value: null });
+      let value = rows[0].value;
+      try { value = typeof value === 'string' ? JSON.parse(value) : value; } catch (_) { /* keep raw */ }
+      res.json({ ok: true, key, exists: true, updatedAt: rows[0].updated_at, value });
+    } catch (error) {
+      logger.error('diagnose_storage_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // READ-ONLY: report composition of the team key and the per-user buckets.
   app.get('/api/admin/diagnose-activities', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
