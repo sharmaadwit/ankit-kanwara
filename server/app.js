@@ -403,18 +403,44 @@ const createApp = (options = {}) => {
     if (!staticDirExists || !indexExists) {
       logger.warn('static_missing_fallback', { staticDir, indexPath });
     }
-    app.use(express.static(staticDir, { extensions: ['html'] }));
-    // Explicit root so GET / always serves the app (catch-all can still 404 if sendFile fails)
-    app.get('/', (req, res) => {
-      if (indexExists) {
-        return res.sendFile(indexPath);
+
+    // Cache-busting: inject a per-deploy version into local js/ and css/ asset URLs in index.html so a
+    // new deploy always changes the URLs and browsers/proxies fetch fresh code (defends against a stale
+    // cached copy from an older deploy that had a long TTL). CDN/absolute URLs are left untouched.
+    const ASSET_VERSION = String(
+      process.env.RAILWAY_DEPLOYMENT_ID ||
+      process.env.RAILWAY_GIT_COMMIT_SHA ||
+      process.env.BUILD_ID ||
+      Date.now()
+    ).slice(0, 20);
+    let indexHtmlCached;
+    const getIndexHtml = () => {
+      if (indexHtmlCached !== undefined) return indexHtmlCached;
+      try {
+        const raw = fs.readFileSync(indexPath, 'utf8');
+        indexHtmlCached = raw.replace(/(src|href)="((?:js|css)\/[^"?]+)"/g,
+          (m, attr, p) => `${attr}="${p}?v=${ASSET_VERSION}"`);
+      } catch (e) {
+        indexHtmlCached = null;
       }
-      res.status(503).send('<!DOCTYPE html><html><body><h1>App not found</h1><p>Static files missing. Check build.</p></body></html>');
-    });
+      return indexHtmlCached;
+    };
+    const sendIndex = (res) => {
+      const html = indexExists ? getIndexHtml() : null;
+      if (html) {
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      }
+      if (indexExists) return res.sendFile(indexPath);
+      return res.status(503).send('<!DOCTYPE html><html><body><h1>App not found</h1><p>Static files missing. Check build.</p></body></html>');
+    };
+
+    // Serve the version-injected index.html for the app entry points BEFORE express.static (so static
+    // doesn't serve the raw, unversioned file for "/" or "/index.html").
+    app.get(['/', '/index.html'], (req, res) => sendIndex(res));
+    app.use(express.static(staticDir, { index: false, extensions: ['html'] }));
     app.get('*', (req, res) => {
-      if (indexExists) {
-        return res.sendFile(indexPath);
-      }
+      if (indexExists) return sendIndex(res);
       res.status(404).send('Not found');
     });
   }
