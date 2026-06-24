@@ -15,6 +15,7 @@ const COMMON_PRODUCTS = [
 
 const Activities = {
     selectedUseCases: [],
+    selectedSecondaryUseCases: [],
     selectedChannels: [],
     selectedProjectProducts: [],
     editingContext: null,
@@ -228,6 +229,7 @@ const Activities = {
         const dateInput = document.getElementById('activityDate');
         if (dateInput && formData.date) dateInput.value = formData.date;
         if (Array.isArray(formData.selectedUseCases)) this.selectedUseCases = formData.selectedUseCases.slice();
+        if (Array.isArray(formData.selectedSecondaryUseCases)) this.selectedSecondaryUseCases = formData.selectedSecondaryUseCases.slice();
         const callType = document.getElementById('callType');
         if (callType && formData.callType) callType.value = formData.callType;
         const callDesc = document.getElementById('callDescription');
@@ -553,9 +555,11 @@ const Activities = {
         }
 
         this.selectedUseCases = [];
+        this.selectedSecondaryUseCases = [];
         this.selectedProjectProducts = [];
         this.selectedChannels = [];
         this.syncMultiSelectState('useCase', []);
+        this.syncMultiSelectState('secondaryUseCase', []);
         this.updateMultiSelectDisplay('projectProductsSelected', []);
         this.updateMultiSelectDisplay('channelsSelected', []);
     },
@@ -791,6 +795,13 @@ const Activities = {
                                     <input type="text" class="form-control" id="projectLocation" placeholder="e.g. store, region, territory (Retail & others)">
                                 </div>
                             </div>
+                            <div class="form-group" id="projectSecondaryUseCasesGroup">
+                                <label class="form-label">Secondary Use Case <span class="text-muted small">(industry-specific — pick the relevant journeys)</span></label>
+                                <div class="checkbox-group secondary-use-case-cbs">
+                                    <span class="text-muted small">Select an industry above to see use cases…</span>
+                                </div>
+                                <input type="text" class="form-control" id="secondaryUseCaseOtherText" placeholder="Specify other use case..." style="margin-top: 0.5rem; display: none;">
+                            </div>
                             <div class="form-group" id="projectProductsGroup">
                                 <label class="form-label required">Products Interested</label>
                                 <div class="multi-select-container">
@@ -994,6 +1005,10 @@ const Activities = {
         }
         if (projectProductsGroup) {
             projectProductsGroup.style.display = isExternal ? 'block' : 'none';
+        }
+        const projectSecondaryUseCasesGroup = document.getElementById('projectSecondaryUseCasesGroup');
+        if (projectSecondaryUseCasesGroup) {
+            projectSecondaryUseCasesGroup.style.display = isExternal ? 'block' : 'none';
         }
 
         let html = '';
@@ -1320,6 +1335,28 @@ const Activities = {
         this.syncMultiSelectState('useCase', selectedArray);
     },
 
+    onSecondaryUseCaseCheckboxChange(checkbox) {
+        if (!checkbox) return;
+        const value = checkbox.value;
+        const selectedArray = this.selectedSecondaryUseCases || (this.selectedSecondaryUseCases = []);
+        const otherTextId = 'secondaryUseCaseOtherText';
+        const index = selectedArray.indexOf(value);
+        if (checkbox.checked) {
+            if (index === -1) selectedArray.push(value);
+            if (value === 'Other') {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) { otherText.style.display = 'block'; otherText.focus(); }
+            }
+        } else {
+            if (index > -1) selectedArray.splice(index, 1);
+            if (value === 'Other') {
+                const otherText = document.getElementById(otherTextId);
+                if (otherText) { otherText.style.display = 'none'; otherText.value = ''; }
+            }
+        }
+        this.syncMultiSelectState('secondaryUseCase', selectedArray);
+    },
+
     toggleOption(category, value) {
         if (typeof event !== 'undefined' && event && typeof event.stopPropagation === 'function') {
             event.stopPropagation();
@@ -1403,6 +1440,15 @@ const Activities = {
             }
             return;
         }
+        if (category === 'secondaryUseCase') {
+            const wrap = document.getElementById('projectSecondaryUseCasesGroup');
+            if (wrap) {
+                wrap.querySelectorAll('input[name="secondaryUseCase"]').forEach((checkbox) => {
+                    checkbox.checked = selectedValues.includes(checkbox.value);
+                });
+            }
+            return;
+        }
         let dropdownId = '';
         if (category === 'projectProducts') {
             dropdownId = 'projectProductsDropdown';
@@ -1435,16 +1481,18 @@ const Activities = {
         this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => { });
     },
 
+    /** The fixed Primary Use Case buckets (broad). Secondary use cases exclude these. */
+    PRIMARY_USE_CASE_BUCKETS: ['Commerce', 'Marketing', 'Support'],
+
     /**
-     * Rebuild the Primary Use Case checkboxes from the admin-configured use cases for the selected
-     * industry (plus any universal use cases), preserving current selections and always offering
-     * "Other". Previously this ignored the industry and left 4 hardcoded options, so industry-specific
-     * use cases configured by admins never appeared on the log-activity form.
+     * Rebuild the SECONDARY Use Case checkboxes from the universal (all-industries) list plus the
+     * admin-configured use cases for the selected industry, excluding the primary buckets. Preserves
+     * current selections and always offers "Other". Primary Use Case stays the fixed 3 buckets.
      */
     async refreshUseCaseOptions(industry) {
-        const wrap = document.getElementById('projectUseCasesGroup');
+        const wrap = document.getElementById('projectSecondaryUseCasesGroup');
         if (!wrap) return;
-        const cbContainer = wrap.querySelector('.primary-use-case-cbs');
+        const cbContainer = wrap.querySelector('.secondary-use-case-cbs');
         if (!cbContainer) return;
 
         const norm = (uc) =>
@@ -1452,53 +1500,54 @@ const Activities = {
                 ? DataManager.normalizePrimaryUseCaseLabel(uc)
                 : uc;
 
-        // Normalize current selections so checked state survives a rebuild.
-        this.selectedUseCases = (this.selectedUseCases || []).map(norm);
-        const selectedLower = new Set(this.selectedUseCases.map((s) => String(s).toLowerCase()));
+        this.selectedSecondaryUseCases = (this.selectedSecondaryUseCases || []).map(norm);
+        const selectedLower = new Set(this.selectedSecondaryUseCases.map((s) => String(s).toLowerCase()));
+        const primaryLower = new Set(this.PRIMARY_USE_CASE_BUCKETS.map((s) => s.toLowerCase()));
 
-        // Gather options for the selected industry (industry may be empty before one is picked).
-        let options = [];
+        // Universal (all industries) + industry-specific. Industry may be empty before one is picked.
+        let universal = [];
+        let industryUC = [];
+        try {
+            if (DataManager.getUniversalUseCases) universal = (await DataManager.getUniversalUseCases()) || [];
+        } catch (_) { /* key may be absent */ }
         try {
             const ind = (industry || '').trim();
-            if (ind && DataManager.getUseCasesForIndustry) {
-                options = (await DataManager.getUseCasesForIndustry(ind)) || [];
-            }
+            if (ind && DataManager.getUseCasesForIndustry) industryUC = (await DataManager.getUseCasesForIndustry(ind)) || [];
         } catch (e) {
             console.warn('[Activities] refreshUseCaseOptions failed to load industry use cases:', e);
         }
 
-        // Normalize + dedupe (case-insensitive); drop "Other" (re-added at the end).
+        // Dedupe (case-insensitive); drop the primary buckets and "Other" (re-added at the end).
         const seen = new Set();
         const cleaned = [];
         const addOption = (uc) => {
             const k = String(norm(uc) || '').trim();
-            if (!k || k.toLowerCase() === 'other') return;
+            if (!k) return;
             const lk = k.toLowerCase();
-            if (seen.has(lk)) return;
+            if (lk === 'other' || primaryLower.has(lk) || seen.has(lk)) return;
             seen.add(lk);
             cleaned.push(k);
         };
-        options.forEach(addOption);
-
-        // Fallback so the user always has something to pick if no use cases are configured yet.
-        if (cleaned.length === 0) {
-            ['Support', 'Commerce', 'Marketing'].forEach(addOption);
-        }
-
-        // Keep any already-selected use case that isn't in the list so we never silently drop a saved value.
-        this.selectedUseCases.forEach(addOption);
+        universal.forEach(addOption);
+        industryUC.forEach(addOption);
+        // Keep any already-selected secondary that isn't in the list so we never drop a saved value.
+        this.selectedSecondaryUseCases.forEach(addOption);
 
         cleaned.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
         const esc = (s) => String(s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+        if (cleaned.length === 0) {
+            cbContainer.innerHTML = '<span class="text-muted small">Select an industry above to see use cases…</span>';
+            return;
+        }
         let html = cleaned.map((uc) => {
             const checked = selectedLower.has(uc.toLowerCase()) ? 'checked' : '';
-            return `<label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="${esc(uc)}" ${checked} onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>${esc(uc)}</span></label>`;
+            return `<label class="checkbox-label"><input type="checkbox" name="secondaryUseCase" value="${esc(uc)}" ${checked} onchange="Activities.onSecondaryUseCaseCheckboxChange(this)"><span>${esc(uc)}</span></label>`;
         }).join('');
         const otherChecked = selectedLower.has('other') ? 'checked' : '';
-        html += `<label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Other" id="useCaseOtherCheck" ${otherChecked} onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Other</span></label>`;
+        html += `<label class="checkbox-label"><input type="checkbox" name="secondaryUseCase" value="Other" id="secondaryUseCaseOtherCheck" ${otherChecked} onchange="Activities.onSecondaryUseCaseCheckboxChange(this)"><span>Other</span></label>`;
         cbContainer.innerHTML = html;
     },
 
@@ -2132,6 +2181,23 @@ const Activities = {
             this.syncMultiSelectState('useCase', this.selectedUseCases);
         }
 
+        // Pre-populate Secondary Use Cases (industry-specific)
+        if (project.secondaryUseCases && project.secondaryUseCases.length > 0) {
+            this.selectedSecondaryUseCases = [];
+            project.secondaryUseCases.forEach(uc => {
+                const ucStr = typeof uc === 'string' ? uc : String(uc || '');
+                if (ucStr.startsWith('Other: ')) {
+                    this.selectedSecondaryUseCases.push('Other');
+                    const otherText = document.getElementById('secondaryUseCaseOtherText');
+                    if (otherText) { otherText.value = ucStr.replace('Other: ', ''); otherText.style.display = 'block'; }
+                } else {
+                    this.selectedSecondaryUseCases.push(ucStr);
+                }
+            });
+            const indVal = (document.getElementById('industry')?.value) || '';
+            await this.refreshUseCaseOptions(indVal === 'Other' ? '' : indVal);
+        }
+
         // Pre-populate Products Interested
         if (project.productsInterested && project.productsInterested.length > 0) {
             this.selectedProjectProducts = [];
@@ -2197,6 +2263,17 @@ const Activities = {
             useCaseOtherText.required = false;
         }
         this.syncMultiSelectState('useCase', []);
+
+        // Clear Secondary Use Cases
+        this.selectedSecondaryUseCases = [];
+        const secondaryUseCaseOtherText = document.getElementById('secondaryUseCaseOtherText');
+        if (secondaryUseCaseOtherText) {
+            secondaryUseCaseOtherText.value = '';
+            secondaryUseCaseOtherText.style.display = 'none';
+        }
+        const secCbs = document.querySelector('.secondary-use-case-cbs');
+        if (secCbs) secCbs.innerHTML = '<span class="text-muted small">Select an industry above to see use cases…</span>';
+        this.syncMultiSelectState('secondaryUseCase', []);
 
         // Clear Products
         this.selectedProjectProducts = [];
@@ -2615,6 +2692,12 @@ const Activities = {
                         uc === 'Other' ? `Other: ${useCaseOtherText}` : norm(uc)
                     );
                 }
+                if (this.selectedSecondaryUseCases && this.selectedSecondaryUseCases.length > 0) {
+                    const secOtherText = document.getElementById('secondaryUseCaseOtherText')?.value || '';
+                    updates.secondaryUseCases = this.selectedSecondaryUseCases.map((uc) =>
+                        uc === 'Other' ? `Other: ${secOtherText}` : uc
+                    );
+                }
                 if (Object.keys(updates).length > 0) {
                     await DataManager.updateProject(finalAccountId, finalProjectId, updates);
                 }
@@ -2649,6 +2732,12 @@ const Activities = {
                             : (u) => u;
                     project.useCases = this.selectedUseCases.map((uc) =>
                         uc === 'Other' ? `Other: ${useCaseOtherText}` : norm(uc)
+                    );
+                }
+                if (this.selectedSecondaryUseCases && this.selectedSecondaryUseCases.length > 0) {
+                    const secOtherText = document.getElementById('secondaryUseCaseOtherText')?.value || '';
+                    project.secondaryUseCases = this.selectedSecondaryUseCases.map((uc) =>
+                        uc === 'Other' ? `Other: ${secOtherText}` : uc
                     );
                 }
                 pendingAccountsSave = accounts;
@@ -3273,6 +3362,7 @@ const Activities = {
     async resetActivityForm() {
         this.activityType = null;
         this.selectedUseCases = [];
+        this.selectedSecondaryUseCases = [];
         this.selectedChannels = [];
         this.selectedProjectProducts = [];
         this.currentSalesRepRegion = await this.getDefaultSalesRepRegion();
