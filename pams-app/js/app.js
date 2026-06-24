@@ -3432,7 +3432,17 @@ const App = {
             return e && e !== 'Submitting…';
         };
         const failedSorted = userDrafts.filter(draftHasFailure).sort((a, b) => String(b.attemptedAt || '').localeCompare(String(a.attemptedAt || '')));
-        const drafts = failedSorted.length ? [failedSorted[0]] : [];
+        // A "bulk"/full-list draft is a legacy payload holding the whole activities array (or a _fullList
+        // envelope). Those are not per-activity and cannot be edited one row at a time. Show every
+        // per-activity failed draft (the activities that did not sync) and keep legacy bulk drafts out of
+        // the cards — surfaced separately with a safe one-click discard.
+        const isBulkDraft = (d) => {
+            const payload = d && d.payload;
+            return (Array.isArray(payload) && payload.length > 0)
+                || (!!payload && payload._fullList === true && typeof payload.payloadJson === 'string');
+        };
+        const drafts = failedSorted.filter(d => !isBulkDraft(d));
+        const legacyBulkDrafts = failedSorted.filter(isBulkDraft);
         this.updateDraftsBadge();
 
         // No longer auto-moving Feb activities to drafts for missing use cases; keep counter correct without drafts.
@@ -3467,13 +3477,40 @@ const App = {
             }
         }
 
+        // Notice + one-click discard for any legacy bulk/full-list drafts (shown separately from cards).
+        const bulkNoticeHtml = legacyBulkDrafts.length
+            ? '<div class="draft-bulk-notice text-muted small mt-2" style="margin-top:1rem;padding:0.75rem;border:1px solid var(--gray-200);border-radius:8px;">'
+                + 'You have ' + legacyBulkDrafts.length + ' old bulk draft' + (legacyBulkDrafts.length === 1 ? '' : 's')
+                + ' from a previous version — each holds a whole list of activities and can\'t be edited per-activity. '
+                + 'Check your Activities list first; if those activities are already there, you can discard these.'
+                + '<br><button type="button" class="btn btn-outline btn-sm" id="draftsDiscardBulkBtn" style="margin-top:0.5rem;">Discard old bulk draft' + (legacyBulkDrafts.length === 1 ? '' : 's') + '</button>'
+                + '</div>'
+            : '';
+        const wireBulkDiscard = () => {
+            const btn = document.getElementById('draftsDiscardBulkBtn');
+            if (!btn) return;
+            btn.addEventListener('click', function () {
+                const n = legacyBulkDrafts.length;
+                if (!window.confirm('Discard ' + n + ' old bulk draft' + (n === 1 ? '' : 's') + '? Do this only if these activities already appear in your Activities list. This cannot be undone.')) {
+                    return;
+                }
+                if (typeof Drafts !== 'undefined') {
+                    legacyBulkDrafts.forEach(d => Drafts.removeDraft(d.id));
+                }
+                App.loadDraftsView();
+                App.updateDraftsBadge();
+                if (typeof UI !== 'undefined' && UI.showNotification) UI.showNotification('Cleared old bulk drafts.', 'info');
+            });
+        };
+
         if (drafts.length === 0) {
-            let msg = '<p class="text-muted">No failed saves to fix here. This tab shows <strong>one</strong> draft at a time when a sync error occurred—use <strong>Edit</strong> to fix and <strong>Deploy</strong> to save.</p>';
+            let msg = '<p class="text-muted">No activities are waiting to sync. When a save fails, the activity appears here—use <strong>Edit</strong> to fix it or <strong>Deploy</strong> to retry the save.</p>';
             if (userDrafts.some(d => !draftHasFailure(d))) {
-                msg += '<p class="text-muted small mt-2">You have other drafts without errors; finish them from the activity flow or wait until a save fails to see them here.</p>';
+                msg += '<p class="text-muted small mt-2">You have other drafts still saving; they\'ll appear here only if a save fails.</p>';
             }
             if (hasBackup) msg += '<p class="text-muted small mt-2">If drafts vanished after a bulk submit, use <strong>Restore from backup</strong> above.</p>';
-            container.innerHTML = msg;
+            container.innerHTML = msg + bulkNoticeHtml;
+            wireBulkDiscard();
             return;
         }
 
@@ -3558,7 +3595,8 @@ const App = {
             }
         }).join('');
 
-        container.innerHTML = '<div class="drafts-grid">' + cards + '</div>';
+        container.innerHTML = '<div class="drafts-grid">' + cards + '</div>' + bulkNoticeHtml;
+        wireBulkDiscard();
 
         container.querySelectorAll('.draft-submit').forEach(function (btn) {
             btn.addEventListener('click', function () {
