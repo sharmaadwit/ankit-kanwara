@@ -634,6 +634,16 @@ const Activities = {
 
     closeActivityModal() {
         this.editingContext = null;
+        // Releasing the in-flight guard on close lets the user immediately open a fresh form and log
+        // the next activity while the previous one finishes saving in the background.
+        this._activitySaveInFlight = false;
+        // Re-enable + relabel the submit button so the next opened form is immediately usable, even
+        // though the previous save may still be running in the background.
+        const submitBtn = document.querySelector('#activityForm button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Save Activity';
+        }
         const categoryRadios = document.querySelectorAll('#activityModal input[name="activityCategory"]');
         categoryRadios.forEach(radio => {
             radio.disabled = false;
@@ -1417,15 +1427,73 @@ const Activities = {
         this.refreshUseCaseOptions(value === 'Other' ? '' : value).catch(() => { });
     },
 
-    async refreshUseCaseOptions(_industry) {
+    /**
+     * Rebuild the Primary Use Case checkboxes from the admin-configured use cases for the selected
+     * industry (plus any universal use cases), preserving current selections and always offering
+     * "Other". Previously this ignored the industry and left 4 hardcoded options, so industry-specific
+     * use cases configured by admins never appeared on the log-activity form.
+     */
+    async refreshUseCaseOptions(industry) {
         const wrap = document.getElementById('projectUseCasesGroup');
         if (!wrap) return;
+        const cbContainer = wrap.querySelector('.primary-use-case-cbs');
+        if (!cbContainer) return;
+
         const norm = (uc) =>
             typeof DataManager !== 'undefined' && typeof DataManager.normalizePrimaryUseCaseLabel === 'function'
                 ? DataManager.normalizePrimaryUseCaseLabel(uc)
                 : uc;
+
+        // Normalize current selections so checked state survives a rebuild.
         this.selectedUseCases = (this.selectedUseCases || []).map(norm);
-        this.syncMultiSelectState('useCase', this.selectedUseCases);
+        const selectedLower = new Set(this.selectedUseCases.map((s) => String(s).toLowerCase()));
+
+        // Gather options: industry-specific + universal (industry may be empty before one is picked).
+        let options = [];
+        try {
+            const ind = (industry || '').trim();
+            const [industryUC, universalUC] = await Promise.all([
+                ind && DataManager.getUseCasesForIndustry ? DataManager.getUseCasesForIndustry(ind) : Promise.resolve([]),
+                DataManager.getUniversalUseCases ? DataManager.getUniversalUseCases() : Promise.resolve([])
+            ]);
+            options = [...(industryUC || []), ...(universalUC || [])];
+        } catch (e) {
+            console.warn('[Activities] refreshUseCaseOptions failed to load industry use cases:', e);
+        }
+
+        // Normalize + dedupe (case-insensitive); drop "Other" (re-added at the end).
+        const seen = new Set();
+        const cleaned = [];
+        const addOption = (uc) => {
+            const k = String(norm(uc) || '').trim();
+            if (!k || k.toLowerCase() === 'other') return;
+            const lk = k.toLowerCase();
+            if (seen.has(lk)) return;
+            seen.add(lk);
+            cleaned.push(k);
+        };
+        options.forEach(addOption);
+
+        // Fallback so the user always has something to pick if no use cases are configured yet.
+        if (cleaned.length === 0) {
+            ['Support', 'Commerce', 'Marketing'].forEach(addOption);
+        }
+
+        // Keep any already-selected use case that isn't in the list so we never silently drop a saved value.
+        this.selectedUseCases.forEach(addOption);
+
+        cleaned.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        const esc = (s) => String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        let html = cleaned.map((uc) => {
+            const checked = selectedLower.has(uc.toLowerCase()) ? 'checked' : '';
+            return `<label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="${esc(uc)}" ${checked} onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>${esc(uc)}</span></label>`;
+        }).join('');
+        const otherChecked = selectedLower.has('other') ? 'checked' : '';
+        html += `<label class="checkbox-label"><input type="checkbox" name="primaryUseCase" value="Other" id="useCaseOtherCheck" ${otherChecked} onchange="Activities.onPrimaryUseCaseCheckboxChange(this)"><span>Other</span></label>`;
+        cbContainer.innerHTML = html;
     },
 
     resetAccountDropdownLayout() {
@@ -2363,14 +2431,19 @@ const Activities = {
             UI.showNotification('Internal activity updated successfully!', 'success');
             this.setLastActivityDateForUser(currentUser.id, date);
         } else {
+            // Hide the form immediately and finish saving in the background so the user can log the
+            // next activity right away. The activity is durable (Drafts first, then retries), so closing
+            // early never loses data. Capture fromDraftId before closeActivityModal() nulls editingContext.
+            const fromDraftId = (this.editingContext && this.editingContext.fromDraftId) || null;
+            this.closeActivityModal();
+            UI.showNotification('Saving activity…', 'info');
             try {
                 await DataManager.addInternalActivity(payload);
-                if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
-                    Drafts.removeDraft(this.editingContext.fromDraftId);
+                if (fromDraftId && typeof Drafts !== 'undefined') {
+                    Drafts.removeDraft(fromDraftId);
                 }
-                this.closeActivityModal();
                 let internalMsg = 'Internal activity logged successfully!';
-                if (this.editingContext && this.editingContext.fromDraftId) internalMsg += ' Draft removed.';
+                if (fromDraftId) internalMsg += ' Draft removed.';
                 UI.showNotification(internalMsg, 'success');
                 this.setLastActivityDateForUser(currentUser.id, date);
             } catch (err) {
@@ -2835,6 +2908,13 @@ const Activities = {
                     UI.showNotification('Logged ' + createdCount + ' activities!', 'success');
                 }
             } else {
+                // Hide the form immediately and finish saving in the background so the user can start
+                // logging the next activity right away. The activity is durable (saved to Drafts first,
+                // then posted with retries), so closing early never loses data. Reads of editingContext
+                // below use the local snapshot taken at function entry, since closeActivityModal() nulls
+                // this.editingContext.
+                this.closeActivityModal();
+                UI.showNotification('Saving activity…', 'info');
                 try {
                     // Multiple pricing activities: one per selected calculation (same account/project)
                     if (activityType === 'pricing' && pricingIdsToLink.length > 1) {
@@ -2866,7 +2946,6 @@ const Activities = {
                                 console.warn('Project use cases/products save failed:', e);
                             }
                         }
-                        this.closeActivityModal();
                         UI.showNotification('Logged ' + pricingIdsToLink.length + ' pricing activities.', 'success');
                         this.setLastActivityDateForUser(currentUser.id, date);
                     } else {
@@ -2884,11 +2963,11 @@ const Activities = {
                         targetAccountId: created.accountId,
                         targetProjectId: created.projectId
                     });
-                    if (this.editingContext && this.editingContext.fromDraftId && typeof Drafts !== 'undefined') {
-                        Drafts.removeDraft(this.editingContext.fromDraftId);
+                    if (editingContext && editingContext.fromDraftId && typeof Drafts !== 'undefined') {
+                        Drafts.removeDraft(editingContext.fromDraftId);
                     }
                     // Link pricing calculation to this activity when opened from dashboard/draft pricing flow or single selection
-                    const fromPricing = this.editingContext && this.editingContext.fromPricingCalculation;
+                    const fromPricing = editingContext && editingContext.fromPricingCalculation;
                     if (fromPricing && fromPricing.calculationId && created && created.id) {
                         try {
                             const apiBase = (typeof window !== 'undefined' && window.__REMOTE_STORAGE_BASE__) ? window.__REMOTE_STORAGE_BASE__.replace(/\/api\/storage\/?$/, '') : '';
@@ -2935,9 +3014,8 @@ const Activities = {
                             UI.showNotification('Activity saved. Project use cases/products could not be saved – try editing the activity again to save them.', 'warning');
                         }
                     }
-                    this.closeActivityModal();
                     let msg = 'Activity logged successfully!';
-                    if (this.editingContext && this.editingContext.fromDraftId) msg += ' Draft removed.';
+                    if (editingContext && editingContext.fromDraftId) msg += ' Draft removed.';
                     if (fromPricing && fromPricing.calculationId) msg = 'Pricing activity logged and linked.';
                     const activityMonth = (created.date || created.createdAt || '').toString().slice(0, 7);
                     const now = new Date();
