@@ -205,18 +205,21 @@ const ReportsV2 = {
      * Order = display order (top-to-bottom when reverseLabels is used on horizontal bars).
      * `test(part)` matches a single name fragment (e.g. after splitting "A / B" on slash or comma).
      */
+    // `departed: true` = inactive/left the team. Kept in the roster so historical months still show
+    // their bars, but excluded from any period where they logged nothing (i.e. this month onwards).
     FIXED_PRESALES_ROSTER: [
         { label: 'Ankit Kanwara', test: (s) => /ankit/i.test(s) && /kanwara/i.test(s) },
-        { label: 'Yashah', test: (s) => /yashas|yashah/i.test(s) },
+        { label: 'Yashas', test: (s) => /yashas|yashah/i.test(s) },
         { label: 'Mridul', test: (s) => /mridul/i.test(s) },
-        { label: 'Samruddha', test: (s) => /samruddha/i.test(s) },
+        { label: 'Samruddha', test: (s) => /samruddha/i.test(s), departed: true },
         { label: 'Puru Chauhan', test: (s) => /purusottam/i.test(s) || /puru\s*chauhan/i.test(s) || (/puru/i.test(s) && /chauhan/i.test(s)) },
         { label: 'Nidhi', test: (s) => /\bnidhi\b/i.test(s) },
         { label: 'Nikhil', test: (s) => /\bnikhil\b/i.test(s) },
         { label: 'Gargi', test: (s) => /\bgargi\b/i.test(s) },
         { label: 'Sidharth', test: (s) => /sid(?:d)?harth/i.test(s) },
-        { label: 'Mauricio', test: (s) => /mauricio/i.test(s) },
-        { label: 'Maria', test: (s) => /\bmaria\b/i.test(s) }
+        { label: 'Mauricio', test: (s) => /mauricio/i.test(s), departed: true },
+        { label: 'Maria', test: (s) => /\bmaria\b/i.test(s) },
+        { label: 'Ananya', test: (s) => /\bananya\b/i.test(s) }
     ],
 
     /**
@@ -255,8 +258,8 @@ const ReportsV2 = {
         return roster.map((r) => {
             const internal = counts[r.label].internal;
             const external = counts[r.label].external;
-            return { id: r.label, name: r.label, internal, external, count: internal + external };
-        });
+            return { id: r.label, name: r.label, internal, external, count: internal + external, departed: !!r.departed };
+        }).filter((row) => !row.departed || row.count > 0);
     },
 
     /** Stacked horizontal bar: Internal + External per presales agent (one bar per label). */
