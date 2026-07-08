@@ -122,6 +122,60 @@ function registerActivitiesDiagnostic(app) {
     }
   });
 
+  // Retag win months: for projects whose winLossData.monthOfWin === fromMonth AND whose winLossData was
+  // edited in editedInMonth, set monthOfWin = toMonth. Archives accounts first. Returns the exact matches.
+  app.post('/api/admin/fix-winloss-month', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const fromMonth = String((req.body && req.body.fromMonth) || '2026-05');
+    const toMonth = String((req.body && req.body.toMonth) || '2026-06');
+    const editedInMonth = String((req.body && req.body.editedInMonth) || '2026-06');
+    const dryRun = !!(req.body && req.body.dryRun);
+    const client = await getPool().connect();
+    const LZ = require('../../pams-app/js/vendor/lz-string.js');
+    const decode = (raw) => {
+      if (raw == null) return null;
+      let s = raw;
+      if (typeof s === 'string' && s.startsWith('__lz__')) s = LZ.decompressFromBase64(s.slice(6));
+      try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (_) { return null; }
+    };
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(
+        `SELECT value, updated_at FROM storage WHERE key = 'accounts' FOR UPDATE`
+      );
+      if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'accounts not found' }); }
+      const accts = decode(rows[0].value) || [];
+      const matched = [];
+      accts.forEach((a) => (a.projects || []).forEach((p) => {
+        const w = p && p.winLossData;
+        if (!w) return;
+        const editedMonth = String(w.updatedAt || p.updatedAt || '').slice(0, 7);
+        if (w.monthOfWin === fromMonth && editedMonth === editedInMonth) {
+          matched.push({ acct: a.name, proj: p.name, wonBy: w.wonByUserName || w.wonByUserId || '', wasEdited: editedMonth });
+          if (!dryRun) w.monthOfWin = toMonth;
+        }
+      }));
+      if (dryRun) { await client.query('ROLLBACK'); return res.json({ ok: true, dryRun: true, matchedCount: matched.length, matched }); }
+      await client.query(
+        `INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ('accounts', $1, $2, NOW())`,
+        [rows[0].value, rows[0].updated_at]
+      );
+      await client.query(
+        `UPDATE storage SET value = $1, updated_at = NOW() WHERE key = 'accounts'`,
+        [JSON.stringify(accts)]
+      );
+      await client.query('COMMIT');
+      logger.info('fix_winloss_month', { fromMonth, toMonth, editedInMonth, matchedCount: matched.length });
+      res.json({ ok: true, fromMonth, toMonth, matchedCount: matched.length, matched });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('fix_winloss_month_failed', { message: error.message, stack: error.stack });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // READ-ONLY: dump a single storage key's value (for inspecting config like industryUseCases).
   app.get('/api/admin/diagnose-storage', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
