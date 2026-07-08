@@ -81,6 +81,47 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: win/loss timeline from storage_history for the accounts key. For each archived version,
+  // count projects with winLossData by effective month, so we can spot when wins (e.g. June) disappeared.
+  app.get('/api/admin/diagnose-winloss-history', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const key = String(req.query.key || 'accounts').trim();
+      const limit = Math.min(60, Math.max(1, parseInt(req.query.limit, 10) || 30));
+      const LZ = require('../../pams-app/js/vendor/lz-string.js');
+      const decode = (raw) => {
+        if (raw == null) return null;
+        let s = raw;
+        if (typeof s === 'string' && s.startsWith('__lz__')) s = LZ.decompressFromBase64(s.slice(6));
+        try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (_) { return null; }
+      };
+      const winStats = (accts) => {
+        let total = 0; const byMonth = {};
+        (Array.isArray(accts) ? accts : []).forEach((a) => (a.projects || []).forEach((p) => {
+          if (p && p.winLossData) {
+            total++;
+            const m = p.winLossData.monthOfWin || String(p.winLossData.updatedAt || p.updatedAt || '').slice(0, 7) || '??';
+            byMonth[m] = (byMonth[m] || 0) + 1;
+          }
+        }));
+        return { total, byMonth };
+      };
+      // Current live value first.
+      const cur = await getPool().query('SELECT value, updated_at FROM storage WHERE key = $1', [key]);
+      const out = [];
+      if (cur.rows.length) out.push(Object.assign({ when: cur.rows[0].updated_at, source: 'LIVE' }, winStats(decode(cur.rows[0].value))));
+      const hist = await getPool().query(
+        'SELECT value, archived_at FROM storage_history WHERE key = $1 ORDER BY archived_at DESC LIMIT $2',
+        [key, limit]
+      );
+      hist.rows.forEach((r) => out.push(Object.assign({ when: r.archived_at, source: 'history' }, winStats(decode(r.value)))));
+      res.json({ ok: true, key, versions: out.length, timeline: out });
+    } catch (error) {
+      logger.error('diagnose_winloss_history_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // READ-ONLY: dump a single storage key's value (for inspecting config like industryUseCases).
   app.get('/api/admin/diagnose-storage', async (req, res) => {
     if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
