@@ -1361,6 +1361,9 @@ const ReportsV2 = {
             if (isYear) {
                 return activityMonthKey.substring(0, 4) === period;
             }
+            if (this.isRangePeriod(period)) {
+                return this.getPeriodMonths(period).includes(activityMonthKey);
+            }
             return activityMonthKey === period;
         });
 
@@ -1440,16 +1443,43 @@ const ReportsV2 = {
     },
 
     // Format period display
+    /** True when the period is a combined month range like "2026-05..2026-06". */
+    isRangePeriod(period) {
+        return /^\d{4}-\d{2}\.\.\d{4}-\d{2}$/.test(String(period || ''));
+    },
+
+    /** Expand a period to the list of YYYY-MM months it covers (single month -> [month], range -> enumerated). */
+    getPeriodMonths(period) {
+        const p = String(period || '');
+        const m = p.match(/^(\d{4}-\d{2})\.\.(\d{4}-\d{2})$/);
+        if (m) return this.enumerateMonths(m[1], m[2]);
+        return p ? [p] : [];
+    },
+
+    /** Show the combined May + June 2026 monthly report (same layout/export as a normal month). */
+    showCombinedMayJune() {
+        this.currentPeriod = '2026-05..2026-06';
+        this.currentPeriodType = 'month';
+        this.activeTab = 'monthly';
+        this.cachedData = null;
+        this.render();
+    },
+
     formatPeriod(period) {
         if (this.currentPeriodType === 'year') {
             return period;
+        }
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        if (this.isRangePeriod(period)) {
+            const months = this.getPeriodMonths(period);
+            const fmt = (mm) => { const [y, mo] = mm.split('-'); return `${monthNames[parseInt(mo, 10) - 1]} ${y}`; };
+            return months.length ? `${fmt(months[0])} – ${fmt(months[months.length - 1])}` : period;
         }
         if (typeof DataManager !== 'undefined' && typeof DataManager.formatMonth === 'function') {
             return DataManager.formatMonth(period);
         }
         const [year, month] = period.split('-');
-        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'];
         return `${monthNames[parseInt(month) - 1]} ${year}`;
     },
 
@@ -1756,16 +1786,19 @@ const ReportsV2 = {
         const winsForPeriod = [];
         const lossesForPeriod = [];
         const periodMonth = this.currentPeriodType === 'month' ? this.currentPeriod : null;
-        if (periodMonth && accounts.length) {
+        // Support a combined month range (e.g. "2026-05..2026-06"): include wins/losses from any month
+        // in the range, applying each record's own month to the month-specific include filters.
+        const periodMonths = periodMonth ? this.getPeriodMonths(periodMonth) : [];
+        if (periodMonths.length && accounts.length) {
             accounts.forEach(account => {
                 account.projects?.forEach(project => {
                     if (project.status === 'won' || project.status === 'lost') {
                         const monthForWinLoss = project.winLossData?.monthOfWin ||
                             (project.winLossData?.updatedAt || project.updatedAt || project.createdAt || '').toString().substring(0, 7);
-                        if (monthForWinLoss === periodMonth) {
+                        if (periodMonths.includes(monthForWinLoss)) {
                             if (project.status === 'won') {
                                 const accountNameForFilter = String(account.name || '').trim();
-                                if (!ReportsV2.shouldIncludeWinInMonthlyReport(periodMonth, accountNameForFilter)) {
+                                if (!ReportsV2.shouldIncludeWinInMonthlyReport(monthForWinLoss, accountNameForFilter)) {
                                     return;
                                 }
                                 winsPeriod++;
@@ -1778,7 +1811,7 @@ const ReportsV2 = {
                                 const presalesRep = this.presalesRepLineForCrmWin(accountName, projectTitle, wl, users, {
                                     activities,
                                     accountId: account.id,
-                                    period: periodMonth
+                                    period: monthForWinLoss
                                 });
                                 const isAlhamra = (accountName || '').toLowerCase().includes('alhamra');
                                 let currency = wl.currency || 'INR';
@@ -1805,7 +1838,7 @@ const ReportsV2 = {
                                 });
                             } else if (project.status === 'lost') {
                                 const lossAccountName = String(account.name || '').trim() || 'Unknown';
-                                if (!ReportsV2.shouldIncludeLossInMonthlyReport(periodMonth, lossAccountName)) {
+                                if (!ReportsV2.shouldIncludeLossInMonthlyReport(monthForWinLoss, lossAccountName)) {
                                     return;
                                 }
                                 lossesPeriod++;
@@ -2725,11 +2758,18 @@ const ReportsV2 = {
                             ← Previous
                         </button>
                         <span class="reports-v2-current-period">${periodLabel}</span>
-                        <button type="button" 
+                        <button type="button"
                                 class="btn btn-sm btn-outline ${!canGoNext ? 'disabled' : ''}"
                                 onclick="ReportsV2.navigateNext()"
                                 ${!canGoNext ? 'disabled' : ''}>
                             Next →
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm ${this.isRangePeriod(this.currentPeriod) ? 'btn-primary' : 'btn-outline'}"
+                                style="margin-left:0.75rem;"
+                                onclick="ReportsV2.showCombinedMayJune()"
+                                title="Combined May + June 2026 report">
+                            May + Jun 2026 (combined)
                         </button>
                     </div>
                 ` : `
