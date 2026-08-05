@@ -81,6 +81,72 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: list DB users (source of the admin Users list for admins). Reveals who is missing
+  // from the DB vs the storage "users" key, and flags any non-string ids (crashes the admin list).
+  app.get('/api/admin/diagnose-db-users', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const { rows } = await getPool().query(
+        'SELECT id, username, email, is_active, roles, force_password_change FROM users ORDER BY username ASC'
+      );
+      res.json({ ok: true, count: rows.length, nonStringIds: rows.filter((r) => typeof r.id !== 'string').length,
+        users: rows.map((r) => ({ id: r.id, idType: typeof r.id, username: r.username, email: r.email, is_active: r.is_active, roles: r.roles, force_password_change: r.force_password_change })) });
+    } catch (error) {
+      logger.error('diagnose_db_users_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Provision a storage "users" record into the DB users table (same upsert the login-time migration
+  // does), so the user appears in the admin list and can log in via the DB path. Body: { username }.
+  app.post('/api/admin/provision-user', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const uname = String((req.body && req.body.username) || '').trim().toLowerCase();
+    if (!uname) return res.status(400).json({ error: 'username required' });
+    try {
+      const bcrypt = require('bcrypt');
+      const crypto = require('crypto');
+      const LZ = require('../../pams-app/js/vendor/lz-string.js');
+      const { rows: sRows } = await getPool().query("SELECT value FROM storage WHERE key = 'users' LIMIT 1");
+      let v = sRows.length ? sRows[0].value : null;
+      if (typeof v === 'string' && v.startsWith('__lz__')) v = LZ.decompressFromBase64(v.slice(6));
+      const arr = v ? (typeof v === 'string' ? JSON.parse(v) : v) : [];
+      const u = (Array.isArray(arr) ? arr : []).find((x) =>
+        String(x.username || '').trim().toLowerCase() === uname || String(x.email || '').trim().toLowerCase() === uname);
+      if (!u) return res.status(404).json({ error: 'user not found in storage users key' });
+      const legacyPassword = String(u.password || '').trim();
+      if (!legacyPassword) return res.status(400).json({ error: 'storage user has no password to migrate' });
+      const passwordHash = await bcrypt.hash(legacyPassword, 10);
+      const email = u.email ? String(u.email).trim().toLowerCase() : null;
+      const username = String(u.username || email || uname).trim().toLowerCase();
+      const preferredId = String(u.id || '').trim() || crypto.randomUUID();
+      const params = [
+        preferredId, username, email, passwordHash,
+        Array.isArray(u.roles) ? u.roles : [],
+        Array.isArray(u.regions) ? u.regions : [],
+        Array.isArray(u.salesReps) ? u.salesReps : [],
+        u.defaultRegion ? String(u.defaultRegion) : '',
+        u.isActive !== false, !!u.forcePasswordChange
+      ];
+      const { rows } = await getPool().query(
+        `INSERT INTO users (id, username, email, password_hash, roles, regions, sales_reps, default_region, is_active, force_password_change, password_updated_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW(),NOW())
+         ON CONFLICT (username) DO UPDATE SET
+           email = COALESCE(EXCLUDED.email, users.email), password_hash = EXCLUDED.password_hash,
+           roles = EXCLUDED.roles, regions = EXCLUDED.regions, sales_reps = EXCLUDED.sales_reps,
+           default_region = EXCLUDED.default_region, is_active = EXCLUDED.is_active,
+           force_password_change = EXCLUDED.force_password_change, updated_at = NOW()
+         RETURNING id, username, email, is_active, roles, force_password_change;`,
+        params
+      );
+      logger.info('provision_user', { username, id: rows[0] && rows[0].id });
+      res.json({ ok: true, provisioned: rows[0] });
+    } catch (error) {
+      logger.error('provision_user_failed', { message: error.message, code: error.code });
+      res.status(500).json({ error: error.message, code: error.code });
+    }
+  });
+
   // READ-ONLY: win/loss timeline from storage_history for the accounts key. For each archived version,
   // count projects with winLossData by effective month, so we can spot when wins (e.g. June) disappeared.
   app.get('/api/admin/diagnose-winloss-history', async (req, res) => {
