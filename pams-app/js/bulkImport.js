@@ -749,11 +749,13 @@ const BulkImport = {
             window.__csvImportTraceLog('processRowsDataLoadStart', { dataRowCount: dataRows.length });
         }
         let users = [];
+        let rosterUsers = [];
         let accounts = [];
         let existingActivities = [];
         try {
-            [users, accounts, existingActivities] = await Promise.all([
+            [users, rosterUsers, accounts, existingActivities] = await Promise.all([
                 DataManager.getUsers(),
+                (typeof DataManager.getActiveRosterUsers === 'function' ? DataManager.getActiveRosterUsers().catch(() => []) : Promise.resolve([])),
                 DataManager.getAccounts(),
                 DataManager.getAllActivities()
             ]);
@@ -763,6 +765,10 @@ const BulkImport = {
             }
             throw err;
         }
+        // Merge both sources so the presales-user match never fails just because one source is empty
+        // for non-admins, then build a forgiving match index (email / email-prefix / name / first name).
+        users = this.mergeUserLists(users, rosterUsers);
+        this._userMatchIndex = this.buildUserMatchIndex(users);
         if (typeof window.__csvImportTraceLog === 'function') {
             window.__csvImportTraceLog('processRowsDataLoadDone', {
                 usersCount: users.length,
@@ -822,6 +828,67 @@ const BulkImport = {
         this.state.duplicateRows = results.filter(r => r.duplicate);
     },
 
+    /** Merge two user lists, de-duped by username/email/id. */
+    mergeUserLists(a, b) {
+        const seen = new Set();
+        const out = [];
+        [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach((u) => {
+            if (!u) return;
+            const key = String(u.username || u.email || u.id || '').trim().toLowerCase();
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            out.push(u);
+        });
+        return out;
+    },
+
+    /**
+     * Build a forgiving lookup for the CSV "Presales Username" column. A user matches on their
+     * username, email, email prefix, "first last" (from a firstname.lastname handle), a compact form,
+     * and — when unambiguous — their first name alone. Prevents "Presales Username not found" for
+     * reasonable identifiers (email, name, or handle).
+     */
+    buildUserMatchIndex(users) {
+        const exact = new Map();          // identifier -> user
+        const firstNameUsers = new Map(); // firstName -> Set(userKey)
+        const firstNameUser = new Map();  // firstName -> user
+        const norm = (s) => String(s == null ? '' : s).trim().toLowerCase();
+        const add = (key, u) => { const k = norm(key); if (k && !exact.has(k)) exact.set(k, u); };
+        (Array.isArray(users) ? users : []).forEach((u) => {
+            if (!u) return;
+            const userKey = norm(u.username || u.email || u.id);
+            [u.username, u.email, u.name].forEach((raw) => {
+                const x = norm(raw);
+                if (!x) return;
+                add(x, u);
+                const local = x.includes('@') ? x.split('@')[0] : x;
+                add(local, u);
+                add(local.replace(/[._]+/g, ' '), u);   // firstname.lastname -> "firstname lastname"
+                add(local.replace(/[._\s]+/g, ''), u);   // compact
+                const first = local.split(/[._\s]+/)[0];
+                if (first) {
+                    if (!firstNameUsers.has(first)) firstNameUsers.set(first, new Set());
+                    firstNameUsers.get(first).add(userKey);
+                    if (!firstNameUser.has(first)) firstNameUser.set(first, u);
+                }
+            });
+        });
+        const firstName = new Map();
+        firstNameUsers.forEach((set, fn) => { if (set.size === 1) firstName.set(fn, firstNameUser.get(fn)); });
+        return { exact, firstName };
+    },
+
+    /** Resolve a CSV "Presales Username" value to a user using the forgiving index. */
+    resolvePresalesUser(identifier, usersFallback) {
+        const index = this._userMatchIndex || this.buildUserMatchIndex(usersFallback || []);
+        const id = String(identifier == null ? '' : identifier).trim().toLowerCase();
+        if (!id) return null;
+        const compact = id.replace(/[._\s]+/g, '');
+        const spaced = id.replace(/[._]+/g, ' ');
+        return index.exact.get(id) || index.exact.get(compact) || index.exact.get(spaced)
+            || index.firstName.get(id) || index.firstName.get(compact) || null;
+    },
+
     evaluateRow(row, displayRowNumber, users, accounts, existingActivities, duplicateHash) {
         const errors = [];
         const warnings = [];
@@ -852,7 +919,7 @@ const BulkImport = {
         }
 
         const userIdentifier = row.user;
-        const user = users.find(u => u.username.toLowerCase() === (userIdentifier || '').toLowerCase());
+        const user = this.resolvePresalesUser(userIdentifier, users);
         if (!user) {
             errors.push('Presales Username not found.');
         }
