@@ -217,7 +217,7 @@ const ReportsV2 = {
         { label: 'Nikhil', test: (s) => /\bnikhil\b/i.test(s) },
         { label: 'Gargi', test: (s) => /\bgargi\b/i.test(s) },
         { label: 'Sidharth', test: (s) => /sid(?:d)?harth/i.test(s) },
-        { label: 'Mauricio', test: (s) => /mauricio/i.test(s), departed: true },
+        { label: 'Mauricio', test: (s) => /mauricio/i.test(s) },
         { label: 'Maria', test: (s) => /\bmaria\b/i.test(s) },
         { label: 'Ananya', test: (s) => /\bananya\b/i.test(s) }
     ],
