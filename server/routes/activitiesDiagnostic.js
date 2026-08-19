@@ -81,6 +81,47 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // Fix specific activities' dates in the team `activities` key. Body: { fixes: [{id, date}], dryRun? }.
+  // Archives the current value first. Only touches the listed ids.
+  app.post('/api/admin/fix-activity-dates', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const fixes = (req.body && Array.isArray(req.body.fixes)) ? req.body.fixes : [];
+    const dryRun = !!(req.body && req.body.dryRun);
+    if (!fixes.length) return res.status(400).json({ error: 'fixes: [{id, date}] required' });
+    const client = await getPool().connect();
+    const LZ = require('../../pams-app/js/vendor/lz-string.js');
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`SELECT value, updated_at FROM storage WHERE key = 'activities' FOR UPDATE`);
+      if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'activities not found' }); }
+      let raw = rows[0].value;
+      let decoded = raw;
+      if (typeof raw === 'string' && raw.startsWith('__lz__')) decoded = LZ.decompressFromBase64(raw.slice(6));
+      const arr = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
+      const byId = new Map(fixes.map((f) => [String(f.id), String(f.date)]));
+      const changed = [];
+      (Array.isArray(arr) ? arr : []).forEach((a) => {
+        if (a && byId.has(String(a.id))) {
+          const to = byId.get(String(a.id));
+          changed.push({ id: a.id, account: a.accountName, from: a.date, to });
+          if (!dryRun) { a.date = to; a.updatedAt = new Date().toISOString(); }
+        }
+      });
+      if (dryRun) { await client.query('ROLLBACK'); return res.json({ ok: true, dryRun: true, matched: changed.length, requested: fixes.length, changed }); }
+      await client.query(`INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ('activities', $1, $2, NOW())`, [rows[0].value, rows[0].updated_at]);
+      await client.query(`UPDATE storage SET value = $1, updated_at = NOW() WHERE key = 'activities'`, [JSON.stringify(arr)]);
+      await client.query('COMMIT');
+      logger.info('fix_activity_dates', { count: changed.length });
+      res.json({ ok: true, matched: changed.length, requested: fixes.length, changed });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('fix_activity_dates_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // READ-ONLY: list DB users (source of the admin Users list for admins). Reveals who is missing
   // from the DB vs the storage "users" key, and flags any non-string ids (crashes the admin list).
   app.get('/api/admin/diagnose-db-users', async (req, res) => {

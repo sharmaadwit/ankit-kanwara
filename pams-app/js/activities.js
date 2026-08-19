@@ -313,9 +313,18 @@ const Activities = {
             </div>
         `;
         container.insertAdjacentHTML('beforeend', rowHtml);
-        const today = new Date().toISOString().split('T')[0];
+        // Seed the new row's date from the previous row (row 0 uses the main #activityDate field),
+        // NOT today — otherwise adding rows for a past month (e.g. July) silently defaults to the
+        // current month, and changing only the day yields the wrong month (Jul 13 -> Aug 13).
+        const prevIndex = nextIndex - 1;
+        const prevDateEl = prevIndex <= 0
+            ? document.getElementById('activityDate')
+            : document.getElementById(`activityDate_${prevIndex}`);
+        const seedDate = (prevDateEl && prevDateEl.value)
+            || (document.getElementById('activityDate') && document.getElementById('activityDate').value)
+            || new Date().toISOString().split('T')[0];
         const dateEl = document.getElementById(`activityDate_${nextIndex}`);
-        if (dateEl) dateEl.value = today;
+        if (dateEl) dateEl.value = seedDate;
     },
 
     // Show type-specific fields for an extra activity row (e.g. POC → Access Type, Customer Call → Call Type)
