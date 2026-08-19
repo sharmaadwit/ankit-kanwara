@@ -81,6 +81,48 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // Set a user's active status in BOTH the DB users table and the storage `users` key (keeps them in
+  // sync). Body: { username, active }. Archives storage users first. Does not delete the account or its
+  // historical activities. Use to disable a departed user.
+  app.post('/api/admin/set-user-active', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    const uname = String((req.body && req.body.username) || '').trim().toLowerCase();
+    const active = !!(req.body && req.body.active);
+    if (!uname) return res.status(400).json({ error: 'username required' });
+    const LZ = require('../../pams-app/js/vendor/lz-string.js');
+    const client = await getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const dbRes = await client.query(
+        'UPDATE users SET is_active = $1, updated_at = NOW() WHERE LOWER(username) = $2 OR LOWER(email) = $2 RETURNING id, username, is_active',
+        [active, uname]
+      );
+      const s = await client.query("SELECT value, updated_at FROM storage WHERE key = 'users' FOR UPDATE");
+      let storageChanged = 0;
+      if (s.rows.length) {
+        let v = s.rows[0].value;
+        if (typeof v === 'string' && v.startsWith('__lz__')) v = LZ.decompressFromBase64(v.slice(6));
+        const arr = typeof v === 'string' ? JSON.parse(v) : v;
+        (Array.isArray(arr) ? arr : []).forEach((u) => {
+          if (u && (String(u.username || '').toLowerCase() === uname || String(u.email || '').toLowerCase() === uname)) {
+            u.isActive = active; storageChanged++;
+          }
+        });
+        await client.query("INSERT INTO storage_history (key, value, updated_at, archived_at) VALUES ('users', $1, $2, NOW())", [s.rows[0].value, s.rows[0].updated_at]);
+        await client.query("UPDATE storage SET value = $1, updated_at = NOW() WHERE key = 'users'", [JSON.stringify(arr)]);
+      }
+      await client.query('COMMIT');
+      logger.info('set_user_active', { username: uname, active, dbUpdated: dbRes.rowCount, storageChanged });
+      res.json({ ok: true, active, dbUpdated: dbRes.rowCount, dbRow: dbRes.rows[0] || null, storageChanged });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('set_user_active_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  });
+
   // Fix specific activities' dates in the team `activities` key. Body: { fixes: [{id, date}], dryRun? }.
   // Archives the current value first. Only touches the listed ids.
   app.post('/api/admin/fix-activity-dates', async (req, res) => {
