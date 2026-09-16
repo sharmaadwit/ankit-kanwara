@@ -210,9 +210,9 @@ const ReportsV2 = {
     FIXED_PRESALES_ROSTER: [
         { label: 'Ankit Kanwara', test: (s) => /ankit/i.test(s) && /kanwara/i.test(s) },
         { label: 'Yashas', test: (s) => /yashas|yashah/i.test(s) },
-        { label: 'Mridul', test: (s) => /mridul/i.test(s) },
+        { label: 'Mridul', test: (s) => /mridul/i.test(s), departed: true },
         { label: 'Samruddha', test: (s) => /samruddha/i.test(s), departed: true },
-        { label: 'Puru Chauhan', test: (s) => /purusottam/i.test(s) || /puru\s*chauhan/i.test(s) || (/puru/i.test(s) && /chauhan/i.test(s)) },
+        { label: 'Puru Chauhan', test: (s) => /purusottam/i.test(s) || /puru\s*chauhan/i.test(s) || (/puru/i.test(s) && /chauhan/i.test(s)), departed: true },
         { label: 'Nidhi', test: (s) => /\bnidhi\b/i.test(s) },
         { label: 'Nikhil', test: (s) => /\bnikhil\b/i.test(s) },
         { label: 'Gargi', test: (s) => /\bgargi\b/i.test(s) },
