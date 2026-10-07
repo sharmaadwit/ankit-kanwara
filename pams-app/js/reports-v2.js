@@ -209,7 +209,7 @@ const ReportsV2 = {
     // their bars, but excluded from any period where they logged nothing (i.e. this month onwards).
     FIXED_PRESALES_ROSTER: [
         { label: 'Ankit Kanwara', test: (s) => /ankit/i.test(s) && /kanwara/i.test(s) },
-        { label: 'Yashas', test: (s) => /yashas|yashah/i.test(s) },
+        { label: 'Yashas', test: (s) => /yashas|yashah/i.test(s), departed: true },
         { label: 'Mridul', test: (s) => /mridul/i.test(s), departed: true },
         { label: 'Samruddha', test: (s) => /samruddha/i.test(s), departed: true },
         { label: 'Puru Chauhan', test: (s) => /purusottam/i.test(s) || /puru\s*chauhan/i.test(s) || (/puru/i.test(s) && /chauhan/i.test(s)), departed: true },
