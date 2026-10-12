@@ -81,6 +81,23 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: login attempts per day (last ~12 days). If a day has zero logins, the app/server was
+  // likely unreachable that day (vs users simply not saving).
+  app.get('/api/admin/diagnose-logins', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const { rows } = await getPool().query(
+        `SELECT created_at::date AS day, status, COUNT(*)::int AS c, COUNT(DISTINCT username)::int AS users
+         FROM login_logs WHERE created_at >= NOW() - INTERVAL '12 days'
+         GROUP BY day, status ORDER BY day DESC, c DESC`
+      );
+      res.json({ ok: true, rows });
+    } catch (error) {
+      logger.error('diagnose_logins_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // READ-ONLY: activity-submission log analysis. Without ?day: outcomes per day for the last ~12 days.
   // With ?day=YYYY-MM-DD: outcomes broken down by user for that day. Shows whether saves were even
   // attempted and how they resolved (success / conflict / if_match_required / validation_failed / ...).
