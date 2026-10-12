@@ -81,6 +81,38 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: activity-submission log analysis. Without ?day: outcomes per day for the last ~12 days.
+  // With ?day=YYYY-MM-DD: outcomes broken down by user for that day. Shows whether saves were even
+  // attempted and how they resolved (success / conflict / if_match_required / validation_failed / ...).
+  app.get('/api/admin/diagnose-submission-logs', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const day = String(req.query.day || '').trim();
+      if (day) {
+        const { rows } = await getPool().query(
+          `SELECT outcome, COALESCE(username,'(none)') AS username, COUNT(*)::int AS c,
+                  MIN(created_at) AS first, MAX(created_at) AS last
+           FROM activity_submission_logs
+           WHERE created_at::date = $1::date
+           GROUP BY outcome, username ORDER BY c DESC`,
+          [day]
+        );
+        const total = rows.reduce((s, r) => s + r.c, 0);
+        return res.json({ ok: true, day, totalAttempts: total, rows });
+      }
+      const { rows } = await getPool().query(
+        `SELECT created_at::date AS day, outcome, COUNT(*)::int AS c
+         FROM activity_submission_logs
+         WHERE created_at >= NOW() - INTERVAL '12 days'
+         GROUP BY day, outcome ORDER BY day DESC, c DESC`
+      );
+      res.json({ ok: true, lastDays: 12, rows });
+    } catch (error) {
+      logger.error('diagnose_submission_logs_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // READ-ONLY: timeline of a storage key from storage_history. For `activities`, reports total count
   // and how many rows were created on ?createdDay (to find a pre-loss version). ?limit (default 100).
   app.get('/api/admin/diagnose-key-history', async (req, res) => {
