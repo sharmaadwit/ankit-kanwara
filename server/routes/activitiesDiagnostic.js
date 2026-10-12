@@ -81,6 +81,42 @@ const verifyToken = (req) => {
  * Mount the diagnostic routes on an express app. Called from app.js before auth middleware.
  */
 function registerActivitiesDiagnostic(app) {
+  // READ-ONLY: timeline of a storage key from storage_history. For `activities`, reports total count
+  // and how many rows were created on ?createdDay (to find a pre-loss version). ?limit (default 100).
+  app.get('/api/admin/diagnose-key-history', async (req, res) => {
+    if (!verifyToken(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+      const key = String(req.query.key || 'activities').trim();
+      const createdDay = String(req.query.createdDay || '').trim();
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 100));
+      const LZ = require('../../pams-app/js/vendor/lz-string.js');
+      const decode = (raw) => {
+        if (raw == null) return null;
+        let s = raw;
+        if (typeof s === 'string' && s.startsWith('__lz__')) s = LZ.decompressFromBase64(s.slice(6));
+        try { return typeof s === 'string' ? JSON.parse(s) : s; } catch (_) { return null; }
+      };
+      const stat = (arr) => {
+        const a = Array.isArray(arr) ? arr : [];
+        let match = 0;
+        if (createdDay) a.forEach((x) => { if (String(x && x.createdAt || '').slice(0, 10) === createdDay) match++; });
+        return { total: a.length, match };
+      };
+      const out = [];
+      const cur = await getPool().query('SELECT value, updated_at FROM storage WHERE key = $1', [key]);
+      if (cur.rows.length) out.push(Object.assign({ when: cur.rows[0].updated_at, source: 'LIVE' }, stat(decode(cur.rows[0].value))));
+      const hist = await getPool().query(
+        'SELECT value, archived_at FROM storage_history WHERE key = $1 ORDER BY archived_at DESC LIMIT $2',
+        [key, limit]
+      );
+      hist.rows.forEach((r) => out.push(Object.assign({ when: r.archived_at, source: 'history' }, stat(decode(r.value)))));
+      res.json({ ok: true, key, createdDay: createdDay || null, versions: out.length, oldest: out.length ? out[out.length - 1].when : null, timeline: out });
+    } catch (error) {
+      logger.error('diagnose_key_history_failed', { message: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Set a user's active status in BOTH the DB users table and the storage `users` key (keeps them in
   // sync). Body: { username, active }. Archives storage users first. Does not delete the account or its
   // historical activities. Use to disable a departed user.
